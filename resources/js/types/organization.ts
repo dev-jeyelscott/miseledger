@@ -26,6 +26,13 @@ export type OrganizationSummary = {
     slug: string;
 };
 
+export type LocationSummary = {
+    id: number;
+    name: string;
+    code: string;
+    active: boolean;
+};
+
 export type OrganizationMembership = {
     organization: OrganizationSummary;
     role: OrganizationRole;
