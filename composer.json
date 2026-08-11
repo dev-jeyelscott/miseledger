@@ -48,7 +48,7 @@
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
             "@php artisan key:generate",
             "@php artisan migrate --force",
-            "npm install",
+            "npm ci",
             "npm run build"
         ],
         "dev": [
@@ -56,20 +56,21 @@
             "@php artisan dev"
         ],
         "lint": [
-            "pint --parallel"
+            "pint"
         ],
         "lint:check": [
-            "pint --parallel --test"
+            "pint --test"
         ],
         "ci:check": [
             "Composer\\Config::disableProcessTimeout",
             "npm run lint:check",
             "npm run format:check",
             "npm run types:check",
+            "npm run build",
             "@test"
         ],
         "types:check": [
-            "phpstan analyse"
+            "@php -d memory_limit=512M vendor/bin/phpstan analyse"
         ],
         "test": [
             "@php artisan config:clear --ansi",
