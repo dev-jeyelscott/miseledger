@@ -278,7 +278,7 @@ class InventoryItemController extends Controller
     private function activeUnitOptions(
         Organization $organization,
     ): array {
-        return $organization
+        $units = $organization
             ->unitsOfMeasure()
             ->where('active', true)
             ->orderBy('name')
@@ -291,8 +291,9 @@ class InventoryItemController extends Controller
                     'active' => $unit->active,
                 ],
             )
-            ->values()
             ->all();
+
+        return array_values($units);
     }
 
     /**

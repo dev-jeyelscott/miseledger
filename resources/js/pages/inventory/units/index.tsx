@@ -13,19 +13,14 @@ type Props = {
     canManage: boolean;
 };
 
-export default function UnitsOfMeasureIndex({
-    units,
-    canManage,
-}: Props) {
+export default function UnitsOfMeasureIndex({ units, canManage }: Props) {
     return (
         <>
             <Head title="Units of measure" />
 
             <div className="flex flex-1 flex-col gap-6 p-4">
                 <div>
-                    <h1 className="text-2xl font-semibold">
-                        Units of measure
-                    </h1>
+                    <h1 className="text-2xl font-semibold">Units of measure</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
                         Define the units available to inventory items.
                     </p>
@@ -108,9 +103,7 @@ export default function UnitsOfMeasureIndex({
                                                 required
                                                 placeholder="Kilogram"
                                             />
-                                            <InputError
-                                                message={errors.name}
-                                            />
+                                            <InputError message={errors.name} />
                                         </div>
 
                                         <div className="grid gap-2">

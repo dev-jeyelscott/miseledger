@@ -6,10 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
-import type {
-    InventoryItemUnitData,
-    UnitOfMeasureData,
-} from '@/types';
+import type { InventoryItemUnitData, UnitOfMeasureData } from '@/types';
 
 type Props = {
     item: {
@@ -21,15 +18,10 @@ type Props = {
     conversion: InventoryItemUnitData;
 };
 
-export default function EditInventoryItemUnit({
-    item,
-    conversion,
-}: Props) {
+export default function EditInventoryItemUnit({ item, conversion }: Props) {
     return (
         <>
-            <Head
-                title={`${item.name} - ${conversion.unitOfMeasure.symbol}`}
-            />
+            <Head title={`${item.name} - ${conversion.unitOfMeasure.symbol}`} />
 
             <div className="flex flex-1 flex-col gap-6 p-4">
                 <div>
@@ -76,9 +68,7 @@ export default function EditInventoryItemUnit({
                                     </p>
 
                                     <InputError
-                                        message={
-                                            errors.quantity_in_base_unit
-                                        }
+                                        message={errors.quantity_in_base_unit}
                                     />
                                 </div>
 
@@ -101,10 +91,7 @@ export default function EditInventoryItemUnit({
                                 </div>
 
                                 <div className="flex gap-2">
-                                    <Button
-                                        type="submit"
-                                        disabled={processing}
-                                    >
+                                    <Button type="submit" disabled={processing}>
                                         Save conversion
                                     </Button>
 

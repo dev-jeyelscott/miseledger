@@ -37,9 +37,15 @@ class StoreInventoryItemUnitRequest extends FormRequest
      */
     public function rules(): array
     {
-        $organizationId = $this->organization()?->id ?? 0;
+        $organizationId = (int) (
+            $this->organization()?->getKey() ?? 0
+        );
+
         $inventoryItem = $this->inventoryItem();
-        $inventoryItemId = $inventoryItem?->id ?? 0;
+
+        $inventoryItemId = (int) (
+            $inventoryItem?->getKey() ?? 0
+        );
 
         return [
             'unit_of_measure_id' => [

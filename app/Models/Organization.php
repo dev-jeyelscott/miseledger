@@ -27,6 +27,16 @@ class Organization extends Model
     use HasFactory;
 
     /**
+     * Get locations belonging to this organization.
+     *
+     * @return HasMany<Location, $this>
+     */
+    public function locations(): HasMany
+    {
+        return $this->hasMany(Location::class);
+    }
+
+    /**
      * Get the organization's explicit user memberships.
      *
      * @return HasMany<OrganizationMembership, $this>

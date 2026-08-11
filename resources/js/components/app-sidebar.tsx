@@ -1,10 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
-import {
-    BookOpen,
-    Boxes,
-    FolderGit2,
-    LayoutGrid,
-} from 'lucide-react';
+import { BookOpen, Boxes, FolderGit2, LayoutGrid } from 'lucide-react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
@@ -20,10 +15,7 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
-import type {
-    NavItem,
-    OrganizationContext,
-} from '@/types';
+import type { NavItem, OrganizationContext } from '@/types';
 
 type PageProps = {
     organizationContext: OrganizationContext;
@@ -47,8 +39,7 @@ export function AppSidebar() {
 
     const activeMembership = organizationContext.memberships.find(
         (membership) =>
-            membership.organization.id
-            === organizationContext.active?.id,
+            membership.organization.id === organizationContext.active?.id,
     );
 
     const mainNavItems: NavItem[] = [
@@ -59,9 +50,7 @@ export function AppSidebar() {
         },
     ];
 
-    if (
-        activeMembership?.permissions.includes('inventory.view')
-    ) {
+    if (activeMembership?.permissions.includes('inventory.view')) {
         mainNavItems.push({
             title: 'Inventory',
             href: InventoryItemController.index(),
@@ -88,10 +77,7 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter>
-                <NavFooter
-                    items={footerNavItems}
-                    className="mt-auto"
-                />
+                <NavFooter items={footerNavItems} className="mt-auto" />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

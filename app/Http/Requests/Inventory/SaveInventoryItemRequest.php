@@ -44,7 +44,10 @@ class SaveInventoryItemRequest extends FormRequest
      */
     public function rules(): array
     {
-        $organizationId = $this->organization()?->id ?? 0;
+        $organizationId = (int) (
+            $this->organization()?->getKey() ?? 0
+        );
+
         $inventoryItem = $this->inventoryItem();
 
         return [

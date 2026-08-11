@@ -6,10 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
-import type {
-    InventoryItemDetail,
-    UnitOfMeasureData,
-} from '@/types';
+import type { InventoryItemDetail, UnitOfMeasureData } from '@/types';
 
 type Props = {
     item: InventoryItemDetail;
@@ -122,10 +119,7 @@ export default function EditInventoryItem({
                                         <InputError message={errors.active} />
                                     </div>
 
-                                    <Button
-                                        type="submit"
-                                        disabled={processing}
-                                    >
+                                    <Button type="submit" disabled={processing}>
                                         Save item
                                     </Button>
                                 </>
@@ -136,9 +130,7 @@ export default function EditInventoryItem({
                     <div className="space-y-6">
                         <div className="rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
                             <div className="border-b border-sidebar-border/70 px-5 py-4 dark:border-sidebar-border">
-                                <h2 className="font-medium">
-                                    Alternate units
-                                </h2>
+                                <h2 className="font-medium">Alternate units</h2>
                                 <p className="mt-1 text-sm text-muted-foreground">
                                     Base: {item.baseUnitOfMeasure.symbol}
                                 </p>
@@ -150,57 +142,53 @@ export default function EditInventoryItem({
                                 </div>
                             ) : (
                                 <div className="divide-y divide-sidebar-border/70 dark:divide-sidebar-border">
-                                    {item.unitConversions.map(
-                                        (conversion) => (
-                                            <div
-                                                key={conversion.id}
-                                                className="flex items-center justify-between gap-4 px-5 py-4"
-                                            >
-                                                <div>
-                                                    <p className="font-medium">
-                                                        1{' '}
-                                                        {
-                                                            conversion
-                                                                .unitOfMeasure
-                                                                .symbol
-                                                        }{' '}
-                                                        ={' '}
-                                                        {
-                                                            conversion.quantityInBaseUnit
-                                                        }{' '}
-                                                        {
-                                                            item
-                                                                .baseUnitOfMeasure
-                                                                .symbol
-                                                        }
-                                                    </p>
+                                    {item.unitConversions.map((conversion) => (
+                                        <div
+                                            key={conversion.id}
+                                            className="flex items-center justify-between gap-4 px-5 py-4"
+                                        >
+                                            <div>
+                                                <p className="font-medium">
+                                                    1{' '}
+                                                    {
+                                                        conversion.unitOfMeasure
+                                                            .symbol
+                                                    }{' '}
+                                                    ={' '}
+                                                    {
+                                                        conversion.quantityInBaseUnit
+                                                    }{' '}
+                                                    {
+                                                        item.baseUnitOfMeasure
+                                                            .symbol
+                                                    }
+                                                </p>
 
-                                                    <p className="mt-1 text-sm text-muted-foreground">
-                                                        {conversion.active
-                                                            ? 'Active'
-                                                            : 'Inactive'}
-                                                    </p>
-                                                </div>
-
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    asChild
-                                                >
-                                                    <Link
-                                                        href={InventoryItemUnitController.edit(
-                                                            [
-                                                                item.id,
-                                                                conversion.id,
-                                                            ],
-                                                        )}
-                                                    >
-                                                        Edit
-                                                    </Link>
-                                                </Button>
+                                                <p className="mt-1 text-sm text-muted-foreground">
+                                                    {conversion.active
+                                                        ? 'Active'
+                                                        : 'Inactive'}
+                                                </p>
                                             </div>
-                                        ),
-                                    )}
+
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                asChild
+                                            >
+                                                <Link
+                                                    href={InventoryItemUnitController.edit(
+                                                        [
+                                                            item.id,
+                                                            conversion.id,
+                                                        ],
+                                                    )}
+                                                >
+                                                    Edit
+                                                </Link>
+                                            </Button>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
@@ -238,10 +226,7 @@ export default function EditInventoryItem({
                                                     required
                                                     className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                                 >
-                                                    <option
-                                                        value=""
-                                                        disabled
-                                                    >
+                                                    <option value="" disabled>
                                                         Select unit
                                                     </option>
 

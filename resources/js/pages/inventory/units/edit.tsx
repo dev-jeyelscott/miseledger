@@ -62,9 +62,7 @@ export default function EditUnitOfMeasure({ unit }: Props) {
                                     <select
                                         id="active"
                                         name="active"
-                                        defaultValue={
-                                            unit.active ? '1' : '0'
-                                        }
+                                        defaultValue={unit.active ? '1' : '0'}
                                         className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="1">Active</option>
@@ -75,10 +73,7 @@ export default function EditUnitOfMeasure({ unit }: Props) {
                                 </div>
 
                                 <div className="flex gap-2">
-                                    <Button
-                                        type="submit"
-                                        disabled={processing}
-                                    >
+                                    <Button type="submit" disabled={processing}>
                                         Save unit
                                     </Button>
 
