@@ -242,6 +242,37 @@ test('an owner can add an existing registered organization member', function () 
     ]);
 });
 
+test('a manager cannot add an organization member', function () {
+    $manager = User::factory()->create();
+    $member = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($manager)
+        ->create([
+            'role' => OrganizationRole::Manager,
+        ]);
+
+    $this->actingAs($manager)
+        ->post(
+            route(
+                'organizations.members.store',
+                $organization,
+            ),
+            [
+                'email' => $member->email,
+                'role' => OrganizationRole::InventoryStaff->value,
+            ],
+        )
+        ->assertForbidden();
+
+    $this->assertDatabaseMissing('organization_memberships', [
+        'organization_id' => $organization->id,
+        'user_id' => $member->id,
+    ]);
+});
+
 test('duplicate organization membership is rejected', function () {
     $owner = User::factory()->create();
     $member = User::factory()->create();
