@@ -1,0 +1,65 @@
+<?php
+
+namespace App\Models;
+
+use Database\Factories\OrganizationFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
+
+/**
+ * @property int $id
+ * @property string $name
+ * @property string $slug
+ * @property string $timezone
+ * @property string $currency
+ * @property bool $active
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ */
+#[Fillable(['name', 'slug', 'timezone', 'currency', 'active'])]
+class Organization extends Model
+{
+    /** @use HasFactory<OrganizationFactory> */
+    use HasFactory;
+
+    /**
+     * Get the organization's explicit user memberships.
+     *
+     * @return HasMany<OrganizationMembership, $this>
+     */
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(OrganizationMembership::class);
+    }
+
+    /**
+     * Get users belonging to this organization.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            User::class,
+            'organization_memberships',
+        )
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    /**
+     * Cast organization state to stable application types.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'active' => 'boolean',
+        ];
+    }
+}

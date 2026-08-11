@@ -1,0 +1,37 @@
+export type OrganizationPermission =
+    | 'inventory.view'
+    | 'inventory.adjust'
+    | 'purchasing.view'
+    | 'purchasing.manage'
+    | 'receiving.finalize'
+    | 'counts.create'
+    | 'counts.finalize'
+    | 'waste.record'
+    | 'transfers.create'
+    | 'transfers.ship'
+    | 'transfers.receive'
+    | 'recipes.view'
+    | 'recipes.manage'
+    | 'reports.view'
+    | 'costs.view'
+    | 'users.manage';
+
+export type OrganizationRole =
+    'owner' | 'manager' | 'inventory_staff' | 'kitchen_staff' | 'auditor';
+
+export type OrganizationSummary = {
+    id: number;
+    name: string;
+    slug: string;
+};
+
+export type OrganizationMembership = {
+    organization: OrganizationSummary;
+    role: OrganizationRole;
+    permissions: OrganizationPermission[];
+};
+
+export type OrganizationContext = {
+    active: OrganizationSummary | null;
+    memberships: OrganizationMembership[];
+};

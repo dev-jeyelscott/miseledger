@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\OrganizationPermission;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -29,10 +32,53 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
-class User extends Authenticatable implements PasskeyUser
+class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+
+    /**
+     * Get the user's organization memberships.
+     *
+     * @return HasMany<OrganizationMembership, $this>
+     */
+    public function organizationMemberships(): HasMany
+    {
+        return $this->hasMany(OrganizationMembership::class);
+    }
+
+    /**
+     * Get organizations this user belongs to.
+     *
+     * @return BelongsToMany<Organization, $this>
+     */
+    public function organizations(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Organization::class,
+            'organization_memberships',
+        )
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    /**
+     * Determine whether this user has an organization-scoped permission.
+     */
+    public function hasOrganizationPermission(
+        Organization $organization,
+        OrganizationPermission $permission,
+    ): bool {
+        if (! $organization->active) {
+            return false;
+        }
+
+        $membership = $this->organizationMemberships()
+            ->where('organization_id', $organization->getKey())
+            ->first();
+
+        return $membership?->role->allows($permission) ?? false;
+    }
 
     /**
      * Get the attributes that should be cast.
