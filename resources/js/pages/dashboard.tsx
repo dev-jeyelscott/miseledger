@@ -1,5 +1,6 @@
 import { Form, Head, Link, usePage } from '@inertiajs/react';
 import OrganizationController from '@/actions/App/Http/Controllers/OrganizationController';
+import OrganizationLocationController from '@/actions/App/Http/Controllers/OrganizationLocationController';
 import OrganizationMemberController from '@/actions/App/Http/Controllers/OrganizationMemberController';
 import { Button } from '@/components/ui/button';
 import { dashboard } from '@/routes';
@@ -65,6 +66,20 @@ export default function Dashboard() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+                        {activeMembership?.permissions.includes(
+                            'locations.manage',
+                        ) && (
+                            <Button variant="outline" asChild>
+                                <Link
+                                    href={OrganizationLocationController.index(
+                                        organizationContext.active.id,
+                                    )}
+                                >
+                                    Manage locations
+                                </Link>
+                            </Button>
+                        )}
+
                         {activeMembership?.permissions.includes(
                             'users.manage',
                         ) && (

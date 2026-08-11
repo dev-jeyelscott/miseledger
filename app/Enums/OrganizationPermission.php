@@ -27,5 +27,6 @@ enum OrganizationPermission: string
     case ReportsView = 'reports.view';
     case CostsView = 'costs.view';
 
+    case LocationsManage = 'locations.manage';
     case UsersManage = 'users.manage';
 }

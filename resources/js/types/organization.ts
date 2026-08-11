@@ -14,6 +14,7 @@ export type OrganizationPermission =
     | 'recipes.manage'
     | 'reports.view'
     | 'costs.view'
+    | 'locations.manage'
     | 'users.manage';
 
 export type OrganizationRole =
