@@ -1,7 +1,7 @@
 import { Form, Head, Link, usePage } from '@inertiajs/react';
 import OrganizationController from '@/actions/App/Http/Controllers/OrganizationController';
-import OrganizationLocationController from '@/actions/App/Http/Controllers/OrganizationLocationController';
 import OrganizationMemberController from '@/actions/App/Http/Controllers/OrganizationMemberController';
+import OrganizationLocationController from '@/actions/App/Http/Controllers/OrganizationLocationController';
 import { Button } from '@/components/ui/button';
 import { dashboard } from '@/routes';
 import type { OrganizationContext } from '@/types';

@@ -27,16 +27,6 @@ class Organization extends Model
     use HasFactory;
 
     /**
-     * Get locations belonging to this organization.
-     *
-     * @return HasMany<Location, $this>
-     */
-    public function locations(): HasMany
-    {
-        return $this->hasMany(Location::class);
-    }
-
-    /**
      * Get the organization's explicit user memberships.
      *
      * @return HasMany<OrganizationMembership, $this>
@@ -59,6 +49,26 @@ class Organization extends Model
         )
             ->withPivot('role')
             ->withTimestamps();
+    }
+
+    /**
+     * Get organization-scoped units of measure.
+     *
+     * @return HasMany<UnitOfMeasure, $this>
+     */
+    public function unitsOfMeasure(): HasMany
+    {
+        return $this->hasMany(UnitOfMeasure::class);
+    }
+
+    /**
+     * Get organization-scoped inventory items.
+     *
+     * @return HasMany<InventoryItem, $this>
+     */
+    public function inventoryItems(): HasMany
+    {
+        return $this->hasMany(InventoryItem::class);
     }
 
     /**

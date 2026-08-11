@@ -35,7 +35,7 @@ class OrganizationLocationController extends Controller
                 'active',
             ])
             ->map(
-                static fn (Location $location): array => [
+                static fn(Location $location): array => [
                     'id' => $location->id,
                     'name' => $location->name,
                     'code' => $location->code,

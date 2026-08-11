@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Inventory\InventoryItemController;
+use App\Http\Controllers\Inventory\InventoryItemUnitController;
+use App\Http\Controllers\Inventory\UnitOfMeasureController;
 use App\Http\Controllers\OrganizationController;
-use App\Http\Controllers\OrganizationLocationController;
 use App\Http\Controllers\OrganizationMemberController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -40,27 +42,69 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         [OrganizationMemberController::class, 'store'],
     )->name('organizations.members.store');
 
-    Route::scopeBindings()->group(function (): void {
-        Route::get(
-            'organizations/{organization}/locations',
-            [OrganizationLocationController::class, 'index'],
-        )->name('organizations.locations.index');
+    Route::prefix('inventory')
+        ->name('inventory.')
+        ->group(function (): void {
+            Route::get(
+                'items',
+                [InventoryItemController::class, 'index'],
+            )->name('items.index');
 
-        Route::post(
-            'organizations/{organization}/locations',
-            [OrganizationLocationController::class, 'store'],
-        )->name('organizations.locations.store');
+            Route::get(
+                'items/create',
+                [InventoryItemController::class, 'create'],
+            )->name('items.create');
 
-        Route::get(
-            'organizations/{organization}/locations/{location}/edit',
-            [OrganizationLocationController::class, 'edit'],
-        )->name('organizations.locations.edit');
+            Route::post(
+                'items',
+                [InventoryItemController::class, 'store'],
+            )->name('items.store');
 
-        Route::put(
-            'organizations/{organization}/locations/{location}',
-            [OrganizationLocationController::class, 'update'],
-        )->name('organizations.locations.update');
-    });
+            Route::get(
+                'items/{inventoryItem}/edit',
+                [InventoryItemController::class, 'edit'],
+            )->name('items.edit');
+
+            Route::put(
+                'items/{inventoryItem}',
+                [InventoryItemController::class, 'update'],
+            )->name('items.update');
+
+            Route::post(
+                'items/{inventoryItem}/units',
+                [InventoryItemUnitController::class, 'store'],
+            )->name('items.units.store');
+
+            Route::get(
+                'items/{inventoryItem}/units/{inventoryItemUnit}/edit',
+                [InventoryItemUnitController::class, 'edit'],
+            )->name('items.units.edit');
+
+            Route::put(
+                'items/{inventoryItem}/units/{inventoryItemUnit}',
+                [InventoryItemUnitController::class, 'update'],
+            )->name('items.units.update');
+
+            Route::get(
+                'units',
+                [UnitOfMeasureController::class, 'index'],
+            )->name('units.index');
+
+            Route::post(
+                'units',
+                [UnitOfMeasureController::class, 'store'],
+            )->name('units.store');
+
+            Route::get(
+                'units/{unitOfMeasure}/edit',
+                [UnitOfMeasureController::class, 'edit'],
+            )->name('units.edit');
+
+            Route::put(
+                'units/{unitOfMeasure}',
+                [UnitOfMeasureController::class, 'update'],
+            )->name('units.update');
+        });
 });
 
 require __DIR__.'/settings.php';
