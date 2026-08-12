@@ -69,11 +69,11 @@ class InventoryReconcile extends Command
                 $identity->storage_location_id,
                 $identity->inventory_item_id,
                 $expected['quantity_on_hand'],
-                $actual?->quantity_on_hand ?? 'MISSING',
+                $actual->quantity_on_hand ?? 'MISSING',
                 $expected['average_unit_cost'],
-                $actual?->average_unit_cost ?? 'MISSING',
+                $actual->average_unit_cost ?? 'MISSING',
                 $expected['inventory_value'],
-                $actual?->inventory_value ?? 'MISSING',
+                $actual->inventory_value ?? 'MISSING',
             ];
         }
 
