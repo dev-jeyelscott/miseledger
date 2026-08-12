@@ -92,7 +92,8 @@ class SupplierItemController extends Controller
             ): void {
                 $query
                     ->where('active', true)
-                    ->orWhereKey(
+                    ->orWhere(
+                        'id',
                         $supplierItemRecord->inventory_item_id,
                     );
             })
@@ -116,7 +117,8 @@ class SupplierItemController extends Controller
             ): void {
                 $query
                     ->where('active', true)
-                    ->orWhereKey(
+                    ->orWhere(
+                        'id',
                         $supplierItemRecord
                             ->purchase_unit_of_measure_id,
                     );
