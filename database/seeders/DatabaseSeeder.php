@@ -18,8 +18,23 @@ class DatabaseSeeder extends Seeder
         // User::factory(10)->create();
 
         User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+            'name' => 'Miseledger Owner',
+            'email' => 'owner@miseledger.com',
+        ]);
+
+        User::factory()->create([
+            'name' => 'Inventory Staff',
+            'email' => 'inventory@miseledger.com',
+        ]);
+
+        User::factory()->create([
+            'name' => 'Kitchen Staff',
+            'email' => 'kitchen@miseledger.com',
+        ]);
+
+        User::factory()->create([
+            'name' => 'Auditor Staff',
+            'email' => 'auditor@miseledger.com',
         ]);
     }
 }

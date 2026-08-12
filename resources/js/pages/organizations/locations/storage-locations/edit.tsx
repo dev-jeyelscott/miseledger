@@ -96,10 +96,7 @@ export default function EditStorageLocation({
                                     <Button variant="outline" asChild>
                                         <Link
                                             href={OrganizationStorageLocationController.index(
-                                                [
-                                                    organization.id,
-                                                    location.id,
-                                                ],
+                                                [organization.id, location.id],
                                             )}
                                         >
                                             Cancel

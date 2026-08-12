@@ -57,9 +57,7 @@ export default function EditUnitOfMeasure({ unit }: Props) {
                                 </div>
 
                                 <div className="grid gap-2">
-                                    <Label htmlFor="dimension">
-                                        Dimension
-                                    </Label>
+                                    <Label htmlFor="dimension">Dimension</Label>
 
                                     <select
                                         id="dimension"

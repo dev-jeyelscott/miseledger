@@ -50,8 +50,8 @@ export default function UnitsOfMeasureIndex({ units, canManage }: Props) {
                                                 {unit.name}
                                             </p>
                                             <p className="mt-1 text-sm text-muted-foreground">
-                                                {unit.symbol} ·{' '}
-                                                {unit.dimension} ·{' '}
+                                                {unit.symbol} · {unit.dimension}{' '}
+                                                ·{' '}
                                                 {unit.active
                                                     ? 'Active'
                                                     : 'Inactive'}

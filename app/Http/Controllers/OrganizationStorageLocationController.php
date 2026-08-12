@@ -73,10 +73,13 @@ class OrganizationStorageLocationController extends Controller
         Location $location,
         SaveStorageLocation $saveStorageLocation,
     ): RedirectResponse {
+        /** @var array{name: string, code: string, active: bool} $attributes */
+        $attributes = $request->validated();
+
         $saveStorageLocation->handle(
             $organization,
             $location,
-            $request->validated(),
+            $attributes,
         );
 
         Inertia::flash('toast', [
@@ -137,10 +140,13 @@ class OrganizationStorageLocationController extends Controller
         StorageLocation $storageLocation,
         SaveStorageLocation $saveStorageLocation,
     ): RedirectResponse {
+        /** @var array{name: string, code: string, active: bool} $attributes */
+        $attributes = $request->validated();
+
         $saveStorageLocation->handle(
             $organization,
             $location,
-            $request->validated(),
+            $attributes,
             $storageLocation,
         );
 

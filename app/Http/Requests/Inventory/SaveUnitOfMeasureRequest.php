@@ -151,9 +151,7 @@ class SaveUnitOfMeasureRequest extends FormRequest
                 ? Str::squish($name)
                 : $name,
             'symbol' => $normalizedSymbol,
-            'dimension' => is_string($dimension)
-                ? strtolower(trim($dimension))
-                : $dimension,
+            'dimension' => strtolower(trim($dimension)),
             'active' => $this->boolean('active'),
         ]);
     }
