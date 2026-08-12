@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
-import type { UnitOfMeasureData } from '@/types';
+import type { UnitOfMeasureMasterData } from '@/types';
 
 type Props = {
-    unit: UnitOfMeasureData;
+    unit: UnitOfMeasureMasterData;
 };
 
 export default function EditUnitOfMeasure({ unit }: Props) {
@@ -54,6 +54,25 @@ export default function EditUnitOfMeasure({ unit }: Props) {
                                         required
                                     />
                                     <InputError message={errors.symbol} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="dimension">
+                                        Dimension
+                                    </Label>
+
+                                    <select
+                                        id="dimension"
+                                        name="dimension"
+                                        defaultValue={unit.dimension}
+                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    >
+                                        <option value="weight">Weight</option>
+                                        <option value="volume">Volume</option>
+                                        <option value="count">Count</option>
+                                    </select>
+
+                                    <InputError message={errors.dimension} />
                                 </div>
 
                                 <div className="grid gap-2">

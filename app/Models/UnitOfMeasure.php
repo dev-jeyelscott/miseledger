@@ -15,11 +15,18 @@ use Illuminate\Support\Carbon;
  * @property int $organization_id
  * @property string $name
  * @property string $symbol
+ * @property string $dimension
  * @property bool $active
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['organization_id', 'name', 'symbol', 'active'])]
+#[Fillable([
+    'organization_id',
+    'name',
+    'symbol',
+    'dimension',
+    'active',
+])]
 class UnitOfMeasure extends Model
 {
     /** @use HasFactory<UnitOfMeasureFactory> */

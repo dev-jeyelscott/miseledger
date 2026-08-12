@@ -2,17 +2,15 @@
 
 namespace App\Models;
 
-use Database\Factories\LocationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
  * @property int $organization_id
+ * @property int $location_id
  * @property string $name
  * @property string $code
  * @property bool $active
@@ -20,13 +18,14 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  */
 #[Fillable(['name', 'code', 'active'])]
-class Location extends Model
+class StorageLocation extends Model
 {
-    /** @use HasFactory<LocationFactory> */
-    use HasFactory;
+    public const DEFAULT_NAME = 'Default Storage';
+
+    public const DEFAULT_CODE = 'DEFAULT';
 
     /**
-     * Get the organization that owns this location.
+     * Get the organization owning this physical storage location.
      *
      * @return BelongsTo<Organization, $this>
      */
@@ -36,17 +35,17 @@ class Location extends Model
     }
 
     /**
-     * Get physical stock areas belonging to this location.
+     * Get the restaurant location containing this storage location.
      *
-     * @return HasMany<StorageLocation, $this>
+     * @return BelongsTo<Location, $this>
      */
-    public function storageLocations(): HasMany
+    public function location(): BelongsTo
     {
-        return $this->hasMany(StorageLocation::class);
+        return $this->belongsTo(Location::class);
     }
 
     /**
-     * Cast location state to stable application types.
+     * Cast persisted storage-location state.
      *
      * @return array<string, string>
      */

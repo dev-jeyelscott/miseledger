@@ -33,6 +33,13 @@ export type LocationSummary = {
     active: boolean;
 };
 
+export type StorageLocationSummary = {
+    id: number;
+    name: string;
+    code: string;
+    active: boolean;
+};
+
 export type OrganizationMembership = {
     organization: OrganizationSummary;
     role: OrganizationRole;

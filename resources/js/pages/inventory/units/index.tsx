@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
-import type { UnitOfMeasureData } from '@/types';
+import type { UnitOfMeasureMasterData } from '@/types';
 
 type Props = {
-    units: UnitOfMeasureData[];
+    units: UnitOfMeasureMasterData[];
     canManage: boolean;
 };
 
@@ -51,6 +51,7 @@ export default function UnitsOfMeasureIndex({ units, canManage }: Props) {
                                             </p>
                                             <p className="mt-1 text-sm text-muted-foreground">
                                                 {unit.symbol} ·{' '}
+                                                {unit.dimension} ·{' '}
                                                 {unit.active
                                                     ? 'Active'
                                                     : 'Inactive'}
@@ -118,6 +119,33 @@ export default function UnitsOfMeasureIndex({ units, canManage }: Props) {
                                             />
                                             <InputError
                                                 message={errors.symbol}
+                                            />
+                                        </div>
+
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="dimension">
+                                                Dimension
+                                            </Label>
+
+                                            <select
+                                                id="dimension"
+                                                name="dimension"
+                                                defaultValue="count"
+                                                className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                            >
+                                                <option value="weight">
+                                                    Weight
+                                                </option>
+                                                <option value="volume">
+                                                    Volume
+                                                </option>
+                                                <option value="count">
+                                                    Count
+                                                </option>
+                                            </select>
+
+                                            <InputError
+                                                message={errors.dimension}
                                             />
                                         </div>
 

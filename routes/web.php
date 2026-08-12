@@ -6,6 +6,7 @@ use App\Http\Controllers\Inventory\UnitOfMeasureController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\OrganizationLocationController;
 use App\Http\Controllers\OrganizationMemberController;
+use App\Http\Controllers\OrganizationStorageLocationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -63,6 +64,26 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             'organizations/{organization}/locations/{location}',
             [OrganizationLocationController::class, 'update'],
         )->name('organizations.locations.update');
+
+        Route::get(
+            'organizations/{organization}/locations/{location}/storage-locations',
+            [OrganizationStorageLocationController::class, 'index'],
+        )->name('organizations.locations.storage-locations.index');
+
+        Route::post(
+            'organizations/{organization}/locations/{location}/storage-locations',
+            [OrganizationStorageLocationController::class, 'store'],
+        )->name('organizations.locations.storage-locations.store');
+
+        Route::get(
+            'organizations/{organization}/locations/{location}/storage-locations/{storageLocation}/edit',
+            [OrganizationStorageLocationController::class, 'edit'],
+        )->name('organizations.locations.storage-locations.edit');
+
+        Route::put(
+            'organizations/{organization}/locations/{location}/storage-locations/{storageLocation}',
+            [OrganizationStorageLocationController::class, 'update'],
+        )->name('organizations.locations.storage-locations.update');
     });
 
     Route::prefix('inventory')

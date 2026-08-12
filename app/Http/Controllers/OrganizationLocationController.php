@@ -7,7 +7,9 @@ use App\Http\Requests\Organizations\StoreOrganizationLocationRequest;
 use App\Http\Requests\Organizations\UpdateOrganizationLocationRequest;
 use App\Models\Location;
 use App\Models\Organization;
+use App\Models\StorageLocation;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -56,15 +58,36 @@ class OrganizationLocationController extends Controller
     }
 
     /**
-     * Create a location through the owning organization relationship.
+     * Create a location and its default storage area atomically.
      */
     public function store(
         StoreOrganizationLocationRequest $request,
         Organization $organization,
     ): RedirectResponse {
-        $organization->locations()->create(
-            $request->validated(),
-        );
+        DB::transaction(function () use (
+            $request,
+            $organization,
+        ): void {
+            $location = $organization
+                ->locations()
+                ->create($request->validated());
+
+            $storageLocation = new StorageLocation([
+                'name' => StorageLocation::DEFAULT_NAME,
+                'code' => StorageLocation::DEFAULT_CODE,
+                'active' => true,
+            ]);
+
+            $storageLocation
+                ->organization()
+                ->associate($organization);
+
+            $storageLocation
+                ->location()
+                ->associate($location);
+
+            $storageLocation->save();
+        });
 
         Inertia::flash('toast', [
             'type' => 'success',

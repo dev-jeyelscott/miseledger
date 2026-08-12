@@ -7,6 +7,86 @@ use App\Models\OrganizationMembership;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 
+test('each MVP role receives only its assigned organization permissions', function (
+    OrganizationRole $role,
+    array $allowedPermissions,
+) {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create([
+            'role' => $role,
+        ]);
+
+    foreach (OrganizationPermission::cases() as $permission) {
+        expect(
+            Gate::forUser($user)->allows(
+                $permission->value,
+                $organization,
+            ),
+        )->toBe(in_array($permission, $allowedPermissions, true));
+    }
+})->with([
+    'owner' => [OrganizationRole::Owner, OrganizationPermission::cases()],
+    'manager' => [
+        OrganizationRole::Manager,
+        [
+            OrganizationPermission::InventoryView,
+            OrganizationPermission::InventoryAdjust,
+            OrganizationPermission::PurchasingView,
+            OrganizationPermission::PurchasingManage,
+            OrganizationPermission::ReceivingFinalize,
+            OrganizationPermission::CountsCreate,
+            OrganizationPermission::CountsFinalize,
+            OrganizationPermission::WasteRecord,
+            OrganizationPermission::TransfersCreate,
+            OrganizationPermission::TransfersShip,
+            OrganizationPermission::TransfersReceive,
+            OrganizationPermission::RecipesView,
+            OrganizationPermission::RecipesManage,
+            OrganizationPermission::ReportsView,
+            OrganizationPermission::CostsView,
+        ],
+    ],
+    'inventory staff' => [
+        OrganizationRole::InventoryStaff,
+        [
+            OrganizationPermission::InventoryView,
+            OrganizationPermission::InventoryAdjust,
+            OrganizationPermission::PurchasingView,
+            OrganizationPermission::ReceivingFinalize,
+            OrganizationPermission::CountsCreate,
+            OrganizationPermission::CountsFinalize,
+            OrganizationPermission::WasteRecord,
+            OrganizationPermission::TransfersCreate,
+            OrganizationPermission::TransfersShip,
+            OrganizationPermission::TransfersReceive,
+            OrganizationPermission::ReportsView,
+        ],
+    ],
+    'kitchen staff' => [
+        OrganizationRole::KitchenStaff,
+        [
+            OrganizationPermission::InventoryView,
+            OrganizationPermission::WasteRecord,
+            OrganizationPermission::RecipesView,
+        ],
+    ],
+    'auditor' => [
+        OrganizationRole::Auditor,
+        [
+            OrganizationPermission::InventoryView,
+            OrganizationPermission::PurchasingView,
+            OrganizationPermission::RecipesView,
+            OrganizationPermission::ReportsView,
+            OrganizationPermission::CostsView,
+        ],
+    ],
+]);
+
 test('an owner has every approved phase zero permission', function () {
     $user = User::factory()->create();
     $organization = Organization::factory()->create();

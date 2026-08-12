@@ -37,6 +37,16 @@ class Organization extends Model
     }
 
     /**
+     * Get physical storage locations belonging to this organization.
+     *
+     * @return HasMany<StorageLocation, $this>
+     */
+    public function storageLocations(): HasMany
+    {
+        return $this->hasMany(StorageLocation::class);
+    }
+
+    /**
      * Get the organization's explicit user memberships.
      *
      * @return HasMany<OrganizationMembership, $this>

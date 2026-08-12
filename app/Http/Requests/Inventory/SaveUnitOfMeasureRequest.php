@@ -6,6 +6,7 @@ use App\Enums\OrganizationPermission;
 use App\Models\Organization;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use App\Support\Inventory\StandardUnits;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
@@ -77,6 +78,11 @@ class SaveUnitOfMeasureRequest extends FormRequest
                     )
                     ->ignore($unitOfMeasure),
             ],
+            'dimension' => [
+                'required',
+                'string',
+                Rule::in(StandardUnits::dimensions()),
+            ],
             'active' => [
                 'required',
                 'boolean',
@@ -119,19 +125,35 @@ class SaveUnitOfMeasureRequest extends FormRequest
 
     /**
      * Normalize reusable master-data values before validation.
+     *
+     * Missing dimension falls back conservatively for backward-compatible
+     * callers. Standard symbols derive their authoritative dimension;
+     * otherwise the safe legacy default is count.
      */
     protected function prepareForValidation(): void
     {
         $name = $this->input('name');
         $symbol = $this->input('symbol');
+        $dimension = $this->input('dimension');
+
+        $normalizedSymbol = is_string($symbol)
+            ? trim($symbol)
+            : $symbol;
+
+        if (! is_string($dimension) || trim($dimension) === '') {
+            $dimension = is_string($normalizedSymbol)
+                ? StandardUnits::dimensionFor($normalizedSymbol) ?? 'count'
+                : 'count';
+        }
 
         $this->merge([
             'name' => is_string($name)
                 ? Str::squish($name)
                 : $name,
-            'symbol' => is_string($symbol)
-                ? trim($symbol)
-                : $symbol,
+            'symbol' => $normalizedSymbol,
+            'dimension' => is_string($dimension)
+                ? strtolower(trim($dimension))
+                : $dimension,
             'active' => $this->boolean('active'),
         ]);
     }

@@ -5,13 +5,14 @@ namespace App\Actions\Organizations;
 use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\User;
+use App\Support\Inventory\StandardUnits;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 final class CreateOrganization
 {
     /**
-     * Create the organization and its owner membership atomically.
+     * Create the organization, owner membership, and standard UOMs atomically.
      */
     public function handle(User $user, string $name): Organization
     {
@@ -28,6 +29,15 @@ final class CreateOrganization
                 'user_id' => $user->getKey(),
                 'role' => OrganizationRole::Owner,
             ]);
+
+            foreach (StandardUnits::definitions() as $unit) {
+                $organization->unitsOfMeasure()->create([
+                    'name' => $unit['name'],
+                    'symbol' => $unit['symbol'],
+                    'dimension' => $unit['dimension'],
+                    'active' => true,
+                ]);
+            }
 
             return $organization;
         });

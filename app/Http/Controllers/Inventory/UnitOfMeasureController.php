@@ -31,6 +31,7 @@ class UnitOfMeasureController extends Controller
         $units = $organization
             ->unitsOfMeasure()
             ->orderByDesc('active')
+            ->orderBy('dimension')
             ->orderBy('name')
             ->get()
             ->map(
@@ -38,6 +39,7 @@ class UnitOfMeasureController extends Controller
                     'id' => $unit->id,
                     'name' => $unit->name,
                     'symbol' => $unit->symbol,
+                    'dimension' => $unit->dimension,
                     'active' => $unit->active,
                 ],
             )
@@ -71,6 +73,7 @@ class UnitOfMeasureController extends Controller
             [
                 'name' => (string) $request->validated('name'),
                 'symbol' => (string) $request->validated('symbol'),
+                'dimension' => (string) $request->validated('dimension'),
                 'active' => (bool) $request->validated('active'),
             ],
         );
@@ -106,6 +109,7 @@ class UnitOfMeasureController extends Controller
                 'id' => $unit->id,
                 'name' => $unit->name,
                 'symbol' => $unit->symbol,
+                'dimension' => $unit->dimension,
                 'active' => $unit->active,
             ],
         ]);
@@ -131,6 +135,7 @@ class UnitOfMeasureController extends Controller
             [
                 'name' => (string) $request->validated('name'),
                 'symbol' => (string) $request->validated('symbol'),
+                'dimension' => (string) $request->validated('dimension'),
                 'active' => (bool) $request->validated('active'),
             ],
             $unit,

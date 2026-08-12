@@ -1,5 +1,6 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import OrganizationLocationController from '@/actions/App/Http/Controllers/OrganizationLocationController';
+import OrganizationStorageLocationController from '@/actions/App/Http/Controllers/OrganizationStorageLocationController';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,22 +70,41 @@ export default function OrganizationLocations({
                                             </div>
                                         </div>
 
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            asChild
-                                        >
-                                            <Link
-                                                href={OrganizationLocationController.edit(
-                                                    [
-                                                        organization.id,
-                                                        location.id,
-                                                    ],
-                                                )}
+                                        <div className="flex shrink-0 gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                asChild
                                             >
-                                                Edit
-                                            </Link>
-                                        </Button>
+                                                <Link
+                                                    href={OrganizationStorageLocationController.index(
+                                                        [
+                                                            organization.id,
+                                                            location.id,
+                                                        ],
+                                                    )}
+                                                >
+                                                    Storage
+                                                </Link>
+                                            </Button>
+
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                asChild
+                                            >
+                                                <Link
+                                                    href={OrganizationLocationController.edit(
+                                                        [
+                                                            organization.id,
+                                                            location.id,
+                                                        ],
+                                                    )}
+                                                >
+                                                    Edit
+                                                </Link>
+                                            </Button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>

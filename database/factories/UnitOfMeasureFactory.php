@@ -14,6 +14,9 @@ class UnitOfMeasureFactory extends Factory
     /**
      * Define a tenant-safe UOM.
      *
+     * Custom test units default to count so they never receive an
+     * accidental global weight or volume conversion.
+     *
      * @return array<string, mixed>
      */
     public function definition(): array
@@ -22,6 +25,7 @@ class UnitOfMeasureFactory extends Factory
             'organization_id' => Organization::factory(),
             'name' => fake()->unique()->words(2, true),
             'symbol' => fake()->unique()->bothify('uom-###'),
+            'dimension' => 'count',
             'active' => true,
         ];
     }
