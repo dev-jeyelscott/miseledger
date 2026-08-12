@@ -92,6 +92,16 @@ class Organization extends Model
     }
 
     /**
+     * Get organization-scoped suppliers.
+     *
+     * @return HasMany<Supplier, $this>
+     */
+    public function suppliers(): HasMany
+    {
+        return $this->hasMany(Supplier::class);
+    }
+
+    /**
      * Cast organization state to stable application types.
      *
      * @return array<string, string>

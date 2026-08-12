@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Boxes, FolderGit2, LayoutGrid } from 'lucide-react';
+import { BookOpen, Boxes, FolderGit2, LayoutGrid, Truck } from 'lucide-react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
+import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -55,6 +56,14 @@ export function AppSidebar() {
             title: 'Inventory',
             href: InventoryItemController.index(),
             icon: Boxes,
+        });
+    }
+
+    if (activeMembership?.permissions.includes('purchasing.view')) {
+        mainNavItems.push({
+            title: 'Suppliers',
+            href: SupplierController.index(),
+            icon: Truck,
         });
     }
 

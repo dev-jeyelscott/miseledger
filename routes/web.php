@@ -7,6 +7,8 @@ use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\OrganizationLocationController;
 use App\Http\Controllers\OrganizationMemberController;
 use App\Http\Controllers\OrganizationStorageLocationController;
+use App\Http\Controllers\Suppliers\SupplierController;
+use App\Http\Controllers\Suppliers\SupplierItemController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -148,6 +150,55 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 'units/{unitOfMeasure}',
                 [UnitOfMeasureController::class, 'update'],
             )->name('units.update');
+        });
+
+    Route::prefix('suppliers')
+        ->name('suppliers.')
+        ->group(function (): void {
+            Route::get(
+                '/',
+                [SupplierController::class, 'index'],
+            )->name('index');
+
+            Route::get(
+                'create',
+                [SupplierController::class, 'create'],
+            )->name('create');
+
+            Route::post(
+                '/',
+                [SupplierController::class, 'store'],
+            )->name('store');
+
+            Route::get(
+                '{supplier}/edit',
+                [SupplierController::class, 'edit'],
+            )->name('edit');
+
+            Route::put(
+                '{supplier}',
+                [SupplierController::class, 'update'],
+            )->name('update');
+
+            Route::post(
+                '{supplier}/items',
+                [SupplierItemController::class, 'store'],
+            )->name('items.store');
+
+            Route::get(
+                '{supplier}/items/{supplierItem}/edit',
+                [SupplierItemController::class, 'edit'],
+            )->name('items.edit');
+
+            Route::put(
+                '{supplier}/items/{supplierItem}',
+                [SupplierItemController::class, 'update'],
+            )->name('items.update');
+
+            Route::post(
+                '{supplier}/items/{supplierItem}/prices',
+                [SupplierItemController::class, 'storePrice'],
+            )->name('items.prices.store');
         });
 });
 
