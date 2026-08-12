@@ -381,6 +381,7 @@ test('a referenced unit of measure cannot be deactivated', function () {
         ->create([
             'name' => 'Gram',
             'symbol' => 'g',
+            'dimension' => 'weight',
         ]);
 
     InventoryItem::factory()
@@ -398,6 +399,7 @@ test('a referenced unit of measure cannot be deactivated', function () {
             [
                 'name' => 'Gram',
                 'symbol' => 'g',
+                'dimension' => 'weight',
                 'active' => false,
             ],
         )
