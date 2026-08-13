@@ -367,21 +367,22 @@ final class SaveGoodsReceipt
     }
 
     /**
-     * Require the purchase-order location to belong to the active tenant.
+     * Require the purchase-order location to be active in the active tenant.
      */
     private function validatePurchaseOrderLocation(
         Organization $organization,
         PurchaseOrder $purchaseOrder,
     ): void {
-        $locationExists = Location::query()
+        $locationIsActive = Location::query()
             ->where('organization_id', $organization->id)
             ->whereKey($purchaseOrder->location_id)
+            ->where('active', true)
             ->exists();
 
-        if (! $locationExists) {
+        if (! $locationIsActive) {
             throw ValidationException::withMessages([
                 'purchase_order' => __(
-                    'The purchase-order location does not belong to the active organization.',
+                    'The purchase-order location must be active in the active organization.',
                 ),
             ]);
         }

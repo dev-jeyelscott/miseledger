@@ -374,6 +374,26 @@ test(
 );
 
 test(
+    'an inactive location cannot be used to create a goods receipt',
+    function () {
+        $this->location->update(['active' => false]);
+
+        expect(fn () => saveReceivingReceiptForTest(
+            $this->organization,
+            $this->actor,
+            $this->purchaseOrder,
+            $this->purchaseOrderLine,
+            $this->storageLocation,
+            $this->baseUnit,
+            'GR-INACTIVE-LOCATION',
+            '1',
+        ))->toThrow(ValidationException::class);
+
+        expect(GoodsReceipt::query()->count())->toBe(0);
+    },
+);
+
+test(
     'finalization creates one purchase receipt movement per receipt line and is idempotent',
     function () {
         $receipt = app(SaveGoodsReceipt::class)->handle(
