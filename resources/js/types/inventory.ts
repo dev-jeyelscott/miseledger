@@ -1,5 +1,11 @@
 export type UnitDimension = 'weight' | 'volume' | 'count';
 
+export type InventoryCategoryData = {
+    id: number;
+    name: string;
+    active: boolean;
+};
+
 export type UnitOfMeasureData = {
     id: number;
     name: string;

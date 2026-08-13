@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
+import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import UnitOfMeasureController from '@/actions/App/Http/Controllers/Inventory/UnitOfMeasureController';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,12 @@ export default function InventoryItemsIndex({ items, canManage }: Props) {
                         <Button variant="outline" asChild>
                             <Link href={UnitOfMeasureController.index()}>
                                 Units of measure
+                            </Link>
+                        </Button>
+
+                        <Button variant="outline" asChild>
+                            <Link href={InventoryCategoryController.index()}>
+                                Categories
                             </Link>
                         </Button>
 
