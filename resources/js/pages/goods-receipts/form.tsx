@@ -127,6 +127,21 @@ const isPositiveQuantity = (value: string): boolean => {
 };
 
 /**
+ * Format decimal strings for display without converting through JavaScript floats.
+ */
+const formatDecimal = (value: string): string => {
+    const [rawInteger, rawDecimal = ''] = value.trim().split('.');
+    const negative = rawInteger.startsWith('-');
+    const integerDigits = negative ? rawInteger.slice(1) : rawInteger;
+    const groupedInteger = integerDigits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const decimal = rawDecimal.replace(/0+$/, '');
+
+    return `${negative ? '-' : ''}${groupedInteger}${
+        decimal === '' ? '' : `.${decimal}`
+    }`;
+};
+
+/**
  * Render receipt editing, PO fulfillment, non-stock evidence, and movement traceability.
  */
 export default function GoodsReceiptForm({
@@ -229,19 +244,25 @@ export default function GoodsReceiptForm({
                                             {line.itemName}
                                         </td>
                                         <td className="py-2">
-                                            {line.baseQuantity}
+                                            {formatDecimal(line.baseQuantity)}
                                         </td>
                                         <td className="py-2">
-                                            {line.receivedBaseQuantity}
+                                            {formatDecimal(
+                                                line.receivedBaseQuantity,
+                                            )}
                                         </td>
                                         <td className="py-2">
-                                            {line.remainingBaseQuantity}
+                                            {formatDecimal(
+                                                line.remainingBaseQuantity,
+                                            )}
                                         </td>
                                         <td className="py-2">
                                             {line.overReceivedBaseQuantity ===
                                             '0.000000'
                                                 ? '—'
-                                                : line.overReceivedBaseQuantity}
+                                                : formatDecimal(
+                                                      line.overReceivedBaseQuantity,
+                                                  )}
                                         </td>
                                     </tr>
                                 ))}
@@ -404,10 +425,14 @@ export default function GoodsReceiptForm({
                                                                             poLine.id
                                                                         }
                                                                     >
-                                                                        {`${poLine.itemName} — remaining ${poLine.remainingBaseQuantity} base${
+                                                                        {`${poLine.itemName} — remaining ${formatDecimal(
+                                                                            poLine.remainingBaseQuantity,
+                                                                        )} base${
                                                                             poLine.overReceivedBaseQuantity !==
                                                                             '0.000000'
-                                                                                ? ` · over received ${poLine.overReceivedBaseQuantity} base`
+                                                                                ? ` · over received ${formatDecimal(
+                                                                                      poLine.overReceivedBaseQuantity,
+                                                                                  )} base`
                                                                                 : ''
                                                                         }`}
                                                                     </option>
@@ -938,28 +963,36 @@ export default function GoodsReceiptForm({
                                                 {isPositiveQuantity(
                                                     line.receivedQuantity,
                                                 ) && line.receivedUnitSymbol
-                                                    ? `${line.receivedQuantity} ${line.receivedUnitSymbol}`
+                                                    ? `${formatDecimal(
+                                                          line.receivedQuantity,
+                                                      )} ${line.receivedUnitSymbol}`
                                                     : '—'}
                                             </td>
                                             <td className="py-2">
                                                 {isPositiveQuantity(
                                                     line.rejectedQuantity,
                                                 ) && line.rejectedUnitSymbol
-                                                    ? `${line.rejectedQuantity} ${line.rejectedUnitSymbol}`
+                                                    ? `${formatDecimal(
+                                                          line.rejectedQuantity,
+                                                      )} ${line.rejectedUnitSymbol}`
                                                     : '—'}
                                             </td>
                                             <td className="py-2">
                                                 {isPositiveQuantity(
                                                     line.damagedQuantity,
                                                 ) && line.damagedUnitSymbol
-                                                    ? `${line.damagedQuantity} ${line.damagedUnitSymbol}`
+                                                    ? `${formatDecimal(
+                                                          line.damagedQuantity,
+                                                      )} ${line.damagedUnitSymbol}`
                                                     : '—'}
                                             </td>
                                             <td className="py-2">
                                                 {isPositiveQuantity(
                                                     line.receivedQuantity,
                                                 )
-                                                    ? line.baseQuantity
+                                                    ? formatDecimal(
+                                                          line.baseQuantity,
+                                                      )
                                                     : '—'}
                                             </td>
                                             <td className="py-2">
@@ -971,7 +1004,9 @@ export default function GoodsReceiptForm({
                                                 {isPositiveQuantity(
                                                     line.receivedQuantity,
                                                 )
-                                                    ? `${currency} ${line.unitCost}`
+                                                    ? `${currency} ${formatDecimal(
+                                                          line.unitCost,
+                                                      )}`
                                                     : '—'}
                                             </td>
                                         </tr>

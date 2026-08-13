@@ -77,6 +77,42 @@ type Props = {
     canReceive: boolean;
 };
 
+/**
+ * Format fixed-precision decimal strings for display without JavaScript floats.
+ */
+const formatDecimal = (value: string): string => {
+    const [rawInteger, rawDecimal = ''] = value.trim().split('.');
+    const negative = rawInteger.startsWith('-');
+    const integerDigits = negative ? rawInteger.slice(1) : rawInteger;
+    const groupedInteger = integerDigits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const decimal = rawDecimal.replace(/0+$/, '');
+
+    return `${negative ? '-' : ''}${groupedInteger}${
+        decimal === '' ? '' : `.${decimal}`
+    }`;
+};
+
+/**
+ * Format money with thousands separators, at least two decimals, and no
+ * unnecessary precision beyond meaningful stored digits.
+ */
+const formatMoney = (value: string): string => {
+    const [rawInteger, rawDecimal = ''] = value.trim().split('.');
+    const negative = rawInteger.startsWith('-');
+    const integerDigits = negative ? rawInteger.slice(1) : rawInteger;
+    const groupedInteger = integerDigits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+    let decimal = rawDecimal;
+
+    while (decimal.length > 2 && decimal.endsWith('0')) {
+        decimal = decimal.slice(0, -1);
+    }
+
+    decimal = decimal.padEnd(2, '0');
+
+    return `${negative ? '-' : ''}${groupedInteger}.${decimal}`;
+};
+
 export default function PurchaseOrderForm({
     purchaseOrder,
     supplierOptions,
@@ -416,9 +452,9 @@ export default function PurchaseOrderForm({
                                                                     item.purchaseUnit
                                                                 }
                                                                 , {currency}{' '}
-                                                                {
-                                                                    item.currentPrice
-                                                                }
+                                                                {formatMoney(
+                                                                    item.currentPrice,
+                                                                )}
                                                                 )
                                                             </option>
                                                         ),
@@ -524,7 +560,10 @@ export default function PurchaseOrderForm({
                                     Subtotal
                                 </div>
                                 <div className="font-medium">
-                                    {currency} {purchaseOrder?.subtotal}
+                                    {currency}{' '}
+                                    {formatMoney(
+                                        purchaseOrder?.subtotal ?? '0.00',
+                                    )}
                                 </div>
                             </div>
                             <div>
@@ -532,7 +571,10 @@ export default function PurchaseOrderForm({
                                     Tax
                                 </div>
                                 <div className="font-medium">
-                                    {currency} {purchaseOrder?.taxTotal}
+                                    {currency}{' '}
+                                    {formatMoney(
+                                        purchaseOrder?.taxTotal ?? '0.00',
+                                    )}
                                 </div>
                             </div>
                             <div>
@@ -540,7 +582,10 @@ export default function PurchaseOrderForm({
                                     Discount
                                 </div>
                                 <div className="font-medium">
-                                    {currency} {purchaseOrder?.discountTotal}
+                                    {currency}{' '}
+                                    {formatMoney(
+                                        purchaseOrder?.discountTotal ?? '0.00',
+                                    )}
                                 </div>
                             </div>
                             <div>
@@ -548,7 +593,10 @@ export default function PurchaseOrderForm({
                                     Final total
                                 </div>
                                 <div className="font-semibold">
-                                    {currency} {purchaseOrder?.total}
+                                    {currency}{' '}
+                                    {formatMoney(
+                                        purchaseOrder?.total ?? '0.00',
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -579,14 +627,19 @@ export default function PurchaseOrderForm({
                                                 {line.supplierSku}
                                             </td>
                                             <td className="py-2">
-                                                {line.orderedQuantity}{' '}
+                                                {formatDecimal(
+                                                    line.orderedQuantity,
+                                                )}{' '}
                                                 {line.purchaseUnit.symbol}
                                             </td>
                                             <td className="py-2">
-                                                {line.receivedBaseQuantity}
+                                                {formatDecimal(
+                                                    line.receivedBaseQuantity,
+                                                )}
                                             </td>
                                             <td className="py-2 text-right">
-                                                {currency} {line.unitPrice}
+                                                {currency}{' '}
+                                                {formatMoney(line.unitPrice)}
                                             </td>
                                         </tr>
                                     ))}

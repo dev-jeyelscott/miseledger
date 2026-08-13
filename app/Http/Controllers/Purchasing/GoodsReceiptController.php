@@ -352,8 +352,8 @@ class GoodsReceiptController extends Controller
 
                         $overReceivedBaseQuantity = $receivedBaseQuantity
                             ->compareTo($baseQuantity) > 0
-                                ? $receivedBaseQuantity->minus($baseQuantity)
-                                : BigDecimal::of('0.000000');
+                            ? $receivedBaseQuantity->minus($baseQuantity)
+                            : BigDecimal::of('0.000000');
 
                         return [
                             'id' => $line->id,
@@ -466,14 +466,14 @@ class GoodsReceiptController extends Controller
             'baseQuantity' => $line->base_quantity,
             'unitCost' => $line->unit_cost,
             'totalCost' => $line->total_cost,
-            'rejectedQuantity' => $evidence?->rejected_quantity
+            'rejectedQuantity' => $evidence->rejected_quantity
                 ?? '0.000000',
             'rejectedUnitId' => $evidence?->rejected_unit_of_measure_id,
             'rejectedUnitSymbol' => $evidence
                 ?->rejectedUnitOfMeasure
                 ?->symbol,
             'rejectedBaseQuantity' => $evidence?->rejected_base_quantity,
-            'damagedQuantity' => $evidence?->damaged_quantity
+            'damagedQuantity' => $evidence->damaged_quantity
                 ?? '0.000000',
             'damagedUnitId' => $evidence?->damaged_unit_of_measure_id,
             'damagedUnitSymbol' => $evidence
