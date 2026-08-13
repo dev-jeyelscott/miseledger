@@ -55,6 +55,8 @@ type PurchaseOrder = {
     orderDate: string;
     expectedDeliveryDate: string | null;
     subtotal: string;
+    taxTotal: string;
+    discountTotal: string;
     total: string;
     notes: string | null;
     approvedAt: string | null;
@@ -292,6 +294,48 @@ export default function PurchaseOrderForm({
                                         />
                                     </div>
 
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="tax_total">
+                                            Tax total
+                                        </Label>
+                                        <Input
+                                            id="tax_total"
+                                            name="tax_total"
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            defaultValue={
+                                                purchaseOrder?.taxTotal ??
+                                                '0.00'
+                                            }
+                                            required
+                                        />
+                                        <InputError
+                                            message={errors.tax_total}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="discount_total">
+                                            Discount total
+                                        </Label>
+                                        <Input
+                                            id="discount_total"
+                                            name="discount_total"
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            defaultValue={
+                                                purchaseOrder?.discountTotal ??
+                                                '0.00'
+                                            }
+                                            required
+                                        />
+                                        <InputError
+                                            message={errors.discount_total}
+                                        />
+                                    </div>
+
                                     <div className="grid gap-2 md:col-span-2">
                                         <Label htmlFor="notes">Notes</Label>
                                         <textarea
@@ -451,7 +495,7 @@ export default function PurchaseOrderForm({
                     </Form>
                 ) : (
                     <div className="space-y-5 rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                        <div className="grid gap-4 md:grid-cols-3">
+                        <div className="grid gap-4 md:grid-cols-2">
                             <div>
                                 <div className="text-sm text-muted-foreground">
                                     Supplier
@@ -468,11 +512,38 @@ export default function PurchaseOrderForm({
                                     {purchaseOrder?.locationName}
                                 </div>
                             </div>
+                        </div>
+
+                        <div className="grid gap-4 rounded-lg bg-muted/40 p-4 sm:grid-cols-2 lg:grid-cols-4">
                             <div>
                                 <div className="text-sm text-muted-foreground">
-                                    Total
+                                    Subtotal
                                 </div>
                                 <div className="font-medium">
+                                    {currency} {purchaseOrder?.subtotal}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-sm text-muted-foreground">
+                                    Tax
+                                </div>
+                                <div className="font-medium">
+                                    {currency} {purchaseOrder?.taxTotal}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-sm text-muted-foreground">
+                                    Discount
+                                </div>
+                                <div className="font-medium">
+                                    {currency} {purchaseOrder?.discountTotal}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-sm text-muted-foreground">
+                                    Final total
+                                </div>
+                                <div className="font-semibold">
                                     {currency} {purchaseOrder?.total}
                                 </div>
                             </div>

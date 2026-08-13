@@ -386,6 +386,8 @@ class PurchaseOrderController extends Controller
                 ->expected_delivery_date
                 ?->toDateString(),
             'subtotal' => $purchaseOrder->subtotal,
+            'taxTotal' => $purchaseOrder->tax_total,
+            'discountTotal' => $purchaseOrder->discount_total,
             'total' => $purchaseOrder->total,
             'notes' => $purchaseOrder->notes,
             'approvedAt' => $purchaseOrder->approved_at

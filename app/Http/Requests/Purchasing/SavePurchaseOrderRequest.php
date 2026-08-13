@@ -89,6 +89,20 @@ class SavePurchaseOrderRequest extends FormRequest
                 'date',
                 'after_or_equal:order_date',
             ],
+            'tax_total' => [
+                'required',
+                'numeric',
+                'min:0',
+                'decimal:0,2',
+                'max:9999999999999.99',
+            ],
+            'discount_total' => [
+                'required',
+                'numeric',
+                'min:0',
+                'decimal:0,2',
+                'max:9999999999999.99',
+            ],
             'notes' => [
                 'nullable',
                 'string',
@@ -161,6 +175,8 @@ class SavePurchaseOrderRequest extends FormRequest
         $number = $this->input('number');
         $notes = $this->input('notes');
         $expected = $this->input('expected_delivery_date');
+        $taxTotal = $this->input('tax_total');
+        $discountTotal = $this->input('discount_total');
         $lines = $this->input('lines');
 
         if (is_array($lines)) {
@@ -192,7 +208,29 @@ class SavePurchaseOrderRequest extends FormRequest
             'expected_delivery_date' => $expected === ''
                 ? null
                 : $expected,
+            'tax_total' => $this->normalizedMoneyInput($taxTotal),
+            'discount_total' => $this->normalizedMoneyInput(
+                $discountTotal,
+            ),
             'lines' => $lines,
         ]);
+    }
+
+    /**
+     * Default an omitted money input to zero and trim string values.
+     */
+    private function normalizedMoneyInput(mixed $value): mixed
+    {
+        if ($value === null) {
+            return '0.00';
+        }
+
+        if (! is_string($value)) {
+            return $value;
+        }
+
+        $value = trim($value);
+
+        return $value === '' ? '0.00' : $value;
     }
 }

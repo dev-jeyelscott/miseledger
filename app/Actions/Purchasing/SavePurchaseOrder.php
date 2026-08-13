@@ -65,6 +65,16 @@ final class SavePurchaseOrder
                 (int) $attributes['location_id'],
             );
 
+            $taxTotal = $this->nonNegativeMoney(
+                $attributes['tax_total'] ?? '0.00',
+                'tax_total',
+            );
+
+            $discountTotal = $this->nonNegativeMoney(
+                $attributes['discount_total'] ?? '0.00',
+                'discount_total',
+            );
+
             $rawLines = $attributes['lines'] ?? [];
 
             if (! is_array($rawLines) || $rawLines === []) {
@@ -165,6 +175,19 @@ final class SavePurchaseOrder
                 RoundingMode::HalfUp,
             );
 
+            $total = $subtotal
+                ->plus($taxTotal)
+                ->minus($discountTotal)
+                ->toScale(2, RoundingMode::Unnecessary);
+
+            if ($total->compareTo(BigDecimal::zero()) < 0) {
+                throw ValidationException::withMessages([
+                    'discount_total' => __(
+                        'Discount cannot make the purchase order total negative.',
+                    ),
+                ]);
+            }
+
             $values = [
                 'organization_id' => $organization->id,
                 'location_id' => $location->id,
@@ -175,9 +198,9 @@ final class SavePurchaseOrder
                     'expected_delivery_date'
                 ] ?? null,
                 'subtotal' => (string) $subtotal,
-                'tax_total' => '0.00',
-                'discount_total' => '0.00',
-                'total' => (string) $subtotal,
+                'tax_total' => (string) $taxTotal,
+                'discount_total' => (string) $discountTotal,
+                'total' => (string) $total,
                 'notes' => $attributes['notes'] ?? null,
             ];
 
@@ -291,6 +314,33 @@ final class SavePurchaseOrder
         }
 
         return $supplierItem;
+    }
+
+    /**
+     * Parse a non-negative monetary amount with at most two decimals.
+     */
+    private function nonNegativeMoney(
+        mixed $value,
+        string $field,
+    ): BigDecimal {
+        try {
+            $amount = BigDecimal::of((string) $value)
+                ->toScale(2, RoundingMode::Unnecessary);
+        } catch (\Throwable) {
+            throw ValidationException::withMessages([
+                $field => __(
+                    'A valid monetary amount with at most two decimal places is required.',
+                ),
+            ]);
+        }
+
+        if ($amount->compareTo(BigDecimal::zero()) < 0) {
+            throw ValidationException::withMessages([
+                $field => __('Amount must be zero or greater.'),
+            ]);
+        }
+
+        return $amount;
     }
 
     /**
