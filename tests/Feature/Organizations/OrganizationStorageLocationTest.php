@@ -7,6 +7,8 @@ use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\StorageLocation;
 use App\Models\User;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -255,6 +257,29 @@ test('storage model rejects a location from another organization', function () {
     expect(
         fn () => $storageLocation->save(),
     )->toThrow(ValidationException::class);
+
+    $this->assertDatabaseCount('storage_locations', 0);
+});
+
+test('database rejects a storage location paired with another tenant location', function () {
+    $firstOrganization = Organization::factory()->create();
+    $secondOrganization = Organization::factory()->create();
+
+    $secondLocation = Location::factory()
+        ->for($secondOrganization)
+        ->create();
+
+    expect(
+        fn () => DB::table('storage_locations')->insert([
+            'organization_id' => $firstOrganization->id,
+            'location_id' => $secondLocation->id,
+            'name' => 'Cross Tenant Storage',
+            'code' => 'CROSS',
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]),
+    )->toThrow(QueryException::class);
 
     $this->assertDatabaseCount('storage_locations', 0);
 });
