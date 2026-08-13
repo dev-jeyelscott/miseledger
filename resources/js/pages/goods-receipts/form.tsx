@@ -33,17 +33,26 @@ type PurchaseOrder = {
 };
 
 type ReceiptLine = {
-    id: number;
+    key: string;
+    id: number | null;
     purchaseOrderLineId: number;
     itemName: string;
-    storageLocationId: number;
-    storageLocationName: string;
+    storageLocationId: number | null;
+    storageLocationName: string | null;
     receivedQuantity: string;
-    receivedUnitId: number;
-    receivedUnitSymbol: string;
+    receivedUnitId: number | null;
+    receivedUnitSymbol: string | null;
     baseQuantity: string;
     unitCost: string;
     totalCost: string;
+    rejectedQuantity: string;
+    rejectedUnitId: number | null;
+    rejectedUnitSymbol: string | null;
+    rejectedBaseQuantity: string | null;
+    damagedQuantity: string;
+    damagedUnitId: number | null;
+    damagedUnitSymbol: string | null;
+    damagedBaseQuantity: string | null;
     notes: string | null;
     movement: {
         id: number;
@@ -80,6 +89,10 @@ type LineState = {
     storageLocationId: string;
     receivedQuantity: string;
     receivedUnitId: string;
+    rejectedQuantity: string;
+    rejectedUnitId: string;
+    damagedQuantity: string;
+    damagedUnitId: string;
     notes: string;
 };
 
@@ -92,8 +105,29 @@ type Props = {
     canFinalize: boolean;
 };
 
+const emptyLine = (): LineState => ({
+    purchaseOrderLineId: '',
+    storageLocationId: '',
+    receivedQuantity: '1',
+    receivedUnitId: '',
+    rejectedQuantity: '0',
+    rejectedUnitId: '',
+    damagedQuantity: '0',
+    damagedUnitId: '',
+    notes: '',
+});
+
 /**
- * Render receipt editing, PO fulfillment, and finalized movement traceability.
+ * Client-only required-field helper. Server-side decimal conversion remains authoritative.
+ */
+const isPositiveQuantity = (value: string): boolean => {
+    const normalized = value.trim();
+
+    return normalized !== '' && !/^0(?:\.0+)?$/.test(normalized);
+};
+
+/**
+ * Render receipt editing, PO fulfillment, non-stock evidence, and movement traceability.
  */
 export default function GoodsReceiptForm({
     goodsReceipt,
@@ -108,19 +142,15 @@ export default function GoodsReceiptForm({
     const [lines, setLines] = useState<LineState[]>(
         goodsReceipt?.lines.map((line) => ({
             purchaseOrderLineId: line.purchaseOrderLineId.toString(),
-            storageLocationId: line.storageLocationId.toString(),
+            storageLocationId: line.storageLocationId?.toString() ?? '',
             receivedQuantity: line.receivedQuantity,
-            receivedUnitId: line.receivedUnitId.toString(),
+            receivedUnitId: line.receivedUnitId?.toString() ?? '',
+            rejectedQuantity: line.rejectedQuantity,
+            rejectedUnitId: line.rejectedUnitId?.toString() ?? '',
+            damagedQuantity: line.damagedQuantity,
+            damagedUnitId: line.damagedUnitId?.toString() ?? '',
             notes: line.notes ?? '',
-        })) ?? [
-            {
-                purchaseOrderLineId: '',
-                storageLocationId: '',
-                receivedQuantity: '1',
-                receivedUnitId: '',
-                notes: '',
-            },
-        ],
+        })) ?? [emptyLine()],
     );
 
     const updateLine = (index: number, values: Partial<LineState>) => {
@@ -137,16 +167,7 @@ export default function GoodsReceiptForm({
     };
 
     const addLine = () => {
-        setLines((current) => [
-            ...current,
-            {
-                purchaseOrderLineId: '',
-                storageLocationId: '',
-                receivedQuantity: '1',
-                receivedUnitId: '',
-                notes: '',
-            },
-        ]);
+        setLines((current) => [...current, emptyLine()]);
     };
 
     const removeLine = (index: number) => {
@@ -182,7 +203,8 @@ export default function GoodsReceiptForm({
                     <div>
                         <h2 className="font-semibold">PO fulfillment</h2>
                         <p className="text-sm text-muted-foreground">
-                            Accepted quantities are tracked in base units.
+                            Only accepted quantities count toward PO fulfillment
+                            and inventory.
                         </p>
                     </div>
 
@@ -192,7 +214,7 @@ export default function GoodsReceiptForm({
                                 <tr>
                                     <th className="py-2">Item</th>
                                     <th className="py-2">Ordered base</th>
-                                    <th className="py-2">Received base</th>
+                                    <th className="py-2">Accepted base</th>
                                     <th className="py-2">Remaining</th>
                                     <th className="py-2">Over received</th>
                                 </tr>
@@ -281,13 +303,16 @@ export default function GoodsReceiptForm({
                                 </div>
 
                                 <div className="space-y-4 rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-4">
                                         <div>
                                             <h2 className="font-semibold">
-                                                Received items
+                                                Receiving quantities
                                             </h2>
                                             <p className="text-sm text-muted-foreground">
-                                                Drafts do not change inventory.
+                                                Accepted enters inventory.
+                                                Rejected and damaged are
+                                                retained as non-stock receiving
+                                                evidence.
                                             </p>
                                         </div>
 
@@ -307,233 +332,524 @@ export default function GoodsReceiptForm({
                                                     poLine.id.toString() ===
                                                     line.purchaseOrderLineId,
                                             );
+                                        const hasAccepted = isPositiveQuantity(
+                                            line.receivedQuantity,
+                                        );
+                                        const hasRejected = isPositiveQuantity(
+                                            line.rejectedQuantity,
+                                        );
+                                        const hasDamaged = isPositiveQuantity(
+                                            line.damagedQuantity,
+                                        );
 
                                         return (
                                             <div
                                                 key={index}
-                                                className="grid gap-4 border-t pt-4 lg:grid-cols-4"
+                                                className="space-y-4 border-t pt-4"
                                             >
-                                                <div className="grid gap-2 lg:col-span-2">
-                                                    <Label>PO line</Label>
-                                                    <select
-                                                        name={`lines[${index}][purchase_order_line_id]`}
-                                                        value={
-                                                            line.purchaseOrderLineId
-                                                        }
-                                                        onChange={(event) => {
-                                                            const poLine =
-                                                                purchaseOrder.lines.find(
-                                                                    (
-                                                                        candidate,
-                                                                    ) =>
-                                                                        candidate.id.toString() ===
-                                                                        event
-                                                                            .target
-                                                                            .value,
-                                                                );
-
-                                                            updateLine(index, {
-                                                                purchaseOrderLineId:
-                                                                    event.target
-                                                                        .value,
-                                                                receivedUnitId:
+                                                <div className="grid gap-4 lg:grid-cols-4">
+                                                    <div className="grid gap-2 lg:col-span-2">
+                                                        <Label>PO line</Label>
+                                                        <select
+                                                            name={`lines[${index}][purchase_order_line_id]`}
+                                                            value={
+                                                                line.purchaseOrderLineId
+                                                            }
+                                                            onChange={(
+                                                                event,
+                                                            ) => {
+                                                                const poLine =
+                                                                    purchaseOrder.lines.find(
+                                                                        (
+                                                                            candidate,
+                                                                        ) =>
+                                                                            candidate.id.toString() ===
+                                                                            event
+                                                                                .target
+                                                                                .value,
+                                                                    );
+                                                                const unitId =
                                                                     poLine?.purchaseUnit.id.toString() ??
-                                                                    '',
-                                                            });
-                                                        }}
-                                                        required
-                                                        className="h-9 rounded-md border bg-background px-3 text-sm"
-                                                    >
-                                                        <option value="">
-                                                            Select PO line
-                                                        </option>
-                                                        {purchaseOrder.lines.map(
-                                                            (poLine) => (
-                                                                <option
-                                                                    key={
-                                                                        poLine.id
-                                                                    }
-                                                                    value={
-                                                                        poLine.id
-                                                                    }
-                                                                >
-                                                                    {`${poLine.itemName} — remaining ${poLine.remainingBaseQuantity} base${
-                                                                        poLine.overReceivedBaseQuantity !==
-                                                                        '0.000000'
-                                                                            ? ` · over received ${poLine.overReceivedBaseQuantity} base`
-                                                                            : ''
-                                                                    }`}
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </select>
-                                                    <InputError
-                                                        message={
-                                                            errors[
-                                                                `lines.${index}.purchase_order_line_id`
-                                                            ]
-                                                        }
-                                                    />
-                                                </div>
+                                                                    '';
 
-                                                <div className="grid gap-2">
-                                                    <Label>
-                                                        Storage location
-                                                    </Label>
-                                                    <select
-                                                        name={`lines[${index}][storage_location_id]`}
-                                                        value={
-                                                            line.storageLocationId
-                                                        }
-                                                        onChange={(event) =>
-                                                            updateLine(index, {
-                                                                storageLocationId:
-                                                                    event.target
-                                                                        .value,
-                                                            })
-                                                        }
-                                                        required
-                                                        className="h-9 rounded-md border bg-background px-3 text-sm"
-                                                    >
-                                                        <option value="">
-                                                            Select storage
-                                                        </option>
-                                                        {storageLocationOptions.map(
-                                                            (storage) => (
-                                                                <option
-                                                                    key={
-                                                                        storage.id
-                                                                    }
-                                                                    value={
-                                                                        storage.id
-                                                                    }
-                                                                >
+                                                                updateLine(
+                                                                    index,
                                                                     {
-                                                                        storage.name
-                                                                    }
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </select>
-                                                    <InputError
-                                                        message={
-                                                            errors[
-                                                                `lines.${index}.storage_location_id`
-                                                            ]
-                                                        }
-                                                    />
-                                                </div>
-
-                                                <div className="grid gap-2">
-                                                    <Label>Quantity</Label>
-                                                    <Input
-                                                        name={`lines[${index}][received_quantity]`}
-                                                        type="number"
-                                                        min="0.000001"
-                                                        step="0.000001"
-                                                        value={
-                                                            line.receivedQuantity
-                                                        }
-                                                        onChange={(event) =>
-                                                            updateLine(index, {
-                                                                receivedQuantity:
-                                                                    event.target
-                                                                        .value,
-                                                            })
-                                                        }
-                                                        required
-                                                    />
-                                                    <InputError
-                                                        message={
-                                                            errors[
-                                                                `lines.${index}.received_quantity`
-                                                            ]
-                                                        }
-                                                    />
-                                                </div>
-
-                                                <div className="grid gap-2">
-                                                    <Label>Received unit</Label>
-                                                    <select
-                                                        name={`lines[${index}][received_unit_of_measure_id]`}
-                                                        value={
-                                                            line.receivedUnitId
-                                                        }
-                                                        onChange={(event) =>
-                                                            updateLine(index, {
-                                                                receivedUnitId:
-                                                                    event.target
-                                                                        .value,
-                                                            })
-                                                        }
-                                                        required
-                                                        className="h-9 rounded-md border bg-background px-3 text-sm"
-                                                    >
-                                                        <option value="">
-                                                            Select unit
-                                                        </option>
-                                                        {unitOptions.map(
-                                                            (unit) => (
-                                                                <option
-                                                                    key={
-                                                                        unit.id
-                                                                    }
-                                                                    value={
-                                                                        unit.id
-                                                                    }
-                                                                >
-                                                                    {unit.name}{' '}
-                                                                    (
-                                                                    {
-                                                                        unit.symbol
-                                                                    }
-                                                                    )
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </select>
-                                                    <InputError
-                                                        message={
-                                                            errors[
-                                                                `lines.${index}.received_unit_of_measure_id`
-                                                            ]
-                                                        }
-                                                    />
-                                                </div>
-
-                                                <div className="grid gap-2 lg:col-span-2">
-                                                    <Label>Line notes</Label>
-                                                    <Input
-                                                        name={`lines[${index}][notes]`}
-                                                        value={line.notes}
-                                                        onChange={(event) =>
-                                                            updateLine(index, {
-                                                                notes: event
-                                                                    .target
-                                                                    .value,
-                                                            })
-                                                        }
-                                                    />
-                                                </div>
-
-                                                <div className="flex items-end justify-between gap-3">
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {selectedPoLine &&
-                                                            `Purchase UOM: ${selectedPoLine.purchaseUnit.symbol}`}
+                                                                        purchaseOrderLineId:
+                                                                            event
+                                                                                .target
+                                                                                .value,
+                                                                        receivedUnitId:
+                                                                            unitId,
+                                                                        rejectedUnitId:
+                                                                            unitId,
+                                                                        damagedUnitId:
+                                                                            unitId,
+                                                                    },
+                                                                );
+                                                            }}
+                                                            required
+                                                            className="h-9 rounded-md border bg-background px-3 text-sm"
+                                                        >
+                                                            <option value="">
+                                                                Select PO line
+                                                            </option>
+                                                            {purchaseOrder.lines.map(
+                                                                (poLine) => (
+                                                                    <option
+                                                                        key={
+                                                                            poLine.id
+                                                                        }
+                                                                        value={
+                                                                            poLine.id
+                                                                        }
+                                                                    >
+                                                                        {`${poLine.itemName} — remaining ${poLine.remainingBaseQuantity} base${
+                                                                            poLine.overReceivedBaseQuantity !==
+                                                                            '0.000000'
+                                                                                ? ` · over received ${poLine.overReceivedBaseQuantity} base`
+                                                                                : ''
+                                                                        }`}
+                                                                    </option>
+                                                                ),
+                                                            )}
+                                                        </select>
+                                                        <InputError
+                                                            message={
+                                                                errors[
+                                                                    `lines.${index}.purchase_order_line_id`
+                                                                ]
+                                                            }
+                                                        />
                                                     </div>
 
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        onClick={() =>
-                                                            removeLine(index)
-                                                        }
-                                                        disabled={
-                                                            lines.length === 1
-                                                        }
-                                                    >
-                                                        Remove
-                                                    </Button>
+                                                    <div className="grid gap-2 lg:col-span-2">
+                                                        <Label>
+                                                            Storage location
+                                                        </Label>
+                                                        <select
+                                                            name={`lines[${index}][storage_location_id]`}
+                                                            value={
+                                                                line.storageLocationId
+                                                            }
+                                                            onChange={(event) =>
+                                                                updateLine(
+                                                                    index,
+                                                                    {
+                                                                        storageLocationId:
+                                                                            event
+                                                                                .target
+                                                                                .value,
+                                                                    },
+                                                                )
+                                                            }
+                                                            required={
+                                                                hasAccepted
+                                                            }
+                                                            className="h-9 rounded-md border bg-background px-3 text-sm"
+                                                        >
+                                                            <option value="">
+                                                                {hasAccepted
+                                                                    ? 'Select storage'
+                                                                    : 'Not required without accepted stock'}
+                                                            </option>
+                                                            {storageLocationOptions.map(
+                                                                (storage) => (
+                                                                    <option
+                                                                        key={
+                                                                            storage.id
+                                                                        }
+                                                                        value={
+                                                                            storage.id
+                                                                        }
+                                                                    >
+                                                                        {
+                                                                            storage.name
+                                                                        }
+                                                                    </option>
+                                                                ),
+                                                            )}
+                                                        </select>
+                                                        <InputError
+                                                            message={
+                                                                errors[
+                                                                    `lines.${index}.storage_location_id`
+                                                                ]
+                                                            }
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid gap-4 lg:grid-cols-3">
+                                                    <div className="space-y-3 rounded-lg border p-4">
+                                                        <div>
+                                                            <h3 className="text-sm font-medium">
+                                                                Accepted
+                                                            </h3>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                Stock-bearing
+                                                            </p>
+                                                        </div>
+                                                        <div className="grid gap-2">
+                                                            <Label>
+                                                                Quantity
+                                                            </Label>
+                                                            <Input
+                                                                name={`lines[${index}][received_quantity]`}
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.000001"
+                                                                value={
+                                                                    line.receivedQuantity
+                                                                }
+                                                                onChange={(
+                                                                    event,
+                                                                ) =>
+                                                                    updateLine(
+                                                                        index,
+                                                                        {
+                                                                            receivedQuantity:
+                                                                                event
+                                                                                    .target
+                                                                                    .value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                                required
+                                                            />
+                                                            <InputError
+                                                                message={
+                                                                    errors[
+                                                                        `lines.${index}.received_quantity`
+                                                                    ]
+                                                                }
+                                                            />
+                                                        </div>
+                                                        <div className="grid gap-2">
+                                                            <Label>
+                                                                Accepted unit
+                                                            </Label>
+                                                            <select
+                                                                name={`lines[${index}][received_unit_of_measure_id]`}
+                                                                value={
+                                                                    line.receivedUnitId
+                                                                }
+                                                                onChange={(
+                                                                    event,
+                                                                ) =>
+                                                                    updateLine(
+                                                                        index,
+                                                                        {
+                                                                            receivedUnitId:
+                                                                                event
+                                                                                    .target
+                                                                                    .value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                                required={
+                                                                    hasAccepted
+                                                                }
+                                                                className="h-9 rounded-md border bg-background px-3 text-sm"
+                                                            >
+                                                                <option value="">
+                                                                    Select unit
+                                                                </option>
+                                                                {unitOptions.map(
+                                                                    (unit) => (
+                                                                        <option
+                                                                            key={
+                                                                                unit.id
+                                                                            }
+                                                                            value={
+                                                                                unit.id
+                                                                            }
+                                                                        >
+                                                                            {
+                                                                                unit.name
+                                                                            }{' '}
+                                                                            (
+                                                                            {
+                                                                                unit.symbol
+                                                                            }
+                                                                            )
+                                                                        </option>
+                                                                    ),
+                                                                )}
+                                                            </select>
+                                                            <InputError
+                                                                message={
+                                                                    errors[
+                                                                        `lines.${index}.received_unit_of_measure_id`
+                                                                    ]
+                                                                }
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-3 rounded-lg border p-4">
+                                                        <div>
+                                                            <h3 className="text-sm font-medium">
+                                                                Rejected
+                                                            </h3>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                Does not enter
+                                                                inventory
+                                                            </p>
+                                                        </div>
+                                                        <div className="grid gap-2">
+                                                            <Label>
+                                                                Quantity
+                                                            </Label>
+                                                            <Input
+                                                                name={`lines[${index}][rejected_quantity]`}
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.000001"
+                                                                value={
+                                                                    line.rejectedQuantity
+                                                                }
+                                                                onChange={(
+                                                                    event,
+                                                                ) =>
+                                                                    updateLine(
+                                                                        index,
+                                                                        {
+                                                                            rejectedQuantity:
+                                                                                event
+                                                                                    .target
+                                                                                    .value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                            <InputError
+                                                                message={
+                                                                    errors[
+                                                                        `lines.${index}.rejected_quantity`
+                                                                    ]
+                                                                }
+                                                            />
+                                                        </div>
+                                                        <div className="grid gap-2">
+                                                            <Label>
+                                                                Rejected unit
+                                                            </Label>
+                                                            <select
+                                                                name={`lines[${index}][rejected_unit_of_measure_id]`}
+                                                                value={
+                                                                    line.rejectedUnitId
+                                                                }
+                                                                onChange={(
+                                                                    event,
+                                                                ) =>
+                                                                    updateLine(
+                                                                        index,
+                                                                        {
+                                                                            rejectedUnitId:
+                                                                                event
+                                                                                    .target
+                                                                                    .value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                                required={
+                                                                    hasRejected
+                                                                }
+                                                                className="h-9 rounded-md border bg-background px-3 text-sm"
+                                                            >
+                                                                <option value="">
+                                                                    Select unit
+                                                                </option>
+                                                                {unitOptions.map(
+                                                                    (unit) => (
+                                                                        <option
+                                                                            key={
+                                                                                unit.id
+                                                                            }
+                                                                            value={
+                                                                                unit.id
+                                                                            }
+                                                                        >
+                                                                            {
+                                                                                unit.name
+                                                                            }{' '}
+                                                                            (
+                                                                            {
+                                                                                unit.symbol
+                                                                            }
+                                                                            )
+                                                                        </option>
+                                                                    ),
+                                                                )}
+                                                            </select>
+                                                            <InputError
+                                                                message={
+                                                                    errors[
+                                                                        `lines.${index}.rejected_unit_of_measure_id`
+                                                                    ]
+                                                                }
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-3 rounded-lg border p-4">
+                                                        <div>
+                                                            <h3 className="text-sm font-medium">
+                                                                Damaged
+                                                            </h3>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                Does not enter
+                                                                inventory
+                                                            </p>
+                                                        </div>
+                                                        <div className="grid gap-2">
+                                                            <Label>
+                                                                Quantity
+                                                            </Label>
+                                                            <Input
+                                                                name={`lines[${index}][damaged_quantity]`}
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.000001"
+                                                                value={
+                                                                    line.damagedQuantity
+                                                                }
+                                                                onChange={(
+                                                                    event,
+                                                                ) =>
+                                                                    updateLine(
+                                                                        index,
+                                                                        {
+                                                                            damagedQuantity:
+                                                                                event
+                                                                                    .target
+                                                                                    .value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                            <InputError
+                                                                message={
+                                                                    errors[
+                                                                        `lines.${index}.damaged_quantity`
+                                                                    ]
+                                                                }
+                                                            />
+                                                        </div>
+                                                        <div className="grid gap-2">
+                                                            <Label>
+                                                                Damaged unit
+                                                            </Label>
+                                                            <select
+                                                                name={`lines[${index}][damaged_unit_of_measure_id]`}
+                                                                value={
+                                                                    line.damagedUnitId
+                                                                }
+                                                                onChange={(
+                                                                    event,
+                                                                ) =>
+                                                                    updateLine(
+                                                                        index,
+                                                                        {
+                                                                            damagedUnitId:
+                                                                                event
+                                                                                    .target
+                                                                                    .value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                                required={
+                                                                    hasDamaged
+                                                                }
+                                                                className="h-9 rounded-md border bg-background px-3 text-sm"
+                                                            >
+                                                                <option value="">
+                                                                    Select unit
+                                                                </option>
+                                                                {unitOptions.map(
+                                                                    (unit) => (
+                                                                        <option
+                                                                            key={
+                                                                                unit.id
+                                                                            }
+                                                                            value={
+                                                                                unit.id
+                                                                            }
+                                                                        >
+                                                                            {
+                                                                                unit.name
+                                                                            }{' '}
+                                                                            (
+                                                                            {
+                                                                                unit.symbol
+                                                                            }
+                                                                            )
+                                                                        </option>
+                                                                    ),
+                                                                )}
+                                                            </select>
+                                                            <InputError
+                                                                message={
+                                                                    errors[
+                                                                        `lines.${index}.damaged_unit_of_measure_id`
+                                                                    ]
+                                                                }
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid gap-4 lg:grid-cols-4">
+                                                    <div className="grid gap-2 lg:col-span-3">
+                                                        <Label>
+                                                            Line notes
+                                                        </Label>
+                                                        <Input
+                                                            name={`lines[${index}][notes]`}
+                                                            value={line.notes}
+                                                            onChange={(event) =>
+                                                                updateLine(
+                                                                    index,
+                                                                    {
+                                                                        notes: event
+                                                                            .target
+                                                                            .value,
+                                                                    },
+                                                                )
+                                                            }
+                                                        />
+                                                        <InputError
+                                                            message={
+                                                                errors[
+                                                                    `lines.${index}.notes`
+                                                                ]
+                                                            }
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex items-end justify-between gap-3">
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {selectedPoLine &&
+                                                                `Purchase UOM: ${selectedPoLine.purchaseUnit.symbol}`}
+                                                        </div>
+
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            onClick={() =>
+                                                                removeLine(
+                                                                    index,
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                lines.length ===
+                                                                1
+                                                            }
+                                                        >
+                                                            Remove
+                                                        </Button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
@@ -595,8 +911,10 @@ export default function GoodsReceiptForm({
                                     <tr>
                                         <th className="py-2">Item</th>
                                         <th className="py-2">Storage</th>
-                                        <th className="py-2">Received</th>
-                                        <th className="py-2">Base qty</th>
+                                        <th className="py-2">Accepted</th>
+                                        <th className="py-2">Rejected</th>
+                                        <th className="py-2">Damaged</th>
+                                        <th className="py-2">Accepted base</th>
                                         <th className="py-2">Movement</th>
                                         <th className="py-2 text-right">
                                             Unit cost
@@ -606,21 +924,43 @@ export default function GoodsReceiptForm({
                                 <tbody>
                                     {goodsReceipt?.lines.map((line) => (
                                         <tr
-                                            key={line.id}
+                                            key={line.key}
                                             className="border-b last:border-b-0"
                                         >
                                             <td className="py-2">
                                                 {line.itemName}
                                             </td>
                                             <td className="py-2">
-                                                {line.storageLocationName}
+                                                {line.storageLocationName ??
+                                                    '—'}
                                             </td>
                                             <td className="py-2">
-                                                {line.receivedQuantity}{' '}
-                                                {line.receivedUnitSymbol}
+                                                {isPositiveQuantity(
+                                                    line.receivedQuantity,
+                                                ) && line.receivedUnitSymbol
+                                                    ? `${line.receivedQuantity} ${line.receivedUnitSymbol}`
+                                                    : '—'}
                                             </td>
                                             <td className="py-2">
-                                                {line.baseQuantity}
+                                                {isPositiveQuantity(
+                                                    line.rejectedQuantity,
+                                                ) && line.rejectedUnitSymbol
+                                                    ? `${line.rejectedQuantity} ${line.rejectedUnitSymbol}`
+                                                    : '—'}
+                                            </td>
+                                            <td className="py-2">
+                                                {isPositiveQuantity(
+                                                    line.damagedQuantity,
+                                                ) && line.damagedUnitSymbol
+                                                    ? `${line.damagedQuantity} ${line.damagedUnitSymbol}`
+                                                    : '—'}
+                                            </td>
+                                            <td className="py-2">
+                                                {isPositiveQuantity(
+                                                    line.receivedQuantity,
+                                                )
+                                                    ? line.baseQuantity
+                                                    : '—'}
                                             </td>
                                             <td className="py-2">
                                                 {line.movement
@@ -628,7 +968,11 @@ export default function GoodsReceiptForm({
                                                     : '—'}
                                             </td>
                                             <td className="py-2 text-right">
-                                                {currency} {line.unitCost}
+                                                {isPositiveQuantity(
+                                                    line.receivedQuantity,
+                                                )
+                                                    ? `${currency} ${line.unitCost}`
+                                                    : '—'}
                                             </td>
                                         </tr>
                                     ))}

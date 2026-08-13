@@ -95,7 +95,7 @@ class SaveGoodsReceiptRequest extends FormRequest
                 ),
             ],
             'lines.*.storage_location_id' => [
-                'required',
+                'nullable',
                 'integer',
                 Rule::exists('storage_locations', 'id')->where(
                     fn (Builder $query): Builder => $query
@@ -107,12 +107,44 @@ class SaveGoodsReceiptRequest extends FormRequest
             'lines.*.received_quantity' => [
                 'required',
                 'numeric',
-                'gt:0',
+                'gte:0',
                 'decimal:0,6',
                 'max:999999999.999999',
             ],
             'lines.*.received_unit_of_measure_id' => [
-                'required',
+                'nullable',
+                'integer',
+                Rule::exists('units_of_measure', 'id')->where(
+                    fn (Builder $query): Builder => $query
+                        ->where('organization_id', $organizationId)
+                        ->where('active', true),
+                ),
+            ],
+            'lines.*.rejected_quantity' => [
+                'nullable',
+                'numeric',
+                'gte:0',
+                'decimal:0,6',
+                'max:999999999.999999',
+            ],
+            'lines.*.rejected_unit_of_measure_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('units_of_measure', 'id')->where(
+                    fn (Builder $query): Builder => $query
+                        ->where('organization_id', $organizationId)
+                        ->where('active', true),
+                ),
+            ],
+            'lines.*.damaged_quantity' => [
+                'nullable',
+                'numeric',
+                'gte:0',
+                'decimal:0,6',
+                'max:999999999.999999',
+            ],
+            'lines.*.damaged_unit_of_measure_id' => [
+                'nullable',
                 'integer',
                 Rule::exists('units_of_measure', 'id')->where(
                     fn (Builder $query): Builder => $query
@@ -208,13 +240,30 @@ class SaveGoodsReceiptRequest extends FormRequest
                         return $line;
                     }
 
-                    $quantity = $line['received_quantity'] ?? null;
-                    $lineNotes = $line['notes'] ?? null;
+                    foreach (
+                        [
+                            'received_quantity',
+                            'rejected_quantity',
+                            'damaged_quantity',
+                        ] as $field
+                    ) {
+                        $quantity = $line[$field] ?? null;
 
-                    if (is_string($quantity)) {
-                        $line['received_quantity'] = trim($quantity);
+                        if (is_string($quantity)) {
+                            $quantity = trim($quantity);
+                        }
+
+                        if (
+                            $field !== 'received_quantity'
+                            && ($quantity === null || $quantity === '')
+                        ) {
+                            $quantity = '0';
+                        }
+
+                        $line[$field] = $quantity;
                     }
 
+                    $lineNotes = $line['notes'] ?? null;
                     $line['notes'] = is_string($lineNotes)
                         && trim($lineNotes) !== ''
                             ? trim($lineNotes)

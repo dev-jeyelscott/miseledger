@@ -8,6 +8,7 @@ use App\Enums\OrganizationPermission;
 use App\Enums\PurchaseOrderStatus;
 use App\Models\GoodsReceipt;
 use App\Models\InventoryItem;
+use App\Models\Location;
 use App\Models\Organization;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
@@ -21,6 +22,8 @@ use Illuminate\Validation\ValidationException;
 
 final class SaveGoodsReceipt
 {
+    private const MAX_QUANTITY = '999999999.999999';
+
     public function __construct(
         private readonly ConvertQuantity $convertQuantity,
     ) {}
@@ -52,6 +55,8 @@ final class SaveGoodsReceipt
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            $this->validatePurchaseOrderLocation($organization, $po);
+
             $receipt = $goodsReceipt === null
                 ? null
                 : GoodsReceipt::query()
@@ -76,6 +81,17 @@ final class SaveGoodsReceipt
                 && $receipt->purchase_order_id !== $po->id
             ) {
                 abort(403);
+            }
+
+            if (
+                $receipt !== null
+                && $receipt->location_id !== $po->location_id
+            ) {
+                throw ValidationException::withMessages([
+                    'goods_receipt' => __(
+                        'The goods receipt location does not match its purchase order.',
+                    ),
+                ]);
             }
 
             if (
@@ -129,85 +145,163 @@ final class SaveGoodsReceipt
                     ]);
                 }
 
-                $storageLocation = StorageLocation::query()
-                    ->where('organization_id', $organization->id)
-                    ->where('location_id', $po->location_id)
-                    ->where('active', true)
-                    ->find(
-                        (int) (
-                            $rawLine['storage_location_id'] ?? 0
-                        ),
-                    );
+                $this->validatePurchaseOrderLineOwnership(
+                    $organization,
+                    $poLine,
+                    $index,
+                );
 
-                if ($storageLocation === null) {
-                    throw ValidationException::withMessages([
-                        "lines.{$index}.storage_location_id" => __(
-                            'Select an active storage location belonging to the purchase-order location.',
-                        ),
-                    ]);
-                }
-
-                $receivedUnit = UnitOfMeasure::query()
-                    ->where('organization_id', $organization->id)
-                    ->where('active', true)
-                    ->find(
-                        (int) (
-                            $rawLine['received_unit_of_measure_id'] ?? 0
-                        ),
-                    );
-
-                if ($receivedUnit === null) {
-                    throw ValidationException::withMessages([
-                        "lines.{$index}.received_unit_of_measure_id" => __(
-                            'Select an active receiving unit.',
-                        ),
-                    ]);
-                }
-
-                $receivedQuantity = $this->positiveQuantity(
+                $acceptedQuantity = $this->nonNegativeQuantity(
                     $rawLine['received_quantity'] ?? null,
                     "lines.{$index}.received_quantity",
                 );
 
-                $baseQuantity = $this->baseQuantity(
-                    $organization,
-                    $poLine,
-                    $receivedQuantity,
-                    $receivedUnit,
+                $rejectedQuantity = $this->nonNegativeQuantity(
+                    $rawLine['rejected_quantity'] ?? '0',
+                    "lines.{$index}.rejected_quantity",
                 );
 
-                $basePerPurchaseUnit = BigDecimal::of(
-                    $poLine->base_quantity,
-                )->dividedBy(
-                    BigDecimal::of($poLine->ordered_quantity),
-                    12,
-                    RoundingMode::HalfUp,
+                $damagedQuantity = $this->nonNegativeQuantity(
+                    $rawLine['damaged_quantity'] ?? '0',
+                    "lines.{$index}.damaged_quantity",
                 );
 
-                $unitCost = BigDecimal::of($poLine->unit_price)
-                    ->dividedBy(
-                        $basePerPurchaseUnit,
-                        4,
+                $hasAccepted = $this->isPositive($acceptedQuantity);
+                $hasRejected = $this->isPositive($rejectedQuantity);
+                $hasDamaged = $this->isPositive($damagedQuantity);
+
+                if (! $hasAccepted && ! $hasRejected && ! $hasDamaged) {
+                    throw ValidationException::withMessages([
+                        "lines.{$index}.received_quantity" => __(
+                            'Enter an accepted, rejected, or damaged quantity greater than zero.',
+                        ),
+                    ]);
+                }
+
+                $notes = $this->nullableString(
+                    $rawLine['notes'] ?? null,
+                );
+
+                $stockSnapshot = null;
+                $nonStockSnapshot = null;
+
+                if ($hasAccepted) {
+                    $storageLocation = $this->storageLocation(
+                        $organization,
+                        $po,
+                        $rawLine['storage_location_id'] ?? null,
+                        "lines.{$index}.storage_location_id",
+                    );
+
+                    $acceptedUnit = $this->activeUnitOfMeasure(
+                        $organization,
+                        $rawLine['received_unit_of_measure_id'] ?? null,
+                        "lines.{$index}.received_unit_of_measure_id",
+                    );
+
+                    $acceptedBaseQuantity = $this->baseQuantity(
+                        $organization,
+                        $poLine,
+                        $acceptedQuantity,
+                        $acceptedUnit,
+                        "lines.{$index}.received_quantity",
+                    );
+
+                    $basePerPurchaseUnit = BigDecimal::of(
+                        $poLine->base_quantity,
+                    )->dividedBy(
+                        BigDecimal::of($poLine->ordered_quantity),
+                        12,
                         RoundingMode::HalfUp,
                     );
 
-                $totalCost = $baseQuantity
-                    ->multipliedBy($unitCost)
-                    ->toScale(4, RoundingMode::HalfUp);
+                    $unitCost = BigDecimal::of($poLine->unit_price)
+                        ->dividedBy(
+                            $basePerPurchaseUnit,
+                            4,
+                            RoundingMode::HalfUp,
+                        );
+
+                    $totalCost = $acceptedBaseQuantity
+                        ->multipliedBy($unitCost)
+                        ->toScale(4, RoundingMode::HalfUp);
+
+                    $stockSnapshot = [
+                        'purchase_order_line_id' => $poLine->id,
+                        'inventory_item_id' => $poLine->inventory_item_id,
+                        'storage_location_id' => $storageLocation->id,
+                        'received_quantity' => (string) $acceptedQuantity,
+                        'received_unit_of_measure_id' => $acceptedUnit->id,
+                        'base_quantity' => (string) $acceptedBaseQuantity,
+                        'unit_cost' => (string) $unitCost,
+                        'total_cost' => (string) $totalCost,
+                        'notes' => $notes,
+                    ];
+                }
+
+                $rejectedUnit = null;
+                $rejectedBaseQuantity = null;
+
+                if ($hasRejected) {
+                    $rejectedUnit = $this->activeUnitOfMeasure(
+                        $organization,
+                        $rawLine['rejected_unit_of_measure_id'] ?? null,
+                        "lines.{$index}.rejected_unit_of_measure_id",
+                    );
+
+                    $rejectedBaseQuantity = $this->baseQuantity(
+                        $organization,
+                        $poLine,
+                        $rejectedQuantity,
+                        $rejectedUnit,
+                        "lines.{$index}.rejected_quantity",
+                    );
+                }
+
+                $damagedUnit = null;
+                $damagedBaseQuantity = null;
+
+                if ($hasDamaged) {
+                    $damagedUnit = $this->activeUnitOfMeasure(
+                        $organization,
+                        $rawLine['damaged_unit_of_measure_id'] ?? null,
+                        "lines.{$index}.damaged_unit_of_measure_id",
+                    );
+
+                    $damagedBaseQuantity = $this->baseQuantity(
+                        $organization,
+                        $poLine,
+                        $damagedQuantity,
+                        $damagedUnit,
+                        "lines.{$index}.damaged_quantity",
+                    );
+                }
+
+                if ($hasRejected || $hasDamaged) {
+                    $nonStockSnapshot = [
+                        'purchase_order_line_id' => $poLine->id,
+                        'inventory_item_id' => $poLine->inventory_item_id,
+                        'rejected_quantity' => $hasRejected
+                            ? (string) $rejectedQuantity
+                            : null,
+                        'rejected_unit_of_measure_id' => $rejectedUnit?->id,
+                        'rejected_base_quantity' => $rejectedBaseQuantity === null
+                            ? null
+                            : (string) $rejectedBaseQuantity,
+                        'damaged_quantity' => $hasDamaged
+                            ? (string) $damagedQuantity
+                            : null,
+                        'damaged_unit_of_measure_id' => $damagedUnit?->id,
+                        'damaged_base_quantity' => $damagedBaseQuantity === null
+                            ? null
+                            : (string) $damagedBaseQuantity,
+                        'notes' => $notes,
+                    ];
+                }
 
                 $lineSnapshots[] = [
-                    'purchase_order_line_id' => $poLine->id,
-                    'inventory_item_id' => $poLine->inventory_item_id,
-                    'storage_location_id' => $storageLocation->id,
-                    'received_quantity' => (string) $receivedQuantity
-                        ->toScale(6, RoundingMode::HalfUp),
-                    'received_unit_of_measure_id' => $receivedUnit->id,
-                    'base_quantity' => (string) $baseQuantity,
-                    'unit_cost' => (string) $unitCost,
-                    'total_cost' => (string) $totalCost,
-                    'notes' => $this->nullableString(
-                        $rawLine['notes'] ?? null,
-                    ),
+                    'stock' => $stockSnapshot,
+                    'non_stock' => $nonStockSnapshot,
                 ];
             }
 
@@ -234,10 +328,22 @@ final class SaveGoodsReceipt
                 $receipt->fill($values);
                 $receipt->save();
 
+                $receipt->nonStockLines()->delete();
                 $receipt->lines()->delete();
             }
 
-            $receipt->lines()->createMany($lineSnapshots);
+            foreach ($lineSnapshots as $lineSnapshot) {
+                $receiptLine = $lineSnapshot['stock'] === null
+                    ? null
+                    : $receipt->lines()->create($lineSnapshot['stock']);
+
+                if ($lineSnapshot['non_stock'] !== null) {
+                    $receipt->nonStockLines()->create([
+                        ...$lineSnapshot['non_stock'],
+                        'goods_receipt_line_id' => $receiptLine?->id,
+                    ]);
+                }
+            }
 
             return $receipt->refresh();
         }, 3);
@@ -261,21 +367,122 @@ final class SaveGoodsReceipt
     }
 
     /**
-     * Convert an entered receipt quantity to the PO line's base quantity.
+     * Require the purchase-order location to belong to the active tenant.
+     */
+    private function validatePurchaseOrderLocation(
+        Organization $organization,
+        PurchaseOrder $purchaseOrder,
+    ): void {
+        $locationExists = Location::query()
+            ->where('organization_id', $organization->id)
+            ->whereKey($purchaseOrder->location_id)
+            ->exists();
+
+        if (! $locationExists) {
+            throw ValidationException::withMessages([
+                'purchase_order' => __(
+                    'The purchase-order location does not belong to the active organization.',
+                ),
+            ]);
+        }
+    }
+
+    /**
+     * Require PO line item and UOM snapshots to remain tenant-owned.
+     */
+    private function validatePurchaseOrderLineOwnership(
+        Organization $organization,
+        PurchaseOrderLine $poLine,
+        int $index,
+    ): void {
+        $inventoryItem = $poLine->inventoryItem;
+        $purchaseUnit = $poLine->purchaseUnitOfMeasure;
+
+        if (
+            ! $inventoryItem instanceof InventoryItem
+            || $inventoryItem->organization_id !== $organization->id
+        ) {
+            throw ValidationException::withMessages([
+                "lines.{$index}.purchase_order_line_id" => __(
+                    'The purchase-order line inventory item does not belong to the active organization.',
+                ),
+            ]);
+        }
+
+        if (
+            ! $purchaseUnit instanceof UnitOfMeasure
+            || $purchaseUnit->organization_id !== $organization->id
+        ) {
+            throw ValidationException::withMessages([
+                "lines.{$index}.purchase_order_line_id" => __(
+                    'The purchase-order line unit does not belong to the active organization.',
+                ),
+            ]);
+        }
+    }
+
+    /**
+     * Resolve an active storage destination only for accepted stock.
+     */
+    private function storageLocation(
+        Organization $organization,
+        PurchaseOrder $purchaseOrder,
+        mixed $value,
+        string $field,
+    ): StorageLocation {
+        $storageLocation = StorageLocation::query()
+            ->where('organization_id', $organization->id)
+            ->where('location_id', $purchaseOrder->location_id)
+            ->where('active', true)
+            ->find((int) $value);
+
+        if ($storageLocation === null) {
+            throw ValidationException::withMessages([
+                $field => __(
+                    'Select an active storage location belonging to the purchase-order location.',
+                ),
+            ]);
+        }
+
+        return $storageLocation;
+    }
+
+    /**
+     * Resolve an active tenant-owned receiving UOM.
+     */
+    private function activeUnitOfMeasure(
+        Organization $organization,
+        mixed $value,
+        string $field,
+    ): UnitOfMeasure {
+        $unit = UnitOfMeasure::query()
+            ->where('organization_id', $organization->id)
+            ->where('active', true)
+            ->find((int) $value);
+
+        if ($unit === null) {
+            throw ValidationException::withMessages([
+                $field => __('Select an active receiving unit.'),
+            ]);
+        }
+
+        return $unit;
+    }
+
+    /**
+     * Convert an entered receiving quantity to the PO line's base quantity.
      *
-     * Purchase-unit receiving uses the immutable PO snapshots rather than
+     * Purchase-unit receiving uses immutable PO snapshots rather than
      * mutable supplier-item configuration.
      */
     private function baseQuantity(
         Organization $organization,
         PurchaseOrderLine $poLine,
-        BigDecimal $receivedQuantity,
-        UnitOfMeasure $receivedUnit,
+        BigDecimal $quantity,
+        UnitOfMeasure $unit,
+        string $field,
     ): BigDecimal {
-        if (
-            $receivedUnit->id
-            === $poLine->purchase_unit_of_measure_id
-        ) {
+        if ($unit->id === $poLine->purchase_unit_of_measure_id) {
             $basePerPurchaseUnit = BigDecimal::of(
                 $poLine->base_quantity,
             )->dividedBy(
@@ -284,9 +491,14 @@ final class SaveGoodsReceipt
                 RoundingMode::HalfUp,
             );
 
-            return $receivedQuantity
+            $baseQuantity = $quantity
                 ->multipliedBy($basePerPurchaseUnit)
                 ->toScale(6, RoundingMode::HalfUp);
+
+            return $this->positiveBaseQuantity(
+                $baseQuantity,
+                $field,
+            );
         }
 
         $inventoryItem = $poLine->inventoryItem;
@@ -300,19 +512,47 @@ final class SaveGoodsReceipt
         $converted = $this->convertQuantity->handle(
             $organization,
             $inventoryItem,
-            (string) $receivedQuantity,
-            $receivedUnit,
+            (string) $quantity,
+            $unit,
             $inventoryItem->baseUnitOfMeasure,
         );
 
-        return BigDecimal::of($converted)
-            ->toScale(6, RoundingMode::HalfUp);
+        return $this->positiveBaseQuantity(
+            BigDecimal::of($converted)->toScale(
+                6,
+                RoundingMode::HalfUp,
+            ),
+            $field,
+        );
     }
 
     /**
-     * Parse and require a positive quantity.
+     * Require a positive converted base snapshot within persisted precision.
      */
-    private function positiveQuantity(
+    private function positiveBaseQuantity(
+        BigDecimal $quantity,
+        string $field,
+    ): BigDecimal {
+        if (
+            $quantity->compareTo(BigDecimal::zero()) <= 0
+            || $quantity->isGreaterThan(
+                BigDecimal::of(self::MAX_QUANTITY),
+            )
+        ) {
+            throw ValidationException::withMessages([
+                $field => __(
+                    'The converted quantity must be greater than zero and within supported inventory precision.',
+                ),
+            ]);
+        }
+
+        return $quantity;
+    }
+
+    /**
+     * Parse a non-negative fixed-precision receiving quantity.
+     */
+    private function nonNegativeQuantity(
         mixed $value,
         string $field,
     ): BigDecimal {
@@ -324,13 +564,29 @@ final class SaveGoodsReceipt
             ]);
         }
 
-        if ($quantity->compareTo(BigDecimal::zero()) <= 0) {
+        if (
+            $quantity->compareTo(BigDecimal::zero()) < 0
+            || $quantity->getScale() > 6
+            || $quantity->isGreaterThan(
+                BigDecimal::of(self::MAX_QUANTITY),
+            )
+        ) {
             throw ValidationException::withMessages([
-                $field => __('Quantity must be greater than zero.'),
+                $field => __(
+                    'Quantity must be non-negative with at most six decimal places.',
+                ),
             ]);
         }
 
-        return $quantity;
+        return $quantity->toScale(6, RoundingMode::HalfUp);
+    }
+
+    /**
+     * Determine whether a fixed-precision quantity is greater than zero.
+     */
+    private function isPositive(BigDecimal $quantity): bool
+    {
+        return $quantity->compareTo(BigDecimal::zero()) > 0;
     }
 
     /**

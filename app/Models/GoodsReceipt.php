@@ -79,13 +79,23 @@ class GoodsReceipt extends Model
     }
 
     /**
-     * Get receipt lines.
+     * Get accepted stock-bearing receipt lines.
      *
      * @return HasMany<GoodsReceiptLine, $this>
      */
     public function lines(): HasMany
     {
         return $this->hasMany(GoodsReceiptLine::class);
+    }
+
+    /**
+     * Get rejected and damaged receiving evidence that never enters stock.
+     *
+     * @return HasMany<GoodsReceiptNonStockLine, $this>
+     */
+    public function nonStockLines(): HasMany
+    {
+        return $this->hasMany(GoodsReceiptNonStockLine::class);
     }
 
     /**

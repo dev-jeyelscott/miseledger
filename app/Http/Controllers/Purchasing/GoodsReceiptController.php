@@ -11,6 +11,7 @@ use App\Http\Requests\Purchasing\GoodsReceiptTransitionRequest;
 use App\Http\Requests\Purchasing\SaveGoodsReceiptRequest;
 use App\Models\GoodsReceipt;
 use App\Models\GoodsReceiptLine;
+use App\Models\GoodsReceiptNonStockLine;
 use App\Models\Organization;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
@@ -169,6 +170,9 @@ class GoodsReceiptController extends Controller
                 'lines.storageLocation:id,name',
                 'lines.receivedUnitOfMeasure:id,name,symbol',
                 'lines.movement',
+                'nonStockLines.inventoryItem:id,name,sku',
+                'nonStockLines.rejectedUnitOfMeasure:id,name,symbol',
+                'nonStockLines.damagedUnitOfMeasure:id,name,symbol',
             ])
             ->where('organization_id', $organization->id)
             ->findOrFail($goodsReceipt);
@@ -376,13 +380,54 @@ class GoodsReceiptController extends Controller
     }
 
     /**
-     * Serialize receipt history and movement traceability.
+     * Serialize accepted lines together with linked or standalone non-stock evidence.
      *
      * @return array<string, mixed>
      */
     private function receiptData(
         GoodsReceipt $receipt,
     ): array {
+        $nonStockByAcceptedLine = $receipt
+            ->nonStockLines
+            ->filter(
+                static fn (
+                    GoodsReceiptNonStockLine $line,
+                ): bool => $line->goods_receipt_line_id !== null,
+            )
+            ->keyBy(
+                static fn (
+                    GoodsReceiptNonStockLine $line,
+                ): int => (int) $line->goods_receipt_line_id,
+            );
+
+        $lines = $receipt
+            ->lines
+            ->map(function (GoodsReceiptLine $line) use (
+                $nonStockByAcceptedLine,
+            ): array {
+                $evidence = $nonStockByAcceptedLine->get($line->id);
+
+                return $this->acceptedReceiptLineData(
+                    $line,
+                    $evidence instanceof GoodsReceiptNonStockLine
+                        ? $evidence
+                        : null,
+                );
+            });
+
+        $standaloneNonStockLines = $receipt
+            ->nonStockLines
+            ->filter(
+                static fn (
+                    GoodsReceiptNonStockLine $line,
+                ): bool => $line->goods_receipt_line_id === null,
+            )
+            ->map(
+                fn (
+                    GoodsReceiptNonStockLine $line,
+                ): array => $this->standaloneNonStockLineData($line),
+            );
+
         return [
             'id' => $receipt->id,
             'number' => $receipt->number,
@@ -392,46 +437,101 @@ class GoodsReceiptController extends Controller
             'receivedAt' => $receipt->received_at
                 ?->toIso8601String(),
             'receivedBy' => $receipt->receiver?->name,
-            'lines' => $receipt
-                ->lines
-                ->map(
-                    static fn (
-                        GoodsReceiptLine $line,
-                    ): array => [
-                        'id' => $line->id,
-                        'purchaseOrderLineId' => $line
-                            ->purchase_order_line_id,
-                        'itemName' => $line->inventoryItem->name,
-                        'storageLocationId' => $line
-                            ->storage_location_id,
-                        'storageLocationName' => $line
-                            ->storageLocation
-                            ->name,
-                        'receivedQuantity' => $line->received_quantity,
-                        'receivedUnitId' => $line
-                            ->received_unit_of_measure_id,
-                        'receivedUnitSymbol' => $line
-                            ->receivedUnitOfMeasure
-                            ->symbol,
-                        'baseQuantity' => $line->base_quantity,
-                        'unitCost' => $line->unit_cost,
-                        'totalCost' => $line->total_cost,
-                        'notes' => $line->notes,
-                        'movement' => $line->movement === null
-                            ? null
-                            : [
-                                'id' => $line->movement->id,
-                                'quantity' => $line->movement->quantity,
-                                'unitCost' => $line->movement->unit_cost,
-                                'occurredAt' => $line
-                                    ->movement
-                                    ->occurred_at
-                                    ->toIso8601String(),
-                            ],
-                    ],
-                )
+            'lines' => $lines
+                ->concat($standaloneNonStockLines)
                 ->values()
                 ->all(),
+        ];
+    }
+
+    /**
+     * Serialize one accepted stock line and its optional non-stock evidence.
+     *
+     * @return array<string, mixed>
+     */
+    private function acceptedReceiptLineData(
+        GoodsReceiptLine $line,
+        ?GoodsReceiptNonStockLine $evidence,
+    ): array {
+        return [
+            'key' => "accepted:{$line->id}",
+            'id' => $line->id,
+            'purchaseOrderLineId' => $line->purchase_order_line_id,
+            'itemName' => $line->inventoryItem->name,
+            'storageLocationId' => $line->storage_location_id,
+            'storageLocationName' => $line->storageLocation->name,
+            'receivedQuantity' => $line->received_quantity,
+            'receivedUnitId' => $line->received_unit_of_measure_id,
+            'receivedUnitSymbol' => $line->receivedUnitOfMeasure->symbol,
+            'baseQuantity' => $line->base_quantity,
+            'unitCost' => $line->unit_cost,
+            'totalCost' => $line->total_cost,
+            'rejectedQuantity' => $evidence?->rejected_quantity
+                ?? '0.000000',
+            'rejectedUnitId' => $evidence?->rejected_unit_of_measure_id,
+            'rejectedUnitSymbol' => $evidence
+                ?->rejectedUnitOfMeasure
+                ?->symbol,
+            'rejectedBaseQuantity' => $evidence?->rejected_base_quantity,
+            'damagedQuantity' => $evidence?->damaged_quantity
+                ?? '0.000000',
+            'damagedUnitId' => $evidence?->damaged_unit_of_measure_id,
+            'damagedUnitSymbol' => $evidence
+                ?->damagedUnitOfMeasure
+                ?->symbol,
+            'damagedBaseQuantity' => $evidence?->damaged_base_quantity,
+            'notes' => $line->notes,
+            'movement' => $line->movement === null
+                ? null
+                : [
+                    'id' => $line->movement->id,
+                    'quantity' => $line->movement->quantity,
+                    'unitCost' => $line->movement->unit_cost,
+                    'occurredAt' => $line
+                        ->movement
+                        ->occurred_at
+                        ->toIso8601String(),
+                ],
+        ];
+    }
+
+    /**
+     * Serialize an all-rejected/all-damaged row without inventing stock data.
+     *
+     * @return array<string, mixed>
+     */
+    private function standaloneNonStockLineData(
+        GoodsReceiptNonStockLine $line,
+    ): array {
+        return [
+            'key' => "non-stock:{$line->id}",
+            'id' => null,
+            'purchaseOrderLineId' => $line->purchase_order_line_id,
+            'itemName' => $line->inventoryItem->name,
+            'storageLocationId' => null,
+            'storageLocationName' => null,
+            'receivedQuantity' => '0.000000',
+            'receivedUnitId' => null,
+            'receivedUnitSymbol' => null,
+            'baseQuantity' => '0.000000',
+            'unitCost' => '0.0000',
+            'totalCost' => '0.0000',
+            'rejectedQuantity' => $line->rejected_quantity
+                ?? '0.000000',
+            'rejectedUnitId' => $line->rejected_unit_of_measure_id,
+            'rejectedUnitSymbol' => $line
+                ->rejectedUnitOfMeasure
+                ?->symbol,
+            'rejectedBaseQuantity' => $line->rejected_base_quantity,
+            'damagedQuantity' => $line->damaged_quantity
+                ?? '0.000000',
+            'damagedUnitId' => $line->damaged_unit_of_measure_id,
+            'damagedUnitSymbol' => $line
+                ->damagedUnitOfMeasure
+                ?->symbol,
+            'damagedBaseQuantity' => $line->damaged_base_quantity,
+            'notes' => $line->notes,
+            'movement' => null,
         ];
     }
 
