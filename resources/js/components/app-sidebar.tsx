@@ -1,6 +1,16 @@
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Boxes, FolderGit2, LayoutGrid, Truck } from 'lucide-react';
+import {
+    BookOpen,
+    Boxes,
+    ClipboardList,
+    FolderGit2,
+    LayoutGrid,
+    PackageCheck,
+    Truck,
+} from 'lucide-react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
+import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/GoodsReceiptController';
+import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
 import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
@@ -60,11 +70,23 @@ export function AppSidebar() {
     }
 
     if (activeMembership?.permissions.includes('purchasing.view')) {
-        mainNavItems.push({
-            title: 'Suppliers',
-            href: SupplierController.index(),
-            icon: Truck,
-        });
+        mainNavItems.push(
+            {
+                title: 'Suppliers',
+                href: SupplierController.index(),
+                icon: Truck,
+            },
+            {
+                title: 'Purchase orders',
+                href: PurchaseOrderController.index(),
+                icon: ClipboardList,
+            },
+            {
+                title: 'Receiving',
+                href: GoodsReceiptController.index(),
+                icon: PackageCheck,
+            },
+        );
     }
 
     return (

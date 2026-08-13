@@ -7,6 +7,8 @@ use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\OrganizationLocationController;
 use App\Http\Controllers\OrganizationMemberController;
 use App\Http\Controllers\OrganizationStorageLocationController;
+use App\Http\Controllers\Purchasing\GoodsReceiptController;
+use App\Http\Controllers\Purchasing\PurchaseOrderController;
 use App\Http\Controllers\Suppliers\SupplierController;
 use App\Http\Controllers\Suppliers\SupplierItemController;
 use Illuminate\Support\Facades\Route;
@@ -199,6 +201,84 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 '{supplier}/items/{supplierItem}/prices',
                 [SupplierItemController::class, 'storePrice'],
             )->name('items.prices.store');
+        });
+
+    Route::prefix('purchase-orders')
+        ->name('purchase-orders.')
+        ->group(function (): void {
+            Route::get(
+                '/',
+                [PurchaseOrderController::class, 'index'],
+            )->name('index');
+
+            Route::get(
+                'create',
+                [PurchaseOrderController::class, 'create'],
+            )->name('create');
+
+            Route::post(
+                '/',
+                [PurchaseOrderController::class, 'store'],
+            )->name('store');
+
+            Route::get(
+                '{purchaseOrder}/edit',
+                [PurchaseOrderController::class, 'edit'],
+            )->name('edit');
+
+            Route::put(
+                '{purchaseOrder}',
+                [PurchaseOrderController::class, 'update'],
+            )->name('update');
+
+            Route::post(
+                '{purchaseOrder}/approve',
+                [PurchaseOrderController::class, 'approve'],
+            )->name('approve');
+
+            Route::post(
+                '{purchaseOrder}/cancel',
+                [PurchaseOrderController::class, 'cancel'],
+            )->name('cancel');
+
+            Route::get(
+                '{purchaseOrder}/receipts/create',
+                [GoodsReceiptController::class, 'create'],
+            )->name('receipts.create');
+
+            Route::post(
+                '{purchaseOrder}/receipts',
+                [GoodsReceiptController::class, 'store'],
+            )->name('receipts.store');
+        });
+
+    Route::prefix('goods-receipts')
+        ->name('goods-receipts.')
+        ->group(function (): void {
+            Route::get(
+                '/',
+                [GoodsReceiptController::class, 'index'],
+            )->name('index');
+
+            Route::get(
+                '{goodsReceipt}/edit',
+                [GoodsReceiptController::class, 'edit'],
+            )->name('edit');
+
+            Route::put(
+                '{goodsReceipt}',
+                [GoodsReceiptController::class, 'update'],
+            )->name('update');
+
+            Route::post(
+                '{goodsReceipt}/finalize',
+                [GoodsReceiptController::class, 'finalize'],
+            )->name('finalize');
+
+            Route::post(
+                '{goodsReceipt}/cancel',
+                [GoodsReceiptController::class, 'cancel'],
+            )->name('cancel');
         });
 });
 
