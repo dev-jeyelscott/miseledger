@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Inventory\InventoryItemController;
 use App\Http\Controllers\Inventory\InventoryItemUnitController;
+use App\Http\Controllers\Inventory\StockCountController;
 use App\Http\Controllers\Inventory\UnitOfMeasureController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\OrganizationLocationController;
@@ -278,6 +279,55 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             Route::post(
                 '{goodsReceipt}/cancel',
                 [GoodsReceiptController::class, 'cancel'],
+            )->name('cancel');
+        });
+
+    Route::prefix('stock-counts')
+        ->name('stock-counts.')
+        ->group(function (): void {
+            Route::get(
+                '/',
+                [StockCountController::class, 'index'],
+            )->name('index');
+
+            Route::get(
+                'variance',
+                [StockCountController::class, 'variance'],
+            )->name('variance');
+
+            Route::get(
+                'create',
+                [StockCountController::class, 'create'],
+            )->name('create');
+
+            Route::post(
+                '/',
+                [StockCountController::class, 'store'],
+            )->name('store');
+
+            Route::get(
+                '{stockCount}/edit',
+                [StockCountController::class, 'edit'],
+            )->name('edit');
+
+            Route::put(
+                '{stockCount}',
+                [StockCountController::class, 'update'],
+            )->name('update');
+
+            Route::post(
+                '{stockCount}/submit',
+                [StockCountController::class, 'submit'],
+            )->name('submit');
+
+            Route::post(
+                '{stockCount}/finalize',
+                [StockCountController::class, 'finalize'],
+            )->name('finalize');
+
+            Route::post(
+                '{stockCount}/cancel',
+                [StockCountController::class, 'cancel'],
             )->name('cancel');
         });
 });

@@ -2,6 +2,7 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     BookOpen,
     Boxes,
+    ClipboardCheck,
     ClipboardList,
     FolderGit2,
     LayoutGrid,
@@ -9,6 +10,7 @@ import {
     Truck,
 } from 'lucide-react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
+import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
 import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/GoodsReceiptController';
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
 import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
@@ -87,6 +89,18 @@ export function AppSidebar() {
                 icon: PackageCheck,
             },
         );
+    }
+
+    if (
+        activeMembership?.permissions.includes('counts.create') ||
+        activeMembership?.permissions.includes('counts.finalize') ||
+        activeMembership?.permissions.includes('reports.view')
+    ) {
+        mainNavItems.push({
+            title: 'Stock counts',
+            href: StockCountController.index(),
+            icon: ClipboardCheck,
+        });
     }
 
     return (
