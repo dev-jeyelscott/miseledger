@@ -307,7 +307,7 @@ class GoodsReceiptController extends Controller
     }
 
     /**
-     * Serialize the receiving-relevant portion of a PO.
+     * Serialize PO fulfillment with non-negative remaining and explicit over-receipt quantities.
      *
      * @return array<string, mixed>
      */
@@ -329,30 +329,46 @@ class GoodsReceiptController extends Controller
             'lines' => $purchaseOrder
                 ->lines
                 ->map(
-                    static fn (
+                    static function (
                         PurchaseOrderLine $line,
-                    ): array => [
-                        'id' => $line->id,
-                        'itemName' => $line->item_name_snapshot,
-                        'supplierSku' => $line->supplier_sku_snapshot,
-                        'orderedQuantity' => $line->ordered_quantity,
-                        'baseQuantity' => $line->base_quantity,
-                        'receivedBaseQuantity' => $line
-                            ->received_base_quantity,
-                        'remainingBaseQuantity' => (string) BigDecimal::of(
+                    ): array {
+                        $baseQuantity = BigDecimal::of(
                             $line->base_quantity,
-                        )->minus(
-                            BigDecimal::of(
-                                $line->received_base_quantity,
-                            ),
-                        ),
-                        'purchaseUnit' => [
-                            'id' => $line->purchaseUnitOfMeasure->id,
-                            'symbol' => $line
-                                ->purchaseUnitOfMeasure
-                                ->symbol,
-                        ],
-                    ],
+                        );
+
+                        $receivedBaseQuantity = BigDecimal::of(
+                            $line->received_base_quantity,
+                        );
+
+                        $remainingBaseQuantity = $baseQuantity->compareTo(
+                            $receivedBaseQuantity,
+                        ) > 0
+                            ? $baseQuantity->minus($receivedBaseQuantity)
+                            : BigDecimal::of('0.000000');
+
+                        $overReceivedBaseQuantity = $receivedBaseQuantity
+                            ->compareTo($baseQuantity) > 0
+                                ? $receivedBaseQuantity->minus($baseQuantity)
+                                : BigDecimal::of('0.000000');
+
+                        return [
+                            'id' => $line->id,
+                            'itemName' => $line->item_name_snapshot,
+                            'supplierSku' => $line->supplier_sku_snapshot,
+                            'orderedQuantity' => $line->ordered_quantity,
+                            'baseQuantity' => $line->base_quantity,
+                            'receivedBaseQuantity' => $line
+                                ->received_base_quantity,
+                            'remainingBaseQuantity' => (string) $remainingBaseQuantity,
+                            'overReceivedBaseQuantity' => (string) $overReceivedBaseQuantity,
+                            'purchaseUnit' => [
+                                'id' => $line->purchaseUnitOfMeasure->id,
+                                'symbol' => $line
+                                    ->purchaseUnitOfMeasure
+                                    ->symbol,
+                            ],
+                        ];
+                    },
                 )
                 ->values()
                 ->all(),

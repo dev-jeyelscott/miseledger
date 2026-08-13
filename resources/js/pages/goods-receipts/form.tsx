@@ -16,6 +16,7 @@ type PurchaseOrderLine = {
     baseQuantity: string;
     receivedBaseQuantity: string;
     remainingBaseQuantity: string;
+    overReceivedBaseQuantity: string;
     purchaseUnit: {
         id: number;
         symbol: string;
@@ -91,6 +92,9 @@ type Props = {
     canFinalize: boolean;
 };
 
+/**
+ * Render receipt editing, PO fulfillment, and finalized movement traceability.
+ */
 export default function GoodsReceiptForm({
     goodsReceipt,
     purchaseOrder,
@@ -172,6 +176,56 @@ export default function GoodsReceiptForm({
                         {purchaseOrder.supplierName} →{' '}
                         {purchaseOrder.locationName}
                     </p>
+                </div>
+
+                <div className="space-y-4 rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
+                    <div>
+                        <h2 className="font-semibold">PO fulfillment</h2>
+                        <p className="text-sm text-muted-foreground">
+                            Accepted quantities are tracked in base units.
+                        </p>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="border-b text-left">
+                                <tr>
+                                    <th className="py-2">Item</th>
+                                    <th className="py-2">Ordered base</th>
+                                    <th className="py-2">Received base</th>
+                                    <th className="py-2">Remaining</th>
+                                    <th className="py-2">Over received</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {purchaseOrder.lines.map((line) => (
+                                    <tr
+                                        key={line.id}
+                                        className="border-b last:border-b-0"
+                                    >
+                                        <td className="py-2">
+                                            {line.itemName}
+                                        </td>
+                                        <td className="py-2">
+                                            {line.baseQuantity}
+                                        </td>
+                                        <td className="py-2">
+                                            {line.receivedBaseQuantity}
+                                        </td>
+                                        <td className="py-2">
+                                            {line.remainingBaseQuantity}
+                                        </td>
+                                        <td className="py-2">
+                                            {line.overReceivedBaseQuantity ===
+                                            '0.000000'
+                                                ? '—'
+                                                : line.overReceivedBaseQuantity}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 {editable ? (
@@ -303,14 +357,12 @@ export default function GoodsReceiptForm({
                                                                         poLine.id
                                                                     }
                                                                 >
-                                                                    {
-                                                                        poLine.itemName
-                                                                    }{' '}
-                                                                    — remaining{' '}
-                                                                    {
-                                                                        poLine.remainingBaseQuantity
-                                                                    }{' '}
-                                                                    base
+                                                                    {`${poLine.itemName} — remaining ${poLine.remainingBaseQuantity} base${
+                                                                        poLine.overReceivedBaseQuantity !==
+                                                                        '0.000000'
+                                                                            ? ` · over received ${poLine.overReceivedBaseQuantity} base`
+                                                                            : ''
+                                                                    }`}
                                                                 </option>
                                                             ),
                                                         )}

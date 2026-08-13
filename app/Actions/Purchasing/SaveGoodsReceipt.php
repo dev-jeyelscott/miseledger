@@ -5,6 +5,7 @@ namespace App\Actions\Purchasing;
 use App\Actions\Inventory\ConvertQuantity;
 use App\Enums\GoodsReceiptStatus;
 use App\Enums\OrganizationPermission;
+use App\Enums\PurchaseOrderStatus;
 use App\Models\GoodsReceipt;
 use App\Models\InventoryItem;
 use App\Models\Organization;
@@ -51,14 +52,6 @@ final class SaveGoodsReceipt
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if (! $po->status->canReceive()) {
-                throw ValidationException::withMessages([
-                    'purchase_order' => __(
-                        'Goods can only be received against an approved purchase order with remaining quantity.',
-                    ),
-                ]);
-            }
-
             $receipt = $goodsReceipt === null
                 ? null
                 : GoodsReceipt::query()
@@ -85,6 +78,20 @@ final class SaveGoodsReceipt
                 abort(403);
             }
 
+            if (
+                ! $po->status->canReceive()
+                && ! (
+                    $receipt !== null
+                    && $po->status === PurchaseOrderStatus::Received
+                )
+            ) {
+                throw ValidationException::withMessages([
+                    'purchase_order' => __(
+                        'This purchase order is not available for this goods-receipt workflow.',
+                    ),
+                ]);
+            }
+
             $rawLines = $attributes['lines'] ?? [];
 
             if (! is_array($rawLines) || $rawLines === []) {
@@ -94,7 +101,6 @@ final class SaveGoodsReceipt
             }
 
             $lineSnapshots = [];
-            $receiptTotalsByPoLine = [];
 
             foreach (array_values($rawLines) as $index => $rawLine) {
                 if (! is_array($rawLine)) {
@@ -169,30 +175,6 @@ final class SaveGoodsReceipt
                     $receivedQuantity,
                     $receivedUnit,
                 );
-
-                $poLineId = $poLine->id;
-
-                $accumulated = (
-                    $receiptTotalsByPoLine[$poLineId]
-                    ?? BigDecimal::zero()
-                )->plus($baseQuantity);
-
-                $receiptTotalsByPoLine[$poLineId] = $accumulated;
-
-                $remaining = BigDecimal::of($poLine->base_quantity)
-                    ->minus(
-                        BigDecimal::of(
-                            $poLine->received_base_quantity,
-                        ),
-                    );
-
-                if ($accumulated->compareTo($remaining) > 0) {
-                    throw ValidationException::withMessages([
-                        "lines.{$index}.received_quantity" => __(
-                            'Received quantity exceeds the remaining purchase-order quantity.',
-                        ),
-                    ]);
-                }
 
                 $basePerPurchaseUnit = BigDecimal::of(
                     $poLine->base_quantity,

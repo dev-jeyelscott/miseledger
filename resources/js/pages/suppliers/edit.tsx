@@ -341,11 +341,37 @@ export default function EditSupplier({
                                                     units
                                                 </p>
 
-                                                <p className="mt-1 text-sm">
-                                                    {item.currentPrice === null
-                                                        ? 'No price'
-                                                        : `${item.currency} ${item.currentPrice}`}
-                                                </p>
+                                                <div className="mt-2 flex items-center gap-3">
+                                                    <p className="text-sm">
+                                                        {item.currentPrice ===
+                                                        null
+                                                            ? 'No price'
+                                                            : `${item.currency} ${item.currentPrice}`}
+                                                    </p>
+
+                                                    {canManage &&
+                                                        supplier.active &&
+                                                        item.active &&
+                                                        item.currentPrice ===
+                                                            null && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                asChild
+                                                            >
+                                                                <Link
+                                                                    href={SupplierItemController.edit(
+                                                                        [
+                                                                            supplier.id,
+                                                                            item.id,
+                                                                        ],
+                                                                    )}
+                                                                >
+                                                                    Set price
+                                                                </Link>
+                                                            </Button>
+                                                        )}
+                                                </div>
                                             </div>
 
                                             <span className="text-sm">

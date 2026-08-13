@@ -68,10 +68,13 @@ final class FinalizeGoodsReceipt
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if (! $purchaseOrder->status->canReceive()) {
+            if (
+                ! $purchaseOrder->status->canReceive()
+                && $purchaseOrder->status !== PurchaseOrderStatus::Received
+            ) {
                 throw ValidationException::withMessages([
                     'purchase_order' => __(
-                        'This purchase order is no longer open for receiving.',
+                        'This purchase order is no longer open for this goods-receipt workflow.',
                     ),
                 ]);
             }
@@ -122,18 +125,6 @@ final class FinalizeGoodsReceipt
                 )->plus(
                     BigDecimal::of($receiptLine->base_quantity),
                 )->toScale(6, RoundingMode::HalfUp);
-
-                if (
-                    $newReceivedQuantity->compareTo(
-                        BigDecimal::of($poLine->base_quantity),
-                    ) > 0
-                ) {
-                    throw ValidationException::withMessages([
-                        'lines' => __(
-                            'Receipt finalization would exceed the remaining purchase-order quantity.',
-                        ),
-                    ]);
-                }
 
                 $inventoryItem = InventoryItem::query()
                     ->where('organization_id', $organization->id)
