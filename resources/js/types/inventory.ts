@@ -6,6 +6,13 @@ export type InventoryCategoryData = {
     active: boolean;
 };
 
+export type InventoryItemType =
+    | 'ingredient'
+    | 'finished_item'
+    | 'prepared_item'
+    | 'packaging'
+    | 'consumable';
+
 export type UnitOfMeasureData = {
     id: number;
     name: string;
@@ -21,9 +28,12 @@ export type InventoryItemListItem = {
     id: number;
     name: string;
     sku: string;
+    type: InventoryItemType;
+    yieldPercentage: string;
     active: boolean;
     conversionCount: number;
     baseUnitOfMeasure: UnitOfMeasureData;
+    inventoryCategory: InventoryCategoryData | null;
 };
 
 export type InventoryItemUnitData = {
@@ -37,7 +47,10 @@ export type InventoryItemDetail = {
     id: number;
     name: string;
     sku: string;
+    type: InventoryItemType;
+    yieldPercentage: string;
     active: boolean;
     baseUnitOfMeasure: UnitOfMeasureData;
+    inventoryCategory: InventoryCategoryData | null;
     unitConversions: InventoryItemUnitData[];
 };

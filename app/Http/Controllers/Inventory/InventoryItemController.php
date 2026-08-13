@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Inventory;
 
 use App\Actions\Inventory\SaveInventoryItem;
+use App\Enums\InventoryItemType;
 use App\Enums\OrganizationPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Inventory\SaveInventoryItemRequest;
+use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
 use App\Models\InventoryItemUnit;
 use App\Models\Organization;
@@ -32,7 +34,10 @@ class InventoryItemController extends Controller
 
         $items = $organization
             ->inventoryItems()
-            ->with('baseUnitOfMeasure:id,name,symbol')
+            ->with([
+                'baseUnitOfMeasure:id,name,symbol',
+                'inventoryCategory:id,name',
+            ])
             ->withCount('unitConversions')
             ->orderByDesc('active')
             ->orderBy('name')
@@ -42,6 +47,8 @@ class InventoryItemController extends Controller
                     'id' => $item->id,
                     'name' => $item->name,
                     'sku' => $item->sku,
+                    'type' => $item->type->value,
+                    'yieldPercentage' => $item->yield_percentage,
                     'active' => $item->active,
                     'conversionCount' => (
                         $item->unit_conversions_count ?? 0
@@ -52,6 +59,12 @@ class InventoryItemController extends Controller
                         'symbol' => $item->baseUnitOfMeasure->symbol,
                         'active' => $item->baseUnitOfMeasure->active,
                     ],
+                    'inventoryCategory' => $item->inventoryCategory === null
+                        ? null
+                        : [
+                            'id' => $item->inventoryCategory->id,
+                            'name' => $item->inventoryCategory->name,
+                        ],
                 ],
             )
             ->values()
@@ -80,6 +93,7 @@ class InventoryItemController extends Controller
 
         return Inertia::render('inventory/items/create', [
             'units' => $this->activeUnitOptions($organization),
+            'categories' => $this->activeCategoryOptions($organization),
         ]);
     }
 
@@ -103,6 +117,15 @@ class InventoryItemController extends Controller
                 'sku' => (string) $request->validated('sku'),
                 'base_unit_of_measure_id' => (int) $request->validated(
                     'base_unit_of_measure_id',
+                ),
+                'inventory_category_id' => $request->validated(
+                    'inventory_category_id',
+                ),
+                'type' => InventoryItemType::from((string) $request->validated(
+                    'type',
+                )),
+                'yield_percentage' => (string) $request->validated(
+                    'yield_percentage',
                 ),
                 'active' => (bool) $request->validated('active'),
             ],
@@ -134,6 +157,7 @@ class InventoryItemController extends Controller
             ->inventoryItems()
             ->with([
                 'baseUnitOfMeasure:id,name,symbol,active',
+                'inventoryCategory:id,name,active',
                 'unitConversions' => fn ($query) => $query
                     ->with('unitOfMeasure:id,name,symbol,active')
                     ->orderBy('id'),
@@ -174,6 +198,8 @@ class InventoryItemController extends Controller
                 'id' => $item->id,
                 'name' => $item->name,
                 'sku' => $item->sku,
+                'type' => $item->type->value,
+                'yieldPercentage' => $item->yield_percentage,
                 'active' => $item->active,
                 'baseUnitOfMeasure' => [
                     'id' => $item->baseUnitOfMeasure->id,
@@ -181,6 +207,13 @@ class InventoryItemController extends Controller
                     'symbol' => $item->baseUnitOfMeasure->symbol,
                     'active' => $item->baseUnitOfMeasure->active,
                 ],
+                'inventoryCategory' => $item->inventoryCategory === null
+                    ? null
+                    : [
+                        'id' => $item->inventoryCategory->id,
+                        'name' => $item->inventoryCategory->name,
+                        'active' => $item->inventoryCategory->active,
+                    ],
                 'unitConversions' => $item
                     ->unitConversions
                     ->map(
@@ -220,6 +253,7 @@ class InventoryItemController extends Controller
                 )
                 ->values()
                 ->all(),
+            'categories' => $this->activeCategoryOptions($organization),
             'availableConversionUnits' => (
                 $availableConversionUnits
             ),
@@ -248,6 +282,15 @@ class InventoryItemController extends Controller
                 'sku' => (string) $request->validated('sku'),
                 'base_unit_of_measure_id' => (int) $request->validated(
                     'base_unit_of_measure_id',
+                ),
+                'inventory_category_id' => $request->validated(
+                    'inventory_category_id',
+                ),
+                'type' => InventoryItemType::from((string) $request->validated(
+                    'type',
+                )),
+                'yield_percentage' => (string) $request->validated(
+                    'yield_percentage',
                 ),
                 'active' => (bool) $request->validated('active'),
             ],
@@ -294,6 +337,29 @@ class InventoryItemController extends Controller
             ->all();
 
         return array_values($units);
+    }
+
+    /**
+     * Build active category choices for item forms.
+     *
+     * @return list<array{id: int, name: string, active: bool}>
+     */
+    private function activeCategoryOptions(Organization $organization): array
+    {
+        return $organization
+            ->inventoryCategories()
+            ->where('active', true)
+            ->orderBy('name')
+            ->get()
+            ->map(
+                static fn (InventoryCategory $category): array => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'active' => $category->active,
+                ],
+            )
+            ->values()
+            ->all();
     }
 
     /**

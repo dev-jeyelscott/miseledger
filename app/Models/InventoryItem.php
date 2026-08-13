@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\InventoryItemType;
 use Database\Factories\InventoryItemFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,8 +15,11 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $organization_id
  * @property int $base_unit_of_measure_id
+ * @property int|null $inventory_category_id
  * @property string $name
  * @property string $sku
+ * @property InventoryItemType $type
+ * @property string $yield_percentage
  * @property bool $active
  * @property int|null $unit_conversions_count
  * @property Carbon|null $created_at
@@ -25,8 +29,11 @@ use Illuminate\Support\Carbon;
 #[Fillable([
     'organization_id',
     'base_unit_of_measure_id',
+    'inventory_category_id',
     'name',
     'sku',
+    'type',
+    'yield_percentage',
     'active',
 ])]
 class InventoryItem extends Model
@@ -58,6 +65,16 @@ class InventoryItem extends Model
     }
 
     /**
+     * Get the optional category assigned to this item.
+     *
+     * @return BelongsTo<InventoryCategory, $this>
+     */
+    public function inventoryCategory(): BelongsTo
+    {
+        return $this->belongsTo(InventoryCategory::class);
+    }
+
+    /**
      * Get alternate item-specific UOM conversions.
      *
      * @return HasMany<InventoryItemUnit, $this>
@@ -76,6 +93,8 @@ class InventoryItem extends Model
     {
         return [
             'active' => 'boolean',
+            'type' => InventoryItemType::class,
+            'yield_percentage' => 'decimal:2',
         ];
     }
 }

@@ -54,8 +54,9 @@ export default function InventoryItemsIndex({ items, canManage }: Props) {
                 </div>
 
                 <div className="overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                    <div className="grid grid-cols-[minmax(0,1fr)_150px_110px_100px] gap-4 border-b border-sidebar-border/70 px-5 py-3 text-xs font-medium text-muted-foreground uppercase dark:border-sidebar-border">
+                    <div className="grid grid-cols-[minmax(0,1fr)_130px_150px_110px_100px] gap-4 border-b border-sidebar-border/70 px-5 py-3 text-xs font-medium text-muted-foreground uppercase dark:border-sidebar-border">
                         <span>Item</span>
+                        <span>Type</span>
                         <span>Base UOM</span>
                         <span>Conversions</span>
                         <span>Status</span>
@@ -70,7 +71,7 @@ export default function InventoryItemsIndex({ items, canManage }: Props) {
                             {items.map((item) => (
                                 <div
                                     key={item.id}
-                                    className="grid grid-cols-[minmax(0,1fr)_150px_110px_100px] items-center gap-4 px-5 py-4"
+                                    className="grid grid-cols-[minmax(0,1fr)_130px_150px_110px_100px] items-center gap-4 px-5 py-4"
                                 >
                                     <div className="min-w-0">
                                         {canManage ? (
@@ -92,6 +93,10 @@ export default function InventoryItemsIndex({ items, canManage }: Props) {
                                             {item.sku}
                                         </p>
                                     </div>
+
+                                    <span className="text-sm">
+                                        {item.type.replace('_', ' ')}
+                                    </span>
 
                                     <span className="text-sm">
                                         {item.baseUnitOfMeasure.symbol}

@@ -6,13 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
-import type { UnitOfMeasureData } from '@/types';
+import type { InventoryCategoryData, UnitOfMeasureData } from '@/types';
 
 type Props = {
     units: UnitOfMeasureData[];
+    categories: InventoryCategoryData[];
 };
 
-export default function CreateInventoryItem({ units }: Props) {
+export default function CreateInventoryItem({ units, categories }: Props) {
     return (
         <>
             <Head title="Create inventory item" />
@@ -76,6 +77,64 @@ export default function CreateInventoryItem({ units }: Props) {
                                             placeholder="FLOUR-001"
                                         />
                                         <InputError message={errors.sku} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="type">Item type</Label>
+                                        <select
+                                            id="type"
+                                            name="type"
+                                            defaultValue="ingredient"
+                                            required
+                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        >
+                                            <option value="ingredient">Ingredient</option>
+                                            <option value="finished_item">Finished item</option>
+                                            <option value="prepared_item">Prepared item</option>
+                                            <option value="packaging">Packaging</option>
+                                            <option value="consumable">Consumable</option>
+                                        </select>
+                                        <InputError message={errors.type} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="inventory_category_id">
+                                            Category
+                                        </Label>
+                                        <select
+                                            id="inventory_category_id"
+                                            name="inventory_category_id"
+                                            defaultValue=""
+                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        >
+                                            <option value="">Uncategorized</option>
+                                            {categories.map((category) => (
+                                                <option
+                                                    key={category.id}
+                                                    value={category.id}
+                                                >
+                                                    {category.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <InputError message={errors.inventory_category_id} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="yield_percentage">
+                                            Yield (%)
+                                        </Label>
+                                        <Input
+                                            id="yield_percentage"
+                                            name="yield_percentage"
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            step="0.01"
+                                            defaultValue="100.00"
+                                            required
+                                        />
+                                        <InputError message={errors.yield_percentage} />
                                     </div>
 
                                     <div className="grid gap-2">

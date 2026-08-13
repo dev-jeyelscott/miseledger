@@ -2,6 +2,8 @@
 
 namespace App\Actions\Inventory;
 
+use App\Enums\InventoryItemType;
+use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
 use App\Models\Organization;
 use App\Models\UnitOfMeasure;
@@ -11,12 +13,15 @@ use Illuminate\Validation\ValidationException;
 final class SaveInventoryItem
 {
     /**
-     * Create or update an inventory item against a locked active base UOM.
+     * Create or update an inventory item against locked tenant-owned relations.
      *
      * @param  array{
      *     name: string,
      *     sku: string,
      *     base_unit_of_measure_id: int,
+     *     inventory_category_id: int|null,
+     *     type: InventoryItemType,
+     *     yield_percentage: string,
      *     active: bool
      * }  $attributes
      */
@@ -45,6 +50,24 @@ final class SaveInventoryItem
             }
 
             $attributes['base_unit_of_measure_id'] = $baseUnit->id;
+
+            if ($attributes['inventory_category_id'] !== null) {
+                $category = InventoryCategory::query()
+                    ->where('organization_id', $organization->getKey())
+                    ->whereKey($attributes['inventory_category_id'])
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($category === null || ! $category->active) {
+                    throw ValidationException::withMessages([
+                        'inventory_category_id' => __(
+                            'Select an active category from the current organization.',
+                        ),
+                    ]);
+                }
+
+                $attributes['inventory_category_id'] = $category->id;
+            }
 
             if ($inventoryItem === null) {
                 return $organization->inventoryItems()->create($attributes);

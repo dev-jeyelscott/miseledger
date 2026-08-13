@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\InventoryItemType;
 use App\Models\InventoryItem;
 use App\Models\Organization;
 use App\Models\UnitOfMeasure;
@@ -30,6 +31,8 @@ class InventoryItemFactory extends Factory
             },
             'name' => fake()->words(3, true),
             'sku' => strtoupper(fake()->unique()->bothify('SKU-#####')),
+            'type' => InventoryItemType::Ingredient,
+            'yield_percentage' => '100.00',
             'active' => true,
         ];
     }

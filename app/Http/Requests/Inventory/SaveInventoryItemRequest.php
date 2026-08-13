@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Inventory;
 
+use App\Enums\InventoryItemType;
 use App\Enums\OrganizationPermission;
 use App\Models\InventoryItem;
 use App\Models\Organization;
@@ -82,6 +83,25 @@ class SaveInventoryItemRequest extends FormRequest
                             ->where('active', true),
                     ),
             ],
+            'inventory_category_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('inventory_categories', 'id')
+                    ->where(
+                        fn (Builder $query): Builder => $query
+                            ->where('organization_id', $organizationId)
+                            ->where('active', true),
+                    ),
+            ],
+            'type' => [
+                'required',
+                Rule::enum(InventoryItemType::class),
+            ],
+            'yield_percentage' => [
+                'required',
+                'decimal:0,2',
+                'between:0,100',
+            ],
             'active' => [
                 'required',
                 'boolean',
@@ -137,6 +157,11 @@ class SaveInventoryItemRequest extends FormRequest
             'sku' => is_string($sku)
                 ? Str::upper(trim($sku))
                 : $sku,
+            'yield_percentage' => $this->input(
+                'yield_percentage',
+                '100.00',
+            ),
+            'type' => $this->input('type', 'ingredient'),
             'active' => $this->boolean('active'),
         ]);
     }
