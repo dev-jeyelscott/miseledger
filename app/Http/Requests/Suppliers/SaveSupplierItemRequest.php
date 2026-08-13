@@ -40,7 +40,7 @@ class SaveSupplierItemRequest extends FormRequest
     }
 
     /**
-     * Validate supplier SKU, internal item, unit, and exact base quantity.
+     * Validate supplier SKU, internal item, unit, quantity, and optional initial price.
      *
      * @return array<string, list<mixed>>
      */
@@ -103,6 +103,14 @@ class SaveSupplierItemRequest extends FormRequest
                 'gt:0',
                 'max:999999999.999999',
                 'decimal:0,6',
+            ],
+
+            'price' => [
+                'nullable',
+                'numeric',
+                'gte:0',
+                'max:99999999999.9999',
+                'decimal:0,4',
             ],
 
             'active' => [
@@ -176,6 +184,7 @@ class SaveSupplierItemRequest extends FormRequest
         $supplierSku = $this->input('supplier_sku');
         $description = $this->input('description');
         $baseQuantity = $this->input('base_quantity');
+        $price = $this->input('price');
 
         $this->merge([
             'supplier_sku' => is_string($supplierSku)
@@ -190,6 +199,11 @@ class SaveSupplierItemRequest extends FormRequest
             'base_quantity' => is_string($baseQuantity)
                 ? trim($baseQuantity)
                 : $baseQuantity,
+
+            'price' => is_string($price)
+                && trim($price) !== ''
+                    ? trim($price)
+                    : null,
 
             'active' => $this->boolean('active'),
         ]);

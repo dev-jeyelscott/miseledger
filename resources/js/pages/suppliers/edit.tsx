@@ -341,37 +341,11 @@ export default function EditSupplier({
                                                     units
                                                 </p>
 
-                                                <div className="mt-2 flex items-center gap-3">
-                                                    <p className="text-sm">
-                                                        {item.currentPrice ===
-                                                        null
-                                                            ? 'No price'
-                                                            : `${item.currency} ${item.currentPrice}`}
-                                                    </p>
-
-                                                    {canManage &&
-                                                        supplier.active &&
-                                                        item.active &&
-                                                        item.currentPrice ===
-                                                            null && (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                asChild
-                                                            >
-                                                                <Link
-                                                                    href={SupplierItemController.edit(
-                                                                        [
-                                                                            supplier.id,
-                                                                            item.id,
-                                                                        ],
-                                                                    )}
-                                                                >
-                                                                    Set price
-                                                                </Link>
-                                                            </Button>
-                                                        )}
-                                                </div>
+                                                <p className="mt-1 text-sm">
+                                                    {item.currentPrice === null
+                                                        ? 'No price'
+                                                        : `${item.currency} ${item.currentPrice}`}
+                                                </p>
                                             </div>
 
                                             <span className="text-sm">
@@ -552,6 +526,29 @@ export default function EditSupplier({
                                                         message={
                                                             errors.base_quantity
                                                         }
+                                                    />
+                                                </div>
+
+                                                <div className="grid gap-2">
+                                                    <Label htmlFor="price">
+                                                        Price
+                                                    </Label>
+                                                    <Input
+                                                        id="price"
+                                                        name="price"
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.0001"
+                                                    />
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Optional initial
+                                                        supplier price. When
+                                                        provided, this becomes
+                                                        the first price-history
+                                                        entry.
+                                                    </p>
+                                                    <InputError
+                                                        message={errors.price}
                                                     />
                                                 </div>
 

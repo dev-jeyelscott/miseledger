@@ -16,6 +16,7 @@ use App\Models\SupplierItemPrice;
 use App\Models\UnitOfMeasure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -23,12 +24,13 @@ use Inertia\Response;
 class SupplierItemController extends Controller
 {
     /**
-     * Create a supplier-specific inventory mapping.
+     * Create a supplier-specific inventory mapping and optional initial price.
      */
     public function store(
         SaveSupplierItemRequest $request,
         string $supplier,
         SaveSupplierItem $saveSupplierItem,
+        RecordSupplierItemPrice $recordSupplierItemPrice,
     ): RedirectResponse {
         $organization = $request->organization();
         $supplierRecord = $request->supplier();
@@ -40,11 +42,29 @@ class SupplierItemController extends Controller
             abort(403);
         }
 
-        $saveSupplierItem->handle(
+        DB::transaction(function () use (
+            $request,
             $organization,
             $supplierRecord,
-            $this->supplierItemAttributes($request),
-        );
+            $saveSupplierItem,
+            $recordSupplierItemPrice,
+        ): void {
+            $supplierItem = $saveSupplierItem->handle(
+                $organization,
+                $supplierRecord,
+                $this->supplierItemAttributes($request),
+            );
+
+            $price = $request->validated('price');
+
+            if ($price !== null) {
+                $recordSupplierItemPrice->handle(
+                    $organization,
+                    $supplierItem,
+                    (string) $price,
+                );
+            }
+        }, 3);
 
         Inertia::flash('toast', [
             'type' => 'success',
