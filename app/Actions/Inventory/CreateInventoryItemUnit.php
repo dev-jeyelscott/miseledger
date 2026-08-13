@@ -59,6 +59,23 @@ final class CreateInventoryItemUnit
                 ]);
             }
 
+            $baseUnitOfMeasure = UnitOfMeasure::query()
+                ->where('organization_id', $organization->getKey())
+                ->whereKey($lockedItem->base_unit_of_measure_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (
+                $baseUnitOfMeasure->dimension
+                !== $unitOfMeasure->dimension
+            ) {
+                throw ValidationException::withMessages([
+                    'unit_of_measure_id' => __(
+                        'The alternate unit must have the same dimension as the base unit.',
+                    ),
+                ]);
+            }
+
             return $lockedItem->unitConversions()->create([
                 'unit_of_measure_id' => $unitOfMeasure->id,
                 'quantity_in_base_unit' => $quantityInBaseUnit,

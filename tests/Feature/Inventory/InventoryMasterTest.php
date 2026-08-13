@@ -306,6 +306,52 @@ test('the base unit cannot also be configured as an alternate unit', function ()
     $this->assertDatabaseCount('inventory_item_units', 0);
 });
 
+test('an alternate unit must share the base unit dimension', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    $gram = UnitOfMeasure::factory()
+        ->for($organization)
+        ->create([
+            'dimension' => 'weight',
+        ]);
+
+    $case = UnitOfMeasure::factory()
+        ->for($organization)
+        ->create([
+            'dimension' => 'count',
+        ]);
+
+    $item = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $gram->id,
+        ]);
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->post(
+            route('inventory.items.units.store', $item),
+            [
+                'unit_of_measure_id' => $case->id,
+                'quantity_in_base_unit' => '25.000000',
+                'active' => true,
+            ],
+        )
+        ->assertSessionHasErrors('unit_of_measure_id');
+
+    $this->assertDatabaseCount('inventory_item_units', 0);
+});
+
 test('an item base unit cannot change after alternate units exist', function () {
     $user = User::factory()->create();
     $organization = Organization::factory()->create();

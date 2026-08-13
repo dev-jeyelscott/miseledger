@@ -435,3 +435,55 @@ test('inactive item conversion is not used', function () {
         ),
     )->toThrow(ValidationException::class);
 });
+
+test('item conversions do not traverse through the base unit', function () {
+    $organization = Organization::factory()->create();
+
+    $bottle = UnitOfMeasure::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Bottle',
+        'symbol' => 'bottle',
+        'dimension' => 'count',
+    ]);
+
+    $case = UnitOfMeasure::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Case',
+        'symbol' => 'case',
+        'dimension' => 'count',
+    ]);
+
+    $pallet = UnitOfMeasure::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Pallet',
+        'symbol' => 'pallet',
+        'dimension' => 'count',
+    ]);
+
+    $item = InventoryItem::factory()->create([
+        'organization_id' => $organization->id,
+        'base_unit_of_measure_id' => $bottle->id,
+    ]);
+
+    InventoryItemUnit::factory()->create([
+        'inventory_item_id' => $item->id,
+        'unit_of_measure_id' => $case->id,
+        'quantity_in_base_unit' => '24.000000',
+    ]);
+
+    InventoryItemUnit::factory()->create([
+        'inventory_item_id' => $item->id,
+        'unit_of_measure_id' => $pallet->id,
+        'quantity_in_base_unit' => '240.000000',
+    ]);
+
+    expect(
+        fn () => app(ConvertQuantity::class)->handle(
+            $organization,
+            $item,
+            '10.000000',
+            $case,
+            $pallet,
+        ),
+    )->toThrow(ValidationException::class);
+});
