@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 
 /**
  * @property int $id
@@ -54,5 +55,36 @@ class StorageLocation extends Model
         return [
             'active' => 'boolean',
         ];
+    }
+
+    /**
+     * Reject an organization/location pairing that crosses tenant boundaries.
+     */
+    protected static function booted(): void
+    {
+        static::saving(static function (StorageLocation $storageLocation): void {
+            if (! $storageLocation->isDirty([
+                'organization_id',
+                'location_id',
+            ])) {
+                return;
+            }
+
+            $locationBelongsToOrganization = Location::query()
+                ->whereKey($storageLocation->location_id)
+                ->where(
+                    'organization_id',
+                    $storageLocation->organization_id,
+                )
+                ->exists();
+
+            if (! $locationBelongsToOrganization) {
+                throw ValidationException::withMessages([
+                    'location_id' => __(
+                        'The selected location does not belong to the organization.',
+                    ),
+                ]);
+            }
+        });
     }
 }

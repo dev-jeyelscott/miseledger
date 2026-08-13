@@ -235,6 +235,30 @@ test('storage application boundary rejects mismatched tenant ownership', functio
     $this->assertDatabaseCount('storage_locations', 0);
 });
 
+test('storage model rejects a location from another organization', function () {
+    $firstOrganization = Organization::factory()->create();
+    $secondOrganization = Organization::factory()->create();
+
+    $secondLocation = Location::factory()
+        ->for($secondOrganization)
+        ->create();
+
+    $storageLocation = new StorageLocation([
+        'name' => 'Cross Tenant Storage',
+        'code' => 'CROSS',
+        'active' => true,
+    ]);
+
+    $storageLocation->organization()->associate($firstOrganization);
+    $storageLocation->location()->associate($secondLocation);
+
+    expect(
+        fn () => $storageLocation->save(),
+    )->toThrow(ValidationException::class);
+
+    $this->assertDatabaseCount('storage_locations', 0);
+});
+
 test('scoped binding rejects storage belonging to another location', function () {
     $owner = User::factory()->create();
     $organization = Organization::factory()->create();
