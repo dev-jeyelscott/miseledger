@@ -63,6 +63,14 @@ final class ConvertQuantity
             return $standard;
         }
 
+        if ($fromUnit->dimension !== $toUnit->dimension) {
+            throw ValidationException::withMessages([
+                'unit' => __(
+                    'Units with different dimensions cannot be converted.',
+                ),
+            ]);
+        }
+
         $direct = $this->directItemConversion(
             $inventoryItem,
             $decimalQuantity,

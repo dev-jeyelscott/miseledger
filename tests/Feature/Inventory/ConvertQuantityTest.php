@@ -189,7 +189,7 @@ test('inverse item conversion converts base quantity back to alternate unit', fu
     )->toBe('2.000000');
 });
 
-test('explicit item conversion may cross dimensions', function () {
+test('cross-dimension item conversion fails', function () {
     $organization = Organization::factory()->create();
 
     $kilogram = UnitOfMeasure::factory()->create([
@@ -219,14 +219,14 @@ test('explicit item conversion may cross dimensions', function () {
     ]);
 
     expect(
-        app(ConvertQuantity::class)->handle(
+        fn () => app(ConvertQuantity::class)->handle(
             $organization,
             $item,
             '2.000000',
             $sack,
             $kilogram,
         ),
-    )->toBe('50.000000');
+    )->toThrow(ValidationException::class);
 });
 
 test('unsupported count conversion fails explicitly', function () {
