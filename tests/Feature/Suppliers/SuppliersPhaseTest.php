@@ -10,6 +10,7 @@ use App\Models\SupplierItemPrice;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('an owner can create an organization scoped supplier', function () {
@@ -228,7 +229,9 @@ test('a referenced supplier cannot be hard deleted', function () {
         ]);
 
     expect(
-        fn () => $supplier->delete(),
+        fn () => DB::transaction(
+            fn () => $supplier->delete(),
+        ),
     )->toThrow(QueryException::class);
 
     $this->assertDatabaseHas('suppliers', [
