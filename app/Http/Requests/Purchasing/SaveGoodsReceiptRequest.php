@@ -48,13 +48,11 @@ class SaveGoodsReceiptRequest extends FormRequest
      */
     public function rules(): array
     {
-        $organizationId = (int) (
-            $this->organization()?->id ?? 0
-        );
+        $organizationId = (int) $this->organization()->id;
 
         $purchaseOrder = $this->purchaseOrder();
-        $purchaseOrderId = (int) ($purchaseOrder?->id ?? 0);
-        $locationId = (int) ($purchaseOrder?->location_id ?? 0);
+        $purchaseOrderId = (int) $purchaseOrder->id;
+        $locationId = (int) $purchaseOrder->location_id;
 
         return [
             'number' => [

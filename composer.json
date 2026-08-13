@@ -61,6 +61,11 @@
         "lint:check": [
             "pint --test"
         ],
+        "format": [
+            "pint",
+            "npm run lint",
+            "npm run format"
+        ],
         "ci:check": [
             "Composer\\Config::disableProcessTimeout",
             "npm run lint:check",
