@@ -29,4 +29,5 @@ enum OrganizationPermission: string
 
     case LocationsManage = 'locations.manage';
     case UsersManage = 'users.manage';
+    case OrganizationManage = 'organization.manage';
 }

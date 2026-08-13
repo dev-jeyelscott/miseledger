@@ -34,4 +34,15 @@ class OrganizationPolicy
             OrganizationPermission::UsersManage,
         );
     }
+
+    /**
+     * Restrict organization configuration to organization.manage.
+     */
+    public function update(User $user, Organization $organization): bool
+    {
+        return $user->hasOrganizationPermission(
+            $organization,
+            OrganizationPermission::OrganizationManage,
+        );
+    }
 }

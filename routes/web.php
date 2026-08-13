@@ -40,6 +40,16 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     )->name('organizations.activate');
 
     Route::get(
+        'organizations/{organization}/settings',
+        [OrganizationController::class, 'edit'],
+    )->name('organizations.settings.edit');
+
+    Route::put(
+        'organizations/{organization}/settings',
+        [OrganizationController::class, 'update'],
+    )->name('organizations.settings.update');
+
+    Route::get(
         'organizations/{organization}/members',
         [OrganizationMemberController::class, 'index'],
     )->name('organizations.members.index');

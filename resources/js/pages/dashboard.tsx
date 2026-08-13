@@ -94,6 +94,20 @@ export default function Dashboard() {
                             </Button>
                         )}
 
+                        {activeMembership?.permissions.includes(
+                            'organization.manage',
+                        ) && (
+                            <Button variant="outline" asChild>
+                                <Link
+                                    href={OrganizationController.edit(
+                                        organizationContext.active.id,
+                                    )}
+                                >
+                                    Organization settings
+                                </Link>
+                            </Button>
+                        )}
+
                         <Button variant="outline" asChild>
                             <Link href={OrganizationController.create()}>
                                 New organization

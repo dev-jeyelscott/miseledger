@@ -15,7 +15,8 @@ export type OrganizationPermission =
     | 'reports.view'
     | 'costs.view'
     | 'locations.manage'
-    | 'users.manage';
+    | 'users.manage'
+    | 'organization.manage';
 
 export type OrganizationRole =
     'owner' | 'manager' | 'inventory_staff' | 'kitchen_staff' | 'auditor';
