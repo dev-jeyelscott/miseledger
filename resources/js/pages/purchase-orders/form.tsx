@@ -165,7 +165,11 @@ export default function PurchaseOrderForm({
                 </div>
 
                 {editable ? (
-                    <Form {...formAttributes} className="space-y-6">
+                    <Form
+                        {...formAttributes}
+                        options={{ preserveState: 'errors' }}
+                        className="space-y-6"
+                    >
                         {({ processing, errors }) => (
                             <>
                                 <div className="grid gap-5 rounded-xl border border-sidebar-border/70 p-5 md:grid-cols-2 dark:border-sidebar-border">
@@ -600,6 +604,7 @@ export default function PurchaseOrderForm({
                                 {...PurchaseOrderController.approve.form(
                                     purchaseOrder.id,
                                 )}
+                                options={{ preserveState: 'errors' }}
                             >
                                 {({ processing }) => (
                                     <Button type="submit" disabled={processing}>
@@ -612,6 +617,7 @@ export default function PurchaseOrderForm({
                                 {...PurchaseOrderController.cancel.form(
                                     purchaseOrder.id,
                                 )}
+                                options={{ preserveState: 'errors' }}
                             >
                                 {({ processing }) => (
                                     <Button
