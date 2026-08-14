@@ -253,7 +253,10 @@ class InventoryItemController extends Controller
                 )
                 ->values()
                 ->all(),
-            'categories' => $this->activeCategoryOptions($organization),
+            'categories' => $this->categoryOptionsForItem(
+                $organization,
+                $item,
+            ),
             'availableConversionUnits' => (
                 $availableConversionUnits
             ),
@@ -346,7 +349,7 @@ class InventoryItemController extends Controller
      */
     private function activeCategoryOptions(Organization $organization): array
     {
-        return $organization
+        $categories = $organization
             ->inventoryCategories()
             ->where('active', true)
             ->orderBy('name')
@@ -358,8 +361,32 @@ class InventoryItemController extends Controller
                     'active' => $category->active,
                 ],
             )
-            ->values()
             ->all();
+
+        return array_values($categories);
+    }
+
+    /**
+     * Include an item's assigned inactive category as a retainable choice.
+     *
+     * @return list<array{id: int, name: string, active: bool}>
+     */
+    private function categoryOptionsForItem(
+        Organization $organization,
+        InventoryItem $inventoryItem,
+    ): array {
+        $categories = $this->activeCategoryOptions($organization);
+        $currentCategory = $inventoryItem->inventoryCategory;
+
+        if ($currentCategory !== null && ! $currentCategory->active) {
+            $categories[] = [
+                'id' => $currentCategory->id,
+                'name' => $currentCategory->name,
+                'active' => $currentCategory->active,
+            ];
+        }
+
+        return $categories;
     }
 
     /**

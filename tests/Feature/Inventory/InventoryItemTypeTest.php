@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 test('an owner can create each approved inventory item type', function (
     InventoryItemType $type,
@@ -129,4 +130,68 @@ test('an inventory item is deactivated without being deleted', function () {
 
     expect($item->refresh()->active)->toBeFalse();
     $this->assertModelExists($item);
+});
+
+test('an assigned inactive category can be retained but not newly assigned', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create(['role' => OrganizationRole::Owner]);
+
+    $unit = UnitOfMeasure::factory()->for($organization)->create();
+    $category = InventoryCategory::factory()->for($organization)->create();
+    $assignedItem = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_category_id' => $category->id,
+        ]);
+    $otherItem = InventoryItem::factory()
+        ->for($organization)
+        ->create(['base_unit_of_measure_id' => $unit->id]);
+
+    $category->update(['active' => false]);
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->get(route('inventory.items.edit', $assignedItem))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page) => $page
+                ->component('inventory/items/edit')
+                ->has('categories', 1)
+                ->where('categories.0.id', $category->id)
+                ->where('categories.0.active', false),
+        );
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->put(route('inventory.items.update', $assignedItem), [
+            'name' => 'Updated item name',
+            'sku' => $assignedItem->sku,
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_category_id' => $category->id,
+            'active' => true,
+        ])
+        ->assertRedirect(route('inventory.items.edit', $assignedItem));
+
+    expect($assignedItem->refresh()->inventory_category_id)
+        ->toBe($category->id)
+        ->and($assignedItem->name)->toBe('Updated item name');
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->put(route('inventory.items.update', $otherItem), [
+            'name' => $otherItem->name,
+            'sku' => $otherItem->sku,
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_category_id' => $category->id,
+            'active' => true,
+        ])
+        ->assertSessionHasErrors('inventory_category_id');
+
+    expect($otherItem->refresh()->inventory_category_id)->toBeNull();
 });

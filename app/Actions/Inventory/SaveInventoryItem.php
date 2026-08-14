@@ -51,6 +51,14 @@ final class SaveInventoryItem
 
             $attributes['base_unit_of_measure_id'] = $baseUnit->id;
 
+            $lockedItem = $inventoryItem === null
+                ? null
+                : InventoryItem::query()
+                    ->where('organization_id', $organization->getKey())
+                    ->whereKey($inventoryItem->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
             if ($attributes['inventory_category_id'] !== null) {
                 $category = InventoryCategory::query()
                     ->where('organization_id', $organization->getKey())
@@ -58,7 +66,13 @@ final class SaveInventoryItem
                     ->lockForUpdate()
                     ->first();
 
-                if ($category === null || ! $category->active) {
+                $retainsCurrentCategory = $lockedItem !== null
+                    && $lockedItem->inventory_category_id === $category?->id;
+
+                if (
+                    $category === null
+                    || (! $category->active && ! $retainsCurrentCategory)
+                ) {
                     throw ValidationException::withMessages([
                         'inventory_category_id' => __(
                             'Select an active category from the current organization.',
@@ -69,15 +83,9 @@ final class SaveInventoryItem
                 $attributes['inventory_category_id'] = $category->id;
             }
 
-            if ($inventoryItem === null) {
+            if ($lockedItem === null) {
                 return $organization->inventoryItems()->create($attributes);
             }
-
-            $lockedItem = InventoryItem::query()
-                ->where('organization_id', $organization->getKey())
-                ->whereKey($inventoryItem->getKey())
-                ->lockForUpdate()
-                ->firstOrFail();
 
             $baseUnitChanged = (
                 $lockedItem->base_unit_of_measure_id !== $baseUnit->id

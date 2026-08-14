@@ -50,6 +50,7 @@ class SaveInventoryItemRequest extends FormRequest
         );
 
         $inventoryItem = $this->inventoryItem();
+        $currentCategoryId = $inventoryItem?->inventory_category_id;
 
         return [
             'name' => [
@@ -90,7 +91,22 @@ class SaveInventoryItemRequest extends FormRequest
                     ->where(
                         fn (Builder $query): Builder => $query
                             ->where('organization_id', $organizationId)
-                            ->where('active', true),
+                            ->where(
+                                function (Builder $query) use (
+                                    $currentCategoryId,
+                                ): Builder {
+                                    $query->where('active', true);
+
+                                    if ($currentCategoryId !== null) {
+                                        $query->orWhere(
+                                            'id',
+                                            $currentCategoryId,
+                                        );
+                                    }
+
+                                    return $query;
+                                },
+                            ),
                     ),
             ],
             'type' => [

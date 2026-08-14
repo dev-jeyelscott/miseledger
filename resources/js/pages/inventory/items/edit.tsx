@@ -118,6 +118,8 @@ export default function EditInventoryItem({
                                                     value={category.id}
                                                 >
                                                     {category.name}
+                                                    {!category.active &&
+                                                        ' (Inactive)'}
                                                 </option>
                                             ))}
                                         </select>
