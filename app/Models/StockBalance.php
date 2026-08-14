@@ -6,6 +6,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use LogicException;
 
 /**
  * @property int $id
@@ -25,10 +26,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'location_id',
     'storage_location_id',
     'inventory_item_id',
-    'quantity_on_hand',
-    'average_unit_cost',
-    'inventory_value',
-    'last_movement_at',
 ])]
 class StockBalance extends Model
 {
@@ -96,5 +93,23 @@ class StockBalance extends Model
             'inventory_value' => 'decimal:4',
             'last_movement_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * Keep balances writable only through their dedicated projection writers.
+     */
+    protected static function booted(): void
+    {
+        static::updating(static function (StockBalance $balance): never {
+            throw new LogicException(
+                'Stock balances are rebuilt projections and cannot be edited directly.',
+            );
+        });
+
+        static::deleting(static function (StockBalance $balance): never {
+            throw new LogicException(
+                'Stock balances are rebuilt projections and cannot be deleted directly.',
+            );
+        });
     }
 }

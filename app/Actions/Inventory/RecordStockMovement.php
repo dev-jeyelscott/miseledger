@@ -357,7 +357,7 @@ final class RecordStockMovement
                     $lastMovementAt = $occurredAt;
                 }
 
-                $balance->update([
+                $balance->forceFill([
                     'quantity_on_hand' => (string) $newQuantity,
                     'average_unit_cost' => (string) $this->scaleMoney(
                         $newAverageCost,
@@ -365,7 +365,7 @@ final class RecordStockMovement
                     ),
                     'inventory_value' => (string) $inventoryValue,
                     'last_movement_at' => $lastMovementAt,
-                ]);
+                ])->saveQuietly();
 
                 return $movement;
             }, 3);

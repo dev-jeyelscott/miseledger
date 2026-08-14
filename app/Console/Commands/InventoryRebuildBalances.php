@@ -42,7 +42,7 @@ class InventoryRebuildBalances extends Command
                     (int) $identity->inventory_item_id,
                 );
 
-                $balance->update($expected);
+                $balance->forceFill($expected)->saveQuietly();
 
                 $rebuilt++;
             }, 3);
