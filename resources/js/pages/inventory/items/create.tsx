@@ -88,11 +88,21 @@ export default function CreateInventoryItem({ units, categories }: Props) {
                                             required
                                             className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                         >
-                                            <option value="ingredient">Ingredient</option>
-                                            <option value="finished_item">Finished item</option>
-                                            <option value="prepared_item">Prepared item</option>
-                                            <option value="packaging">Packaging</option>
-                                            <option value="consumable">Consumable</option>
+                                            <option value="ingredient">
+                                                Ingredient
+                                            </option>
+                                            <option value="finished_item">
+                                                Finished item
+                                            </option>
+                                            <option value="prepared_item">
+                                                Prepared item
+                                            </option>
+                                            <option value="packaging">
+                                                Packaging
+                                            </option>
+                                            <option value="consumable">
+                                                Consumable
+                                            </option>
                                         </select>
                                         <InputError message={errors.type} />
                                     </div>
@@ -107,7 +117,9 @@ export default function CreateInventoryItem({ units, categories }: Props) {
                                             defaultValue=""
                                             className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                         >
-                                            <option value="">Uncategorized</option>
+                                            <option value="">
+                                                Uncategorized
+                                            </option>
                                             {categories.map((category) => (
                                                 <option
                                                     key={category.id}
@@ -117,7 +129,11 @@ export default function CreateInventoryItem({ units, categories }: Props) {
                                                 </option>
                                             ))}
                                         </select>
-                                        <InputError message={errors.inventory_category_id} />
+                                        <InputError
+                                            message={
+                                                errors.inventory_category_id
+                                            }
+                                        />
                                     </div>
 
                                     <div className="grid gap-2">
@@ -134,7 +150,9 @@ export default function CreateInventoryItem({ units, categories }: Props) {
                                             defaultValue="100.00"
                                             required
                                         />
-                                        <InputError message={errors.yield_percentage} />
+                                        <InputError
+                                            message={errors.yield_percentage}
+                                        />
                                     </div>
 
                                     <div className="grid gap-2">

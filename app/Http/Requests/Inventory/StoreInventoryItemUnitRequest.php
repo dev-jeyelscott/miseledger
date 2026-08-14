@@ -5,6 +5,7 @@ namespace App\Http\Requests\Inventory;
 use App\Enums\OrganizationPermission;
 use App\Models\InventoryItem;
 use App\Models\Organization;
+use App\Models\UnitOfMeasure;
 use App\Models\User;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
