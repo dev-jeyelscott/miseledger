@@ -59,8 +59,7 @@ final class CancelStockTransfer
             }
 
             $transfer->forceFill([
-                'status' =>
-                    StockTransferStatus::Cancelled,
+                'status' => StockTransferStatus::Cancelled,
             ])->save();
 
             AuditLog::query()->create([
@@ -70,15 +69,12 @@ final class CancelStockTransfer
                 'entity_type' => 'stock_transfer',
                 'entity_id' => $transfer->id,
                 'before_data' => [
-                    'status' =>
-                        StockTransferStatus::Draft->value,
+                    'status' => StockTransferStatus::Draft->value,
                 ],
                 'after_data' => [
-                    'status' =>
-                        StockTransferStatus::Cancelled->value,
+                    'status' => StockTransferStatus::Cancelled->value,
                 ],
-                'correlation_id' =>
-                    "stock-transfer:{$transfer->id}:cancel",
+                'correlation_id' => "stock-transfer:{$transfer->id}:cancel",
             ]);
 
             return $transfer->refresh();

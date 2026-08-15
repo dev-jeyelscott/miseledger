@@ -126,7 +126,8 @@ export default function StockTransferForm({
     canViewCosts,
 }: Props) {
     const editable =
-        canCreate && (stockTransfer === null || stockTransfer.status === 'draft');
+        canCreate &&
+        (stockTransfer === null || stockTransfer.status === 'draft');
 
     const firstLocationId = locationOptions[0]?.id.toString() ?? '';
 
@@ -145,9 +146,11 @@ export default function StockTransferForm({
 
     const initialToLocationId =
         stockTransfer?.toLocationId.toString() ??
-        locationOptions.find(
-            (location) => location.id.toString() !== initialFromLocationId,
-        )?.id.toString() ??
+        locationOptions
+            .find(
+                (location) => location.id.toString() !== initialFromLocationId,
+            )
+            ?.id.toString() ??
         initialFromLocationId;
 
     const initialToStorageLocationId =
@@ -161,9 +164,7 @@ export default function StockTransferForm({
             ?.id.toString() ??
         '';
 
-    const [fromLocationId, setFromLocationId] = useState(
-        initialFromLocationId,
-    );
+    const [fromLocationId, setFromLocationId] = useState(initialFromLocationId);
     const [fromStorageLocationId, setFromStorageLocationId] = useState(
         initialFromStorageLocationId,
     );
@@ -221,9 +222,10 @@ export default function StockTransferForm({
         updateLine(index, {
             inventoryItemId: value,
             unitId:
-                item !== undefined && item.validUnitIds.includes(item.baseUnitId)
+                item !== undefined &&
+                item.validUnitIds.includes(item.baseUnitId)
                     ? item.baseUnitId.toString()
-                    : item?.validUnitIds[0]?.toString() ?? '',
+                    : (item?.validUnitIds[0]?.toString() ?? ''),
         });
     };
 
@@ -367,7 +369,9 @@ export default function StockTransferForm({
                                                 )}
                                             </select>
                                             <InputError
-                                                message={errors.from_location_id}
+                                                message={
+                                                    errors.from_location_id
+                                                }
                                             />
                                         </div>
 
@@ -671,10 +675,7 @@ export default function StockTransferForm({
                                 </div>
 
                                 <div className="flex gap-2">
-                                    <Button
-                                        type="submit"
-                                        disabled={processing}
-                                    >
+                                    <Button type="submit" disabled={processing}>
                                         {stockTransfer === null
                                             ? 'Create draft'
                                             : 'Save draft'}
@@ -882,10 +883,7 @@ export default function StockTransferForm({
                                 )}
                             >
                                 {({ processing }) => (
-                                    <Button
-                                        type="submit"
-                                        disabled={processing}
-                                    >
+                                    <Button type="submit" disabled={processing}>
                                         Ship transfer
                                     </Button>
                                 )}
@@ -986,10 +984,7 @@ export default function StockTransferForm({
 
                                 <InputError message={errors.lines} />
 
-                                <Button
-                                    type="submit"
-                                    disabled={processing}
-                                >
+                                <Button type="submit" disabled={processing}>
                                     Confirm receipt
                                 </Button>
                             </div>

@@ -181,29 +181,24 @@ final class ShipStockTransfer
                         storageLocation: $storageLocation,
                         inventoryItem: $inventoryItem,
                         type: StockMovementType::TransferOut,
-                        baseQuantity:
-                            '-'.$line->requested_base_quantity,
+                        baseQuantity: '-'.$line->requested_base_quantity,
                         baseUnitOfMeasure: $baseUnit,
                         referenceType: 'stock_transfer_line',
                         referenceId: $line->id,
                         occurredAt: $shippedAt,
                         actor: $actor,
-                        idempotencyKey:
-                            "stock_transfer:{$transfer->id}:line:{$line->id}:out",
+                        idempotencyKey: "stock_transfer:{$transfer->id}:line:{$line->id}:out",
                         notes: __(
                             'Stock transfer :number shipment',
                             [
-                                'number' =>
-                                    $transfer->number,
+                                'number' => $transfer->number,
                             ],
                         ),
                     );
 
                 $line->forceFill([
-                    'shipped_base_quantity' =>
-                        $line->requested_base_quantity,
-                    'unit_cost' =>
-                        $movement->unit_cost,
+                    'shipped_base_quantity' => $line->requested_base_quantity,
+                    'unit_cost' => $movement->unit_cost,
                 ])->save();
 
                 $movementCount++;
@@ -222,20 +217,15 @@ final class ShipStockTransfer
                 'entity_type' => 'stock_transfer',
                 'entity_id' => $transfer->id,
                 'before_data' => [
-                    'status' =>
-                        StockTransferStatus::Draft->value,
+                    'status' => StockTransferStatus::Draft->value,
                 ],
                 'after_data' => [
-                    'status' =>
-                        StockTransferStatus::Shipped->value,
-                    'shipped_at' =>
-                        $shippedAt->toIso8601String(),
+                    'status' => StockTransferStatus::Shipped->value,
+                    'shipped_at' => $shippedAt->toIso8601String(),
                     'line_count' => $lines->count(),
-                    'movement_count' =>
-                        $movementCount,
+                    'movement_count' => $movementCount,
                 ],
-                'correlation_id' =>
-                    "stock-transfer:{$transfer->id}:ship",
+                'correlation_id' => "stock-transfer:{$transfer->id}:ship",
             ]);
 
             return $transfer->refresh();

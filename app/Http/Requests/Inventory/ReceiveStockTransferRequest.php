@@ -39,7 +39,7 @@ class ReceiveStockTransferRequest extends FormRequest
     public function rules(): array
     {
         $stockTransferId =
-            $this->stockTransfer()?->id ?? 0;
+            $this->stockTransfer()->id ?? 0;
 
         return [
             'lines' => [

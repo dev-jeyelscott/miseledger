@@ -68,29 +68,21 @@ class StockTransferController extends Controller
                 ): array => [
                     'id' => $transfer->id,
                     'number' => $transfer->number,
-                    'status' =>
-                        $transfer->status->value,
-                    'fromLocationName' =>
-                        $transfer->fromLocation->name,
-                    'fromStorageLocationName' =>
-                        $transfer
-                            ->fromStorageLocation
-                            ->name,
-                    'toLocationName' =>
-                        $transfer->toLocation->name,
-                    'toStorageLocationName' =>
-                        $transfer
-                            ->toStorageLocation
-                            ->name,
-                    'requestedAt' =>
-                        $transfer->requested_at
-                            ?->toIso8601String(),
-                    'shippedAt' =>
-                        $transfer->shipped_at
-                            ?->toIso8601String(),
-                    'receivedAt' =>
-                        $transfer->received_at
-                            ?->toIso8601String(),
+                    'status' => $transfer->status->value,
+                    'fromLocationName' => $transfer->fromLocation->name,
+                    'fromStorageLocationName' => $transfer
+                        ->fromStorageLocation
+                        ->name,
+                    'toLocationName' => $transfer->toLocation->name,
+                    'toStorageLocationName' => $transfer
+                        ->toStorageLocation
+                        ->name,
+                    'requestedAt' => $transfer->requested_at
+                        ?->toIso8601String(),
+                    'shippedAt' => $transfer->shipped_at
+                        ?->toIso8601String(),
+                    'receivedAt' => $transfer->received_at
+                        ?->toIso8601String(),
                 ],
             )
             ->values()
@@ -223,11 +215,10 @@ class StockTransferController extends Controller
         return Inertia::render(
             'stock-transfers/form',
             [
-                'stockTransfer' =>
-                    $this->stockTransferData(
-                        $transfer,
-                        $canViewCosts,
-                    ),
+                'stockTransfer' => $this->stockTransferData(
+                    $transfer,
+                    $canViewCosts,
+                ),
                 ...$this->formOptions(
                     $organization,
                     $convertQuantity,
@@ -560,51 +551,36 @@ class StockTransferController extends Controller
 
                 $rows[] = [
                     'transferId' => $transfer->id,
-                    'transferNumber' =>
-                        $transfer->number,
-                    'receivedAt' =>
-                        $transfer->received_at
-                            ?->toIso8601String(),
-                    'fromLocationName' =>
-                        $transfer->fromLocation->name,
-                    'fromStorageLocationName' =>
-                        $transfer
-                            ->fromStorageLocation
-                            ->name,
-                    'toLocationName' =>
-                        $transfer->toLocation->name,
-                    'toStorageLocationName' =>
-                        $transfer
-                            ->toStorageLocation
-                            ->name,
-                    'itemName' =>
-                        $line->inventoryItem->name,
-                    'itemSku' =>
-                        $line->inventoryItem->sku,
-                    'shippedBaseQuantity' =>
-                        $line->shipped_base_quantity,
-                    'receivedBaseQuantity' =>
-                        $line->received_base_quantity,
-                    'varianceBaseQuantity' =>
-                        $line->variance_base_quantity,
-                    'baseUnitSymbol' =>
-                        $line
-                            ->inventoryItem
-                            ->baseUnitOfMeasure
-                            ->symbol,
+                    'transferNumber' => $transfer->number,
+                    'receivedAt' => $transfer->received_at
+                        ?->toIso8601String(),
+                    'fromLocationName' => $transfer->fromLocation->name,
+                    'fromStorageLocationName' => $transfer
+                        ->fromStorageLocation
+                        ->name,
+                    'toLocationName' => $transfer->toLocation->name,
+                    'toStorageLocationName' => $transfer
+                        ->toStorageLocation
+                        ->name,
+                    'itemName' => $line->inventoryItem->name,
+                    'itemSku' => $line->inventoryItem->sku,
+                    'shippedBaseQuantity' => $line->shipped_base_quantity,
+                    'receivedBaseQuantity' => $line->received_base_quantity,
+                    'varianceBaseQuantity' => $line->variance_base_quantity,
+                    'baseUnitSymbol' => $line
+                        ->inventoryItem
+                        ->baseUnitOfMeasure
+                        ->symbol,
                     'unitCost' => $canViewCosts
                         ? $line->unit_cost
                         : null,
-                    'varianceValue' =>
-                        $varianceValue,
-                    'outboundMovementId' =>
-                        $line
-                            ->outboundMovement
-                            ?->id,
-                    'inboundMovementId' =>
-                        $line
-                            ->inboundMovement
-                            ?->id,
+                    'varianceValue' => $varianceValue,
+                    'outboundMovementId' => $line
+                        ->outboundMovement
+                        ?->id,
+                    'inboundMovementId' => $line
+                        ->inboundMovement
+                        ?->id,
                 ];
             }
         }
@@ -634,15 +610,13 @@ class StockTransferController extends Controller
             'stock-transfers/variance',
             [
                 'rows' => $rows,
-                'locationOptions' =>
-                    $locationOptions,
+                'locationOptions' => $locationOptions,
                 'filters' => [
                     'locationId' => $locationId,
                     'from' => $from,
                     'to' => $to,
                 ],
-                'currency' =>
-                    $organization->currency,
+                'currency' => $organization->currency,
                 'canViewCosts' => $canViewCosts,
             ],
         );
@@ -661,37 +635,23 @@ class StockTransferController extends Controller
             'id' => $transfer->id,
             'number' => $transfer->number,
             'status' => $transfer->status->value,
-            'fromLocationId' =>
-                $transfer->from_location_id,
-            'fromLocationName' =>
-                $transfer->fromLocation->name,
-            'fromStorageLocationId' =>
-                $transfer->from_storage_location_id,
-            'fromStorageLocationName' =>
-                $transfer->fromStorageLocation->name,
-            'toLocationId' =>
-                $transfer->to_location_id,
-            'toLocationName' =>
-                $transfer->toLocation->name,
-            'toStorageLocationId' =>
-                $transfer->to_storage_location_id,
-            'toStorageLocationName' =>
-                $transfer->toStorageLocation->name,
-            'requestedAt' =>
-                $transfer->requested_at
-                    ?->toIso8601String(),
-            'shippedAt' =>
-                $transfer->shipped_at
-                    ?->toIso8601String(),
-            'receivedAt' =>
-                $transfer->received_at
-                    ?->toIso8601String(),
-            'createdBy' =>
-                $transfer->creator?->name,
-            'shippedBy' =>
-                $transfer->shipper?->name,
-            'receivedBy' =>
-                $transfer->receiver?->name,
+            'fromLocationId' => $transfer->from_location_id,
+            'fromLocationName' => $transfer->fromLocation->name,
+            'fromStorageLocationId' => $transfer->from_storage_location_id,
+            'fromStorageLocationName' => $transfer->fromStorageLocation->name,
+            'toLocationId' => $transfer->to_location_id,
+            'toLocationName' => $transfer->toLocation->name,
+            'toStorageLocationId' => $transfer->to_storage_location_id,
+            'toStorageLocationName' => $transfer->toStorageLocation->name,
+            'requestedAt' => $transfer->requested_at
+                ?->toIso8601String(),
+            'shippedAt' => $transfer->shipped_at
+                ?->toIso8601String(),
+            'receivedAt' => $transfer->received_at
+                ?->toIso8601String(),
+            'createdBy' => $transfer->creator?->name,
+            'shippedBy' => $transfer->shipper?->name,
+            'receivedBy' => $transfer->receiver?->name,
             'notes' => $transfer->notes,
             'lines' => $transfer
                 ->lines
@@ -700,49 +660,37 @@ class StockTransferController extends Controller
                         StockTransferLine $line,
                     ): array => [
                         'id' => $line->id,
-                        'inventoryItemId' =>
-                            $line->inventory_item_id,
-                        'itemName' =>
-                            $line
-                                ->inventoryItem
-                                ->name,
-                        'itemSku' =>
-                            $line
-                                ->inventoryItem
-                                ->sku,
-                        'requestedQuantity' =>
-                            $line->requested_quantity,
+                        'inventoryItemId' => $line->inventory_item_id,
+                        'itemName' => $line
+                            ->inventoryItem
+                            ->name,
+                        'itemSku' => $line
+                            ->inventoryItem
+                            ->sku,
+                        'requestedQuantity' => $line->requested_quantity,
                         'unitId' => $line->unit_id,
-                        'unitSymbol' =>
-                            $line->unit->symbol,
-                        'requestedBaseQuantity' =>
-                            $line
-                                ->requested_base_quantity,
-                        'shippedBaseQuantity' =>
-                            $line
-                                ->shipped_base_quantity,
-                        'receivedBaseQuantity' =>
-                            $line
-                                ->received_base_quantity,
+                        'unitSymbol' => $line->unit->symbol,
+                        'requestedBaseQuantity' => $line
+                            ->requested_base_quantity,
+                        'shippedBaseQuantity' => $line
+                            ->shipped_base_quantity,
+                        'receivedBaseQuantity' => $line
+                            ->received_base_quantity,
                         'unitCost' => $canViewCosts
                             ? $line->unit_cost
                             : null,
-                        'varianceBaseQuantity' =>
-                            $line
-                                ->variance_base_quantity,
-                        'baseUnitSymbol' =>
-                            $line
-                                ->inventoryItem
-                                ->baseUnitOfMeasure
-                                ->symbol,
-                        'outboundMovementId' =>
-                            $line
-                                ->outboundMovement
-                                ?->id,
-                        'inboundMovementId' =>
-                            $line
-                                ->inboundMovement
-                                ?->id,
+                        'varianceBaseQuantity' => $line
+                            ->variance_base_quantity,
+                        'baseUnitSymbol' => $line
+                            ->inventoryItem
+                            ->baseUnitOfMeasure
+                            ->symbol,
+                        'outboundMovementId' => $line
+                            ->outboundMovement
+                            ?->id,
+                        'inboundMovementId' => $line
+                            ->inboundMovement
+                            ?->id,
                     ],
                 )
                 ->values()
@@ -809,58 +757,52 @@ class StockTransferController extends Controller
                 )
                 ->values()
                 ->all(),
-            'storageLocationOptions' =>
-                StorageLocation::query()
-                    ->where(
-                        'organization_id',
-                        $organization->id,
-                    )
-                    ->where('active', true)
-                    ->orderBy('name')
-                    ->get([
-                        'id',
-                        'location_id',
-                        'name',
-                    ])
-                    ->map(
-                        static fn (
-                            StorageLocation $storage,
-                        ): array => [
-                            'id' => $storage->id,
-                            'locationId' =>
-                                $storage->location_id,
-                            'name' => $storage->name,
-                        ],
-                    )
-                    ->values()
-                    ->all(),
-            'inventoryItemOptions' =>
-                $inventoryItems
-                    ->map(
-                        fn (
-                            InventoryItem $item,
-                        ): array => [
-                            'id' => $item->id,
-                            'name' => $item->name,
-                            'sku' => $item->sku,
-                            'baseUnitId' =>
-                                $item
-                                    ->base_unit_of_measure_id,
-                            'baseUnitSymbol' =>
-                                $item
-                                    ->baseUnitOfMeasure
-                                    ->symbol,
-                            'validUnitIds' =>
-                                $this->validUnitIds(
-                                    $organization,
-                                    $item,
-                                    $units,
-                                    $convertQuantity,
-                                ),
-                        ],
-                    )
-                    ->values()
-                    ->all(),
+            'storageLocationOptions' => StorageLocation::query()
+                ->where(
+                    'organization_id',
+                    $organization->id,
+                )
+                ->where('active', true)
+                ->orderBy('name')
+                ->get([
+                    'id',
+                    'location_id',
+                    'name',
+                ])
+                ->map(
+                    static fn (
+                        StorageLocation $storage,
+                    ): array => [
+                        'id' => $storage->id,
+                        'locationId' => $storage->location_id,
+                        'name' => $storage->name,
+                    ],
+                )
+                ->values()
+                ->all(),
+            'inventoryItemOptions' => $inventoryItems
+                ->map(
+                    fn (
+                        InventoryItem $item,
+                    ): array => [
+                        'id' => $item->id,
+                        'name' => $item->name,
+                        'sku' => $item->sku,
+                        'baseUnitId' => $item
+                            ->base_unit_of_measure_id,
+                        'baseUnitSymbol' => $item
+                            ->baseUnitOfMeasure
+                            ->symbol,
+                        'validUnitIds' => $this->validUnitIds(
+                            $organization,
+                            $item,
+                            $units,
+                            $convertQuantity,
+                        ),
+                    ],
+                )
+                ->values()
+                ->all(),
             'unitOptions' => $units
                 ->map(
                     static fn (

@@ -96,8 +96,7 @@ function createTransferDraftForTest(
             'notes' => null,
             'lines' => [
                 [
-                    'inventory_item_id' =>
-                        $inventoryItem->id,
+                    'inventory_item_id' => $inventoryItem->id,
                     'requested_quantity' => $quantity,
                     'unit_id' => $unit->id,
                 ],
@@ -233,8 +232,7 @@ test(
             Organization::factory()->create();
 
         $otherLocation = Location::factory()->create([
-            'organization_id' =>
-                $otherOrganization->id,
+            'organization_id' => $otherOrganization->id,
             'active' => true,
         ]);
 
@@ -562,8 +560,7 @@ test(
                 'lines' => [
                     [
                         'id' => $line->id,
-                        'received_base_quantity' =>
-                            '400',
+                        'received_base_quantity' => '400',
                     ],
                 ],
             ],
@@ -659,8 +656,7 @@ test(
                 'lines' => [
                     [
                         'id' => $line->id,
-                        'received_base_quantity' =>
-                            '0',
+                        'received_base_quantity' => '0',
                     ],
                 ],
             ],
@@ -829,8 +825,7 @@ test(
                 'lines' => [
                     [
                         'id' => $line->id,
-                        'received_base_quantity' =>
-                            '400',
+                        'received_base_quantity' => '400',
                     ],
                 ],
             ],
@@ -845,8 +840,7 @@ test(
         $url = route(
             'stock-transfers.variance',
             [
-                'location_id' =>
-                    $this->fromLocation->id,
+                'location_id' => $this->fromLocation->id,
                 'from' => $date,
                 'to' => $date,
             ],
@@ -855,8 +849,7 @@ test(
         $this
             ->actingAs($this->actor)
             ->withSession([
-                'active_organization_id' =>
-                    $this->organization->id,
+                'active_organization_id' => $this->organization->id,
             ])
             ->get($url)
             ->assertOk()
@@ -891,8 +884,7 @@ test(
         $this
             ->actingAs($this->manager)
             ->withSession([
-                'active_organization_id' =>
-                    $this->organization->id,
+                'active_organization_id' => $this->organization->id,
             ])
             ->get($url)
             ->assertOk()

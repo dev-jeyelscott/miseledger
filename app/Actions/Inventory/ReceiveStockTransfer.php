@@ -290,24 +290,20 @@ final class ReceiveStockTransfer
                         storageLocation: $storageLocation,
                         inventoryItem: $inventoryItem,
                         type: StockMovementType::TransferIn,
-                        baseQuantity:
-                            (string) $receivedBaseQuantity,
+                        baseQuantity: (string) $receivedBaseQuantity,
                         baseUnitOfMeasure: $baseUnit,
                         referenceType: 'stock_transfer_line',
                         referenceId: $line->id,
                         occurredAt: $receivedAt,
                         actor: $actor,
-                        idempotencyKey:
-                            "stock_transfer:{$transfer->id}:line:{$line->id}:in",
+                        idempotencyKey: "stock_transfer:{$transfer->id}:line:{$line->id}:in",
                         notes: __(
                             'Stock transfer :number receipt',
                             [
-                                'number' =>
-                                    $transfer->number,
+                                'number' => $transfer->number,
                             ],
                         ),
-                        inboundUnitCost:
-                            $line->unit_cost,
+                        inboundUnitCost: $line->unit_cost,
                     );
 
                     $movementCount++;
@@ -330,16 +326,13 @@ final class ReceiveStockTransfer
                 }
 
                 $line->forceFill([
-                    'received_base_quantity' =>
-                        (string) $receivedBaseQuantity,
-                    'variance_base_quantity' =>
-                        (string) $varianceBaseQuantity,
+                    'received_base_quantity' => (string) $receivedBaseQuantity,
+                    'variance_base_quantity' => (string) $varianceBaseQuantity,
                 ])->save();
             }
 
             $transfer->forceFill([
-                'status' =>
-                    StockTransferStatus::Received,
+                'status' => StockTransferStatus::Received,
                 'received_at' => $receivedAt,
                 'received_by' => $actor->id,
             ])->save();
@@ -351,22 +344,16 @@ final class ReceiveStockTransfer
                 'entity_type' => 'stock_transfer',
                 'entity_id' => $transfer->id,
                 'before_data' => [
-                    'status' =>
-                        StockTransferStatus::Shipped->value,
+                    'status' => StockTransferStatus::Shipped->value,
                 ],
                 'after_data' => [
-                    'status' =>
-                        StockTransferStatus::Received->value,
-                    'received_at' =>
-                        $receivedAt->toIso8601String(),
+                    'status' => StockTransferStatus::Received->value,
+                    'received_at' => $receivedAt->toIso8601String(),
                     'line_count' => $lines->count(),
-                    'movement_count' =>
-                        $movementCount,
-                    'variance_line_count' =>
-                        $varianceLineCount,
+                    'movement_count' => $movementCount,
+                    'variance_line_count' => $varianceLineCount,
                 ],
-                'correlation_id' =>
-                    "stock-transfer:{$transfer->id}:receive",
+                'correlation_id' => "stock-transfer:{$transfer->id}:receive",
             ]);
 
             return $transfer->refresh();

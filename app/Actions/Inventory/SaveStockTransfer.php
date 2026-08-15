@@ -187,10 +187,9 @@ final class SaveStockTransfer
                         );
                 } catch (ValidationException $exception) {
                     throw ValidationException::withMessages([
-                        "lines.{$index}.unit_id" =>
-                            $this->firstValidationMessage(
-                                $exception,
-                            ),
+                        "lines.{$index}.unit_id" => $this->firstValidationMessage(
+                            $exception,
+                        ),
                     ]);
                 }
 
@@ -214,13 +213,10 @@ final class SaveStockTransfer
                 }
 
                 $lineSnapshots[] = [
-                    'inventory_item_id' =>
-                        $inventoryItem->id,
-                    'requested_quantity' =>
-                        (string) $requestedQuantity,
+                    'inventory_item_id' => $inventoryItem->id,
+                    'requested_quantity' => (string) $requestedQuantity,
                     'unit_id' => $unit->id,
-                    'requested_base_quantity' =>
-                        (string) $baseQuantity,
+                    'requested_base_quantity' => (string) $baseQuantity,
                     'shipped_base_quantity' => null,
                     'received_base_quantity' => null,
                     'unit_cost' => null,
@@ -231,11 +227,9 @@ final class SaveStockTransfer
             $values = [
                 'organization_id' => $organization->id,
                 'from_location_id' => $fromLocation->id,
-                'from_storage_location_id' =>
-                    $fromStorage->id,
+                'from_storage_location_id' => $fromStorage->id,
                 'to_location_id' => $toLocation->id,
-                'to_storage_location_id' =>
-                    $toStorage->id,
+                'to_storage_location_id' => $toStorage->id,
                 'number' => trim(
                     (string) $attributes['number'],
                 ),

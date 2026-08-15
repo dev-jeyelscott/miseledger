@@ -185,8 +185,8 @@ export default function StockTransferVariance({
                                         colSpan={canViewCosts ? 10 : 8}
                                         className="px-4 py-8 text-center text-muted-foreground"
                                     >
-                                        No received transfer variances match
-                                        the selected filters.
+                                        No received transfer variances match the
+                                        selected filters.
                                     </td>
                                 </tr>
                             ) : (
@@ -213,9 +213,7 @@ export default function StockTransferVariance({
                                         <td className="px-4 py-3">
                                             <div>{row.fromLocationName}</div>
                                             <div className="text-xs text-muted-foreground">
-                                                {
-                                                    row.fromStorageLocationName
-                                                }
+                                                {row.fromStorageLocationName}
                                             </div>
                                         </td>
 
