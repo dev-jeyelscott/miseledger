@@ -1,5 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
+    ArrowLeftRight,
     BookOpen,
     Boxes,
     ClipboardCheck,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
+import StockTransferController from '@/actions/App/Http/Controllers/Inventory/StockTransferController';
 import WasteController from '@/actions/App/Http/Controllers/Inventory/WasteController';
 import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/GoodsReceiptController';
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
@@ -113,6 +115,19 @@ export function AppSidebar() {
             title: 'Waste',
             href: WasteController.index(),
             icon: Trash2,
+        });
+    }
+
+    if (
+        activeMembership?.permissions.includes('transfers.create') ||
+        activeMembership?.permissions.includes('transfers.ship') ||
+        activeMembership?.permissions.includes('transfers.receive') ||
+        activeMembership?.permissions.includes('reports.view')
+    ) {
+        mainNavItems.push({
+            title: 'Stock transfers',
+            href: StockTransferController.index(),
+            icon: ArrowLeftRight,
         });
     }
 

@@ -5,6 +5,7 @@ use App\Http\Controllers\Inventory\InventoryItemController;
 use App\Http\Controllers\Inventory\InventoryItemUnitController;
 use App\Http\Controllers\Inventory\OpeningBalanceController;
 use App\Http\Controllers\Inventory\StockCountController;
+use App\Http\Controllers\Inventory\StockTransferController;
 use App\Http\Controllers\Inventory\UnitOfMeasureController;
 use App\Http\Controllers\Inventory\WasteController;
 use App\Http\Controllers\Inventory\WasteReasonController;
@@ -401,6 +402,55 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 '{wasteReason}',
                 [WasteReasonController::class, 'update'],
             )->name('update');
+        });
+
+    Route::prefix('stock-transfers')
+        ->name('stock-transfers.')
+        ->group(function (): void {
+            Route::get(
+                '/',
+                [StockTransferController::class, 'index'],
+            )->name('index');
+
+            Route::get(
+                'variance',
+                [StockTransferController::class, 'variance'],
+            )->name('variance');
+
+            Route::get(
+                'create',
+                [StockTransferController::class, 'create'],
+            )->name('create');
+
+            Route::post(
+                '/',
+                [StockTransferController::class, 'store'],
+            )->name('store');
+
+            Route::get(
+                '{stockTransfer}/edit',
+                [StockTransferController::class, 'edit'],
+            )->name('edit');
+
+            Route::put(
+                '{stockTransfer}',
+                [StockTransferController::class, 'update'],
+            )->name('update');
+
+            Route::post(
+                '{stockTransfer}/ship',
+                [StockTransferController::class, 'ship'],
+            )->name('ship');
+
+            Route::post(
+                '{stockTransfer}/receive',
+                [StockTransferController::class, 'receive'],
+            )->name('receive');
+
+            Route::post(
+                '{stockTransfer}/cancel',
+                [StockTransferController::class, 'cancel'],
+            )->name('cancel');
         });
 });
 
