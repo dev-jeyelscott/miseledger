@@ -3,6 +3,7 @@
 use App\Http\Controllers\Inventory\InventoryCategoryController;
 use App\Http\Controllers\Inventory\InventoryItemController;
 use App\Http\Controllers\Inventory\InventoryItemUnitController;
+use App\Http\Controllers\Inventory\OpeningBalanceController;
 use App\Http\Controllers\Inventory\StockCountController;
 use App\Http\Controllers\Inventory\UnitOfMeasureController;
 use App\Http\Controllers\Inventory\WasteController;
@@ -107,6 +108,16 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::prefix('inventory')
         ->name('inventory.')
         ->group(function (): void {
+            Route::get(
+                'opening-balances/create',
+                [OpeningBalanceController::class, 'create'],
+            )->name('opening-balances.create');
+
+            Route::post(
+                'opening-balances',
+                [OpeningBalanceController::class, 'store'],
+            )->name('opening-balances.store');
+
             Route::get(
                 'items',
                 [InventoryItemController::class, 'index'],

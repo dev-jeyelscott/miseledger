@@ -299,54 +299,55 @@ class WasteController extends Controller
             );
         }
 
-        $rows = $query
-            ->orderByDesc('occurred_at')
-            ->orderByDesc('id')
-            ->get()
-            ->map(
-                static fn (
-                    WasteRecord $record,
-                ): array => [
-                    'recordId' => $record->id,
-                    'occurredAt' => $record->occurred_at
-                        ->toIso8601String(),
-                    'locationName' => $record->location->name,
-                    'storageLocationName' => $record
-                        ->storageLocation
-                        ->name,
-                    'itemName' => $record
-                        ->inventoryItem
-                        ->name,
-                    'itemSku' => $record
-                        ->inventoryItem
-                        ->sku,
-                    'reasonName' => $record
-                        ->wasteReason
-                        ->name,
-                    'quantity' => $record->quantity,
-                    'unitSymbol' => $record->unit->symbol,
-                    'baseQuantity' => $record->base_quantity,
-                    'baseUnitSymbol' => $record
-                        ->inventoryItem
-                        ->baseUnitOfMeasure
-                        ->symbol,
-                    'unitCost' => $canViewCosts
-                        ? $record->unit_cost
-                        : null,
-                    'totalCost' => $canViewCosts
-                        ? $record->total_cost
-                        : null,
-                    'recordedBy' => $record
-                        ->recorder
-                        ?->name,
-                    'notes' => $record->notes,
-                    'movementId' => $record
-                        ->movement
-                        ?->id,
-                ],
-            )
-            ->values()
-            ->all();
+        $rows = array_values(
+            $query
+                ->orderByDesc('occurred_at')
+                ->orderByDesc('id')
+                ->get()
+                ->map(
+                    static fn (
+                        WasteRecord $record,
+                    ): array => [
+                        'recordId' => $record->id,
+                        'occurredAt' => $record->occurred_at
+                            ->toIso8601String(),
+                        'locationName' => $record->location->name,
+                        'storageLocationName' => $record
+                            ->storageLocation
+                            ->name,
+                        'itemName' => $record
+                            ->inventoryItem
+                            ->name,
+                        'itemSku' => $record
+                            ->inventoryItem
+                            ->sku,
+                        'reasonName' => $record
+                            ->wasteReason
+                            ->name,
+                        'quantity' => $record->quantity,
+                        'unitSymbol' => $record->unit->symbol,
+                        'baseQuantity' => $record->base_quantity,
+                        'baseUnitSymbol' => $record
+                            ->inventoryItem
+                            ->baseUnitOfMeasure
+                            ->symbol,
+                        'unitCost' => $canViewCosts
+                            ? $record->unit_cost
+                            : null,
+                        'totalCost' => $canViewCosts
+                            ? $record->total_cost
+                            : null,
+                        'recordedBy' => $record
+                            ->recorder
+                            ?->name,
+                        'notes' => $record->notes,
+                        'movementId' => $record
+                            ->movement
+                            ?->id,
+                    ],
+                )
+                ->all(),
+        );
 
         return [
             [

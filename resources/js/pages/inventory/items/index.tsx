@@ -2,6 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
 import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
+import OpeningBalanceController from '@/actions/App/Http/Controllers/Inventory/OpeningBalanceController';
 import UnitOfMeasureController from '@/actions/App/Http/Controllers/Inventory/UnitOfMeasureController';
 import { Button } from '@/components/ui/button';
 import { dashboard } from '@/routes';
@@ -29,7 +30,7 @@ export default function InventoryItemsIndex({ items, canManage }: Props) {
                         </p>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <Button variant="outline" asChild>
                             <Link href={UnitOfMeasureController.index()}>
                                 Units of measure
@@ -43,12 +44,24 @@ export default function InventoryItemsIndex({ items, canManage }: Props) {
                         </Button>
 
                         {canManage && (
-                            <Button asChild>
-                                <Link href={InventoryItemController.create()}>
-                                    <Plus className="size-4" />
-                                    New item
-                                </Link>
-                            </Button>
+                            <>
+                                <Button variant="outline" asChild>
+                                    <Link
+                                        href={OpeningBalanceController.create()}
+                                    >
+                                        Opening balance
+                                    </Link>
+                                </Button>
+
+                                <Button asChild>
+                                    <Link
+                                        href={InventoryItemController.create()}
+                                    >
+                                        <Plus className="size-4" />
+                                        New item
+                                    </Link>
+                                </Button>
+                            </>
                         )}
                     </div>
                 </div>
