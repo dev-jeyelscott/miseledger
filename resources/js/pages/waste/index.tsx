@@ -69,8 +69,19 @@ type WasteRow = {
     movementId: number | null;
 };
 
+type PaginatedWasteRows = {
+    current_page: number;
+    data: WasteRow[];
+    from: number | null;
+    last_page: number;
+    next_page_url: string | null;
+    prev_page_url: string | null;
+    to: number | null;
+    total: number;
+};
+
 type Props = {
-    rows: WasteRow[];
+    rows: PaginatedWasteRows | null;
     filters: {
         locationId: number | null;
         inventoryItemId: number | null;
@@ -117,6 +128,8 @@ export default function WasteIndex({
     const [recordStorageLocationId, setRecordStorageLocationId] = useState('');
     const [recordInventoryItemId, setRecordInventoryItemId] = useState('');
     const [recordUnitId, setRecordUnitId] = useState('');
+
+    const reportRows = rows?.data ?? [];
 
     const selectedStorageLocationOptions =
         recordForm?.storageLocationOptions.filter(
@@ -703,7 +716,7 @@ export default function WasteIndex({
                                 </thead>
 
                                 <tbody>
-                                    {rows.length === 0 ? (
+                                    {reportRows.length === 0 ? (
                                         <tr>
                                             <td
                                                 colSpan={canViewCosts ? 10 : 8}
@@ -714,7 +727,7 @@ export default function WasteIndex({
                                             </td>
                                         </tr>
                                     ) : (
-                                        rows.map((row) => (
+                                        reportRows.map((row) => (
                                             <tr
                                                 key={row.recordId}
                                                 className="border-b align-top last:border-b-0"
@@ -799,6 +812,64 @@ export default function WasteIndex({
                                 </tbody>
                             </table>
                         </div>
+
+                        {rows !== null && rows.total > 0 && (
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="text-sm text-muted-foreground">
+                                    Showing {rows.from ?? 0} to {rows.to ?? 0}{' '}
+                                    of {rows.total} waste records.
+                                </p>
+
+                                {rows.last_page > 1 && (
+                                    <div className="flex items-center gap-2">
+                                        {rows.prev_page_url !== null ? (
+                                            <Button variant="outline" asChild>
+                                                <Link
+                                                    href={rows.prev_page_url}
+                                                    preserveScroll
+                                                    preserveState
+                                                >
+                                                    Previous
+                                                </Link>
+                                            </Button>
+                                        ) : (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                disabled
+                                            >
+                                                Previous
+                                            </Button>
+                                        )}
+
+                                        <span className="px-2 text-sm text-muted-foreground">
+                                            Page {rows.current_page} of{' '}
+                                            {rows.last_page}
+                                        </span>
+
+                                        {rows.next_page_url !== null ? (
+                                            <Button variant="outline" asChild>
+                                                <Link
+                                                    href={rows.next_page_url}
+                                                    preserveScroll
+                                                    preserveState
+                                                >
+                                                    Next
+                                                </Link>
+                                            </Button>
+                                        ) : (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                disabled
+                                            >
+                                                Next
+                                            </Button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </section>
                 )}
             </div>

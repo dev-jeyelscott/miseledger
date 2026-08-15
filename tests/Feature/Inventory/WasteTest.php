@@ -704,6 +704,139 @@ test(
 );
 
 test(
+    'waste report paginates newest first and preserves active filters',
+    function () {
+        $reportMoment = now()
+            ->setTimezone($this->organization->timezone)
+            ->startOfDay()
+            ->addHours(12);
+
+        $records = [];
+
+        for ($index = 0; $index < 26; $index++) {
+            $records[] = WasteRecord::query()->create([
+                'organization_id' => $this->organization->id,
+                'location_id' => $this->location->id,
+                'storage_location_id' => $this->storage->id,
+                'inventory_item_id' => $this->item->id,
+                'waste_reason_id' => $this->reason->id,
+                'operation_id' => (string) Str::uuid(),
+                'quantity' => '1.000000',
+                'unit_id' => $this->gram->id,
+                'base_quantity' => '1.000000',
+                'unit_cost' => '0.2500',
+                'total_cost' => '0.2500',
+                'occurred_at' => $reportMoment
+                    ->copy()
+                    ->subSeconds($index),
+                'recorded_by' => $this->actor->id,
+                'notes' => null,
+            ]);
+        }
+
+        $date = $reportMoment->toDateString();
+
+        $filters = [
+            'location_id' => $this->location->id,
+            'inventory_item_id' => $this->item->id,
+            'waste_reason_id' => $this->reason->id,
+            'from' => $date,
+            'to' => $date,
+        ];
+
+        $this
+            ->actingAs($this->actor)
+            ->withSession([
+                'active_organization_id' => $this->organization->id,
+            ])
+            ->get(route('waste.index', $filters))
+            ->assertOk()
+            ->assertInertia(
+                fn (Assert $page): Assert => $page
+                    ->component('waste/index')
+                    ->where('rows.current_page', 1)
+                    ->where('rows.last_page', 2)
+                    ->where('rows.per_page', 25)
+                    ->where('rows.total', 26)
+                    ->has('rows.data', 25)
+                    ->where(
+                        'rows.data.0.recordId',
+                        $records[0]->id,
+                    )
+                    ->where(
+                        'rows.data.24.recordId',
+                        $records[24]->id,
+                    )
+                    ->where(
+                        'rows.next_page_url',
+                        fn (?string $nextPageUrl): bool => $nextPageUrl !== null
+                            && str_contains(
+                                $nextPageUrl,
+                                "location_id={$this->location->id}",
+                            )
+                            && str_contains(
+                                $nextPageUrl,
+                                "inventory_item_id={$this->item->id}",
+                            )
+                            && str_contains(
+                                $nextPageUrl,
+                                "waste_reason_id={$this->reason->id}",
+                            )
+                            && str_contains(
+                                $nextPageUrl,
+                                "from={$date}",
+                            )
+                            && str_contains(
+                                $nextPageUrl,
+                                "to={$date}",
+                            )
+                            && str_contains(
+                                $nextPageUrl,
+                                'page=2',
+                            ),
+                    ),
+            );
+
+        $this
+            ->actingAs($this->actor)
+            ->withSession([
+                'active_organization_id' => $this->organization->id,
+            ])
+            ->get(route('waste.index', [
+                ...$filters,
+                'page' => 2,
+            ]))
+            ->assertOk()
+            ->assertInertia(
+                fn (Assert $page): Assert => $page
+                    ->component('waste/index')
+                    ->where('rows.current_page', 2)
+                    ->where('rows.last_page', 2)
+                    ->where('rows.total', 26)
+                    ->has('rows.data', 1)
+                    ->where(
+                        'rows.data.0.recordId',
+                        $records[25]->id,
+                    )
+                    ->where(
+                        'filters.locationId',
+                        $this->location->id,
+                    )
+                    ->where(
+                        'filters.inventoryItemId',
+                        $this->item->id,
+                    )
+                    ->where(
+                        'filters.wasteReasonId',
+                        $this->reason->id,
+                    )
+                    ->where('filters.from', $date)
+                    ->where('filters.to', $date),
+            );
+    },
+);
+
+test(
     'waste report is tenant isolated and protects cost snapshots',
     function () {
         recordWasteOpeningBalanceForTest(
@@ -778,43 +911,32 @@ test(
             'notes' => null,
         ]);
 
-        $date = now()
-            ->setTimezone($this->organization->timezone)
-            ->toDateString();
-
-        $url = route('waste.index', [
-            'location_id' => $this->location->id,
-            'inventory_item_id' => $this->item->id,
-            'waste_reason_id' => $this->reason->id,
-            'from' => $date,
-            'to' => $date,
-        ]);
-
         $this
             ->actingAs($this->actor)
             ->withSession([
                 'active_organization_id' => $this->organization->id,
             ])
-            ->get($url)
+            ->get(route('waste.index'))
             ->assertOk()
             ->assertInertia(
                 fn (Assert $page): Assert => $page
                     ->component('waste/index')
-                    ->has('rows', 1)
+                    ->where('rows.total', 1)
+                    ->has('rows.data', 1)
                     ->where(
-                        'rows.0.recordId',
+                        'rows.data.0.recordId',
                         $record->id,
                     )
                     ->where(
-                        'rows.0.baseQuantity',
+                        'rows.data.0.baseQuantity',
                         '500.000000',
                     )
                     ->where(
-                        'rows.0.unitCost',
+                        'rows.data.0.unitCost',
                         null,
                     )
                     ->where(
-                        'rows.0.totalCost',
+                        'rows.data.0.totalCost',
                         null,
                     )
                     ->where('canViewCosts', false),
@@ -825,22 +947,23 @@ test(
             ->withSession([
                 'active_organization_id' => $this->organization->id,
             ])
-            ->get($url)
+            ->get(route('waste.index'))
             ->assertOk()
             ->assertInertia(
                 fn (Assert $page): Assert => $page
                     ->component('waste/index')
-                    ->has('rows', 1)
+                    ->where('rows.total', 1)
+                    ->has('rows.data', 1)
                     ->where(
-                        'rows.0.recordId',
+                        'rows.data.0.recordId',
                         $record->id,
                     )
                     ->where(
-                        'rows.0.unitCost',
+                        'rows.data.0.unitCost',
                         '0.2500',
                     )
                     ->where(
-                        'rows.0.totalCost',
+                        'rows.data.0.totalCost',
                         '125.0000',
                     )
                     ->where('canViewCosts', true),

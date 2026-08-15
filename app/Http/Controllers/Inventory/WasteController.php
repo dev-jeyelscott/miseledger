@@ -19,6 +19,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -71,7 +72,7 @@ class WasteController extends Controller
             'to' => null,
         ];
 
-        $rows = [];
+        $rows = null;
 
         if ($canViewReport) {
             [$filters, $rows] = $this->reportData(
@@ -158,11 +159,11 @@ class WasteController extends Controller
     }
 
     /**
-     * Build report filters and tenant-scoped immutable waste rows.
+     * Build filters and a bounded tenant-scoped page of immutable waste rows.
      *
      * @return array{
      *     0: array<string, int|string|null>,
-     *     1: list<array<string, mixed>>
+     *     1: LengthAwarePaginator<int, array<string, mixed>>
      * }
      */
     private function reportData(
@@ -306,55 +307,53 @@ class WasteController extends Controller
             );
         }
 
-        $rows = array_values(
-            $query
-                ->orderByDesc('occurred_at')
-                ->orderByDesc('id')
-                ->get()
-                ->map(
-                    static fn (
-                        WasteRecord $record,
-                    ): array => [
-                        'recordId' => $record->id,
-                        'occurredAt' => $record->occurred_at
-                            ->toIso8601String(),
-                        'locationName' => $record->location->name,
-                        'storageLocationName' => $record
-                            ->storageLocation
-                            ->name,
-                        'itemName' => $record
-                            ->inventoryItem
-                            ->name,
-                        'itemSku' => $record
-                            ->inventoryItem
-                            ->sku,
-                        'reasonName' => $record
-                            ->wasteReason
-                            ->name,
-                        'quantity' => $record->quantity,
-                        'unitSymbol' => $record->unit->symbol,
-                        'baseQuantity' => $record->base_quantity,
-                        'baseUnitSymbol' => $record
-                            ->inventoryItem
-                            ->baseUnitOfMeasure
-                            ->symbol,
-                        'unitCost' => $canViewCosts
-                            ? $record->unit_cost
-                            : null,
-                        'totalCost' => $canViewCosts
-                            ? $record->total_cost
-                            : null,
-                        'recordedBy' => $record
-                            ->recorder
-                            ?->name,
-                        'notes' => $record->notes,
-                        'movementId' => $record
-                            ->movement
-                            ?->id,
-                    ],
-                )
-                ->all(),
-        );
+        $rows = $query
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->paginate(25)
+            ->withQueryString()
+            ->through(
+                static fn (
+                    WasteRecord $record,
+                ): array => [
+                    'recordId' => $record->id,
+                    'occurredAt' => $record->occurred_at
+                        ->toIso8601String(),
+                    'locationName' => $record->location->name,
+                    'storageLocationName' => $record
+                        ->storageLocation
+                        ->name,
+                    'itemName' => $record
+                        ->inventoryItem
+                        ->name,
+                    'itemSku' => $record
+                        ->inventoryItem
+                        ->sku,
+                    'reasonName' => $record
+                        ->wasteReason
+                        ->name,
+                    'quantity' => $record->quantity,
+                    'unitSymbol' => $record->unit->symbol,
+                    'baseQuantity' => $record->base_quantity,
+                    'baseUnitSymbol' => $record
+                        ->inventoryItem
+                        ->baseUnitOfMeasure
+                        ->symbol,
+                    'unitCost' => $canViewCosts
+                        ? $record->unit_cost
+                        : null,
+                    'totalCost' => $canViewCosts
+                        ? $record->total_cost
+                        : null,
+                    'recordedBy' => $record
+                        ->recorder
+                        ?->name,
+                    'notes' => $record->notes,
+                    'movementId' => $record
+                        ->movement
+                        ?->id,
+                ],
+            );
 
         return [
             [
