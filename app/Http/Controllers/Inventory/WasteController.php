@@ -752,7 +752,7 @@ class WasteController extends Controller
         Builder $query,
         bool $canViewCosts,
     ): array {
-        return $this->addAggregateSelects(
+        $rows = $this->addAggregateSelects(
             $query->select([
                 'inventory_items.id as item_id',
                 'inventory_items.name as item_name',
@@ -792,8 +792,9 @@ class WasteController extends Controller
                         : null,
                 ],
             )
-            ->values()
             ->all();
+
+        return array_values($rows);
     }
 
     /**
@@ -837,6 +838,8 @@ class WasteController extends Controller
 
     /**
      * Add decimal aggregate values without converting through binary floating point.
+     *
+     * @param  int<0, max>  $scale
      */
     private function addDecimal(
         string $current,
@@ -853,6 +856,8 @@ class WasteController extends Controller
 
     /**
      * Normalize database aggregate output to the persisted report precision.
+     *
+     * @param  int<0, max>  $scale
      */
     private function fixedDecimal(
         mixed $value,
