@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Inventory\InventoryAdjustmentController;
 use App\Http\Controllers\Inventory\InventoryCategoryController;
 use App\Http\Controllers\Inventory\InventoryItemController;
 use App\Http\Controllers\Inventory\InventoryItemUnitController;
@@ -118,6 +119,16 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 'opening-balances',
                 [OpeningBalanceController::class, 'store'],
             )->name('opening-balances.store');
+
+            Route::get(
+                'adjustments/create',
+                [InventoryAdjustmentController::class, 'create'],
+            )->name('adjustments.create');
+
+            Route::post(
+                'adjustments',
+                [InventoryAdjustmentController::class, 'store'],
+            )->name('adjustments.store');
 
             Route::get(
                 'items',

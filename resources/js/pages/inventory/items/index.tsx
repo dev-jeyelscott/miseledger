@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
+import InventoryAdjustmentController from '@/actions/App/Http/Controllers/Inventory/InventoryAdjustmentController';
 import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import OpeningBalanceController from '@/actions/App/Http/Controllers/Inventory/OpeningBalanceController';
@@ -50,6 +51,14 @@ export default function InventoryItemsIndex({ items, canManage }: Props) {
                                         href={OpeningBalanceController.create()}
                                     >
                                         Opening balance
+                                    </Link>
+                                </Button>
+
+                                <Button variant="outline" asChild>
+                                    <Link
+                                        href={InventoryAdjustmentController.create()}
+                                    >
+                                        Adjust inventory
                                     </Link>
                                 </Button>
 

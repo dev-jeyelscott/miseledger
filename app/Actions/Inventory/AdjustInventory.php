@@ -4,6 +4,7 @@ namespace App\Actions\Inventory;
 
 use App\Enums\OrganizationPermission;
 use App\Enums\StockMovementType;
+use App\Models\AuditLog;
 use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
@@ -13,6 +14,7 @@ use App\Models\UnitOfMeasure;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 final class AdjustInventory
@@ -74,28 +76,81 @@ final class AdjustInventory
             ]);
         }
 
-        $baseQuantity = $this->convertQuantity->handle(
+        $idempotencyKey = trim($idempotencyKey);
+
+        return DB::transaction(function () use (
             $organization,
+            $location,
+            $storageLocation,
             $inventoryItem,
             $quantity,
             $unit,
-            $inventoryItem->baseUnitOfMeasure,
-        );
+            $reason,
+            $referenceType,
+            $referenceId,
+            $occurredAt,
+            $actor,
+            $idempotencyKey,
+        ): StockMovement {
+            $alreadyRecorded = StockMovement::query()
+                ->where(
+                    'organization_id',
+                    $organization->getKey(),
+                )
+                ->where(
+                    'idempotency_key',
+                    $idempotencyKey,
+                )
+                ->exists();
 
-        return $this->recordStockMovement->handle(
-            organization: $organization,
-            location: $location,
-            storageLocation: $storageLocation,
-            inventoryItem: $inventoryItem,
-            type: StockMovementType::ManualAdjustment,
-            baseQuantity: $baseQuantity,
-            baseUnitOfMeasure: $inventoryItem->baseUnitOfMeasure,
-            referenceType: $referenceType,
-            referenceId: $referenceId,
-            occurredAt: $occurredAt,
-            actor: $actor,
-            idempotencyKey: $idempotencyKey,
-            notes: $reason,
-        );
+            $baseQuantity = $this->convertQuantity->handle(
+                $organization,
+                $inventoryItem,
+                $quantity,
+                $unit,
+                $inventoryItem->baseUnitOfMeasure,
+            );
+
+            $movement = $this->recordStockMovement->handle(
+                organization: $organization,
+                location: $location,
+                storageLocation: $storageLocation,
+                inventoryItem: $inventoryItem,
+                type: StockMovementType::ManualAdjustment,
+                baseQuantity: $baseQuantity,
+                baseUnitOfMeasure: $inventoryItem->baseUnitOfMeasure,
+                referenceType: $referenceType,
+                referenceId: $referenceId,
+                occurredAt: $occurredAt,
+                actor: $actor,
+                idempotencyKey: $idempotencyKey,
+                notes: $reason,
+            );
+
+            if (! $alreadyRecorded) {
+                AuditLog::query()->create([
+                    'organization_id' => $organization->getKey(),
+                    'actor_id' => $actor->getKey(),
+                    'action' => 'inventory.manual_adjustment',
+                    'entity_type' => 'stock_movement',
+                    'entity_id' => $movement->id,
+                    'before_data' => null,
+                    'after_data' => [
+                        'location_id' => $location->getKey(),
+                        'storage_location_id' => $storageLocation->getKey(),
+                        'inventory_item_id' => $inventoryItem->getKey(),
+                        'quantity' => $quantity,
+                        'unit_id' => $unit->getKey(),
+                        'base_quantity' => $movement->quantity,
+                        'reason' => $reason,
+                        'occurred_at' => $occurredAt
+                            ->toIso8601String(),
+                    ],
+                    'correlation_id' => "inventory_adjustment:{$idempotencyKey}",
+                ]);
+            }
+
+            return $movement;
+        }, 3);
     }
 }
