@@ -1,11 +1,11 @@
 import { Head, Link } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
-import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import UnitOfMeasureController from '@/actions/App/Http/Controllers/Inventory/UnitOfMeasureController';
 import { Button } from '@/components/ui/button';
 import { dashboard } from '@/routes';
 import type { InventoryItemListItem } from '@/types';
+import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 
 type Props = {
     items: InventoryItemListItem[];

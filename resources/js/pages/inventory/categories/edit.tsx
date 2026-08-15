@@ -1,5 +1,4 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -7,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
 import type { InventoryCategoryData } from '@/types';
+import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 
 type Props = {
     category: InventoryCategoryData;

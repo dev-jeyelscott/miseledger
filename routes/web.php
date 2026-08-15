@@ -1,10 +1,11 @@
 <?php
 
-use App\Http\Controllers\Inventory\InventoryCategoryController;
 use App\Http\Controllers\Inventory\InventoryItemController;
 use App\Http\Controllers\Inventory\InventoryItemUnitController;
 use App\Http\Controllers\Inventory\StockCountController;
 use App\Http\Controllers\Inventory\UnitOfMeasureController;
+use App\Http\Controllers\Inventory\WasteController;
+use App\Http\Controllers\Inventory\WasteReasonController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\OrganizationLocationController;
 use App\Http\Controllers\OrganizationMemberController;
@@ -39,16 +40,6 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         'organizations/{organization}/activate',
         [OrganizationController::class, 'activate'],
     )->name('organizations.activate');
-
-    Route::get(
-        'organizations/{organization}/settings',
-        [OrganizationController::class, 'edit'],
-    )->name('organizations.settings.edit');
-
-    Route::put(
-        'organizations/{organization}/settings',
-        [OrganizationController::class, 'update'],
-    )->name('organizations.settings.update');
 
     Route::get(
         'organizations/{organization}/members',
@@ -129,26 +120,6 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 'items/{inventoryItem}',
                 [InventoryItemController::class, 'update'],
             )->name('items.update');
-
-            Route::get(
-                'categories',
-                [InventoryCategoryController::class, 'index'],
-            )->name('categories.index');
-
-            Route::post(
-                'categories',
-                [InventoryCategoryController::class, 'store'],
-            )->name('categories.store');
-
-            Route::get(
-                'categories/{inventoryCategory}/edit',
-                [InventoryCategoryController::class, 'edit'],
-            )->name('categories.edit');
-
-            Route::put(
-                'categories/{inventoryCategory}',
-                [InventoryCategoryController::class, 'update'],
-            )->name('categories.update');
 
             Route::post(
                 'items/{inventoryItem}/units',
@@ -360,6 +331,34 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 '{stockCount}/cancel',
                 [StockCountController::class, 'cancel'],
             )->name('cancel');
+        });
+
+    Route::prefix('waste')
+        ->name('waste.')
+        ->group(function (): void {
+            Route::get(
+                '/',
+                [WasteController::class, 'index'],
+            )->name('index');
+
+            Route::post(
+                '/',
+                [WasteController::class, 'store'],
+            )->name('store');
+        });
+
+    Route::prefix('waste-reasons')
+        ->name('waste-reasons.')
+        ->group(function (): void {
+            Route::post(
+                '/',
+                [WasteReasonController::class, 'store'],
+            )->name('store');
+
+            Route::put(
+                '{wasteReason}',
+                [WasteReasonController::class, 'update'],
+            )->name('update');
         });
 });
 

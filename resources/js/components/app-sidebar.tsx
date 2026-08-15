@@ -7,10 +7,12 @@ import {
     FolderGit2,
     LayoutGrid,
     PackageCheck,
+    Trash2,
     Truck,
 } from 'lucide-react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
+import WasteController from '@/actions/App/Http/Controllers/Inventory/WasteController';
 import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/GoodsReceiptController';
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
 import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
@@ -100,6 +102,17 @@ export function AppSidebar() {
             title: 'Stock counts',
             href: StockCountController.index(),
             icon: ClipboardCheck,
+        });
+    }
+
+    if (
+        activeMembership?.permissions.includes('waste.record') ||
+        activeMembership?.permissions.includes('reports.view')
+    ) {
+        mainNavItems.push({
+            title: 'Waste',
+            href: WasteController.index(),
+            icon: Trash2,
         });
     }
 
