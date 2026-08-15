@@ -6,6 +6,7 @@ use App\Enums\OrganizationRole;
 use App\Enums\StockMovementType;
 use App\Models\AuditLog;
 use App\Models\InventoryItem;
+use App\Models\InventoryItemUnit;
 use App\Models\Location;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
@@ -231,6 +232,224 @@ test(
                 ['name' => 'Unauthorized reason'],
             )
             ->assertForbidden();
+    },
+);
+
+test(
+    'waste form exposes location containment and converter backed item units',
+    function () {
+        $annexLocation = Location::factory()->create([
+            'organization_id' => $this->organization->id,
+            'name' => 'Annex',
+            'active' => true,
+        ]);
+
+        $annexStorage = createWasteStorageForTest(
+            $this->organization,
+            $annexLocation,
+            'ANNEX',
+        );
+
+        $bottle = UnitOfMeasure::factory()->create([
+            'organization_id' => $this->organization->id,
+            'name' => 'Bottle',
+            'symbol' => 'bottle',
+            'dimension' => 'count',
+            'active' => true,
+        ]);
+
+        $case = UnitOfMeasure::factory()->create([
+            'organization_id' => $this->organization->id,
+            'name' => 'Case',
+            'symbol' => 'case',
+            'dimension' => 'count',
+            'active' => true,
+        ]);
+
+        $pack = UnitOfMeasure::factory()->create([
+            'organization_id' => $this->organization->id,
+            'name' => 'Pack',
+            'symbol' => 'pack',
+            'dimension' => 'count',
+            'active' => true,
+        ]);
+
+        $cola = InventoryItem::factory()->create([
+            'organization_id' => $this->organization->id,
+            'base_unit_of_measure_id' => $bottle->id,
+            'name' => 'Cola',
+            'sku' => 'COLA',
+            'active' => true,
+        ]);
+
+        InventoryItemUnit::factory()->create([
+            'inventory_item_id' => $cola->id,
+            'unit_of_measure_id' => $case->id,
+            'quantity_in_base_unit' => '24.000000',
+            'active' => true,
+        ]);
+
+        $this
+            ->actingAs($this->actor)
+            ->withSession([
+                'active_organization_id' => $this->organization->id,
+            ])
+            ->get(route('waste.index'))
+            ->assertOk()
+            ->assertInertia(
+                fn (Assert $page): Assert => $page
+                    ->component('waste/index')
+                    ->has('recordForm.storageLocationOptions', 2)
+                    ->where(
+                        'recordForm.storageLocationOptions.0.id',
+                        $annexStorage->id,
+                    )
+                    ->where(
+                        'recordForm.storageLocationOptions.0.locationId',
+                        $annexLocation->id,
+                    )
+                    ->where(
+                        'recordForm.storageLocationOptions.1.id',
+                        $this->storage->id,
+                    )
+                    ->where(
+                        'recordForm.storageLocationOptions.1.locationId',
+                        $this->location->id,
+                    )
+                    ->has('recordForm.inventoryItemOptions', 2)
+                    ->where(
+                        'recordForm.inventoryItemOptions.0.id',
+                        $this->item->id,
+                    )
+                    ->where(
+                        'recordForm.inventoryItemOptions.0.validUnitIds',
+                        [
+                            $this->gram->id,
+                            $this->kilogram->id,
+                        ],
+                    )
+                    ->where(
+                        'recordForm.inventoryItemOptions.1.id',
+                        $cola->id,
+                    )
+                    ->where(
+                        'recordForm.inventoryItemOptions.1.validUnitIds',
+                        [
+                            $bottle->id,
+                            $case->id,
+                        ],
+                    ),
+            );
+
+        expect($pack->exists)->toBeTrue();
+    },
+);
+
+test(
+    'waste request rejects storage outside the selected location',
+    function () {
+        $otherLocation = Location::factory()->create([
+            'organization_id' => $this->organization->id,
+            'active' => true,
+        ]);
+
+        $otherStorage = createWasteStorageForTest(
+            $this->organization,
+            $otherLocation,
+            'OTHER',
+        );
+
+        $payload = wastePayloadForTest(
+            $this->organization,
+            $this->location,
+            $this->storage,
+            $this->item,
+            $this->reason,
+            $this->kilogram,
+        );
+
+        $payload['storage_location_id'] = $otherStorage->id;
+
+        $this
+            ->actingAs($this->actor)
+            ->withSession([
+                'active_organization_id' => $this->organization->id,
+            ])
+            ->from(route('waste.index'))
+            ->post(route('waste.store'), $payload)
+            ->assertRedirect(route('waste.index'))
+            ->assertSessionHasErrors('storage_location_id');
+
+        expect(WasteRecord::query()->count())
+            ->toBe(0)
+            ->and(
+                StockMovement::query()
+                    ->where(
+                        'type',
+                        StockMovementType::Waste->value,
+                    )
+                    ->count(),
+            )
+            ->toBe(0);
+    },
+);
+
+test(
+    'waste request rejects a unit configured for another inventory item',
+    function () {
+        $portion = UnitOfMeasure::factory()->create([
+            'organization_id' => $this->organization->id,
+            'name' => 'Portion',
+            'symbol' => 'portion',
+            'dimension' => 'weight',
+            'active' => true,
+        ]);
+
+        $otherItem = InventoryItem::factory()->create([
+            'organization_id' => $this->organization->id,
+            'base_unit_of_measure_id' => $this->gram->id,
+            'name' => 'Beef',
+            'sku' => 'BEEF',
+            'active' => true,
+        ]);
+
+        InventoryItemUnit::factory()->create([
+            'inventory_item_id' => $otherItem->id,
+            'unit_of_measure_id' => $portion->id,
+            'quantity_in_base_unit' => '100.000000',
+            'active' => true,
+        ]);
+
+        $payload = wastePayloadForTest(
+            $this->organization,
+            $this->location,
+            $this->storage,
+            $this->item,
+            $this->reason,
+            $portion,
+        );
+
+        $this
+            ->actingAs($this->actor)
+            ->withSession([
+                'active_organization_id' => $this->organization->id,
+            ])
+            ->from(route('waste.index'))
+            ->post(route('waste.store'), $payload)
+            ->assertRedirect(route('waste.index'))
+            ->assertSessionHasErrors('unit');
+
+        expect(WasteRecord::query()->count())
+            ->toBe(0)
+            ->and(
+                StockMovement::query()
+                    ->where(
+                        'type',
+                        StockMovementType::Waste->value,
+                    )
+                    ->count(),
+            )
+            ->toBe(0);
     },
 );
 

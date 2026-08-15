@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Inventory;
 
+use App\Actions\Inventory\ConvertQuantity;
 use App\Actions\Inventory\RecordWaste;
 use App\Enums\OrganizationPermission;
 use App\Http\Controllers\Controller;
@@ -18,6 +19,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -30,8 +32,10 @@ class WasteController extends Controller
     /**
      * Show the waste recording workspace and permission-scoped report.
      */
-    public function index(Request $request): Response
-    {
+    public function index(
+        Request $request,
+        ConvertQuantity $convertQuantity,
+    ): Response {
         $organization = $this->activeOrganization($request);
 
         $canRecord = Gate::allows(
@@ -108,7 +112,10 @@ class WasteController extends Controller
             'canViewCosts' => $canViewCosts,
             'wasteReasons' => $allReasons,
             'recordForm' => $canRecord
-                ? $this->recordFormData($organization)
+                ? $this->recordFormData(
+                    $organization,
+                    $convertQuantity,
+                )
                 : null,
             'reportOptions' => $canViewReport
                 ? $this->reportOptions($organization)
@@ -368,7 +375,36 @@ class WasteController extends Controller
      */
     private function recordFormData(
         Organization $organization,
+        ConvertQuantity $convertQuantity,
     ): array {
+        $units = UnitOfMeasure::query()
+            ->where(
+                'organization_id',
+                $organization->id,
+            )
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
+
+        $inventoryItems = InventoryItem::query()
+            ->with('baseUnitOfMeasure')
+            ->where(
+                'organization_id',
+                $organization->id,
+            )
+            ->where('active', true)
+            ->whereHas(
+                'baseUnitOfMeasure',
+                fn ($query) => $query
+                    ->where(
+                        'organization_id',
+                        $organization->id,
+                    )
+                    ->where('active', true),
+            )
+            ->orderBy('name')
+            ->get();
+
         return [
             'operationId' => (string) Str::uuid(),
             'defaultOccurredAt' => CarbonImmutable::now(
@@ -415,26 +451,9 @@ class WasteController extends Controller
                 )
                 ->values()
                 ->all(),
-            'inventoryItemOptions' => InventoryItem::query()
-                ->with('baseUnitOfMeasure:id,symbol')
-                ->where(
-                    'organization_id',
-                    $organization->id,
-                )
-                ->where('active', true)
-                ->whereHas(
-                    'baseUnitOfMeasure',
-                    fn ($query) => $query
-                        ->where(
-                            'organization_id',
-                            $organization->id,
-                        )
-                        ->where('active', true),
-                )
-                ->orderBy('name')
-                ->get()
+            'inventoryItemOptions' => $inventoryItems
                 ->map(
-                    static fn (
+                    fn (
                         InventoryItem $item,
                     ): array => [
                         'id' => $item->id,
@@ -443,22 +462,17 @@ class WasteController extends Controller
                         'baseUnitSymbol' => $item
                             ->baseUnitOfMeasure
                             ->symbol,
+                        'validUnitIds' => $this->validUnitIds(
+                            $organization,
+                            $item,
+                            $units,
+                            $convertQuantity,
+                        ),
                     ],
                 )
                 ->values()
                 ->all(),
-            'unitOptions' => UnitOfMeasure::query()
-                ->where(
-                    'organization_id',
-                    $organization->id,
-                )
-                ->where('active', true)
-                ->orderBy('name')
-                ->get([
-                    'id',
-                    'name',
-                    'symbol',
-                ])
+            'unitOptions' => $units
                 ->map(
                     static fn (
                         UnitOfMeasure $unit,
@@ -492,6 +506,52 @@ class WasteController extends Controller
                 ->values()
                 ->all(),
         ];
+    }
+
+    /**
+     * Resolve selectable units through the existing authoritative converter.
+     *
+     * @param  Collection<int, UnitOfMeasure>  $units
+     * @return list<int>
+     */
+    private function validUnitIds(
+        Organization $organization,
+        InventoryItem $item,
+        Collection $units,
+        ConvertQuantity $convertQuantity,
+    ): array {
+        return $units
+            ->filter(
+                function (UnitOfMeasure $unit) use (
+                    $organization,
+                    $item,
+                    $convertQuantity,
+                ): bool {
+                    try {
+                        /*
+                         * Probe at the smallest supported waste precision.
+                         * Actual submitted quantities are still validated and
+                         * converted authoritatively by RecordWaste.
+                         */
+                        $convertQuantity->handle(
+                            $organization,
+                            $item,
+                            '0.000001',
+                            $unit,
+                            $item->baseUnitOfMeasure,
+                        );
+
+                        return true;
+                    } catch (ValidationException) {
+                        return false;
+                    }
+                },
+            )
+            ->map(
+                static fn (UnitOfMeasure $unit): int => $unit->id,
+            )
+            ->values()
+            ->all();
     }
 
     /**

@@ -1,4 +1,5 @@
 import { Form, Head, Link } from '@inertiajs/react';
+import { useState } from 'react';
 import WasteController from '@/actions/App/Http/Controllers/Inventory/WasteController';
 import WasteReasonController from '@/actions/App/Http/Controllers/Inventory/WasteReasonController';
 import { Button } from '@/components/ui/button';
@@ -17,7 +18,12 @@ type StorageOption = Option & {
 
 type ItemOption = Option & {
     sku: string;
-    baseUnitSymbol?: string;
+    baseUnitSymbol: string;
+    validUnitIds: number[];
+};
+
+type ReportItemOption = Option & {
+    sku: string;
 };
 
 type UnitOption = Option & {
@@ -40,7 +46,7 @@ type RecordForm = {
 
 type ReportOptions = {
     locations: Option[];
-    inventoryItems: ItemOption[];
+    inventoryItems: ReportItemOption[];
     wasteReasons: Option[];
 };
 
@@ -107,6 +113,36 @@ export default function WasteIndex({
     recordForm,
     reportOptions,
 }: Props) {
+    const [recordLocationId, setRecordLocationId] = useState('');
+    const [recordStorageLocationId, setRecordStorageLocationId] = useState('');
+    const [recordInventoryItemId, setRecordInventoryItemId] = useState('');
+    const [recordUnitId, setRecordUnitId] = useState('');
+
+    const selectedStorageLocationOptions =
+        recordForm?.storageLocationOptions.filter(
+            (storageLocation) =>
+                storageLocation.locationId.toString() === recordLocationId,
+        ) ?? [];
+
+    const selectedInventoryItem = recordForm?.inventoryItemOptions.find(
+        (item) => item.id.toString() === recordInventoryItemId,
+    );
+
+    const selectedUnitOptions =
+        recordForm?.unitOptions.filter((unit) =>
+            selectedInventoryItem?.validUnitIds.includes(unit.id),
+        ) ?? [];
+
+    const handleRecordLocationChange = (value: string) => {
+        setRecordLocationId(value);
+        setRecordStorageLocationId('');
+    };
+
+    const handleRecordInventoryItemChange = (value: string) => {
+        setRecordInventoryItemId(value);
+        setRecordUnitId('');
+    };
+
     return (
         <>
             <Head title="Waste" />
@@ -151,6 +187,12 @@ export default function WasteIndex({
                                             <select
                                                 id="location_id"
                                                 name="location_id"
+                                                value={recordLocationId}
+                                                onChange={(event) =>
+                                                    handleRecordLocationChange(
+                                                        event.target.value,
+                                                    )
+                                                }
                                                 className="h-9 rounded-md border bg-background px-3 text-sm"
                                                 required
                                             >
@@ -180,13 +222,24 @@ export default function WasteIndex({
                                             <select
                                                 id="storage_location_id"
                                                 name="storage_location_id"
+                                                value={recordStorageLocationId}
+                                                onChange={(event) =>
+                                                    setRecordStorageLocationId(
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                disabled={
+                                                    recordLocationId === ''
+                                                }
                                                 className="h-9 rounded-md border bg-background px-3 text-sm"
                                                 required
                                             >
                                                 <option value="">
-                                                    Select storage
+                                                    {recordLocationId === ''
+                                                        ? 'Select location first'
+                                                        : 'Select storage'}
                                                 </option>
-                                                {recordForm.storageLocationOptions.map(
+                                                {selectedStorageLocationOptions.map(
                                                     (option) => (
                                                         <option
                                                             key={option.id}
@@ -211,6 +264,12 @@ export default function WasteIndex({
                                             <select
                                                 id="inventory_item_id"
                                                 name="inventory_item_id"
+                                                value={recordInventoryItemId}
+                                                onChange={(event) =>
+                                                    handleRecordInventoryItemChange(
+                                                        event.target.value,
+                                                    )
+                                                }
                                                 className="h-9 rounded-md border bg-background px-3 text-sm"
                                                 required
                                             >
@@ -289,13 +348,25 @@ export default function WasteIndex({
                                             <select
                                                 id="unit_id"
                                                 name="unit_id"
+                                                value={recordUnitId}
+                                                onChange={(event) =>
+                                                    setRecordUnitId(
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                disabled={
+                                                    recordInventoryItemId === ''
+                                                }
                                                 className="h-9 rounded-md border bg-background px-3 text-sm"
                                                 required
                                             >
                                                 <option value="">
-                                                    Select unit
+                                                    {recordInventoryItemId ===
+                                                    ''
+                                                        ? 'Select item first'
+                                                        : 'Select unit'}
                                                 </option>
-                                                {recordForm.unitOptions.map(
+                                                {selectedUnitOptions.map(
                                                     (option) => (
                                                         <option
                                                             key={option.id}
@@ -308,7 +379,10 @@ export default function WasteIndex({
                                                 )}
                                             </select>
                                             <ErrorText
-                                                message={errors.unit_id}
+                                                message={
+                                                    errors.unit_id ??
+                                                    errors.unit
+                                                }
                                             />
                                         </div>
 
