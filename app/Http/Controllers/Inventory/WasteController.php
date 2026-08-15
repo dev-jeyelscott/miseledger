@@ -217,23 +217,23 @@ class WasteController extends Controller
 
         $inventoryItemId =
             isset($validated['inventory_item_id'])
-                ? (int) $validated['inventory_item_id']
-                : null;
+            ? (int) $validated['inventory_item_id']
+            : null;
 
         $wasteReasonId =
             isset($validated['waste_reason_id'])
-                ? (int) $validated['waste_reason_id']
-                : null;
+            ? (int) $validated['waste_reason_id']
+            : null;
 
         $from = isset($validated['from'])
             && is_string($validated['from'])
-                ? $validated['from']
-                : null;
+            ? $validated['from']
+            : null;
 
         $to = isset($validated['to'])
             && is_string($validated['to'])
-                ? $validated['to']
-                : null;
+            ? $validated['to']
+            : null;
 
         if (
             $from !== null
@@ -520,38 +520,34 @@ class WasteController extends Controller
         Collection $units,
         ConvertQuantity $convertQuantity,
     ): array {
-        return $units
-            ->filter(
-                function (UnitOfMeasure $unit) use (
-                    $organization,
-                    $item,
-                    $convertQuantity,
-                ): bool {
-                    try {
-                        /*
-                         * Probe at the smallest supported waste precision.
-                         * Actual submitted quantities are still validated and
-                         * converted authoritatively by RecordWaste.
-                         */
-                        $convertQuantity->handle(
-                            $organization,
-                            $item,
-                            '0.000001',
-                            $unit,
-                            $item->baseUnitOfMeasure,
-                        );
+        return array_values(
+            $units
+                ->filter(
+                    function (UnitOfMeasure $unit) use (
+                        $organization,
+                        $item,
+                        $convertQuantity,
+                    ): bool {
+                        try {
+                            $convertQuantity->handle(
+                                $organization,
+                                $item,
+                                '0.000001',
+                                $unit,
+                                $item->baseUnitOfMeasure,
+                            );
 
-                        return true;
-                    } catch (ValidationException) {
-                        return false;
-                    }
-                },
-            )
-            ->map(
-                static fn (UnitOfMeasure $unit): int => $unit->id,
-            )
-            ->values()
-            ->all();
+                            return true;
+                        } catch (ValidationException) {
+                            return false;
+                        }
+                    },
+                )
+                ->map(
+                    static fn (UnitOfMeasure $unit): int => $unit->id,
+                )
+                ->all(),
+        );
     }
 
     /**
