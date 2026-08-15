@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Inventory\InventoryCategoryController;
 use App\Http\Controllers\Inventory\InventoryItemController;
 use App\Http\Controllers\Inventory\InventoryItemUnitController;
 use App\Http\Controllers\Inventory\StockCountController;
@@ -40,6 +41,16 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         'organizations/{organization}/activate',
         [OrganizationController::class, 'activate'],
     )->name('organizations.activate');
+
+    Route::get(
+        'organizations/{organization}/settings',
+        [OrganizationController::class, 'edit'],
+    )->name('organizations.settings.edit');
+
+    Route::put(
+        'organizations/{organization}/settings',
+        [OrganizationController::class, 'update'],
+    )->name('organizations.settings.update');
 
     Route::get(
         'organizations/{organization}/members',
@@ -120,6 +131,26 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 'items/{inventoryItem}',
                 [InventoryItemController::class, 'update'],
             )->name('items.update');
+
+            Route::get(
+                'categories',
+                [InventoryCategoryController::class, 'index'],
+            )->name('categories.index');
+
+            Route::post(
+                'categories',
+                [InventoryCategoryController::class, 'store'],
+            )->name('categories.store');
+
+            Route::get(
+                'categories/{inventoryCategory}/edit',
+                [InventoryCategoryController::class, 'edit'],
+            )->name('categories.edit');
+
+            Route::put(
+                'categories/{inventoryCategory}',
+                [InventoryCategoryController::class, 'update'],
+            )->name('categories.update');
 
             Route::post(
                 'items/{inventoryItem}/units',
