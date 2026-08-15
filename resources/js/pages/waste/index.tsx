@@ -46,8 +46,47 @@ type RecordForm = {
 
 type ReportOptions = {
     locations: Option[];
+    inventoryCategories: Option[];
     inventoryItems: ReportItemOption[];
     wasteReasons: Option[];
+};
+
+type QuantityTotal = {
+    baseUnitId: number;
+    quantity: string;
+    unitSymbol: string;
+};
+
+type WasteReport = {
+    summary: {
+        recordCount: number;
+        quantityTotals: QuantityTotal[];
+        totalCost: string | null;
+    };
+    byReason: {
+        reasonId: number;
+        reasonName: string;
+        recordCount: number;
+        quantityTotals: QuantityTotal[];
+        totalCost: string | null;
+    }[];
+    byEmployee: {
+        employeeId: number | null;
+        employeeName: string;
+        recordCount: number;
+        quantityTotals: QuantityTotal[];
+        totalCost: string | null;
+    }[];
+    byItem: {
+        itemId: number;
+        itemName: string;
+        itemSku: string;
+        baseUnitId: number;
+        baseUnitSymbol: string;
+        recordCount: number;
+        totalQuantity: string;
+        totalCost: string | null;
+    }[];
 };
 
 type WasteRow = {
@@ -82,8 +121,10 @@ type PaginatedWasteRows = {
 
 type Props = {
     rows: PaginatedWasteRows | null;
+    report: WasteReport | null;
     filters: {
         locationId: number | null;
+        inventoryCategoryId: number | null;
         inventoryItemId: number | null;
         wasteReasonId: number | null;
         from: string | null;
@@ -109,11 +150,28 @@ const formatDecimal = (value: string): string => {
 
 const formatDate = (value: string): string => new Date(value).toLocaleString();
 
+const QuantityTotals = ({ totals }: { totals: QuantityTotal[] }) => {
+    if (totals.length === 0) {
+        return <span>—</span>;
+    }
+
+    return (
+        <div className="grid gap-1">
+            {totals.map((total) => (
+                <div key={total.baseUnitId}>
+                    {formatDecimal(total.quantity)} {total.unitSymbol}
+                </div>
+            ))}
+        </div>
+    );
+};
+
 const ErrorText = ({ message }: { message?: string }) =>
     message ? <p className="text-sm text-destructive">{message}</p> : null;
 
 export default function WasteIndex({
     rows,
+    report,
     filters,
     currency,
     canRecord,
@@ -555,21 +613,21 @@ export default function WasteIndex({
                     </section>
                 )}
 
-                {canViewReport && reportOptions !== null && (
+                {canViewReport && reportOptions !== null && report !== null && (
                     <section className="grid gap-5">
                         <div>
                             <h2 className="text-lg font-semibold">
                                 Waste report
                             </h2>
                             <p className="text-sm text-muted-foreground">
-                                Trace finalized waste by item, reason, location,
-                                and period.
+                                Summarize and trace finalized waste by period,
+                                location, category, item, reason, and employee.
                             </p>
                         </div>
 
                         <Form action={WasteController.index().url} method="get">
                             {({ processing }) => (
-                                <div className="grid gap-4 rounded-xl border border-sidebar-border/70 p-5 md:grid-cols-2 lg:grid-cols-6 dark:border-sidebar-border">
+                                <div className="grid gap-4 rounded-xl border border-sidebar-border/70 p-5 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 dark:border-sidebar-border">
                                     <div className="grid gap-2">
                                         <Label>Location</Label>
                                         <select
@@ -584,6 +642,32 @@ export default function WasteIndex({
                                                 All locations
                                             </option>
                                             {reportOptions.locations.map(
+                                                (option) => (
+                                                    <option
+                                                        key={option.id}
+                                                        value={option.id}
+                                                    >
+                                                        {option.name}
+                                                    </option>
+                                                ),
+                                            )}
+                                        </select>
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label>Category</Label>
+                                        <select
+                                            name="inventory_category_id"
+                                            defaultValue={
+                                                filters.inventoryCategoryId?.toString() ??
+                                                ''
+                                            }
+                                            className="h-9 rounded-md border bg-background px-3 text-sm"
+                                        >
+                                            <option value="">
+                                                All categories
+                                            </option>
+                                            {reportOptions.inventoryCategories.map(
                                                 (option) => (
                                                     <option
                                                         key={option.id}
@@ -682,6 +766,311 @@ export default function WasteIndex({
                                 </div>
                             )}
                         </Form>
+
+                        <section className="grid gap-3">
+                            <div>
+                                <h3 className="font-semibold">Waste Summary</h3>
+                                <p className="text-sm text-muted-foreground">
+                                    Totals for the selected report filters.
+                                </p>
+                            </div>
+
+                            <div
+                                className={`grid gap-4 ${
+                                    canViewCosts
+                                        ? 'md:grid-cols-3'
+                                        : 'md:grid-cols-2'
+                                }`}
+                            >
+                                <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
+                                    <div className="text-sm text-muted-foreground">
+                                        Waste records
+                                    </div>
+                                    <div className="mt-2 text-2xl font-semibold">
+                                        {report.summary.recordCount.toLocaleString()}
+                                    </div>
+                                </div>
+
+                                <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
+                                    <div className="text-sm text-muted-foreground">
+                                        Waste quantity
+                                    </div>
+                                    <div className="mt-2 font-semibold">
+                                        <QuantityTotals
+                                            totals={
+                                                report.summary.quantityTotals
+                                            }
+                                        />
+                                    </div>
+                                </div>
+
+                                {canViewCosts && (
+                                    <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
+                                        <div className="text-sm text-muted-foreground">
+                                            Waste value
+                                        </div>
+                                        <div className="mt-2 text-2xl font-semibold">
+                                            {currency}{' '}
+                                            {formatDecimal(
+                                                report.summary.totalCost ??
+                                                    '0.0000',
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </section>
+
+                        <section className="grid gap-3">
+                            <div>
+                                <h3 className="font-semibold">
+                                    Waste by Reason
+                                </h3>
+                                <p className="text-sm text-muted-foreground">
+                                    Quantity and value grouped by retained waste
+                                    reason.
+                                </p>
+                            </div>
+
+                            <div className="overflow-x-auto rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
+                                <table className="w-full text-sm">
+                                    <thead className="border-b text-left">
+                                        <tr>
+                                            <th className="px-4 py-3">
+                                                Reason
+                                            </th>
+                                            <th className="px-4 py-3">
+                                                Records
+                                            </th>
+                                            <th className="px-4 py-3">
+                                                Quantity
+                                            </th>
+                                            {canViewCosts && (
+                                                <th className="px-4 py-3 text-right">
+                                                    Waste value
+                                                </th>
+                                            )}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {report.byReason.length === 0 ? (
+                                            <tr>
+                                                <td
+                                                    colSpan={
+                                                        canViewCosts ? 4 : 3
+                                                    }
+                                                    className="px-4 py-8 text-center text-muted-foreground"
+                                                >
+                                                    No waste records match the
+                                                    selected filters.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            report.byReason.map((row) => (
+                                                <tr
+                                                    key={row.reasonId}
+                                                    className="border-b last:border-b-0"
+                                                >
+                                                    <td className="px-4 py-3 font-medium">
+                                                        {row.reasonName}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        {row.recordCount.toLocaleString()}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <QuantityTotals
+                                                            totals={
+                                                                row.quantityTotals
+                                                            }
+                                                        />
+                                                    </td>
+                                                    {canViewCosts && (
+                                                        <td className="px-4 py-3 text-right font-medium">
+                                                            {currency}{' '}
+                                                            {formatDecimal(
+                                                                row.totalCost ??
+                                                                    '0.0000',
+                                                            )}
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+
+                        <section className="grid gap-3">
+                            <div>
+                                <h3 className="font-semibold">
+                                    Waste by Employee
+                                </h3>
+                                <p className="text-sm text-muted-foreground">
+                                    Quantity and value grouped by the user who
+                                    recorded the waste.
+                                </p>
+                            </div>
+
+                            <div className="overflow-x-auto rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
+                                <table className="w-full text-sm">
+                                    <thead className="border-b text-left">
+                                        <tr>
+                                            <th className="px-4 py-3">
+                                                Employee
+                                            </th>
+                                            <th className="px-4 py-3">
+                                                Records
+                                            </th>
+                                            <th className="px-4 py-3">
+                                                Quantity
+                                            </th>
+                                            {canViewCosts && (
+                                                <th className="px-4 py-3 text-right">
+                                                    Waste value
+                                                </th>
+                                            )}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {report.byEmployee.length === 0 ? (
+                                            <tr>
+                                                <td
+                                                    colSpan={
+                                                        canViewCosts ? 4 : 3
+                                                    }
+                                                    className="px-4 py-8 text-center text-muted-foreground"
+                                                >
+                                                    No waste records match the
+                                                    selected filters.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            report.byEmployee.map((row) => (
+                                                <tr
+                                                    key={
+                                                        row.employeeId ??
+                                                        'unknown'
+                                                    }
+                                                    className="border-b last:border-b-0"
+                                                >
+                                                    <td className="px-4 py-3 font-medium">
+                                                        {row.employeeName}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        {row.recordCount.toLocaleString()}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <QuantityTotals
+                                                            totals={
+                                                                row.quantityTotals
+                                                            }
+                                                        />
+                                                    </td>
+                                                    {canViewCosts && (
+                                                        <td className="px-4 py-3 text-right font-medium">
+                                                            {currency}{' '}
+                                                            {formatDecimal(
+                                                                row.totalCost ??
+                                                                    '0.0000',
+                                                            )}
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+
+                        <section className="grid gap-3">
+                            <div>
+                                <h3 className="font-semibold">Waste by Item</h3>
+                                <p className="text-sm text-muted-foreground">
+                                    Quantity and value grouped by inventory
+                                    item.
+                                </p>
+                            </div>
+
+                            <div className="overflow-x-auto rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
+                                <table className="w-full text-sm">
+                                    <thead className="border-b text-left">
+                                        <tr>
+                                            <th className="px-4 py-3">Item</th>
+                                            <th className="px-4 py-3">
+                                                Records
+                                            </th>
+                                            <th className="px-4 py-3">
+                                                Quantity
+                                            </th>
+                                            {canViewCosts && (
+                                                <th className="px-4 py-3 text-right">
+                                                    Waste value
+                                                </th>
+                                            )}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {report.byItem.length === 0 ? (
+                                            <tr>
+                                                <td
+                                                    colSpan={
+                                                        canViewCosts ? 4 : 3
+                                                    }
+                                                    className="px-4 py-8 text-center text-muted-foreground"
+                                                >
+                                                    No waste records match the
+                                                    selected filters.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            report.byItem.map((row) => (
+                                                <tr
+                                                    key={row.itemId}
+                                                    className="border-b last:border-b-0"
+                                                >
+                                                    <td className="px-4 py-3">
+                                                        <div className="font-medium">
+                                                            {row.itemName}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {row.itemSku}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        {row.recordCount.toLocaleString()}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        {formatDecimal(
+                                                            row.totalQuantity,
+                                                        )}{' '}
+                                                        {row.baseUnitSymbol}
+                                                    </td>
+                                                    {canViewCosts && (
+                                                        <td className="px-4 py-3 text-right font-medium">
+                                                            {currency}{' '}
+                                                            {formatDecimal(
+                                                                row.totalCost ??
+                                                                    '0.0000',
+                                                            )}
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+
+                        <div>
+                            <h3 className="font-semibold">Waste evidence</h3>
+                            <p className="text-sm text-muted-foreground">
+                                Paginated immutable records behind the selected
+                                report totals.
+                            </p>
+                        </div>
 
                         <div className="overflow-x-auto rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
                             <table className="w-full text-sm">

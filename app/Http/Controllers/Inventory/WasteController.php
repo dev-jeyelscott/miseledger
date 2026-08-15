@@ -7,6 +7,7 @@ use App\Actions\Inventory\RecordWaste;
 use App\Enums\OrganizationPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Inventory\RecordWasteRequest;
+use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
@@ -15,19 +16,72 @@ use App\Models\UnitOfMeasure;
 use App\Models\User;
 use App\Models\WasteReason;
 use App\Models\WasteRecord;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use stdClass;
 
 /**
+ * @phpstan-type WasteReportFilters array{
+ *     locationId: int|null,
+ *     inventoryCategoryId: int|null,
+ *     inventoryItemId: int|null,
+ *     wasteReasonId: int|null,
+ *     from: string|null,
+ *     to: string|null
+ * }
+ * @phpstan-type WasteQuantityTotal array{
+ *     baseUnitId: int,
+ *     quantity: string,
+ *     unitSymbol: string
+ * }
+ * @phpstan-type WasteSummary array{
+ *     recordCount: int,
+ *     quantityTotals: list<WasteQuantityTotal>,
+ *     totalCost: string|null
+ * }
+ * @phpstan-type WasteByReasonRow array{
+ *     reasonId: int,
+ *     reasonName: string,
+ *     recordCount: int,
+ *     quantityTotals: list<WasteQuantityTotal>,
+ *     totalCost: string|null
+ * }
+ * @phpstan-type WasteByEmployeeRow array{
+ *     employeeId: int|null,
+ *     employeeName: string,
+ *     recordCount: int,
+ *     quantityTotals: list<WasteQuantityTotal>,
+ *     totalCost: string|null
+ * }
+ * @phpstan-type WasteByItemRow array{
+ *     itemId: int,
+ *     itemName: string,
+ *     itemSku: string,
+ *     baseUnitId: int,
+ *     baseUnitSymbol: string,
+ *     recordCount: int,
+ *     totalQuantity: string,
+ *     totalCost: string|null
+ * }
+ * @phpstan-type WasteAggregateReport array{
+ *     summary: WasteSummary,
+ *     byReason: list<WasteByReasonRow>,
+ *     byEmployee: list<WasteByEmployeeRow>,
+ *     byItem: list<WasteByItemRow>
+ * }
  * @phpstan-type WasteReportRow array{
  *     recordId: int,
  *     occurredAt: string,
@@ -85,6 +139,7 @@ class WasteController extends Controller
 
         $filters = [
             'locationId' => null,
+            'inventoryCategoryId' => null,
             'inventoryItemId' => null,
             'wasteReasonId' => null,
             'from' => null,
@@ -92,9 +147,10 @@ class WasteController extends Controller
         ];
 
         $rows = null;
+        $report = null;
 
         if ($canViewReport) {
-            [$filters, $rows] = $this->reportData(
+            [$filters, $rows, $report] = $this->reportData(
                 $request,
                 $organization,
                 $canViewCosts,
@@ -124,6 +180,7 @@ class WasteController extends Controller
 
         return Inertia::render('waste/index', [
             'rows' => $rows,
+            'report' => $report,
             'filters' => $filters,
             'currency' => $organization->currency,
             'canRecord' => $canRecord,
@@ -178,18 +235,9 @@ class WasteController extends Controller
     }
 
     /**
-     * Build filters and a bounded tenant-scoped page of immutable waste rows.
+     * Build filters, aggregate reports, and a bounded page of immutable waste evidence.
      *
-     * @return array{
-     *     0: array{
-     *         locationId: int|null,
-     *         inventoryItemId: int|null,
-     *         wasteReasonId: int|null,
-     *         from: string|null,
-     *         to: string|null
-     *     },
-     *     1: array<array-key, mixed>
-     * }
+     * @return array{0: WasteReportFilters, 1: array<array-key, mixed>, 2: WasteAggregateReport}
      */
     private function reportData(
         Request $request,
@@ -201,6 +249,16 @@ class WasteController extends Controller
                 'nullable',
                 'integer',
                 Rule::exists('locations', 'id')->where(
+                    fn (Builder $query): Builder => $query->where(
+                        'organization_id',
+                        $organization->id,
+                    ),
+                ),
+            ],
+            'inventory_category_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('inventory_categories', 'id')->where(
                     fn (Builder $query): Builder => $query->where(
                         'organization_id',
                         $organization->id,
@@ -241,13 +299,15 @@ class WasteController extends Controller
             ? (int) $validated['location_id']
             : null;
 
-        $inventoryItemId =
-            isset($validated['inventory_item_id'])
+        $inventoryCategoryId = isset($validated['inventory_category_id'])
+            ? (int) $validated['inventory_category_id']
+            : null;
+
+        $inventoryItemId = isset($validated['inventory_item_id'])
             ? (int) $validated['inventory_item_id']
             : null;
 
-        $wasteReasonId =
-            isset($validated['waste_reason_id'])
+        $wasteReasonId = isset($validated['waste_reason_id'])
             ? (int) $validated['waste_reason_id']
             : null;
 
@@ -273,7 +333,21 @@ class WasteController extends Controller
             ]);
         }
 
-        $query = WasteRecord::query()
+        $filters = [
+            'locationId' => $locationId,
+            'inventoryCategoryId' => $inventoryCategoryId,
+            'inventoryItemId' => $inventoryItemId,
+            'wasteReasonId' => $wasteReasonId,
+            'from' => $from,
+            'to' => $to,
+        ];
+
+        $evidenceQuery = $this->reportEvidenceQuery(
+            $organization,
+            $filters,
+        );
+
+        $rows = WasteRecord::query()
             ->with([
                 'location:id,name',
                 'storageLocation:id,name',
@@ -286,53 +360,11 @@ class WasteController extends Controller
             ->where(
                 'organization_id',
                 $organization->id,
-            );
-
-        if ($locationId !== null) {
-            $query->where('location_id', $locationId);
-        }
-
-        if ($inventoryItemId !== null) {
-            $query->where(
-                'inventory_item_id',
-                $inventoryItemId,
-            );
-        }
-
-        if ($wasteReasonId !== null) {
-            $query->where(
-                'waste_reason_id',
-                $wasteReasonId,
-            );
-        }
-
-        if ($from !== null) {
-            $query->where(
-                'occurred_at',
-                '>=',
-                CarbonImmutable::parse(
-                    $from,
-                    $organization->timezone,
-                )
-                    ->startOfDay()
-                    ->utc(),
-            );
-        }
-
-        if ($to !== null) {
-            $query->where(
-                'occurred_at',
-                '<=',
-                CarbonImmutable::parse(
-                    $to,
-                    $organization->timezone,
-                )
-                    ->endOfDay()
-                    ->utc(),
-            );
-        }
-
-        $rows = $query
+            )
+            ->whereIn(
+                'id',
+                (clone $evidenceQuery)->select('waste_records.id'),
+            )
             ->orderByDesc('occurred_at')
             ->orderByDesc('id')
             ->paginate(25)
@@ -348,15 +380,489 @@ class WasteController extends Controller
             ->toArray();
 
         return [
-            [
-                'locationId' => $locationId,
-                'inventoryItemId' => $inventoryItemId,
-                'wasteReasonId' => $wasteReasonId,
-                'from' => $from,
-                'to' => $to,
-            ],
+            $filters,
             $rows,
+            $this->aggregateReport(
+                $evidenceQuery,
+                $canViewCosts,
+            ),
         ];
+    }
+
+    /**
+     * Build the shared tenant-scoped evidence query used by every Waste report.
+     *
+     * @param  WasteReportFilters  $filters
+     */
+    private function reportEvidenceQuery(
+        Organization $organization,
+        array $filters,
+    ): Builder {
+        $query = DB::table('waste_records')
+            ->join(
+                'inventory_items',
+                function (JoinClause $join): void {
+                    $join
+                        ->on(
+                            'inventory_items.id',
+                            '=',
+                            'waste_records.inventory_item_id',
+                        )
+                        ->on(
+                            'inventory_items.organization_id',
+                            '=',
+                            'waste_records.organization_id',
+                        );
+                },
+            )
+            ->join(
+                'units_of_measure as base_units',
+                function (JoinClause $join): void {
+                    $join
+                        ->on(
+                            'base_units.id',
+                            '=',
+                            'inventory_items.base_unit_of_measure_id',
+                        )
+                        ->on(
+                            'base_units.organization_id',
+                            '=',
+                            'waste_records.organization_id',
+                        );
+                },
+            )
+            ->where(
+                'waste_records.organization_id',
+                $organization->id,
+            );
+
+        if ($filters['locationId'] !== null) {
+            $query->where(
+                'waste_records.location_id',
+                $filters['locationId'],
+            );
+        }
+
+        if ($filters['inventoryCategoryId'] !== null) {
+            $query->where(
+                'inventory_items.inventory_category_id',
+                $filters['inventoryCategoryId'],
+            );
+        }
+
+        if ($filters['inventoryItemId'] !== null) {
+            $query->where(
+                'waste_records.inventory_item_id',
+                $filters['inventoryItemId'],
+            );
+        }
+
+        if ($filters['wasteReasonId'] !== null) {
+            $query->where(
+                'waste_records.waste_reason_id',
+                $filters['wasteReasonId'],
+            );
+        }
+
+        if ($filters['from'] !== null) {
+            $query->where(
+                'waste_records.occurred_at',
+                '>=',
+                CarbonImmutable::parse(
+                    $filters['from'],
+                    $organization->timezone,
+                )
+                    ->startOfDay()
+                    ->utc(),
+            );
+        }
+
+        if ($filters['to'] !== null) {
+            $query->where(
+                'waste_records.occurred_at',
+                '<=',
+                CarbonImmutable::parse(
+                    $filters['to'],
+                    $organization->timezone,
+                )
+                    ->endOfDay()
+                    ->utc(),
+            );
+        }
+
+        return $query;
+    }
+
+    /**
+     * Build every aggregate Waste report from the exact same filtered evidence.
+     *
+     * @return WasteAggregateReport
+     */
+    private function aggregateReport(
+        Builder $query,
+        bool $canViewCosts,
+    ): array {
+        return [
+            'summary' => $this->wasteSummary(
+                clone $query,
+                $canViewCosts,
+            ),
+            'byReason' => $this->wasteByReason(
+                clone $query,
+                $canViewCosts,
+            ),
+            'byEmployee' => $this->wasteByEmployee(
+                clone $query,
+                $canViewCosts,
+            ),
+            'byItem' => $this->wasteByItem(
+                clone $query,
+                $canViewCosts,
+            ),
+        ];
+    }
+
+    /**
+     * Summarize filtered waste without combining quantities from unlike base units.
+     *
+     * @return WasteSummary
+     */
+    private function wasteSummary(
+        Builder $query,
+        bool $canViewCosts,
+    ): array {
+        $rows = $this->addAggregateSelects(
+            $query->select([
+                'base_units.id as base_unit_id',
+                'base_units.symbol as base_unit_symbol',
+            ]),
+            $canViewCosts,
+        )
+            ->groupBy(
+                'base_units.id',
+                'base_units.symbol',
+            )
+            ->orderBy('base_units.symbol')
+            ->orderBy('base_units.id')
+            ->get();
+
+        $recordCount = 0;
+        $totalCost = '0.0000';
+        /** @var list<WasteQuantityTotal> $quantityTotals */
+        $quantityTotals = [];
+
+        foreach ($rows as $row) {
+            $recordCount += (int) $row->record_count;
+            $quantityTotals[] = $this->quantityTotal($row);
+
+            if ($canViewCosts) {
+                $totalCost = $this->addDecimal(
+                    $totalCost,
+                    $row->total_cost,
+                    4,
+                );
+            }
+        }
+
+        return [
+            'recordCount' => $recordCount,
+            'quantityTotals' => $quantityTotals,
+            'totalCost' => $canViewCosts
+                ? $totalCost
+                : null,
+        ];
+    }
+
+    /**
+     * Group filtered immutable waste evidence by retained business reason.
+     *
+     * @return list<WasteByReasonRow>
+     */
+    private function wasteByReason(
+        Builder $query,
+        bool $canViewCosts,
+    ): array {
+        $rows = $this->addAggregateSelects(
+            $query
+                ->join(
+                    'waste_reasons',
+                    function (JoinClause $join): void {
+                        $join
+                            ->on(
+                                'waste_reasons.id',
+                                '=',
+                                'waste_records.waste_reason_id',
+                            )
+                            ->on(
+                                'waste_reasons.organization_id',
+                                '=',
+                                'waste_records.organization_id',
+                            );
+                    },
+                )
+                ->select([
+                    'waste_reasons.id as reason_id',
+                    'waste_reasons.name as reason_name',
+                    'base_units.id as base_unit_id',
+                    'base_units.symbol as base_unit_symbol',
+                ]),
+            $canViewCosts,
+        )
+            ->groupBy(
+                'waste_reasons.id',
+                'waste_reasons.name',
+                'base_units.id',
+                'base_units.symbol',
+            )
+            ->get();
+
+        /** @var array<int, WasteByReasonRow> $report */
+        $report = [];
+        foreach ($rows as $row) {
+            $reasonId = (int) $row->reason_id;
+
+            if (! isset($report[$reasonId])) {
+                $report[$reasonId] = [
+                    'reasonId' => $reasonId,
+                    'reasonName' => (string) $row->reason_name,
+                    'recordCount' => 0,
+                    'quantityTotals' => [],
+                    'totalCost' => $canViewCosts
+                        ? '0.0000'
+                        : null,
+                ];
+            }
+
+            $report[$reasonId]['recordCount'] += (int) $row->record_count;
+            $report[$reasonId]['quantityTotals'][] = $this->quantityTotal($row);
+
+            if ($canViewCosts) {
+                $report[$reasonId]['totalCost'] = $this->addDecimal(
+                    (string) $report[$reasonId]['totalCost'],
+                    $row->total_cost,
+                    4,
+                );
+            }
+        }
+
+        $report = array_values($report);
+
+        usort(
+            $report,
+            static fn (array $left, array $right): int => strcasecmp(
+                $left['reasonName'],
+                $right['reasonName'],
+            ),
+        );
+
+        return $report;
+    }
+
+    /**
+     * Group filtered immutable waste evidence by the user who recorded it.
+     *
+     * @return list<WasteByEmployeeRow>
+     */
+    private function wasteByEmployee(
+        Builder $query,
+        bool $canViewCosts,
+    ): array {
+        $rows = $this->addAggregateSelects(
+            $query
+                ->leftJoin(
+                    'users',
+                    'users.id',
+                    '=',
+                    'waste_records.recorded_by',
+                )
+                ->select([
+                    'waste_records.recorded_by as employee_id',
+                    'users.name as employee_name',
+                    'base_units.id as base_unit_id',
+                    'base_units.symbol as base_unit_symbol',
+                ]),
+            $canViewCosts,
+        )
+            ->groupBy(
+                'waste_records.recorded_by',
+                'users.name',
+                'base_units.id',
+                'base_units.symbol',
+            )
+            ->get();
+
+        /** @var array<string, WasteByEmployeeRow> $report */
+        $report = [];
+
+        foreach ($rows as $row) {
+            $employeeId = $row->employee_id === null
+                ? null
+                : (int) $row->employee_id;
+            $key = $employeeId === null
+                ? 'unknown'
+                : (string) $employeeId;
+            $employeeName = is_string($row->employee_name)
+                && trim($row->employee_name) !== ''
+                ? $row->employee_name
+                : 'Unknown user';
+
+            if (! isset($report[$key])) {
+                $report[$key] = [
+                    'employeeId' => $employeeId,
+                    'employeeName' => $employeeName,
+                    'recordCount' => 0,
+                    'quantityTotals' => [],
+                    'totalCost' => $canViewCosts
+                        ? '0.0000'
+                        : null,
+                ];
+            }
+
+            $report[$key]['recordCount'] += (int) $row->record_count;
+            $report[$key]['quantityTotals'][] = $this->quantityTotal($row);
+
+            if ($canViewCosts) {
+                $report[$key]['totalCost'] = $this->addDecimal(
+                    (string) $report[$key]['totalCost'],
+                    $row->total_cost,
+                    4,
+                );
+            }
+        }
+
+        $report = array_values($report);
+
+        usort(
+            $report,
+            static fn (array $left, array $right): int => strcasecmp(
+                $left['employeeName'],
+                $right['employeeName'],
+            ),
+        );
+
+        return $report;
+    }
+
+    /**
+     * Group filtered immutable waste evidence by inventory item.
+     *
+     * @return list<WasteByItemRow>
+     */
+    private function wasteByItem(
+        Builder $query,
+        bool $canViewCosts,
+    ): array {
+        return $this->addAggregateSelects(
+            $query->select([
+                'inventory_items.id as item_id',
+                'inventory_items.name as item_name',
+                'inventory_items.sku as item_sku',
+                'base_units.id as base_unit_id',
+                'base_units.symbol as base_unit_symbol',
+            ]),
+            $canViewCosts,
+        )
+            ->groupBy(
+                'inventory_items.id',
+                'inventory_items.name',
+                'inventory_items.sku',
+                'base_units.id',
+                'base_units.symbol',
+            )
+            ->orderBy('inventory_items.name')
+            ->orderBy('inventory_items.id')
+            ->get()
+            ->map(
+                fn (stdClass $row): array => [
+                    'itemId' => (int) $row->item_id,
+                    'itemName' => (string) $row->item_name,
+                    'itemSku' => (string) $row->item_sku,
+                    'baseUnitId' => (int) $row->base_unit_id,
+                    'baseUnitSymbol' => (string) $row->base_unit_symbol,
+                    'recordCount' => (int) $row->record_count,
+                    'totalQuantity' => $this->fixedDecimal(
+                        $row->total_quantity,
+                        6,
+                    ),
+                    'totalCost' => $canViewCosts
+                        ? $this->fixedDecimal(
+                            $row->total_cost,
+                            4,
+                        )
+                        : null,
+                ],
+            )
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Add fixed aggregate values while avoiding protected cost selection when unauthorized.
+     */
+    private function addAggregateSelects(
+        Builder $query,
+        bool $canViewCosts,
+    ): Builder {
+        $query
+            ->selectRaw('COUNT(*) as record_count')
+            ->selectRaw(
+                'SUM(waste_records.base_quantity) as total_quantity',
+            );
+
+        if ($canViewCosts) {
+            $query->selectRaw(
+                'SUM(waste_records.total_cost) as total_cost',
+            );
+        }
+
+        return $query;
+    }
+
+    /**
+     * Normalize one grouped base-UOM quantity into the report contract.
+     *
+     * @return WasteQuantityTotal
+     */
+    private function quantityTotal(stdClass $row): array
+    {
+        return [
+            'baseUnitId' => (int) $row->base_unit_id,
+            'quantity' => $this->fixedDecimal(
+                $row->total_quantity,
+                6,
+            ),
+            'unitSymbol' => (string) $row->base_unit_symbol,
+        ];
+    }
+
+    /**
+     * Add decimal aggregate values without converting through binary floating point.
+     */
+    private function addDecimal(
+        string $current,
+        mixed $value,
+        int $scale,
+    ): string {
+        return (string) BigDecimal::of($current)
+            ->plus(BigDecimal::of((string) $value))
+            ->toScale(
+                $scale,
+                RoundingMode::HalfUp,
+            );
+    }
+
+    /**
+     * Normalize database aggregate output to the persisted report precision.
+     */
+    private function fixedDecimal(
+        mixed $value,
+        int $scale,
+    ): string {
+        return (string) BigDecimal::of((string) $value)
+            ->toScale(
+                $scale,
+                RoundingMode::HalfUp,
+            );
     }
 
     /**
@@ -449,7 +955,7 @@ class WasteController extends Controller
             'operationId' => (string) Str::uuid(),
             'defaultOccurredAt' => CarbonImmutable::now(
                 $organization->timezone,
-            )->format('Y-m-d\TH:i'),
+            )->format('Y-m-d\\TH:i'),
             'locationOptions' => Location::query()
                 ->where(
                     'organization_id',
@@ -612,6 +1118,23 @@ class WasteController extends Controller
                     ): array => [
                         'id' => $location->id,
                         'name' => $location->name,
+                    ],
+                )
+                ->values()
+                ->all(),
+            'inventoryCategories' => InventoryCategory::query()
+                ->where(
+                    'organization_id',
+                    $organization->id,
+                )
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(
+                    static fn (
+                        InventoryCategory $category,
+                    ): array => [
+                        'id' => $category->id,
+                        'name' => $category->name,
                     ],
                 )
                 ->values()
