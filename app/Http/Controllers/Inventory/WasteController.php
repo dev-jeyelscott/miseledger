@@ -19,7 +19,6 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -189,7 +188,7 @@ class WasteController extends Controller
      *         from: string|null,
      *         to: string|null
      *     },
-     *     1: LengthAwarePaginator<int, WasteReportRow>
+     *     1: array<array-key, mixed>
      * }
      */
     private function reportData(
@@ -345,7 +344,8 @@ class WasteController extends Controller
                     $record,
                     $canViewCosts,
                 ),
-            );
+            )
+            ->toArray();
 
         return [
             [
