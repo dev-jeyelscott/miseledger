@@ -339,46 +339,12 @@ class WasteController extends Controller
             ->paginate(25)
             ->withQueryString()
             ->through(
-                static fn (
+                fn (
                     WasteRecord $record,
-                ): array => [
-                    'recordId' => $record->id,
-                    'occurredAt' => $record->occurred_at
-                        ->toIso8601String(),
-                    'locationName' => $record->location->name,
-                    'storageLocationName' => $record
-                        ->storageLocation
-                        ->name,
-                    'itemName' => $record
-                        ->inventoryItem
-                        ->name,
-                    'itemSku' => $record
-                        ->inventoryItem
-                        ->sku,
-                    'reasonName' => $record
-                        ->wasteReason
-                        ->name,
-                    'quantity' => $record->quantity,
-                    'unitSymbol' => $record->unit->symbol,
-                    'baseQuantity' => $record->base_quantity,
-                    'baseUnitSymbol' => $record
-                        ->inventoryItem
-                        ->baseUnitOfMeasure
-                        ->symbol,
-                    'unitCost' => $canViewCosts
-                        ? $record->unit_cost
-                        : null,
-                    'totalCost' => $canViewCosts
-                        ? $record->total_cost
-                        : null,
-                    'recordedBy' => $record
-                        ->recorder
-                        ?->name,
-                    'notes' => $record->notes,
-                    'movementId' => $record
-                        ->movement
-                        ?->id,
-                ],
+                ): array => $this->wasteReportRow(
+                    $record,
+                    $canViewCosts,
+                ),
             );
 
         return [
@@ -390,6 +356,55 @@ class WasteController extends Controller
                 'to' => $to,
             ],
             $rows,
+        ];
+    }
+
+    /**
+     * Map one waste record to the stable report-row contract.
+     *
+     * @return WasteReportRow
+     */
+    private function wasteReportRow(
+        WasteRecord $record,
+        bool $canViewCosts,
+    ): array {
+        return [
+            'recordId' => $record->id,
+            'occurredAt' => $record->occurred_at
+                ->toIso8601String(),
+            'locationName' => $record->location->name,
+            'storageLocationName' => $record
+                ->storageLocation
+                ->name,
+            'itemName' => $record
+                ->inventoryItem
+                ->name,
+            'itemSku' => $record
+                ->inventoryItem
+                ->sku,
+            'reasonName' => $record
+                ->wasteReason
+                ->name,
+            'quantity' => $record->quantity,
+            'unitSymbol' => $record->unit->symbol,
+            'baseQuantity' => $record->base_quantity,
+            'baseUnitSymbol' => $record
+                ->inventoryItem
+                ->baseUnitOfMeasure
+                ->symbol,
+            'unitCost' => $canViewCosts
+                ? $record->unit_cost
+                : null,
+            'totalCost' => $canViewCosts
+                ? $record->total_cost
+                : null,
+            'recordedBy' => $record
+                ->recorder
+                ?->name,
+            'notes' => $record->notes,
+            'movementId' => $record
+                ->movement
+                ?->id,
         ];
     }
 
