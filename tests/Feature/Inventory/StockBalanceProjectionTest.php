@@ -17,13 +17,21 @@ beforeEach(function () {
         'organization_id' => $this->organization->id,
     ]);
 
-    $this->storageLocation = StorageLocation::query()->create([
-        'organization_id' => $this->organization->id,
-        'location_id' => $this->location->id,
+    $this->storageLocation = new StorageLocation([
         'name' => 'Main Storage',
         'code' => 'MAIN',
         'active' => true,
     ]);
+
+    $this->storageLocation
+        ->organization()
+        ->associate($this->organization);
+
+    $this->storageLocation
+        ->location()
+        ->associate($this->location);
+
+    $this->storageLocation->save();
 
     $this->unit = UnitOfMeasure::factory()->create([
         'organization_id' => $this->organization->id,

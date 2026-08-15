@@ -270,15 +270,17 @@ test('database rejects a storage location paired with another tenant location', 
         ->create();
 
     expect(
-        fn () => DB::table('storage_locations')->insert([
-            'organization_id' => $firstOrganization->id,
-            'location_id' => $secondLocation->id,
-            'name' => 'Cross Tenant Storage',
-            'code' => 'CROSS',
-            'active' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]),
+        fn () => DB::transaction(
+            fn () => DB::table('storage_locations')->insert([
+                'organization_id' => $firstOrganization->id,
+                'location_id' => $secondLocation->id,
+                'name' => 'Cross Tenant Storage',
+                'code' => 'CROSS',
+                'active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]),
+        ),
     )->toThrow(QueryException::class);
 
     $this->assertDatabaseCount('storage_locations', 0);
