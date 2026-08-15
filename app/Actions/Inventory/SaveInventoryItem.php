@@ -12,6 +12,10 @@ use Illuminate\Validation\ValidationException;
 
 final class SaveInventoryItem
 {
+    public function __construct(
+        private readonly EnsureStockTransferDependencyCanBeDeactivated $ensureStockTransferDependencyCanBeDeactivated,
+    ) {}
+
     /**
      * Create or update an inventory item against locked tenant-owned relations.
      *
@@ -35,6 +39,18 @@ final class SaveInventoryItem
             $attributes,
             $inventoryItem,
         ): InventoryItem {
+            if (
+                $inventoryItem !== null
+                && ! $attributes['active']
+            ) {
+                $this
+                    ->ensureStockTransferDependencyCanBeDeactivated
+                    ->assertInventoryItemCanBeDeactivated(
+                        $organization,
+                        $inventoryItem,
+                    );
+            }
+
             $baseUnit = UnitOfMeasure::query()
                 ->where('organization_id', $organization->getKey())
                 ->whereKey($attributes['base_unit_of_measure_id'])

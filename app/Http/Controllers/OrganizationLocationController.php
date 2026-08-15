@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Inventory\EnsureStockTransferDependencyCanBeDeactivated;
 use App\Enums\OrganizationPermission;
 use App\Http\Requests\Organizations\StoreOrganizationLocationRequest;
 use App\Http\Requests\Organizations\UpdateOrganizationLocationRequest;
@@ -16,9 +17,7 @@ use Inertia\Response;
 
 class OrganizationLocationController extends Controller
 {
-    /**
-     * Show locations belonging to an organization.
-     */
+    /** Show locations belonging to an organization. */
     public function index(Organization $organization): Response
     {
         Gate::authorize(
@@ -57,9 +56,7 @@ class OrganizationLocationController extends Controller
         ]);
     }
 
-    /**
-     * Create a location and its default storage area atomically.
-     */
+    /** Create a location and its default storage area atomically. */
     public function store(
         StoreOrganizationLocationRequest $request,
         Organization $organization,
@@ -100,9 +97,7 @@ class OrganizationLocationController extends Controller
         );
     }
 
-    /**
-     * Show the location editing form.
-     */
+    /** Show the location editing form. */
     public function edit(
         Organization $organization,
         Location $location,
@@ -134,10 +129,36 @@ class OrganizationLocationController extends Controller
         UpdateOrganizationLocationRequest $request,
         Organization $organization,
         Location $location,
+        EnsureStockTransferDependencyCanBeDeactivated $ensureStockTransferDependencyCanBeDeactivated,
     ): RedirectResponse {
-        $location->update(
-            $request->validated(),
-        );
+        /** @var array{name: string, code: string, active: bool} $attributes */
+        $attributes = $request->validated();
+
+        DB::transaction(function () use (
+            $organization,
+            $location,
+            $attributes,
+            $ensureStockTransferDependencyCanBeDeactivated,
+        ): void {
+            if (! $attributes['active']) {
+                $ensureStockTransferDependencyCanBeDeactivated
+                    ->assertLocationCanBeDeactivated(
+                        $organization,
+                        $location,
+                    );
+            }
+
+            $lockedLocation = Location::query()
+                ->where(
+                    'organization_id',
+                    $organization->getKey(),
+                )
+                ->whereKey($location->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $lockedLocation->update($attributes);
+        });
 
         Inertia::flash('toast', [
             'type' => 'success',

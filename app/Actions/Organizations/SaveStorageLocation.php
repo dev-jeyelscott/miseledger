@@ -2,6 +2,7 @@
 
 namespace App\Actions\Organizations;
 
+use App\Actions\Inventory\EnsureStockTransferDependencyCanBeDeactivated;
 use App\Models\Location;
 use App\Models\Organization;
 use App\Models\StorageLocation;
@@ -10,6 +11,10 @@ use Illuminate\Validation\ValidationException;
 
 final class SaveStorageLocation
 {
+    public function __construct(
+        private readonly EnsureStockTransferDependencyCanBeDeactivated $ensureStockTransferDependencyCanBeDeactivated,
+    ) {}
+
     /**
      * Create or update storage configuration while preserving the
      * organization → location → storage ownership invariant.
@@ -28,6 +33,18 @@ final class SaveStorageLocation
             $attributes,
             $storageLocation,
         ): StorageLocation {
+            if (
+                $storageLocation !== null
+                && ! $attributes['active']
+            ) {
+                $this
+                    ->ensureStockTransferDependencyCanBeDeactivated
+                    ->assertStorageLocationCanBeDeactivated(
+                        $organization,
+                        $storageLocation,
+                    );
+            }
+
             $lockedLocation = Location::query()
                 ->where('organization_id', $organization->getKey())
                 ->whereKey($location->getKey())

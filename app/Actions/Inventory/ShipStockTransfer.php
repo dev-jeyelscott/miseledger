@@ -112,6 +112,52 @@ final class ShipStockTransfer
                 ]);
             }
 
+            /*
+             * The locked transfer header serializes these checks against the
+             * deactivation guard without locking destination stock records.
+             */
+            $destinationLocationIsActive = Location::query()
+                ->where(
+                    'organization_id',
+                    $organization->id,
+                )
+                ->whereKey($transfer->to_location_id)
+                ->where('active', true)
+                ->exists();
+
+            if (! $destinationLocationIsActive) {
+                throw ValidationException::withMessages([
+                    'to_location_id' => __(
+                        'The transfer destination location is no longer active.',
+                    ),
+                ]);
+            }
+
+            $destinationStorageIsActive =
+                StorageLocation::query()
+                    ->where(
+                        'organization_id',
+                        $organization->id,
+                    )
+                    ->where(
+                        'location_id',
+                        $transfer->to_location_id,
+                    )
+                    ->whereKey(
+                        $transfer
+                            ->to_storage_location_id,
+                    )
+                    ->where('active', true)
+                    ->exists();
+
+            if (! $destinationStorageIsActive) {
+                throw ValidationException::withMessages([
+                    'to_storage_location_id' => __(
+                        'The transfer destination storage location is no longer active.',
+                    ),
+                ]);
+            }
+
             $lines = StockTransferLine::query()
                 ->where(
                     'stock_transfer_id',
