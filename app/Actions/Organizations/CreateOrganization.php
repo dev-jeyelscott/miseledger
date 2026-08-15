@@ -11,8 +11,12 @@ use Illuminate\Support\Str;
 
 final class CreateOrganization
 {
+    public function __construct(
+        private readonly EnsureDefaultWasteReasons $ensureDefaultWasteReasons,
+    ) {}
+
     /**
-     * Create the organization, owner membership, and standard UOMs atomically.
+     * Create the organization, owner membership, UOMs, and waste reasons atomically.
      */
     public function handle(User $user, string $name): Organization
     {
@@ -38,6 +42,8 @@ final class CreateOrganization
                     'active' => true,
                 ]);
             }
+
+            $this->ensureDefaultWasteReasons->handle($organization);
 
             return $organization;
         });

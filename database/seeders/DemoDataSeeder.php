@@ -196,11 +196,10 @@ class DemoDataSeeder extends Seeder
                 ]);
             }
 
-            $wasteReason = WasteReason::query()->create([
-                'organization_id' => $organization->id,
-                'name' => 'Spoilage',
-                'active' => true,
-            ]);
+            $wasteReason = WasteReason::query()
+                ->where('organization_id', $organization->id)
+                ->where('name', 'Spoilage')
+                ->sole();
 
             for ($index = 0; $index < 5; $index++) {
                 $number = $index + 1;
