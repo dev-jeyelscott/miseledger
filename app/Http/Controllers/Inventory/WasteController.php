@@ -28,6 +28,26 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/**
+ * @phpstan-type WasteReportRow array{
+ *     recordId: int,
+ *     occurredAt: string,
+ *     locationName: string,
+ *     storageLocationName: string,
+ *     itemName: string,
+ *     itemSku: string,
+ *     reasonName: string,
+ *     quantity: string,
+ *     unitSymbol: string,
+ *     baseQuantity: string,
+ *     baseUnitSymbol: string,
+ *     unitCost: string|null,
+ *     totalCost: string|null,
+ *     recordedBy: string|null,
+ *     notes: string|null,
+ *     movementId: int|null
+ * }
+ */
 class WasteController extends Controller
 {
     /**
@@ -162,8 +182,14 @@ class WasteController extends Controller
      * Build filters and a bounded tenant-scoped page of immutable waste rows.
      *
      * @return array{
-     *     0: array<string, int|string|null>,
-     *     1: LengthAwarePaginator<int, array<string, mixed>>
+     *     0: array{
+     *         locationId: int|null,
+     *         inventoryItemId: int|null,
+     *         wasteReasonId: int|null,
+     *         from: string|null,
+     *         to: string|null
+     *     },
+     *     1: LengthAwarePaginator<int, WasteReportRow>
      * }
      */
     private function reportData(
