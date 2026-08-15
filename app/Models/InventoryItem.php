@@ -85,6 +85,16 @@ class InventoryItem extends Model
     }
 
     /**
+     * Get the committed ledger movements recorded against this item.
+     *
+     * @return HasMany<StockMovement, $this>
+     */
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
+    }
+
+    /**
      * Cast persisted item state.
      *
      * @return array<string, string>

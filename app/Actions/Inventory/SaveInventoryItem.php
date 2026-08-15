@@ -118,6 +118,17 @@ final class SaveInventoryItem
                 ]);
             }
 
+            if (
+                $baseUnitChanged
+                && $lockedItem->stockMovements()->exists()
+            ) {
+                throw ValidationException::withMessages([
+                    'base_unit_of_measure_id' => __(
+                        'The base unit cannot be changed after stock movements have been recorded.',
+                    ),
+                ]);
+            }
+
             $lockedItem->update($attributes);
 
             return $lockedItem;

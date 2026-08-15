@@ -1,10 +1,14 @@
 <?php
 
+use App\Actions\Inventory\RecordStockMovement;
 use App\Enums\OrganizationRole;
+use App\Enums\StockMovementType;
 use App\Models\InventoryItem;
 use App\Models\InventoryItemUnit;
+use App\Models\Location;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
+use App\Models\StorageLocation;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -389,6 +393,126 @@ test('an item base unit cannot change after alternate units exist', function () 
             'unit_of_measure_id' => $kilogram->id,
             'quantity_in_base_unit' => '1000.000000',
         ]);
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->put(
+            route('inventory.items.update', $item),
+            [
+                'name' => 'Flour',
+                'sku' => 'FLOUR-001',
+                'base_unit_of_measure_id' => $piece->id,
+                'active' => true,
+            ],
+        )
+        ->assertSessionHasErrors(
+            'base_unit_of_measure_id',
+        );
+
+    expect($item->refresh()->base_unit_of_measure_id)
+        ->toBe($gram->id);
+});
+
+test('an item base unit can change before any stock movement exists', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    $gram = UnitOfMeasure::factory()
+        ->for($organization)
+        ->create();
+
+    $piece = UnitOfMeasure::factory()
+        ->for($organization)
+        ->create();
+
+    $item = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $gram->id,
+            'name' => 'Flour',
+            'sku' => 'FLOUR-001',
+        ]);
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->put(
+            route('inventory.items.update', $item),
+            [
+                'name' => 'Flour',
+                'sku' => 'FLOUR-001',
+                'base_unit_of_measure_id' => $piece->id,
+                'active' => true,
+            ],
+        )
+        ->assertRedirect();
+
+    expect($item->refresh()->base_unit_of_measure_id)
+        ->toBe($piece->id);
+});
+
+test('an item base unit cannot change after a stock movement exists', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    $gram = UnitOfMeasure::factory()
+        ->for($organization)
+        ->create();
+
+    $piece = UnitOfMeasure::factory()
+        ->for($organization)
+        ->create();
+
+    $item = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $gram->id,
+            'name' => 'Flour',
+            'sku' => 'FLOUR-001',
+        ]);
+
+    $location = Location::factory()
+        ->for($organization)
+        ->create();
+
+    $storageLocation = new StorageLocation;
+    $storageLocation->organization_id = $organization->id;
+    $storageLocation->location_id = $location->id;
+    $storageLocation->name = 'Main Storage';
+    $storageLocation->code = 'MAIN';
+    $storageLocation->active = true;
+    $storageLocation->save();
+
+    app(RecordStockMovement::class)->handle(
+        organization: $organization,
+        location: $location,
+        storageLocation: $storageLocation,
+        inventoryItem: $item,
+        type: StockMovementType::OpeningBalance,
+        baseQuantity: '10.000000',
+        baseUnitOfMeasure: $gram,
+        referenceType: 'opening_balance',
+        referenceId: 1,
+        occurredAt: now(),
+        inboundUnitCost: '1.0000',
+    );
 
     $this->withSession([
         'active_organization_id' => $organization->id,
