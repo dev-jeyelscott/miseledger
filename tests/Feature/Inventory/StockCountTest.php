@@ -522,6 +522,98 @@ test(
 );
 
 test(
+    'draft creation requires at least one line',
+    function () {
+        expect(
+            fn () => app(SaveStockCount::class)->handle(
+                $this->organization,
+                $this->actor,
+                [
+                    'number' => 'COUNT-NO-LINES',
+                    'location_id' => $this->location->id,
+                    'storage_location_id' => $this->storageLocation->id,
+                    'lines' => [],
+                ],
+            ),
+        )->toThrow(ValidationException::class);
+
+        expect(StockCount::query()->count())->toBe(0);
+    },
+);
+
+test(
+    'draft creation rejects the same inventory item on more than one line',
+    function () {
+        expect(
+            fn () => app(SaveStockCount::class)->handle(
+                $this->organization,
+                $this->actor,
+                [
+                    'number' => 'COUNT-DUPLICATE-ITEM',
+                    'location_id' => $this->location->id,
+                    'storage_location_id' => $this->storageLocation->id,
+                    'lines' => [
+                        [
+                            'inventory_item_id' => $this->inventoryItem->id,
+                            'counted_quantity' => '1',
+                            'count_unit_id' => $this->gram->id,
+                            'notes' => null,
+                        ],
+                        [
+                            'inventory_item_id' => $this->inventoryItem->id,
+                            'counted_quantity' => '2',
+                            'count_unit_id' => $this->gram->id,
+                            'notes' => null,
+                        ],
+                    ],
+                ],
+            ),
+        )->toThrow(ValidationException::class);
+
+        expect(StockCount::query()->count())->toBe(0);
+    },
+);
+
+test(
+    'draft creation rejects a storage location belonging to a different location in the same organization',
+    function () {
+        $otherLocation = Location::factory()->create([
+            'organization_id' => $this->organization->id,
+            'active' => true,
+        ]);
+
+        $otherLocationStorage =
+            createStockCountStorageLocationForTest(
+                $this->organization,
+                $otherLocation,
+                'OTHER-LOCATION',
+            );
+
+        expect(
+            fn () => app(SaveStockCount::class)->handle(
+                $this->organization,
+                $this->actor,
+                [
+                    'number' => 'COUNT-WRONG-LOCATION-PAIR',
+                    'location_id' => $this->location->id,
+                    'storage_location_id' => $otherLocationStorage->id,
+                    'lines' => [
+                        [
+                            'inventory_item_id' => $this->inventoryItem->id,
+                            'counted_quantity' => '1',
+                            'count_unit_id' => $this->gram->id,
+                            'notes' => null,
+                        ],
+                    ],
+                ],
+            ),
+        )->toThrow(ValidationException::class);
+
+        expect(StockCount::query()->count())->toBe(0);
+    },
+);
+
+test(
     'stock count draft rejects cross tenant storage and inventory items',
     function () {
         $otherOrganization =
