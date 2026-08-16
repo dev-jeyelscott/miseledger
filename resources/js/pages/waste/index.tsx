@@ -87,6 +87,13 @@ type WasteReport = {
         totalQuantity: string;
         totalCost: string | null;
     }[];
+    byLocation: {
+        locationId: number;
+        locationName: string;
+        recordCount: number;
+        quantityTotals: QuantityTotal[];
+        totalCost: string | null;
+    }[];
 };
 
 type WasteRow = {
@@ -1046,6 +1053,86 @@ export default function WasteIndex({
                                                             row.totalQuantity,
                                                         )}{' '}
                                                         {row.baseUnitSymbol}
+                                                    </td>
+                                                    {canViewCosts && (
+                                                        <td className="px-4 py-3 text-right font-medium">
+                                                            {currency}{' '}
+                                                            {formatDecimal(
+                                                                row.totalCost ??
+                                                                    '0.0000',
+                                                            )}
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+
+                        <section className="grid gap-3">
+                            <div>
+                                <h3 className="font-semibold">
+                                    Waste by Location
+                                </h3>
+                                <p className="text-sm text-muted-foreground">
+                                    Quantity and value grouped by restaurant
+                                    location.
+                                </p>
+                            </div>
+
+                            <div className="overflow-x-auto rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
+                                <table className="w-full text-sm">
+                                    <thead className="border-b text-left">
+                                        <tr>
+                                            <th className="px-4 py-3">
+                                                Location
+                                            </th>
+                                            <th className="px-4 py-3">
+                                                Records
+                                            </th>
+                                            <th className="px-4 py-3">
+                                                Quantity
+                                            </th>
+                                            {canViewCosts && (
+                                                <th className="px-4 py-3 text-right">
+                                                    Waste value
+                                                </th>
+                                            )}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {report.byLocation.length === 0 ? (
+                                            <tr>
+                                                <td
+                                                    colSpan={
+                                                        canViewCosts ? 4 : 3
+                                                    }
+                                                    className="px-4 py-8 text-center text-muted-foreground"
+                                                >
+                                                    No waste records match the
+                                                    selected filters.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            report.byLocation.map((row) => (
+                                                <tr
+                                                    key={row.locationId}
+                                                    className="border-b last:border-b-0"
+                                                >
+                                                    <td className="px-4 py-3 font-medium">
+                                                        {row.locationName}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        {row.recordCount.toLocaleString()}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <QuantityTotals
+                                                            totals={
+                                                                row.quantityTotals
+                                                            }
+                                                        />
                                                     </td>
                                                     {canViewCosts && (
                                                         <td className="px-4 py-3 text-right font-medium">

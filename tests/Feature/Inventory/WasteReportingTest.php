@@ -401,7 +401,25 @@ test(
                         'report.byItem.1.totalQuantity',
                         '2.000000',
                     )
-                    ->where('report.byItem.1.totalCost', '6.0000'),
+                    ->where('report.byItem.1.totalCost', '6.0000')
+                    ->where('report.byLocation.0.locationName', 'Main Kitchen')
+                    ->where('report.byLocation.0.recordCount', 3)
+                    ->where(
+                        'report.byLocation.0.quantityTotals',
+                        [
+                            [
+                                'baseUnitId' => $this->gram->id,
+                                'quantity' => '150.300000',
+                                'unitSymbol' => 'g',
+                            ],
+                            [
+                                'baseUnitId' => $this->piece->id,
+                                'quantity' => '2.000000',
+                                'unitSymbol' => 'pc',
+                            ],
+                        ],
+                    )
+                    ->where('report.byLocation.0.totalCost', '21.0300'),
             );
     },
 );
@@ -530,6 +548,7 @@ test(
                     ->where('report.byReason.0.totalCost', null)
                     ->where('report.byEmployee.0.totalCost', null)
                     ->where('report.byItem.0.totalCost', null)
+                    ->where('report.byLocation.0.totalCost', null)
                     ->where('rows.data.0.unitCost', null)
                     ->where('rows.data.0.totalCost', null),
             );

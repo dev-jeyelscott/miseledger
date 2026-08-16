@@ -76,11 +76,19 @@ use stdClass;
  *     totalQuantity: string,
  *     totalCost: string|null
  * }
+ * @phpstan-type WasteByLocationRow array{
+ *     locationId: int,
+ *     locationName: string,
+ *     recordCount: int,
+ *     quantityTotals: list<WasteQuantityTotal>,
+ *     totalCost: string|null
+ * }
  * @phpstan-type WasteAggregateReport array{
  *     summary: WasteSummary,
  *     byReason: list<WasteByReasonRow>,
  *     byEmployee: list<WasteByEmployeeRow>,
- *     byItem: list<WasteByItemRow>
+ *     byItem: list<WasteByItemRow>,
+ *     byLocation: list<WasteByLocationRow>
  * }
  * @phpstan-type WasteReportRow array{
  *     recordId: int,
@@ -519,6 +527,10 @@ class WasteController extends Controller
                 clone $query,
                 $canViewCosts,
             ),
+            'byLocation' => $this->wasteByLocation(
+                clone $query,
+                $canViewCosts,
+            ),
         ];
     }
 
@@ -795,6 +807,91 @@ class WasteController extends Controller
             ->all();
 
         return array_values($rows);
+    }
+
+    /**
+     * Group filtered immutable waste evidence by restaurant location.
+     *
+     * @return list<WasteByLocationRow>
+     */
+    private function wasteByLocation(
+        Builder $query,
+        bool $canViewCosts,
+    ): array {
+        $rows = $this->addAggregateSelects(
+            $query
+                ->join(
+                    'locations',
+                    function (JoinClause $join): void {
+                        $join
+                            ->on(
+                                'locations.id',
+                                '=',
+                                'waste_records.location_id',
+                            )
+                            ->on(
+                                'locations.organization_id',
+                                '=',
+                                'waste_records.organization_id',
+                            );
+                    },
+                )
+                ->select([
+                    'locations.id as location_id',
+                    'locations.name as location_name',
+                    'base_units.id as base_unit_id',
+                    'base_units.symbol as base_unit_symbol',
+                ]),
+            $canViewCosts,
+        )
+            ->groupBy(
+                'locations.id',
+                'locations.name',
+                'base_units.id',
+                'base_units.symbol',
+            )
+            ->get();
+
+        /** @var array<int, WasteByLocationRow> $report */
+        $report = [];
+        foreach ($rows as $row) {
+            $locationId = (int) $row->location_id;
+
+            if (! isset($report[$locationId])) {
+                $report[$locationId] = [
+                    'locationId' => $locationId,
+                    'locationName' => (string) $row->location_name,
+                    'recordCount' => 0,
+                    'quantityTotals' => [],
+                    'totalCost' => $canViewCosts
+                        ? '0.0000'
+                        : null,
+                ];
+            }
+
+            $report[$locationId]['recordCount'] += (int) $row->record_count;
+            $report[$locationId]['quantityTotals'][] = $this->quantityTotal($row);
+
+            if ($canViewCosts) {
+                $report[$locationId]['totalCost'] = $this->addDecimal(
+                    (string) $report[$locationId]['totalCost'],
+                    $row->total_cost,
+                    4,
+                );
+            }
+        }
+
+        $report = array_values($report);
+
+        usort(
+            $report,
+            static fn (array $left, array $right): int => strcasecmp(
+                $left['locationName'],
+                $right['locationName'],
+            ),
+        );
+
+        return $report;
     }
 
     /**
