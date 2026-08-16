@@ -17,6 +17,7 @@ use App\Models\User;
 use Brick\Math\BigDecimal;
 use Brick\Math\Exception\NumberFormatException;
 use Brick\Math\RoundingMode;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -63,6 +64,25 @@ final class ReceiveStockTransfer
                 $transfer->status
                 === StockTransferStatus::Received
             ) {
+                $lines = $this->lockedTransferLines(
+                    $transfer,
+                );
+
+                $receivedByLine =
+                    $this->receivedLineSet(
+                        $attributes,
+                    );
+
+                $this->assertCompleteReceivedLineSet(
+                    $lines,
+                    $receivedByLine,
+                );
+
+                $this->assertReceiptReplayMatches(
+                    $lines,
+                    $receivedByLine,
+                );
+
                 return $transfer->refresh();
             }
 
@@ -121,99 +141,25 @@ final class ReceiveStockTransfer
                 ]);
             }
 
-            $lines = StockTransferLine::query()
-                ->where(
-                    'stock_transfer_id',
-                    $transfer->id,
-                )
-                ->orderBy('inventory_item_id')
-                ->orderBy('id')
-                ->lockForUpdate()
-                ->get();
+            $lines = $this->lockedTransferLines(
+                $transfer,
+            );
 
-            if ($lines->isEmpty()) {
-                throw ValidationException::withMessages([
-                    'lines' => __(
-                        'At least one stock-transfer line is required.',
-                    ),
-                ]);
-            }
-
-            $rawLines = $attributes['lines'] ?? [];
-
-            if (! is_array($rawLines)) {
-                throw ValidationException::withMessages([
-                    'lines' => __(
-                        'Actual received quantities are required.',
-                    ),
-                ]);
-            }
-
-            $receivedByLine = [];
-
-            foreach (
-                array_values($rawLines) as $index => $rawLine
-            ) {
-                if (! is_array($rawLine)) {
-                    throw ValidationException::withMessages([
-                        "lines.{$index}" => __(
-                            'Invalid receipt line.',
-                        ),
-                    ]);
-                }
-
-                $lineId = (int) (
-                    $rawLine['id'] ?? 0
+            $receivedByLine =
+                $this->receivedLineSet(
+                    $attributes,
                 );
 
-                if (
-                    $lineId <= 0
-                    || array_key_exists(
-                        $lineId,
-                        $receivedByLine,
-                    )
-                ) {
-                    throw ValidationException::withMessages([
-                        "lines.{$index}.id" => __(
-                            'Each transfer line must be received exactly once.',
-                        ),
-                    ]);
-                }
-
-                $receivedByLine[$lineId] =
-                    $rawLine['received_base_quantity']
-                    ?? null;
-            }
-
-            if (
-                count($receivedByLine)
-                !== $lines->count()
-            ) {
-                throw ValidationException::withMessages([
-                    'lines' => __(
-                        'A received quantity is required for every transfer line.',
-                    ),
-                ]);
-            }
+            $this->assertCompleteReceivedLineSet(
+                $lines,
+                $receivedByLine,
+            );
 
             $receivedAt = now();
             $movementCount = 0;
             $varianceLineCount = 0;
 
             foreach ($lines as $line) {
-                if (
-                    ! array_key_exists(
-                        $line->id,
-                        $receivedByLine,
-                    )
-                ) {
-                    throw ValidationException::withMessages([
-                        'lines' => __(
-                            'A received quantity is required for every transfer line.',
-                        ),
-                    ]);
-                }
-
                 if (
                     $line->shipped_base_quantity === null
                     || $line->unit_cost === null
@@ -374,6 +320,175 @@ final class ReceiveStockTransfer
             )
         ) {
             abort(403);
+        }
+    }
+
+    /**
+     * Lock the immutable transfer lines before receiving or comparing a replay.
+     *
+     * @return EloquentCollection<int, StockTransferLine>
+     */
+    private function lockedTransferLines(
+        StockTransfer $transfer,
+    ): EloquentCollection {
+        $lines = StockTransferLine::query()
+            ->where(
+                'stock_transfer_id',
+                $transfer->id,
+            )
+            ->orderBy('inventory_item_id')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        if ($lines->isEmpty()) {
+            throw ValidationException::withMessages([
+                'lines' => __(
+                    'At least one stock-transfer line is required.',
+                ),
+            ]);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Key the submitted receipt values by unique transfer line id.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<int, mixed>
+     */
+    private function receivedLineSet(
+        array $attributes,
+    ): array {
+        $rawLines = $attributes['lines'] ?? [];
+
+        if (! is_array($rawLines)) {
+            throw ValidationException::withMessages([
+                'lines' => __(
+                    'Actual received quantities are required.',
+                ),
+            ]);
+        }
+
+        $receivedByLine = [];
+
+        foreach (
+            array_values($rawLines) as $index => $rawLine
+        ) {
+            if (! is_array($rawLine)) {
+                throw ValidationException::withMessages([
+                    "lines.{$index}" => __(
+                        'Invalid receipt line.',
+                    ),
+                ]);
+            }
+
+            $lineId = (int) (
+                $rawLine['id'] ?? 0
+            );
+
+            if (
+                $lineId <= 0
+                || array_key_exists(
+                    $lineId,
+                    $receivedByLine,
+                )
+            ) {
+                throw ValidationException::withMessages([
+                    "lines.{$index}.id" => __(
+                        'Each transfer line must be received exactly once.',
+                    ),
+                ]);
+            }
+
+            $receivedByLine[$lineId] =
+                $rawLine['received_base_quantity']
+                ?? null;
+        }
+
+        return $receivedByLine;
+    }
+
+    /**
+     * Require every persisted transfer line exactly once and reject extra ids.
+     *
+     * @param  EloquentCollection<int, StockTransferLine>  $lines
+     * @param  array<int, mixed>  $receivedByLine
+     */
+    private function assertCompleteReceivedLineSet(
+        EloquentCollection $lines,
+        array $receivedByLine,
+    ): void {
+        if (
+            count($receivedByLine)
+            !== $lines->count()
+        ) {
+            throw ValidationException::withMessages([
+                'lines' => __(
+                    'A received quantity is required for every transfer line.',
+                ),
+            ]);
+        }
+
+        foreach ($lines as $line) {
+            if (
+                ! array_key_exists(
+                    $line->id,
+                    $receivedByLine,
+                )
+            ) {
+                throw ValidationException::withMessages([
+                    'lines' => __(
+                        'A received quantity is required for every transfer line.',
+                    ),
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Accept a received-transfer retry only when it exactly replays the stored receipt snapshot.
+     *
+     * @param  EloquentCollection<int, StockTransferLine>  $lines
+     * @param  array<int, mixed>  $receivedByLine
+     */
+    private function assertReceiptReplayMatches(
+        EloquentCollection $lines,
+        array $receivedByLine,
+    ): void {
+        foreach ($lines as $line) {
+            if ($line->received_base_quantity === null) {
+                throw ValidationException::withMessages([
+                    'stock_transfer' => __(
+                        'The recorded stock-transfer receipt snapshot is incomplete.',
+                    ),
+                ]);
+            }
+
+            $receivedBaseQuantity =
+                $this->nonNegativeQuantity(
+                    $receivedByLine[$line->id],
+                    'received_base_quantity',
+                );
+
+            $persistedQuantity = BigDecimal::of(
+                $line->received_base_quantity,
+            )->toScale(
+                6,
+                RoundingMode::HalfUp,
+            );
+
+            if (
+                (string) $receivedBaseQuantity
+                !== (string) $persistedQuantity
+            ) {
+                throw ValidationException::withMessages([
+                    'lines' => __(
+                        'This stock transfer was already received with different quantities.',
+                    ),
+                ]);
+            }
         }
     }
 
