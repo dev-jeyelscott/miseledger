@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\RecipeVersionStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -88,6 +89,25 @@ class RecipeVersion extends Model
     public function components(): HasMany
     {
         return $this->hasMany(RecipeVersionComponent::class);
+    }
+
+    /**
+     * Constrain published versions whose effective period covers the given
+     * date.
+     *
+     * @param  Builder<RecipeVersion>  $query
+     * @return Builder<RecipeVersion>
+     */
+    public function scopeEffectiveOn(Builder $query, Carbon $date): Builder
+    {
+        return $query
+            ->where('status', RecipeVersionStatus::Published)
+            ->where('effective_start_date', '<=', $date)
+            ->where(
+                fn (Builder $query): Builder => $query
+                    ->whereNull('effective_end_date')
+                    ->orWhere('effective_end_date', '>=', $date),
+            );
     }
 
     /**
