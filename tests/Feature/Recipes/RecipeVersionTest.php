@@ -241,6 +241,299 @@ test('item components validate quantities, units, and yields', function () {
     expect(RecipeVersion::query()->count())->toBe(0);
 });
 
+function publishRecipeVersion(RecipeVersion $version): RecipeVersion
+{
+    $version->status = RecipeVersionStatus::Published;
+    $version->published_at = now();
+    $version->save();
+
+    return $version->fresh();
+}
+
+test('a recipe version can nest a published recipe version as a component', function () {
+    $nestedRecipe = Recipe::factory()
+        ->for($this->organization)
+        ->create();
+
+    $nestedVersion = publishRecipeVersion(
+        app(SaveRecipeVersion::class)->handle(
+            $this->organization,
+            $this->manager,
+            $nestedRecipe,
+            [
+                'yield_quantity' => '10',
+                'yield_unit_id' => $this->yieldUnit->id,
+                'notes' => null,
+                'components' => saveRecipeVersionComponentsPayload(
+                    $this->item,
+                    $this->baseUnit,
+                ),
+            ],
+        ),
+    );
+
+    $version = app(SaveRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $this->recipe,
+        [
+            'yield_quantity' => '10',
+            'yield_unit_id' => $this->yieldUnit->id,
+            'notes' => null,
+            'components' => [
+                [
+                    'recipe_version_id' => $nestedVersion->id,
+                    'quantity' => '3',
+                    'unit_of_measure_id' => $this->yieldUnit->id,
+                    'yield_percentage' => '100',
+                    'notes' => null,
+                ],
+            ],
+        ],
+    );
+
+    $component = $version->components()->sole();
+
+    expect($component->component_recipe_version_id)->toBe($nestedVersion->id)
+        ->and($component->inventory_item_id)->toBeNull()
+        ->and($component->base_quantity)->toBe('3.000000');
+});
+
+test('only published recipe versions can be nested as components', function () {
+    $nestedRecipe = Recipe::factory()
+        ->for($this->organization)
+        ->create();
+
+    $draftNestedVersion = app(SaveRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $nestedRecipe,
+        [
+            'yield_quantity' => '10',
+            'yield_unit_id' => $this->yieldUnit->id,
+            'notes' => null,
+            'components' => saveRecipeVersionComponentsPayload(
+                $this->item,
+                $this->baseUnit,
+            ),
+        ],
+    );
+
+    expect(fn () => app(SaveRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $this->recipe,
+        [
+            'yield_quantity' => '10',
+            'yield_unit_id' => $this->yieldUnit->id,
+            'notes' => null,
+            'components' => [
+                [
+                    'recipe_version_id' => $draftNestedVersion->id,
+                    'quantity' => '3',
+                    'unit_of_measure_id' => $this->yieldUnit->id,
+                    'yield_percentage' => '100',
+                    'notes' => null,
+                ],
+            ],
+        ],
+    ))->toThrow(ValidationException::class);
+});
+
+test('a nested recipe version output is required', function () {
+    expect(fn () => app(SaveRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $this->recipe,
+        [
+            'yield_quantity' => '10',
+            'yield_unit_id' => $this->yieldUnit->id,
+            'notes' => null,
+            'components' => [
+                [
+                    'recipe_version_id' => null,
+                    'inventory_item_id' => null,
+                    'quantity' => '3',
+                    'unit_of_measure_id' => $this->yieldUnit->id,
+                    'yield_percentage' => '100',
+                    'notes' => null,
+                ],
+            ],
+        ],
+    ))->toThrow(ValidationException::class);
+});
+
+test('cross-tenant recipe version references fail', function () {
+    $otherOrganization = Organization::factory()->create();
+
+    $otherYieldUnit = UnitOfMeasure::factory()->create([
+        'organization_id' => $otherOrganization->id,
+    ]);
+
+    $otherBaseUnit = UnitOfMeasure::factory()->create([
+        'organization_id' => $otherOrganization->id,
+    ]);
+
+    $otherItem = InventoryItem::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'base_unit_of_measure_id' => $otherBaseUnit->id,
+    ]);
+
+    OrganizationMembership::factory()
+        ->for($otherOrganization)
+        ->for($this->manager)
+        ->create([
+            'role' => OrganizationRole::Manager,
+        ]);
+
+    $foreignRecipe = Recipe::factory()
+        ->for($otherOrganization)
+        ->create();
+
+    $foreignVersion = publishRecipeVersion(
+        app(SaveRecipeVersion::class)->handle(
+            $otherOrganization,
+            $this->manager,
+            $foreignRecipe,
+            [
+                'yield_quantity' => '10',
+                'yield_unit_id' => $otherYieldUnit->id,
+                'notes' => null,
+                'components' => saveRecipeVersionComponentsPayload(
+                    $otherItem,
+                    $otherBaseUnit,
+                ),
+            ],
+        ),
+    );
+
+    expect(fn () => app(SaveRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $this->recipe,
+        [
+            'yield_quantity' => '10',
+            'yield_unit_id' => $this->yieldUnit->id,
+            'notes' => null,
+            'components' => [
+                [
+                    'recipe_version_id' => $foreignVersion->id,
+                    'quantity' => '3',
+                    'unit_of_measure_id' => $this->yieldUnit->id,
+                    'yield_percentage' => '100',
+                    'notes' => null,
+                ],
+            ],
+        ],
+    ))->toThrow(ValidationException::class);
+});
+
+test('direct nested recipe version cycles fail', function () {
+    $publishedVersion = publishRecipeVersion(
+        app(SaveRecipeVersion::class)->handle(
+            $this->organization,
+            $this->manager,
+            $this->recipe,
+            [
+                'yield_quantity' => '10',
+                'yield_unit_id' => $this->yieldUnit->id,
+                'notes' => null,
+                'components' => saveRecipeVersionComponentsPayload(
+                    $this->item,
+                    $this->baseUnit,
+                ),
+            ],
+        ),
+    );
+
+    expect(fn () => app(SaveRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $this->recipe,
+        [
+            'yield_quantity' => '10',
+            'yield_unit_id' => $this->yieldUnit->id,
+            'notes' => null,
+            'components' => [
+                [
+                    'recipe_version_id' => $publishedVersion->id,
+                    'quantity' => '3',
+                    'unit_of_measure_id' => $this->yieldUnit->id,
+                    'yield_percentage' => '100',
+                    'notes' => null,
+                ],
+            ],
+        ],
+    ))->toThrow(ValidationException::class);
+
+    expect(RecipeVersion::query()->count())->toBe(1);
+});
+
+test('indirect nested recipe version cycles fail', function () {
+    $middleRecipe = Recipe::factory()
+        ->for($this->organization)
+        ->create();
+
+    $rootVersion = publishRecipeVersion(
+        app(SaveRecipeVersion::class)->handle(
+            $this->organization,
+            $this->manager,
+            $this->recipe,
+            [
+                'yield_quantity' => '10',
+                'yield_unit_id' => $this->yieldUnit->id,
+                'notes' => null,
+                'components' => saveRecipeVersionComponentsPayload(
+                    $this->item,
+                    $this->baseUnit,
+                ),
+            ],
+        ),
+    );
+
+    $middleVersion = publishRecipeVersion(
+        app(SaveRecipeVersion::class)->handle(
+            $this->organization,
+            $this->manager,
+            $middleRecipe,
+            [
+                'yield_quantity' => '10',
+                'yield_unit_id' => $this->yieldUnit->id,
+                'notes' => null,
+                'components' => [
+                    [
+                        'recipe_version_id' => $rootVersion->id,
+                        'quantity' => '3',
+                        'unit_of_measure_id' => $this->yieldUnit->id,
+                        'yield_percentage' => '100',
+                        'notes' => null,
+                    ],
+                ],
+            ],
+        ),
+    );
+
+    expect(fn () => app(SaveRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $this->recipe,
+        [
+            'yield_quantity' => '12',
+            'yield_unit_id' => $this->yieldUnit->id,
+            'notes' => null,
+            'components' => [
+                [
+                    'recipe_version_id' => $middleVersion->id,
+                    'quantity' => '2',
+                    'unit_of_measure_id' => $this->yieldUnit->id,
+                    'yield_percentage' => '100',
+                    'notes' => null,
+                ],
+            ],
+        ],
+    ))->toThrow(ValidationException::class);
+});
+
 test('kitchen staff cannot create recipe versions', function () {
     $staff = User::factory()->create();
 

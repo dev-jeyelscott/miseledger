@@ -9,8 +9,10 @@ use App\Models\InventoryItem;
 use App\Models\Organization;
 use App\Models\Recipe;
 use App\Models\RecipeVersion;
+use App\Models\RecipeVersionComponent;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use App\Support\Inventory\StandardUnits;
 use Brick\Math\BigDecimal;
 use Brick\Math\Exception\NumberFormatException;
 use Brick\Math\RoundingMode;
@@ -94,6 +96,7 @@ final class SaveRecipeVersion
 
             $componentSnapshots = [];
             $seenItemIds = [];
+            $seenRecipeVersionIds = [];
 
             foreach (array_values($rawComponents) as $index => $rawComponent) {
                 if (! is_array($rawComponent)) {
@@ -104,80 +107,31 @@ final class SaveRecipeVersion
                     ]);
                 }
 
-                $inventoryItem = $this->activeInventoryItem(
-                    $organization,
-                    $rawComponent['inventory_item_id'] ?? null,
-                    $index,
-                );
+                $hasInventoryItem = ($rawComponent['inventory_item_id'] ?? null) !== null;
+                $hasRecipeVersion = ($rawComponent['recipe_version_id'] ?? null) !== null;
 
-                if (isset($seenItemIds[$inventoryItem->id])) {
+                if ($hasInventoryItem === $hasRecipeVersion) {
                     throw ValidationException::withMessages([
-                        "components.{$index}.inventory_item_id" => __(
-                            'Each inventory item may appear only once per recipe version.',
+                        "components.{$index}" => __(
+                            'Each component must reference either an inventory item or a published recipe version, but not both.',
                         ),
                     ]);
                 }
 
-                $seenItemIds[$inventoryItem->id] = true;
-
-                $unitOfMeasure = $this->activeUnitOfMeasure(
-                    $organization,
-                    $rawComponent['unit_of_measure_id'] ?? null,
-                    "components.{$index}.unit_of_measure_id",
-                );
-
-                $baseUnit = UnitOfMeasure::query()
-                    ->where('organization_id', $organization->id)
-                    ->whereKey($inventoryItem->base_unit_of_measure_id)
-                    ->where('active', true)
-                    ->first();
-
-                if ($baseUnit === null) {
-                    throw ValidationException::withMessages([
-                        "components.{$index}.inventory_item_id" => __(
-                            'The inventory item does not have an active base unit.',
-                        ),
-                    ]);
-                }
-
-                $quantity = $this->positiveQuantity(
-                    $rawComponent['quantity'] ?? null,
-                    "components.{$index}.quantity",
-                );
-
-                try {
-                    $baseQuantity = $this->convertQuantity->handle(
+                $componentSnapshots[] = $hasRecipeVersion
+                    ? $this->nestedRecipeVersionSnapshot(
                         $organization,
-                        $inventoryItem,
-                        (string) $quantity,
-                        $unitOfMeasure,
-                        $baseUnit,
+                        $lockedRecipe,
+                        $rawComponent,
+                        $index,
+                        $seenRecipeVersionIds,
+                    )
+                    : $this->inventoryItemSnapshot(
+                        $organization,
+                        $rawComponent,
+                        $index,
+                        $seenItemIds,
                     );
-                } catch (ValidationException $exception) {
-                    throw ValidationException::withMessages([
-                        "components.{$index}.unit_of_measure_id" => $this->firstValidationMessage(
-                            $exception,
-                        ),
-                    ]);
-                }
-
-                $yieldPercentage = $this->yieldPercentage(
-                    $rawComponent['yield_percentage'] ?? null,
-                    "components.{$index}.yield_percentage",
-                );
-
-                $componentSnapshots[] = [
-                    'inventory_item_id' => $inventoryItem->id,
-                    'quantity' => (string) $quantity,
-                    'unit_of_measure_id' => $unitOfMeasure->id,
-                    'base_quantity' => BigDecimal::of($baseQuantity)
-                        ->toScale(6, RoundingMode::HalfUp)
-                        ->__toString(),
-                    'yield_percentage' => (string) $yieldPercentage,
-                    'notes' => $this->nullableString(
-                        $rawComponent['notes'] ?? null,
-                    ),
-                ];
             }
 
             $values = [
@@ -214,6 +168,322 @@ final class SaveRecipeVersion
 
             return $version->refresh();
         }, 3);
+    }
+
+    /**
+     * Build a component snapshot consuming a tenant-owned inventory item.
+     *
+     * @param  array<string, mixed>  $rawComponent
+     * @param  array<int, true>  $seenItemIds
+     * @return array<string, mixed>
+     */
+    private function inventoryItemSnapshot(
+        Organization $organization,
+        array $rawComponent,
+        int $index,
+        array &$seenItemIds,
+    ): array {
+        $inventoryItem = $this->activeInventoryItem(
+            $organization,
+            $rawComponent['inventory_item_id'] ?? null,
+            $index,
+        );
+
+        if (isset($seenItemIds[$inventoryItem->id])) {
+            throw ValidationException::withMessages([
+                "components.{$index}.inventory_item_id" => __(
+                    'Each inventory item may appear only once per recipe version.',
+                ),
+            ]);
+        }
+
+        $seenItemIds[$inventoryItem->id] = true;
+
+        $unitOfMeasure = $this->activeUnitOfMeasure(
+            $organization,
+            $rawComponent['unit_of_measure_id'] ?? null,
+            "components.{$index}.unit_of_measure_id",
+        );
+
+        $baseUnit = UnitOfMeasure::query()
+            ->where('organization_id', $organization->id)
+            ->whereKey($inventoryItem->base_unit_of_measure_id)
+            ->where('active', true)
+            ->first();
+
+        if ($baseUnit === null) {
+            throw ValidationException::withMessages([
+                "components.{$index}.inventory_item_id" => __(
+                    'The inventory item does not have an active base unit.',
+                ),
+            ]);
+        }
+
+        $quantity = $this->positiveQuantity(
+            $rawComponent['quantity'] ?? null,
+            "components.{$index}.quantity",
+        );
+
+        try {
+            $baseQuantity = $this->convertQuantity->handle(
+                $organization,
+                $inventoryItem,
+                (string) $quantity,
+                $unitOfMeasure,
+                $baseUnit,
+            );
+        } catch (ValidationException $exception) {
+            throw ValidationException::withMessages([
+                "components.{$index}.unit_of_measure_id" => $this->firstValidationMessage(
+                    $exception,
+                ),
+            ]);
+        }
+
+        $yieldPercentage = $this->yieldPercentage(
+            $rawComponent['yield_percentage'] ?? null,
+            "components.{$index}.yield_percentage",
+        );
+
+        return [
+            'inventory_item_id' => $inventoryItem->id,
+            'component_recipe_version_id' => null,
+            'quantity' => (string) $quantity,
+            'unit_of_measure_id' => $unitOfMeasure->id,
+            'base_quantity' => BigDecimal::of($baseQuantity)
+                ->toScale(6, RoundingMode::HalfUp)
+                ->__toString(),
+            'yield_percentage' => (string) $yieldPercentage,
+            'notes' => $this->nullableString(
+                $rawComponent['notes'] ?? null,
+            ),
+        ];
+    }
+
+    /**
+     * Build a component snapshot consuming the published output of another
+     * recipe version, guarding against tenant leaks and reference cycles.
+     *
+     * @param  array<string, mixed>  $rawComponent
+     * @param  array<int, true>  $seenRecipeVersionIds
+     * @return array<string, mixed>
+     */
+    private function nestedRecipeVersionSnapshot(
+        Organization $organization,
+        Recipe $recipe,
+        array $rawComponent,
+        int $index,
+        array &$seenRecipeVersionIds,
+    ): array {
+        $nestedVersion = $this->publishedNestedRecipeVersion(
+            $organization,
+            $rawComponent['recipe_version_id'] ?? null,
+            $index,
+        );
+
+        if (isset($seenRecipeVersionIds[$nestedVersion->id])) {
+            throw ValidationException::withMessages([
+                "components.{$index}.recipe_version_id" => __(
+                    'Each recipe version may appear only once per recipe version.',
+                ),
+            ]);
+        }
+
+        $seenRecipeVersionIds[$nestedVersion->id] = true;
+
+        $this->assertNoCycle($recipe, $nestedVersion, $index);
+
+        $unitOfMeasure = $this->activeUnitOfMeasure(
+            $organization,
+            $rawComponent['unit_of_measure_id'] ?? null,
+            "components.{$index}.unit_of_measure_id",
+        );
+
+        $quantity = $this->positiveQuantity(
+            $rawComponent['quantity'] ?? null,
+            "components.{$index}.quantity",
+        );
+
+        $baseQuantity = $this->convertToNestedOutput(
+            $quantity,
+            $unitOfMeasure,
+            $nestedVersion,
+            $index,
+        );
+
+        $yieldPercentage = $this->yieldPercentage(
+            $rawComponent['yield_percentage'] ?? null,
+            "components.{$index}.yield_percentage",
+        );
+
+        return [
+            'inventory_item_id' => null,
+            'component_recipe_version_id' => $nestedVersion->id,
+            'quantity' => (string) $quantity,
+            'unit_of_measure_id' => $unitOfMeasure->id,
+            'base_quantity' => $baseQuantity,
+            'yield_percentage' => (string) $yieldPercentage,
+            'notes' => $this->nullableString(
+                $rawComponent['notes'] ?? null,
+            ),
+        ];
+    }
+
+    /**
+     * Resolve a published, tenant-owned recipe version to nest as a
+     * component output.
+     */
+    private function publishedNestedRecipeVersion(
+        Organization $organization,
+        mixed $value,
+        int $index,
+    ): RecipeVersion {
+        if ($value === null || ! is_numeric($value)) {
+            throw ValidationException::withMessages([
+                "components.{$index}.recipe_version_id" => __(
+                    'A published recipe version output is required.',
+                ),
+            ]);
+        }
+
+        $nestedVersion = RecipeVersion::query()
+            ->whereKey((int) $value)
+            ->whereHas(
+                'recipe',
+                fn ($query) => $query->where(
+                    'organization_id',
+                    $organization->id,
+                ),
+            )
+            ->first();
+
+        if ($nestedVersion === null) {
+            throw ValidationException::withMessages([
+                "components.{$index}.recipe_version_id" => __(
+                    'Select a recipe version belonging to the active organization.',
+                ),
+            ]);
+        }
+
+        if ($nestedVersion->status !== RecipeVersionStatus::Published) {
+            throw ValidationException::withMessages([
+                "components.{$index}.recipe_version_id" => __(
+                    'Only published recipe versions can be nested as components.',
+                ),
+            ]);
+        }
+
+        return $nestedVersion;
+    }
+
+    /**
+     * Reject direct and indirect self-references through the nested
+     * component graph.
+     */
+    private function assertNoCycle(
+        Recipe $recipe,
+        RecipeVersion $nestedVersion,
+        int $index,
+    ): void {
+        $visited = [];
+
+        if (in_array($recipe->id, $this->reachableRecipeIds($nestedVersion, $visited), true)) {
+            throw ValidationException::withMessages([
+                "components.{$index}.recipe_version_id" => __(
+                    'This recipe version cannot be nested because it would create a reference cycle.',
+                ),
+            ]);
+        }
+    }
+
+    /**
+     * Walk the nested component graph, collecting every recipe reachable
+     * from the given published recipe version.
+     *
+     * @param  array<int, true>  $visited
+     * @return list<int>
+     */
+    private function reachableRecipeIds(
+        RecipeVersion $version,
+        array &$visited,
+    ): array {
+        if (isset($visited[$version->id])) {
+            return [];
+        }
+
+        $visited[$version->id] = true;
+
+        $recipeIds = [$version->recipe_id];
+
+        $nestedComponents = RecipeVersionComponent::query()
+            ->where('recipe_version_id', $version->id)
+            ->whereNotNull('component_recipe_version_id')
+            ->with('componentRecipeVersion')
+            ->get();
+
+        foreach ($nestedComponents as $nestedComponent) {
+            $child = $nestedComponent->componentRecipeVersion;
+
+            if ($child !== null) {
+                $recipeIds = [
+                    ...$recipeIds,
+                    ...$this->reachableRecipeIds($child, $visited),
+                ];
+            }
+        }
+
+        return $recipeIds;
+    }
+
+    /**
+     * Convert an entered quantity into the nested recipe version's
+     * published output unit using dimension-based standard conversion.
+     */
+    private function convertToNestedOutput(
+        BigDecimal $quantity,
+        UnitOfMeasure $unitOfMeasure,
+        RecipeVersion $nestedVersion,
+        int $index,
+    ): string {
+        if ($unitOfMeasure->id === $nestedVersion->yield_unit_id) {
+            return $quantity->toScale(6, RoundingMode::HalfUp)->__toString();
+        }
+
+        $outputUnit = $nestedVersion->yieldUnit;
+
+        if (
+            $outputUnit === null
+            || $outputUnit->dimension !== $unitOfMeasure->dimension
+        ) {
+            throw ValidationException::withMessages([
+                "components.{$index}.unit_of_measure_id" => __(
+                    'The component unit must match the dimension of the nested recipe version output.',
+                ),
+            ]);
+        }
+
+        $fromFactor = StandardUnits::canonicalFactor(
+            $unitOfMeasure->symbol,
+            $unitOfMeasure->dimension,
+        );
+
+        $toFactor = StandardUnits::canonicalFactor(
+            $outputUnit->symbol,
+            $outputUnit->dimension,
+        );
+
+        if ($fromFactor === null || $toFactor === null) {
+            throw ValidationException::withMessages([
+                "components.{$index}.unit_of_measure_id" => __(
+                    'No supported unit conversion exists for the nested recipe version output.',
+                ),
+            ]);
+        }
+
+        return $quantity
+            ->multipliedBy(BigDecimal::of($fromFactor))
+            ->dividedBy(BigDecimal::of($toFactor), 6, RoundingMode::HalfUp)
+            ->__toString();
     }
 
     /**

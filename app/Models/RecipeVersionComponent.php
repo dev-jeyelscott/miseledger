@@ -10,7 +10,8 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $recipe_version_id
- * @property int $inventory_item_id
+ * @property int|null $component_recipe_version_id
+ * @property int|null $inventory_item_id
  * @property string $quantity
  * @property int $unit_of_measure_id
  * @property string $base_quantity
@@ -21,6 +22,7 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'recipe_version_id',
+    'component_recipe_version_id',
     'inventory_item_id',
     'quantity',
     'unit_of_measure_id',
@@ -38,6 +40,16 @@ class RecipeVersionComponent extends Model
     public function recipeVersion(): BelongsTo
     {
         return $this->belongsTo(RecipeVersion::class);
+    }
+
+    /**
+     * Get the published nested recipe version consumed by this component.
+     *
+     * @return BelongsTo<RecipeVersion, $this>
+     */
+    public function componentRecipeVersion(): BelongsTo
+    {
+        return $this->belongsTo(RecipeVersion::class, 'component_recipe_version_id');
     }
 
     /**
