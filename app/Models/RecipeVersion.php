@@ -20,6 +20,8 @@ use Illuminate\Support\Carbon;
  * @property int|null $created_by
  * @property int|null $published_by
  * @property Carbon|null $published_at
+ * @property Carbon|null $effective_start_date
+ * @property Carbon|null $effective_end_date
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -33,6 +35,8 @@ use Illuminate\Support\Carbon;
     'created_by',
     'published_by',
     'published_at',
+    'effective_start_date',
+    'effective_end_date',
 ])]
 class RecipeVersion extends Model
 {
@@ -97,6 +101,8 @@ class RecipeVersion extends Model
             'status' => RecipeVersionStatus::class,
             'yield_quantity' => 'decimal:6',
             'published_at' => 'datetime',
+            'effective_start_date' => 'date',
+            'effective_end_date' => 'date',
         ];
     }
 }

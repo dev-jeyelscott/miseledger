@@ -9,10 +9,10 @@ use App\Models\InventoryItem;
 use App\Models\Organization;
 use App\Models\Recipe;
 use App\Models\RecipeVersion;
-use App\Models\RecipeVersionComponent;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
 use App\Support\Inventory\StandardUnits;
+use App\Support\Recipes\RecipeVersionGraph;
 use Brick\Math\BigDecimal;
 use Brick\Math\Exception\NumberFormatException;
 use Brick\Math\RoundingMode;
@@ -387,52 +387,13 @@ final class SaveRecipeVersion
     ): void {
         $visited = [];
 
-        if (in_array($recipe->id, $this->reachableRecipeIds($nestedVersion, $visited), true)) {
+        if (in_array($recipe->id, RecipeVersionGraph::reachableRecipeIds($nestedVersion, $visited), true)) {
             throw ValidationException::withMessages([
                 "components.{$index}.recipe_version_id" => __(
                     'This recipe version cannot be nested because it would create a reference cycle.',
                 ),
             ]);
         }
-    }
-
-    /**
-     * Walk the nested component graph, collecting every recipe reachable
-     * from the given published recipe version.
-     *
-     * @param  array<int, true>  $visited
-     * @return list<int>
-     */
-    private function reachableRecipeIds(
-        RecipeVersion $version,
-        array &$visited,
-    ): array {
-        if (isset($visited[$version->id])) {
-            return [];
-        }
-
-        $visited[$version->id] = true;
-
-        $recipeIds = [$version->recipe_id];
-
-        $nestedComponents = RecipeVersionComponent::query()
-            ->where('recipe_version_id', $version->id)
-            ->whereNotNull('component_recipe_version_id')
-            ->with('componentRecipeVersion')
-            ->get();
-
-        foreach ($nestedComponents as $nestedComponent) {
-            $child = $nestedComponent->componentRecipeVersion;
-
-            if ($child !== null) {
-                $recipeIds = [
-                    ...$recipeIds,
-                    ...$this->reachableRecipeIds($child, $visited),
-                ];
-            }
-        }
-
-        return $recipeIds;
     }
 
     /**

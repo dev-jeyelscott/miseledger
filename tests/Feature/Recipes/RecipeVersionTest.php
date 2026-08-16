@@ -1,8 +1,10 @@
 <?php
 
+use App\Actions\Recipes\PublishRecipeVersion;
 use App\Actions\Recipes\SaveRecipeVersion;
 use App\Enums\OrganizationRole;
 use App\Enums\RecipeVersionStatus;
+use App\Models\AuditLog;
 use App\Models\InventoryItem;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
@@ -10,6 +12,7 @@ use App\Models\Recipe;
 use App\Models\RecipeVersion;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -562,4 +565,278 @@ test('kitchen staff cannot create recipe versions', function () {
     ))->toThrow(HttpException::class);
 
     expect(RecipeVersion::query()->count())->toBe(0);
+});
+
+function draftRecipeVersionForTest(
+    Organization $organization,
+    User $actor,
+    Recipe $recipe,
+    InventoryItem $item,
+    UnitOfMeasure $baseUnit,
+    UnitOfMeasure $yieldUnit,
+): RecipeVersion {
+    return app(SaveRecipeVersion::class)->handle(
+        $organization,
+        $actor,
+        $recipe,
+        [
+            'yield_quantity' => '10',
+            'yield_unit_id' => $yieldUnit->id,
+            'notes' => null,
+            'components' => saveRecipeVersionComponentsPayload(
+                $item,
+                $baseUnit,
+            ),
+        ],
+    );
+}
+
+test('a manager can publish a valid draft recipe version', function () {
+    $version = draftRecipeVersionForTest(
+        $this->organization,
+        $this->manager,
+        $this->recipe,
+        $this->item,
+        $this->baseUnit,
+        $this->yieldUnit,
+    );
+
+    $published = app(PublishRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $version,
+        [
+            'effective_start_date' => '2026-09-01',
+            'effective_end_date' => null,
+        ],
+    );
+
+    expect($published->status)->toBe(RecipeVersionStatus::Published)
+        ->and($published->published_by)->toBe($this->manager->id)
+        ->and($published->published_at)->not->toBeNull()
+        ->and($published->effective_start_date->toDateString())->toBe('2026-09-01')
+        ->and($published->effective_end_date)->toBeNull();
+
+    $entry = AuditLog::query()
+        ->where('organization_id', $this->organization->id)
+        ->where('entity_type', 'recipe_version')
+        ->where('entity_id', $published->id)
+        ->where('action', 'recipe_version.published')
+        ->sole();
+
+    expect($entry->actor_id)->toBe($this->manager->id);
+});
+
+test('an already published recipe version cannot be published again', function () {
+    $version = publishRecipeVersion(
+        draftRecipeVersionForTest(
+            $this->organization,
+            $this->manager,
+            $this->recipe,
+            $this->item,
+            $this->baseUnit,
+            $this->yieldUnit,
+        ),
+    );
+
+    expect(fn () => app(PublishRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $version,
+        [
+            'effective_start_date' => '2026-09-01',
+            'effective_end_date' => null,
+        ],
+    ))->toThrow(ValidationException::class);
+});
+
+test('published recipe versions are immutable once published', function () {
+    $version = app(PublishRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        draftRecipeVersionForTest(
+            $this->organization,
+            $this->manager,
+            $this->recipe,
+            $this->item,
+            $this->baseUnit,
+            $this->yieldUnit,
+        ),
+        [
+            'effective_start_date' => '2026-09-01',
+            'effective_end_date' => null,
+        ],
+    );
+
+    expect(fn () => app(SaveRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $this->recipe,
+        [
+            'yield_quantity' => '99',
+            'yield_unit_id' => $this->yieldUnit->id,
+            'notes' => null,
+            'components' => saveRecipeVersionComponentsPayload(
+                $this->item,
+                $this->baseUnit,
+            ),
+        ],
+        $version,
+    ))->toThrow(ValidationException::class);
+
+    expect($version->fresh()->yield_quantity)->toBe('10.000000');
+});
+
+test('overlapping effective periods on the same recipe fail to publish', function () {
+    publishRecipeVersion(
+        draftRecipeVersionForTest(
+            $this->organization,
+            $this->manager,
+            $this->recipe,
+            $this->item,
+            $this->baseUnit,
+            $this->yieldUnit,
+        ),
+    )->forceFill([
+        'effective_start_date' => '2026-01-01',
+        'effective_end_date' => '2026-12-31',
+    ])->save();
+
+    $secondVersion = draftRecipeVersionForTest(
+        $this->organization,
+        $this->manager,
+        $this->recipe,
+        $this->item,
+        $this->baseUnit,
+        $this->yieldUnit,
+    );
+
+    expect(fn () => app(PublishRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $secondVersion,
+        [
+            'effective_start_date' => '2026-06-01',
+            'effective_end_date' => null,
+        ],
+    ))->toThrow(ValidationException::class);
+
+    expect($secondVersion->fresh()->status)->toBe(RecipeVersionStatus::Draft);
+});
+
+test('non-overlapping effective periods on the same recipe can both publish', function () {
+    publishRecipeVersion(
+        draftRecipeVersionForTest(
+            $this->organization,
+            $this->manager,
+            $this->recipe,
+            $this->item,
+            $this->baseUnit,
+            $this->yieldUnit,
+        ),
+    )->forceFill([
+        'effective_start_date' => '2026-01-01',
+        'effective_end_date' => '2026-06-30',
+    ])->save();
+
+    $secondVersion = draftRecipeVersionForTest(
+        $this->organization,
+        $this->manager,
+        $this->recipe,
+        $this->item,
+        $this->baseUnit,
+        $this->yieldUnit,
+    );
+
+    $published = app(PublishRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $secondVersion,
+        [
+            'effective_start_date' => '2026-07-01',
+            'effective_end_date' => null,
+        ],
+    );
+
+    expect($published->status)->toBe(RecipeVersionStatus::Published);
+});
+
+test('publishing fails when a component item has become inactive', function () {
+    $version = draftRecipeVersionForTest(
+        $this->organization,
+        $this->manager,
+        $this->recipe,
+        $this->item,
+        $this->baseUnit,
+        $this->yieldUnit,
+    );
+
+    $this->item->update(['active' => false]);
+
+    expect(fn () => app(PublishRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $version,
+        [
+            'effective_start_date' => '2026-09-01',
+            'effective_end_date' => null,
+        ],
+    ))->toThrow(ValidationException::class);
+
+    expect($version->fresh()->status)->toBe(RecipeVersionStatus::Draft);
+});
+
+test('publishing requires a valid effective start date', function () {
+    $version = draftRecipeVersionForTest(
+        $this->organization,
+        $this->manager,
+        $this->recipe,
+        $this->item,
+        $this->baseUnit,
+        $this->yieldUnit,
+    );
+
+    expect(fn () => app(PublishRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $version,
+        [
+            'effective_start_date' => null,
+            'effective_end_date' => null,
+        ],
+    ))->toThrow(ValidationException::class);
+});
+
+test('kitchen staff cannot publish recipe versions', function () {
+    $staff = User::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($this->organization)
+        ->for($staff)
+        ->create([
+            'role' => OrganizationRole::KitchenStaff,
+        ]);
+
+    $version = draftRecipeVersionForTest(
+        $this->organization,
+        $this->manager,
+        $this->recipe,
+        $this->item,
+        $this->baseUnit,
+        $this->yieldUnit,
+    );
+
+    $this->withoutExceptionHandling();
+
+    expect(fn () => app(PublishRecipeVersion::class)->handle(
+        $this->organization,
+        $staff,
+        $version,
+        [
+            'effective_start_date' => '2026-09-01',
+            'effective_end_date' => null,
+        ],
+    ))->toThrow(HttpException::class);
+
+    expect($version->fresh()->status)->toBe(RecipeVersionStatus::Draft);
 });
