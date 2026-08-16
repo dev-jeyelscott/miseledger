@@ -5,13 +5,11 @@ namespace App\Http\Requests\Inventory;
 use App\Enums\OrganizationPermission;
 use App\Models\InventoryItem;
 use App\Models\Organization;
-use App\Models\UnitOfMeasure;
 use App\Models\User;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Validator;
 
 class StoreInventoryItemUnitRequest extends FormRequest
 {
@@ -87,48 +85,6 @@ class StoreInventoryItemUnitRequest extends FormRequest
                 'boolean',
             ],
         ];
-    }
-
-    /**
-     * Require alternate units to share the base unit's physical dimension.
-     *
-     * @return array<int, callable(Validator): void>
-     */
-    public function after(): array
-    {
-        return [function (Validator $validator): void {
-            if ($validator->errors()->has('unit_of_measure_id')) {
-                return;
-            }
-
-            $inventoryItem = $this->inventoryItem();
-            $unitOfMeasureId = $this->integer('unit_of_measure_id');
-
-            if ($inventoryItem === null || $unitOfMeasureId === 0) {
-                return;
-            }
-
-            $baseDimension = UnitOfMeasure::query()
-                ->where('organization_id', $inventoryItem->organization_id)
-                ->whereKey($inventoryItem->base_unit_of_measure_id)
-                ->value('dimension');
-
-            $alternateDimension = UnitOfMeasure::query()
-                ->where('organization_id', $inventoryItem->organization_id)
-                ->whereKey($unitOfMeasureId)
-                ->value('dimension');
-
-            if (
-                $baseDimension !== null
-                && $alternateDimension !== null
-                && $baseDimension !== $alternateDimension
-            ) {
-                $validator->errors()->add(
-                    'unit_of_measure_id',
-                    __('The alternate unit must have the same dimension as the base unit.'),
-                );
-            }
-        }];
     }
 
     /**

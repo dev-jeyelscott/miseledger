@@ -189,44 +189,54 @@ test('inverse item conversion converts base quantity back to alternate unit', fu
     )->toBe('2.000000');
 });
 
-test('cross-dimension item conversion fails', function () {
+test('configured cross-dimension item conversion resolves directly and inversely', function () {
     $organization = Organization::factory()->create();
 
-    $kilogram = UnitOfMeasure::factory()->create([
+    $milliliter = UnitOfMeasure::factory()->create([
         'organization_id' => $organization->id,
-        'name' => 'Kilogram',
-        'symbol' => 'kg',
-        'dimension' => 'weight',
+        'name' => 'Milliliter',
+        'symbol' => 'ml',
+        'dimension' => 'volume',
     ]);
 
-    $sack = UnitOfMeasure::factory()->create([
+    $bottle = UnitOfMeasure::factory()->create([
         'organization_id' => $organization->id,
-        'name' => 'Sack',
-        'symbol' => 'sack',
+        'name' => 'Bottle',
+        'symbol' => 'bottle',
         'dimension' => 'count',
     ]);
 
     $item = InventoryItem::factory()->create([
         'organization_id' => $organization->id,
-        'base_unit_of_measure_id' => $kilogram->id,
+        'base_unit_of_measure_id' => $milliliter->id,
     ]);
 
     InventoryItemUnit::factory()->create([
         'inventory_item_id' => $item->id,
-        'unit_of_measure_id' => $sack->id,
-        'quantity_in_base_unit' => '25.000000',
+        'unit_of_measure_id' => $bottle->id,
+        'quantity_in_base_unit' => '1000.000000',
         'active' => true,
     ]);
 
     expect(
-        fn () => app(ConvertQuantity::class)->handle(
+        app(ConvertQuantity::class)->handle(
             $organization,
             $item,
-            '2.000000',
-            $sack,
-            $kilogram,
+            '2.500000',
+            $bottle,
+            $milliliter,
         ),
-    )->toThrow(ValidationException::class);
+    )->toBe('2500.000000');
+
+    expect(
+        app(ConvertQuantity::class)->handle(
+            $organization,
+            $item,
+            '1500.000000',
+            $milliliter,
+            $bottle,
+        ),
+    )->toBe('1.500000');
 });
 
 test('unsupported count conversion fails explicitly', function () {
@@ -262,7 +272,7 @@ test('unsupported count conversion fails explicitly', function () {
     )->toThrow(ValidationException::class);
 });
 
-test('dimension mismatch fails without explicit item conversion', function () {
+test('unconfigured global cross-dimension conversion fails explicitly', function () {
     $organization = Organization::factory()->create();
 
     $gram = UnitOfMeasure::factory()->create([

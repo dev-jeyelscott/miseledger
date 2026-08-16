@@ -310,7 +310,7 @@ test('the base unit cannot also be configured as an alternate unit', function ()
     $this->assertDatabaseCount('inventory_item_units', 0);
 });
 
-test('an alternate unit must share the base unit dimension', function () {
+test('an explicit alternate unit may map across dimensions to the item base unit', function () {
     $user = User::factory()->create();
     $organization = Organization::factory()->create();
 
@@ -321,22 +321,30 @@ test('an alternate unit must share the base unit dimension', function () {
             'role' => OrganizationRole::Owner,
         ]);
 
-    $gram = UnitOfMeasure::factory()
+    $milliliter = UnitOfMeasure::factory()
         ->for($organization)
         ->create([
-            'dimension' => 'weight',
+            'name' => 'Milliliter',
+            'symbol' => 'ml',
+            'dimension' => 'volume',
+            'active' => true,
         ]);
 
-    $case = UnitOfMeasure::factory()
+    $bottle = UnitOfMeasure::factory()
         ->for($organization)
         ->create([
+            'name' => 'Bottle',
+            'symbol' => 'bottle',
             'dimension' => 'count',
+            'active' => true,
         ]);
 
     $item = InventoryItem::factory()
         ->for($organization)
         ->create([
-            'base_unit_of_measure_id' => $gram->id,
+            'base_unit_of_measure_id' => $milliliter->id,
+            'name' => 'Cooking Oil',
+            'sku' => 'OIL-001',
         ]);
 
     $this->withSession([
@@ -346,14 +354,25 @@ test('an alternate unit must share the base unit dimension', function () {
         ->post(
             route('inventory.items.units.store', $item),
             [
-                'unit_of_measure_id' => $case->id,
-                'quantity_in_base_unit' => '25.000000',
+                'unit_of_measure_id' => $bottle->id,
+                'quantity_in_base_unit' => '1000.000000',
                 'active' => true,
             ],
         )
-        ->assertSessionHasErrors('unit_of_measure_id');
+        ->assertRedirect(
+            route('inventory.items.edit', $item),
+        );
 
-    $this->assertDatabaseCount('inventory_item_units', 0);
+    $conversion = InventoryItemUnit::query()->sole();
+
+    expect($conversion->inventory_item_id)
+        ->toBe($item->id)
+        ->and($conversion->unit_of_measure_id)
+        ->toBe($bottle->id)
+        ->and($conversion->quantity_in_base_unit)
+        ->toBe('1000.000000')
+        ->and($conversion->active)
+        ->toBeTrue();
 });
 
 test('an item base unit cannot change after alternate units exist', function () {
