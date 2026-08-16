@@ -11,6 +11,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
+ * @property int $organization_id
  * @property int $stock_transfer_id
  * @property int $inventory_item_id
  * @property string $requested_quantity
@@ -24,6 +25,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  */
 #[Fillable([
+    'organization_id',
     'stock_transfer_id',
     'inventory_item_id',
     'requested_quantity',

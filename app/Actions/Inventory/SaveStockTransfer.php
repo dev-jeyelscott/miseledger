@@ -213,6 +213,7 @@ final class SaveStockTransfer
                 }
 
                 $lineSnapshots[] = [
+                    'organization_id' => $organization->id,
                     'inventory_item_id' => $inventoryItem->id,
                     'requested_quantity' => (string) $requestedQuantity,
                     'unit_id' => $unit->id,

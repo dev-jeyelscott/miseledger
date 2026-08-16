@@ -82,8 +82,8 @@ export default function InventoryAdjustmentCreate({
                         <p className="font-medium">Privileged correction</p>
 
                         <p className="mt-1 text-muted-foreground">
-                            Every adjustment requires a documented reason and
-                            is recorded on the immutable stock ledger. An
+                            Every adjustment requires a documented reason and is
+                            recorded on the immutable stock ledger. An
                             adjustment that would take stock negative is
                             rejected.
                         </p>
