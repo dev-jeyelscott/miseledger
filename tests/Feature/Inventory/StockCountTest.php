@@ -842,3 +842,249 @@ test(
             );
     },
 );
+
+test(
+    'variance report location filter excludes counts from other locations in the same tenant',
+    function () {
+        recordStockCountOpeningBalanceForTest(
+            $this->organization,
+            $this->location,
+            $this->storageLocation,
+            $this->inventoryItem,
+            $this->gram,
+        );
+
+        $count = createSubmittedStockCountForTest(
+            $this->organization,
+            $this->actor,
+            $this->location,
+            $this->storageLocation,
+            $this->inventoryItem,
+            $this->kilogram,
+            '1.2',
+            'COUNT-LOCATION-FILTER',
+        );
+
+        app(FinalizeStockCount::class)->handle(
+            $this->organization,
+            $this->actor,
+            $count,
+        );
+
+        $otherLocation = Location::factory()->create([
+            'organization_id' => $this->organization->id,
+            'active' => true,
+        ]);
+
+        $otherStorage =
+            createStockCountStorageLocationForTest(
+                $this->organization,
+                $otherLocation,
+                'OTHER-LOCATION-FILTER',
+            );
+
+        $otherItem = InventoryItem::factory()->create([
+            'organization_id' => $this->organization->id,
+            'base_unit_of_measure_id' => $this->gram->id,
+            'active' => true,
+        ]);
+
+        recordStockCountOpeningBalanceForTest(
+            $this->organization,
+            $otherLocation,
+            $otherStorage,
+            $otherItem,
+            $this->gram,
+        );
+
+        $otherCount = createSubmittedStockCountForTest(
+            $this->organization,
+            $this->actor,
+            $otherLocation,
+            $otherStorage,
+            $otherItem,
+            $this->kilogram,
+            '1.3',
+            'COUNT-OTHER-LOCATION',
+        );
+
+        app(FinalizeStockCount::class)->handle(
+            $this->organization,
+            $this->actor,
+            $otherCount,
+        );
+
+        $url = route(
+            'stock-counts.variance',
+            [
+                'location_id' => $this->location->id,
+            ],
+        );
+
+        $this
+            ->actingAs($this->manager)
+            ->withSession([
+                'active_organization_id' => $this->organization->id,
+            ])
+            ->get($url)
+            ->assertOk()
+            ->assertInertia(
+                fn (Assert $page): Assert => $page
+                    ->component('stock-counts/variance')
+                    ->has('rows', 1)
+                    ->where(
+                        'rows.0.countNumber',
+                        'COUNT-LOCATION-FILTER',
+                    )
+                    ->where(
+                        'rows.0.locationName',
+                        $this->location->name,
+                    ),
+            );
+    },
+);
+
+test(
+    'variance report date filter excludes counts outside the requested range',
+    function () {
+        recordStockCountOpeningBalanceForTest(
+            $this->organization,
+            $this->location,
+            $this->storageLocation,
+            $this->inventoryItem,
+            $this->gram,
+        );
+
+        $count = createSubmittedStockCountForTest(
+            $this->organization,
+            $this->actor,
+            $this->location,
+            $this->storageLocation,
+            $this->inventoryItem,
+            $this->kilogram,
+            '1.2',
+            'COUNT-DATE-FILTER',
+        );
+
+        $count->forceFill([
+            'counted_at' => now()->subDays(10),
+        ])->save();
+
+        app(FinalizeStockCount::class)->handle(
+            $this->organization,
+            $this->actor,
+            $count,
+        );
+
+        $todayInTenantTimezone = now()
+            ->setTimezone($this->organization->timezone)
+            ->toDateString();
+
+        $url = route(
+            'stock-counts.variance',
+            [
+                'from' => $todayInTenantTimezone,
+                'to' => $todayInTenantTimezone,
+            ],
+        );
+
+        $this
+            ->actingAs($this->manager)
+            ->withSession([
+                'active_organization_id' => $this->organization->id,
+            ])
+            ->get($url)
+            ->assertOk()
+            ->assertInertia(
+                fn (Assert $page): Assert => $page
+                    ->component('stock-counts/variance')
+                    ->has('rows', 0),
+            );
+    },
+);
+
+test(
+    'variance report preserves the finalized cost snapshot even after later balance activity',
+    function () {
+        recordStockCountOpeningBalanceForTest(
+            $this->organization,
+            $this->location,
+            $this->storageLocation,
+            $this->inventoryItem,
+            $this->gram,
+            '1000',
+            '0.25',
+        );
+
+        $count = createSubmittedStockCountForTest(
+            $this->organization,
+            $this->actor,
+            $this->location,
+            $this->storageLocation,
+            $this->inventoryItem,
+            $this->kilogram,
+            '1.2',
+            'COUNT-SNAPSHOT',
+        );
+
+        app(FinalizeStockCount::class)->handle(
+            $this->organization,
+            $this->actor,
+            $count,
+        );
+
+        $line = $count->lines()->sole();
+
+        expect($line->variance_unit_cost)
+            ->toBe('0.2500')
+            ->and($line->variance_total_cost)
+            ->toBe('50.0000');
+
+        app(RecordStockMovement::class)->handle(
+            organization: $this->organization,
+            location: $this->location,
+            storageLocation: $this->storageLocation,
+            inventoryItem: $this->inventoryItem,
+            type: StockMovementType::OpeningBalance,
+            baseQuantity: '500',
+            baseUnitOfMeasure: $this->gram,
+            referenceType: 'opening_balance',
+            referenceId: $this->inventoryItem->id + 1000,
+            occurredAt: now(),
+            idempotencyKey: 'stock-count-test:post-finalize-balance-change',
+            inboundUnitCost: '9.0000',
+        );
+
+        $url = route(
+            'stock-counts.variance',
+            [
+                'location_id' => $this->location->id,
+            ],
+        );
+
+        $this
+            ->actingAs($this->manager)
+            ->withSession([
+                'active_organization_id' => $this->organization->id,
+            ])
+            ->get($url)
+            ->assertOk()
+            ->assertInertia(
+                fn (Assert $page): Assert => $page
+                    ->component('stock-counts/variance')
+                    ->has('rows', 1)
+                    ->where(
+                        'rows.0.countId',
+                        $count->id,
+                    )
+                    ->where(
+                        'rows.0.varianceUnitCost',
+                        '0.2500',
+                    )
+                    ->where(
+                        'rows.0.varianceTotalCost',
+                        '50.0000',
+                    ),
+            );
+    },
+);
