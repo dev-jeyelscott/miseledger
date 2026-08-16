@@ -530,6 +530,107 @@ test(
 );
 
 test(
+    'a corrupted line during finalization rolls back the entire transaction',
+    function () {
+        $secondInventoryItem = InventoryItem::factory()->create([
+            'organization_id' => $this->organization->id,
+            'base_unit_of_measure_id' => $this->baseUnit->id,
+            'name' => 'Second Receiving Test Item',
+            'sku' => 'RECEIVE-TEST-2',
+            'active' => true,
+        ]);
+
+        $secondPurchaseOrderLine = PurchaseOrderLine::query()->create([
+            'purchase_order_id' => $this->purchaseOrder->id,
+            'supplier_item_id' => $this->supplierItem->id,
+            'inventory_item_id' => $secondInventoryItem->id,
+            'item_name_snapshot' => $secondInventoryItem->name,
+            'supplier_sku_snapshot' => $this->supplierItem->supplier_sku,
+            'ordered_quantity' => '5.000000',
+            'purchase_unit_of_measure_id' => $this->baseUnit->id,
+            'base_quantity' => '5.000000',
+            'unit_price' => '10.0000',
+            'line_total' => '50.00',
+            'received_base_quantity' => '0.000000',
+        ]);
+
+        $receipt = app(SaveGoodsReceipt::class)->handle(
+            $this->organization,
+            $this->actor,
+            $this->purchaseOrder,
+            [
+                'number' => 'GR-ROLLBACK',
+                'supplier_reference' => null,
+                'notes' => null,
+                'lines' => [
+                    [
+                        'purchase_order_line_id' => $this
+                            ->purchaseOrderLine
+                            ->id,
+                        'storage_location_id' => $this
+                            ->storageLocation
+                            ->id,
+                        'received_quantity' => '6',
+                        'received_unit_of_measure_id' => $this
+                            ->baseUnit
+                            ->id,
+                        'notes' => null,
+                    ],
+                    [
+                        'purchase_order_line_id' => $secondPurchaseOrderLine
+                            ->id,
+                        'storage_location_id' => $this
+                            ->storageLocation
+                            ->id,
+                        'received_quantity' => '5',
+                        'received_unit_of_measure_id' => $this
+                            ->baseUnit
+                            ->id,
+                        'notes' => null,
+                    ],
+                ],
+            ],
+        );
+
+        $secondReceiptLineId = $receipt->lines()
+            ->orderBy('id')
+            ->pluck('id')
+            ->last();
+
+        DB::table('goods_receipt_lines')
+            ->where('id', $secondReceiptLineId)
+            ->update(['inventory_item_id' => $this->inventoryItem->id]);
+
+        expect(fn () => app(FinalizeGoodsReceipt::class)->handle(
+            $this->organization,
+            $this->actor,
+            $receipt,
+        ))->toThrow(ValidationException::class);
+
+        expect($receipt->refresh()->status)
+            ->toBe(GoodsReceiptStatus::Draft)
+            ->and(StockMovement::query()->count())
+            ->toBe(0)
+            ->and(StockBalance::query()->count())
+            ->toBe(0)
+            ->and(
+                $this->purchaseOrderLine
+                    ->refresh()
+                    ->received_base_quantity,
+            )
+            ->toBe('0.000000')
+            ->and(
+                $secondPurchaseOrderLine
+                    ->refresh()
+                    ->received_base_quantity,
+            )
+            ->toBe('0.000000')
+            ->and($this->purchaseOrder->refresh()->status)
+            ->toBe(PurchaseOrderStatus::Approved);
+    },
+);
+
+test(
     'weighted average costing remains correct for an over receipt',
     function () {
         app(RecordStockMovement::class)->handle(
