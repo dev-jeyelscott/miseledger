@@ -1,12 +1,14 @@
 <?php
 
 use App\Actions\Inventory\RecordStockMovement;
+use App\Actions\Purchasing\CancelGoodsReceipt;
 use App\Actions\Purchasing\FinalizeGoodsReceipt;
 use App\Actions\Purchasing\SaveGoodsReceipt;
 use App\Enums\GoodsReceiptStatus;
 use App\Enums\OrganizationRole;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\StockMovementType;
+use App\Models\AuditLog;
 use App\Models\GoodsReceipt;
 use App\Models\InventoryItem;
 use App\Models\Location;
@@ -24,6 +26,7 @@ use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia as Assert;
 
 /**
  * Create one active storage destination for receiving tests.
@@ -777,3 +780,118 @@ test(
     ['base_quantity', '0.000000'],
     ['received_base_quantity', '-0.000001'],
 ]);
+
+test('finalizing a receipt creates an audit entry with the finalizing actor', function () {
+    $receipt = saveReceivingReceiptForTest(
+        $this->organization,
+        $this->actor,
+        $this->purchaseOrder,
+        $this->purchaseOrderLine,
+        $this->storageLocation,
+        $this->baseUnit,
+        'GR-AUDIT',
+        '10',
+    );
+
+    app(FinalizeGoodsReceipt::class)->handle(
+        $this->organization,
+        $this->actor,
+        $receipt,
+    );
+
+    $entry = AuditLog::query()
+        ->where('organization_id', $this->organization->id)
+        ->where('entity_type', 'goods_receipt')
+        ->where('entity_id', $receipt->id)
+        ->where('action', 'goods_receipt.finalized')
+        ->sole();
+
+    expect($entry->actor_id)
+        ->toBe($this->actor->id)
+        ->and($entry->created_at)
+        ->not->toBeNull();
+});
+
+test('a finalized goods receipt cannot be edited or cancelled', function () {
+    $receipt = saveReceivingReceiptForTest(
+        $this->organization,
+        $this->actor,
+        $this->purchaseOrder,
+        $this->purchaseOrderLine,
+        $this->storageLocation,
+        $this->baseUnit,
+        'GR-IMMUTABLE',
+        '10',
+    );
+
+    app(FinalizeGoodsReceipt::class)->handle(
+        $this->organization,
+        $this->actor,
+        $receipt,
+    );
+
+    expect(fn () => saveReceivingReceiptForTest(
+        $this->organization,
+        $this->actor,
+        $this->purchaseOrder,
+        $this->purchaseOrderLine,
+        $this->storageLocation,
+        $this->baseUnit,
+        'GR-IMMUTABLE',
+        '1',
+        $receipt,
+    ))->toThrow(ValidationException::class)
+        ->and(fn () => app(CancelGoodsReceipt::class)->handle(
+            $this->organization,
+            $this->actor,
+            $receipt,
+        ))->toThrow(ValidationException::class)
+        ->and($receipt->refresh()->status)
+        ->toBe(GoodsReceiptStatus::Finalized);
+});
+
+test(
+    'the goods receipt page exposes movement traceability, actor, timestamp, and audit history',
+    function () {
+        $receipt = saveReceivingReceiptForTest(
+            $this->organization,
+            $this->actor,
+            $this->purchaseOrder,
+            $this->purchaseOrderLine,
+            $this->storageLocation,
+            $this->baseUnit,
+            'GR-TRACE',
+            '10',
+        );
+
+        app(FinalizeGoodsReceipt::class)->handle(
+            $this->organization,
+            $this->actor,
+            $receipt,
+        );
+
+        $movement = StockMovement::query()
+            ->where('reference_type', 'goods_receipt_line')
+            ->sole();
+
+        $this->actingAs($this->actor)
+            ->get(route('goods-receipts.edit', $receipt))
+            ->assertOk()
+            ->assertInertia(
+                fn (Assert $page) => $page
+                    ->component('goods-receipts/form')
+                    ->where('goodsReceipt.status', 'finalized')
+                    ->where('goodsReceipt.receivedBy', $this->actor->name)
+                    ->where(
+                        'goodsReceipt.lines.0.movement.id',
+                        $movement->id,
+                    )
+                    ->where(
+                        'goodsReceipt.lines.0.movement.actorName',
+                        $this->actor->name,
+                    )
+                    ->where('auditTrail.0.action', 'goods_receipt.finalized')
+                    ->where('auditTrail.0.actorName', $this->actor->name),
+            );
+    },
+);

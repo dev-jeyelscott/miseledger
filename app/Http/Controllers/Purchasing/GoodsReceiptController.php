@@ -9,6 +9,7 @@ use App\Enums\OrganizationPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Purchasing\GoodsReceiptTransitionRequest;
 use App\Http\Requests\Purchasing\SaveGoodsReceiptRequest;
+use App\Models\AuditLog;
 use App\Models\GoodsReceipt;
 use App\Models\GoodsReceiptLine;
 use App\Models\GoodsReceiptNonStockLine;
@@ -102,6 +103,7 @@ class GoodsReceiptController extends Controller
             'purchaseOrder' => $this->purchaseOrderData($po),
             ...$this->formOptions($organization, $po),
             'canFinalize' => true,
+            'auditTrail' => [],
         ]);
     }
 
@@ -169,7 +171,7 @@ class GoodsReceiptController extends Controller
                 'lines.inventoryItem:id,name,sku',
                 'lines.storageLocation:id,name',
                 'lines.receivedUnitOfMeasure:id,name,symbol',
-                'lines.movement',
+                'lines.movement.creator:id,name',
                 'nonStockLines.inventoryItem:id,name,sku',
                 'nonStockLines.rejectedUnitOfMeasure:id,name,symbol',
                 'nonStockLines.damagedUnitOfMeasure:id,name,symbol',
@@ -192,6 +194,10 @@ class GoodsReceiptController extends Controller
                 $receipt->purchaseOrder,
             ),
             'canFinalize' => $canFinalize,
+            'auditTrail' => $this->auditTrailData(
+                $organization,
+                $receipt,
+            ),
         ]);
     }
 
@@ -491,6 +497,7 @@ class GoodsReceiptController extends Controller
                         ->movement
                         ->occurred_at
                         ->toIso8601String(),
+                    'actorName' => $line->movement->creator?->name,
                 ],
         ];
     }
@@ -533,6 +540,37 @@ class GoodsReceiptController extends Controller
             'notes' => $line->notes,
             'movement' => null,
         ];
+    }
+
+    /**
+     * Serialize the immutable audit trail for one receipt, oldest first.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function auditTrailData(
+        Organization $organization,
+        GoodsReceipt $receipt,
+    ): array {
+        return AuditLog::query()
+            ->with('actor:id,name')
+            ->where('organization_id', $organization->id)
+            ->where('entity_type', 'goods_receipt')
+            ->where('entity_id', $receipt->id)
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get()
+            ->map(
+                static fn (AuditLog $entry): array => [
+                    'id' => $entry->id,
+                    'action' => $entry->action,
+                    'actorName' => $entry->actor?->name,
+                    'createdAt' => $entry
+                        ->created_at
+                        ?->toIso8601String(),
+                ],
+            )
+            ->values()
+            ->all();
     }
 
     /**

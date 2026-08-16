@@ -59,7 +59,15 @@ type ReceiptLine = {
         quantity: string;
         unitCost: string | null;
         occurredAt: string;
+        actorName: string | null;
     } | null;
+};
+
+type AuditEntry = {
+    id: number;
+    action: string;
+    actorName: string | null;
+    createdAt: string | null;
 };
 
 type GoodsReceipt = {
@@ -103,6 +111,7 @@ type Props = {
     unitOptions: UnitOption[];
     currency: string;
     canFinalize: boolean;
+    auditTrail: AuditEntry[];
 };
 
 const emptyLine = (): LineState => ({
@@ -151,6 +160,7 @@ export default function GoodsReceiptForm({
     unitOptions,
     currency,
     canFinalize,
+    auditTrail,
 }: Props) {
     const editable = goodsReceipt === null || goodsReceipt.status === 'draft';
 
@@ -996,9 +1006,25 @@ export default function GoodsReceiptForm({
                                                     : '—'}
                                             </td>
                                             <td className="py-2">
-                                                {line.movement
-                                                    ? `#${line.movement.id}`
-                                                    : '—'}
+                                                {line.movement ? (
+                                                    <div>
+                                                        <div>
+                                                            #{line.movement.id}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {line.movement
+                                                                .actorName ??
+                                                                'System'}{' '}
+                                                            ·{' '}
+                                                            {
+                                                                line.movement
+                                                                    .occurredAt
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    '—'
+                                                )}
                                             </td>
                                             <td className="py-2 text-right">
                                                 {isPositiveQuantity(
@@ -1014,6 +1040,52 @@ export default function GoodsReceiptForm({
                                 </tbody>
                             </table>
                         </div>
+
+                        {auditTrail.length > 0 && (
+                            <div>
+                                <div className="mb-2 text-sm font-medium">
+                                    Audit history
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="border-b text-left">
+                                            <tr>
+                                                <th className="py-2">
+                                                    Action
+                                                </th>
+                                                <th className="py-2">
+                                                    Actor
+                                                </th>
+                                                <th className="py-2">
+                                                    Timestamp
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {auditTrail.map((entry) => (
+                                                <tr
+                                                    key={entry.id}
+                                                    className="border-b last:border-b-0"
+                                                >
+                                                    <td className="py-2">
+                                                        {entry.action}
+                                                    </td>
+                                                    <td className="py-2">
+                                                        {entry.actorName ??
+                                                            'System'}
+                                                    </td>
+                                                    <td className="py-2">
+                                                        {entry.createdAt ??
+                                                            '—'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
