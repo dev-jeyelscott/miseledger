@@ -393,6 +393,59 @@ test(
     },
 );
 
+test('a saved draft creates no stock movement or balance', function () {
+    $receipt = saveReceivingReceiptForTest(
+        $this->organization,
+        $this->actor,
+        $this->purchaseOrder,
+        $this->purchaseOrderLine,
+        $this->storageLocation,
+        $this->baseUnit,
+        'GR-DRAFT-NO-LEDGER',
+        '5',
+    );
+
+    expect($receipt->status)
+        ->toBe(GoodsReceiptStatus::Draft)
+        ->and(StockMovement::query()->count())
+        ->toBe(0)
+        ->and(StockBalance::query()->count())
+        ->toBe(0)
+        ->and($this->purchaseOrderLine->refresh()->received_base_quantity)
+        ->toBe('0.000000')
+        ->and($this->purchaseOrder->refresh()->status)
+        ->toBe(PurchaseOrderStatus::Approved);
+});
+
+test(
+    'an incompatible-dimension received unit fails conversion and creates no draft lines',
+    function () {
+        $incompatibleUnit = UnitOfMeasure::factory()->create([
+            'organization_id' => $this->organization->id,
+            'name' => 'Kilogram',
+            'symbol' => 'kg',
+            'dimension' => 'weight',
+            'active' => true,
+        ]);
+
+        expect(fn () => saveReceivingReceiptForTest(
+            $this->organization,
+            $this->actor,
+            $this->purchaseOrder,
+            $this->purchaseOrderLine,
+            $this->storageLocation,
+            $incompatibleUnit,
+            'GR-INVALID-CONVERSION',
+            '5',
+        ))->toThrow(ValidationException::class);
+
+        expect(GoodsReceipt::query()->count())
+            ->toBe(0)
+            ->and(StockMovement::query()->count())
+            ->toBe(0);
+    },
+);
+
 test(
     'finalization creates one purchase receipt movement per receipt line and is idempotent',
     function () {
