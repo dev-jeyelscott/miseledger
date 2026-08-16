@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Suppliers\RecordSupplierItemPrice;
 use App\Enums\OrganizationRole;
 use App\Models\InventoryItem;
 use App\Models\Organization;
@@ -463,7 +464,108 @@ test('supplier prices append history and update current price', function () {
         ->and($supplierItem->refresh()->current_price)
         ->toBe('135.7500')
         ->and($supplierItem->currency)
-        ->toBe('PHP');
+        ->toBe('PHP')
+        ->and($supplierItem->currentPriceRecord()?->price)
+        ->toBe('135.7500');
+});
+
+test('current price retrieval is deterministic when history ties on effective_at', function () {
+    $organization = Organization::factory()->create();
+
+    $inventoryItem = InventoryItem::factory()
+        ->for($organization)
+        ->create();
+
+    $purchaseUnit = UnitOfMeasure::factory()
+        ->for($organization)
+        ->create();
+
+    $supplier = Supplier::factory()
+        ->for($organization)
+        ->create();
+
+    $supplierItem = SupplierItem::factory()
+        ->for($organization)
+        ->for($supplier)
+        ->for($inventoryItem)
+        ->create([
+            'purchase_unit_of_measure_id' => $purchaseUnit->id,
+        ]);
+
+    $tiedTimestamp = now();
+
+    $older = SupplierItemPrice::factory()
+        ->for($organization)
+        ->for($supplierItem)
+        ->create([
+            'price' => '10.0000',
+            'effective_at' => $tiedTimestamp,
+        ]);
+
+    $newer = SupplierItemPrice::factory()
+        ->for($organization)
+        ->for($supplierItem)
+        ->create([
+            'price' => '12.0000',
+            'effective_at' => $tiedTimestamp,
+        ]);
+
+    expect($older->id)->toBeLessThan($newer->id);
+
+    expect($supplierItem->currentPriceRecord()?->id)
+        ->toBe($newer->id)
+        ->and($supplierItem->currentPriceRecord()?->price)
+        ->toBe('12.0000')
+        ->and(SupplierItemPrice::query()->count())
+        ->toBe(2);
+});
+
+test('recording a supplier price never mutates or removes prior history rows', function () {
+    $organization = Organization::factory()->create();
+
+    $inventoryItem = InventoryItem::factory()
+        ->for($organization)
+        ->create();
+
+    $purchaseUnit = UnitOfMeasure::factory()
+        ->for($organization)
+        ->create();
+
+    $supplier = Supplier::factory()
+        ->for($organization)
+        ->create();
+
+    $supplierItem = SupplierItem::factory()
+        ->for($organization)
+        ->for($supplier)
+        ->for($inventoryItem)
+        ->create([
+            'purchase_unit_of_measure_id' => $purchaseUnit->id,
+            'current_price' => null,
+        ]);
+
+    $recordSupplierItemPrice = app(RecordSupplierItemPrice::class);
+
+    $first = $recordSupplierItemPrice->handle(
+        $organization,
+        $supplierItem,
+        '50.0000',
+    );
+
+    $second = $recordSupplierItemPrice->handle(
+        $organization,
+        $supplierItem->refresh(),
+        '75.0000',
+    );
+
+    expect(SupplierItemPrice::query()->find($first->id)?->price)
+        ->toBe('50.0000')
+        ->and(SupplierItemPrice::query()->find($second->id)?->price)
+        ->toBe('75.0000')
+        ->and(SupplierItemPrice::query()->count())
+        ->toBe(2)
+        ->and($supplierItem->refresh()->current_price)
+        ->toBe('75.0000');
 });
 
 test('a new price cannot be recorded for an inactive supplier item', function () {

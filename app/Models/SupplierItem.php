@@ -99,6 +99,17 @@ class SupplierItem extends Model
     }
 
     /**
+     * Resolve the current price directly from history, independent of the
+     * cached current_price column, breaking ties deterministically.
+     */
+    public function currentPriceRecord(): ?SupplierItemPrice
+    {
+        return $this->prices()
+            ->mostRecentFirst()
+            ->first();
+    }
+
+    /**
      * Preserve authoritative quantities and prices as decimal strings.
      *
      * @return array<string, string>

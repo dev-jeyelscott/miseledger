@@ -100,8 +100,7 @@ class SupplierItemController extends Controller
                 'inventoryItem:id,name,sku,active',
                 'purchaseUnitOfMeasure:id,name,symbol,active',
                 'prices' => fn ($query) => $query
-                    ->orderByDesc('effective_at')
-                    ->orderByDesc('id'),
+                    ->mostRecentFirst(),
             ])
             ->findOrFail($supplierItem);
 
