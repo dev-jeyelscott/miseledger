@@ -49,6 +49,10 @@ class RecipeController extends Controller
                 OrganizationPermission::RecipesManage->value,
                 $organization,
             ),
+            'canViewCosts' => Gate::allows(
+                OrganizationPermission::CostsView->value,
+                $organization,
+            ),
         ]);
     }
 

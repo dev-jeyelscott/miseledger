@@ -1,5 +1,6 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import RecipeController from '@/actions/App/Http/Controllers/Recipes/RecipeController';
+import RecipeCostController from '@/actions/App/Http/Controllers/Recipes/RecipeCostController';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +11,7 @@ import type { RecipeData } from '@/types';
 type Props = {
     recipes: RecipeData[];
     canManage: boolean;
+    canViewCosts: boolean;
 };
 
 const typeLabels: Record<RecipeData['type'], string> = {
@@ -18,7 +20,11 @@ const typeLabels: Record<RecipeData['type'], string> = {
     batch: 'Batch',
 };
 
-export default function RecipesIndex({ recipes, canManage }: Props) {
+export default function RecipesIndex({
+    recipes,
+    canManage,
+    canViewCosts,
+}: Props) {
     return (
         <>
             <Head title="Recipes" />
@@ -65,21 +71,39 @@ export default function RecipesIndex({ recipes, canManage }: Props) {
                                             </p>
                                         </div>
 
-                                        {canManage && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                asChild
-                                            >
-                                                <Link
-                                                    href={RecipeController.edit(
-                                                        recipe.id,
-                                                    )}
+                                        <div className="flex items-center gap-2">
+                                            {canViewCosts && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    asChild
                                                 >
-                                                    Edit
-                                                </Link>
-                                            </Button>
-                                        )}
+                                                    <Link
+                                                        href={RecipeCostController.show(
+                                                            recipe.id,
+                                                        )}
+                                                    >
+                                                        Cost
+                                                    </Link>
+                                                </Button>
+                                            )}
+
+                                            {canManage && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    asChild
+                                                >
+                                                    <Link
+                                                        href={RecipeController.edit(
+                                                            recipe.id,
+                                                        )}
+                                                    >
+                                                        Edit
+                                                    </Link>
+                                                </Button>
+                                            )}
+                                        </div>
                                     </div>
                                 ))
                             )}

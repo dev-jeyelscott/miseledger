@@ -17,6 +17,7 @@ use App\Http\Controllers\OrganizationStorageLocationController;
 use App\Http\Controllers\Purchasing\GoodsReceiptController;
 use App\Http\Controllers\Purchasing\PurchaseOrderController;
 use App\Http\Controllers\Recipes\RecipeController;
+use App\Http\Controllers\Recipes\RecipeCostController;
 use App\Http\Controllers\Suppliers\SupplierController;
 use App\Http\Controllers\Suppliers\SupplierItemController;
 use Illuminate\Support\Facades\Route;
@@ -234,6 +235,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 '{recipe}',
                 [RecipeController::class, 'update'],
             )->name('update');
+
+            Route::get(
+                '{recipe}/cost',
+                [RecipeCostController::class, 'show'],
+            )->name('cost');
         });
 
     Route::prefix('suppliers')
