@@ -7,6 +7,7 @@ import {
     ClipboardList,
     FolderGit2,
     LayoutGrid,
+    NotebookText,
     PackageCheck,
     Trash2,
     Truck,
@@ -17,6 +18,7 @@ import StockTransferController from '@/actions/App/Http/Controllers/Inventory/St
 import WasteController from '@/actions/App/Http/Controllers/Inventory/WasteController';
 import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/GoodsReceiptController';
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
+import RecipeController from '@/actions/App/Http/Controllers/Recipes/RecipeController';
 import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
@@ -128,6 +130,14 @@ export function AppSidebar() {
             title: 'Stock transfers',
             href: StockTransferController.index(),
             icon: ArrowLeftRight,
+        });
+    }
+
+    if (activeMembership?.permissions.includes('recipes.view')) {
+        mainNavItems.push({
+            title: 'Recipes',
+            href: RecipeController.index(),
+            icon: NotebookText,
         });
     }
 

@@ -16,6 +16,7 @@ use App\Http\Controllers\OrganizationMemberController;
 use App\Http\Controllers\OrganizationStorageLocationController;
 use App\Http\Controllers\Purchasing\GoodsReceiptController;
 use App\Http\Controllers\Purchasing\PurchaseOrderController;
+use App\Http\Controllers\Recipes\RecipeController;
 use App\Http\Controllers\Suppliers\SupplierController;
 use App\Http\Controllers\Suppliers\SupplierItemController;
 use Illuminate\Support\Facades\Route;
@@ -209,6 +210,30 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 'units/{unitOfMeasure}',
                 [UnitOfMeasureController::class, 'update'],
             )->name('units.update');
+        });
+
+    Route::prefix('recipes')
+        ->name('recipes.')
+        ->group(function (): void {
+            Route::get(
+                '/',
+                [RecipeController::class, 'index'],
+            )->name('index');
+
+            Route::post(
+                '/',
+                [RecipeController::class, 'store'],
+            )->name('store');
+
+            Route::get(
+                '{recipe}/edit',
+                [RecipeController::class, 'edit'],
+            )->name('edit');
+
+            Route::put(
+                '{recipe}',
+                [RecipeController::class, 'update'],
+            )->name('update');
         });
 
     Route::prefix('suppliers')

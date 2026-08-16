@@ -112,6 +112,16 @@ class Organization extends Model
     }
 
     /**
+     * Get organization-scoped recipe masters.
+     *
+     * @return HasMany<Recipe, $this>
+     */
+    public function recipes(): HasMany
+    {
+        return $this->hasMany(Recipe::class);
+    }
+
+    /**
      * Cast organization state to stable application types.
      *
      * @return array<string, string>
