@@ -5,6 +5,7 @@ use App\Http\Controllers\Inventory\InventoryCategoryController;
 use App\Http\Controllers\Inventory\InventoryItemController;
 use App\Http\Controllers\Inventory\InventoryItemUnitController;
 use App\Http\Controllers\Inventory\InventoryValuationReportController;
+use App\Http\Controllers\Inventory\LowStockReportController;
 use App\Http\Controllers\Inventory\OpeningBalanceController;
 use App\Http\Controllers\Inventory\PurchasingHistoryReportController;
 use App\Http\Controllers\Inventory\StockCountController;
@@ -140,6 +141,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 'stock-on-hand',
                 [StockOnHandReportController::class, 'index'],
             )->name('stock-on-hand.index');
+
+            Route::get(
+                'low-stock',
+                [LowStockReportController::class, 'index'],
+            )->name('low-stock.index');
 
             Route::get(
                 'stock-movements',

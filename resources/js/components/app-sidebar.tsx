@@ -1,5 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
+    AlertTriangle,
     ArrowLeftRight,
     BookOpen,
     Boxes,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InventoryValuationReportController from '@/actions/App/Http/Controllers/Inventory/InventoryValuationReportController';
+import LowStockReportController from '@/actions/App/Http/Controllers/Inventory/LowStockReportController';
 import PurchasingHistoryReportController from '@/actions/App/Http/Controllers/Inventory/PurchasingHistoryReportController';
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
 import StockMovementLedgerReportController from '@/actions/App/Http/Controllers/Inventory/StockMovementLedgerReportController';
@@ -89,6 +91,12 @@ export function AppSidebar() {
             title: 'Stock on hand',
             href: StockOnHandReportController.index(),
             icon: PackageSearch,
+        });
+
+        mainNavItems.push({
+            title: 'Low stock',
+            href: LowStockReportController.index(),
+            icon: AlertTriangle,
         });
 
         mainNavItems.push({
