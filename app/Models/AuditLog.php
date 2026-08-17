@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use LogicException;
 
 /**
  * @property int $id
@@ -65,5 +66,23 @@ class AuditLog extends Model
             'after_data' => 'array',
             'created_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Prevent mutation or deletion of committed audit history.
+     */
+    protected static function booted(): void
+    {
+        static::updating(static function (AuditLog $log): never {
+            throw new LogicException(
+                'Audit log entries are immutable.',
+            );
+        });
+
+        static::deleting(static function (AuditLog $log): never {
+            throw new LogicException(
+                'Audit log entries cannot be deleted.',
+            );
+        });
     }
 }

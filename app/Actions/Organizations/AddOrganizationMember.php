@@ -2,6 +2,7 @@
 
 namespace App\Actions\Organizations;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
@@ -11,16 +12,22 @@ use Illuminate\Validation\ValidationException;
 
 final class AddOrganizationMember
 {
+    public function __construct(
+        private readonly RecordAuditEntry $recordAuditEntry,
+    ) {}
+
     /**
      * Add an existing user to an organization with an explicit role.
      */
     public function handle(
         Organization $organization,
+        User $actor,
         User $user,
         OrganizationRole $role,
     ): OrganizationMembership {
         return DB::transaction(function () use (
             $organization,
+            $actor,
             $user,
             $role,
         ): OrganizationMembership {
@@ -39,10 +46,26 @@ final class AddOrganizationMember
                 ]);
             }
 
-            return $lockedOrganization->memberships()->create([
+            $membership = $lockedOrganization->memberships()->create([
                 'user_id' => $user->getKey(),
                 'role' => $role,
             ]);
+
+            $this->recordAuditEntry->handle(
+                organization: $lockedOrganization,
+                actor: $actor,
+                action: 'organization_membership.role_assigned',
+                entityType: 'organization_membership',
+                entityId: $membership->id,
+                beforeData: null,
+                afterData: [
+                    'user_id' => $user->getKey(),
+                    'role' => $role->value,
+                ],
+                correlationId: "organization_membership:{$membership->id}:assign",
+            );
+
+            return $membership;
         });
     }
 }

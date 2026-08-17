@@ -2,9 +2,9 @@
 
 namespace App\Actions\Inventory;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\OrganizationPermission;
 use App\Enums\StockMovementType;
-use App\Models\AuditLog;
 use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
@@ -29,6 +29,7 @@ final class RecordWaste
     public function __construct(
         private readonly ConvertQuantity $convertQuantity,
         private readonly RecordStockMovement $recordStockMovement,
+        private readonly RecordAuditEntry $recordAuditEntry,
     ) {}
 
     /**
@@ -285,14 +286,14 @@ final class RecordWaste
                         ?? '0.0000',
                 ])->save();
 
-                AuditLog::query()->create([
-                    'organization_id' => $organization->id,
-                    'actor_id' => $actor->id,
-                    'action' => 'waste.recorded',
-                    'entity_type' => 'waste_record',
-                    'entity_id' => $record->id,
-                    'before_data' => null,
-                    'after_data' => [
+                $this->recordAuditEntry->handle(
+                    organization: $organization,
+                    actor: $actor,
+                    action: 'waste.recorded',
+                    entityType: 'waste_record',
+                    entityId: $record->id,
+                    beforeData: null,
+                    afterData: [
                         'location_id' => $location->id,
                         'storage_location_id' => $storageLocation->id,
                         'inventory_item_id' => $inventoryItem->id,
@@ -306,8 +307,8 @@ final class RecordWaste
                         'occurred_at' => $occurredAt
                             ->toIso8601String(),
                     ],
-                    'correlation_id' => "waste:{$record->id}",
-                ]);
+                    correlationId: "waste:{$record->id}",
+                );
 
                 return $record->refresh();
             }, 3);

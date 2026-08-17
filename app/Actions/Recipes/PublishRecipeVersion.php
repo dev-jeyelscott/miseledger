@@ -2,9 +2,9 @@
 
 namespace App\Actions\Recipes;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\OrganizationPermission;
 use App\Enums\RecipeVersionStatus;
-use App\Models\AuditLog;
 use App\Models\Organization;
 use App\Models\RecipeVersion;
 use App\Models\User;
@@ -15,6 +15,10 @@ use Illuminate\Validation\ValidationException;
 
 final class PublishRecipeVersion
 {
+    public function __construct(
+        private readonly RecordAuditEntry $recordAuditEntry,
+    ) {}
+
     /**
      * Publish a validated draft recipe version as an immutable, effective
      * revision of its recipe.
@@ -78,23 +82,23 @@ final class PublishRecipeVersion
                 'effective_end_date' => $effectiveEndDate,
             ])->save();
 
-            AuditLog::query()->create([
-                'organization_id' => $organization->id,
-                'actor_id' => $actor->id,
-                'action' => 'recipe_version.published',
-                'entity_type' => 'recipe_version',
-                'entity_id' => $version->id,
-                'before_data' => [
+            $this->recordAuditEntry->handle(
+                organization: $organization,
+                actor: $actor,
+                action: 'recipe_version.published',
+                entityType: 'recipe_version',
+                entityId: $version->id,
+                beforeData: [
                     'status' => RecipeVersionStatus::Draft->value,
                 ],
-                'after_data' => [
+                afterData: [
                     'status' => RecipeVersionStatus::Published->value,
                     'published_at' => $publishedAt->toIso8601String(),
                     'effective_start_date' => $effectiveStartDate->toDateString(),
                     'effective_end_date' => $effectiveEndDate?->toDateString(),
                 ],
-                'correlation_id' => "recipe_version:{$version->id}:publish",
-            ]);
+                correlationId: "recipe_version:{$version->id}:publish",
+            );
 
             return $version->refresh();
         }, 3);

@@ -2,9 +2,9 @@
 
 namespace App\Actions\Inventory;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\OrganizationPermission;
 use App\Enums\StockTransferStatus;
-use App\Models\AuditLog;
 use App\Models\Organization;
 use App\Models\StockTransfer;
 use App\Models\User;
@@ -13,6 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 final class CancelStockTransfer
 {
+    public function __construct(
+        private readonly RecordAuditEntry $recordAuditEntry,
+    ) {}
+
     /**
      * Cancel an inventory-neutral transfer draft.
      */
@@ -62,20 +66,20 @@ final class CancelStockTransfer
                 'status' => StockTransferStatus::Cancelled,
             ])->save();
 
-            AuditLog::query()->create([
-                'organization_id' => $organization->id,
-                'actor_id' => $actor->id,
-                'action' => 'stock_transfer.cancelled',
-                'entity_type' => 'stock_transfer',
-                'entity_id' => $transfer->id,
-                'before_data' => [
+            $this->recordAuditEntry->handle(
+                organization: $organization,
+                actor: $actor,
+                action: 'stock_transfer.cancelled',
+                entityType: 'stock_transfer',
+                entityId: $transfer->id,
+                beforeData: [
                     'status' => StockTransferStatus::Draft->value,
                 ],
-                'after_data' => [
+                afterData: [
                     'status' => StockTransferStatus::Cancelled->value,
                 ],
-                'correlation_id' => "stock-transfer:{$transfer->id}:cancel",
-            ]);
+                correlationId: "stock-transfer:{$transfer->id}:cancel",
+            );
 
             return $transfer->refresh();
         }, 3);

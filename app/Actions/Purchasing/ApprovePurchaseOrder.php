@@ -2,9 +2,9 @@
 
 namespace App\Actions\Purchasing;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\OrganizationPermission;
 use App\Enums\PurchaseOrderStatus;
-use App\Models\AuditLog;
 use App\Models\Organization;
 use App\Models\PurchaseOrder;
 use App\Models\User;
@@ -13,6 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 final class ApprovePurchaseOrder
 {
+    public function __construct(
+        private readonly RecordAuditEntry $recordAuditEntry,
+    ) {}
+
     /**
      * Approve a draft PO without changing inventory.
      */
@@ -62,21 +66,21 @@ final class ApprovePurchaseOrder
                 'approved_at' => $approvedAt,
             ])->save();
 
-            AuditLog::query()->create([
-                'organization_id' => $organization->id,
-                'actor_id' => $actor->id,
-                'action' => 'purchase_order.approved',
-                'entity_type' => 'purchase_order',
-                'entity_id' => $record->id,
-                'before_data' => [
+            $this->recordAuditEntry->handle(
+                organization: $organization,
+                actor: $actor,
+                action: 'purchase_order.approved',
+                entityType: 'purchase_order',
+                entityId: $record->id,
+                beforeData: [
                     'status' => PurchaseOrderStatus::Draft->value,
                 ],
-                'after_data' => [
+                afterData: [
                     'status' => PurchaseOrderStatus::Approved->value,
                     'approved_at' => $approvedAt->toIso8601String(),
                 ],
-                'correlation_id' => "purchase_order:{$record->id}:approve",
-            ]);
+                correlationId: "purchase_order:{$record->id}:approve",
+            );
 
             return $record->refresh();
         }, 3);

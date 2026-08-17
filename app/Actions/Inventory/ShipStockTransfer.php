@@ -2,10 +2,10 @@
 
 namespace App\Actions\Inventory;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\OrganizationPermission;
 use App\Enums\StockMovementType;
 use App\Enums\StockTransferStatus;
-use App\Models\AuditLog;
 use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
@@ -21,6 +21,7 @@ final class ShipStockTransfer
 {
     public function __construct(
         private readonly RecordStockMovement $recordStockMovement,
+        private readonly RecordAuditEntry $recordAuditEntry,
     ) {}
 
     /**
@@ -256,23 +257,23 @@ final class ShipStockTransfer
                 'shipped_by' => $actor->id,
             ])->save();
 
-            AuditLog::query()->create([
-                'organization_id' => $organization->id,
-                'actor_id' => $actor->id,
-                'action' => 'stock_transfer.shipped',
-                'entity_type' => 'stock_transfer',
-                'entity_id' => $transfer->id,
-                'before_data' => [
+            $this->recordAuditEntry->handle(
+                organization: $organization,
+                actor: $actor,
+                action: 'stock_transfer.shipped',
+                entityType: 'stock_transfer',
+                entityId: $transfer->id,
+                beforeData: [
                     'status' => StockTransferStatus::Draft->value,
                 ],
-                'after_data' => [
+                afterData: [
                     'status' => StockTransferStatus::Shipped->value,
                     'shipped_at' => $shippedAt->toIso8601String(),
                     'line_count' => $lines->count(),
                     'movement_count' => $movementCount,
                 ],
-                'correlation_id' => "stock-transfer:{$transfer->id}:ship",
-            ]);
+                correlationId: "stock-transfer:{$transfer->id}:ship",
+            );
 
             return $transfer->refresh();
         }, 3);

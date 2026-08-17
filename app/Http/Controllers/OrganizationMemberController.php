@@ -79,6 +79,7 @@ class OrganizationMemberController extends Controller
 
         $addOrganizationMember->handle(
             $organization,
+            $request->user(),
             $user,
             $role,
         );

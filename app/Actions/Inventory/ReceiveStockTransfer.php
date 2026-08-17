@@ -2,10 +2,10 @@
 
 namespace App\Actions\Inventory;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\OrganizationPermission;
 use App\Enums\StockMovementType;
 use App\Enums\StockTransferStatus;
-use App\Models\AuditLog;
 use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
@@ -27,6 +27,7 @@ final class ReceiveStockTransfer
 
     public function __construct(
         private readonly RecordStockMovement $recordStockMovement,
+        private readonly RecordAuditEntry $recordAuditEntry,
     ) {}
 
     /**
@@ -283,24 +284,24 @@ final class ReceiveStockTransfer
                 'received_by' => $actor->id,
             ])->save();
 
-            AuditLog::query()->create([
-                'organization_id' => $organization->id,
-                'actor_id' => $actor->id,
-                'action' => 'stock_transfer.received',
-                'entity_type' => 'stock_transfer',
-                'entity_id' => $transfer->id,
-                'before_data' => [
+            $this->recordAuditEntry->handle(
+                organization: $organization,
+                actor: $actor,
+                action: 'stock_transfer.received',
+                entityType: 'stock_transfer',
+                entityId: $transfer->id,
+                beforeData: [
                     'status' => StockTransferStatus::Shipped->value,
                 ],
-                'after_data' => [
+                afterData: [
                     'status' => StockTransferStatus::Received->value,
                     'received_at' => $receivedAt->toIso8601String(),
                     'line_count' => $lines->count(),
                     'movement_count' => $movementCount,
                     'variance_line_count' => $varianceLineCount,
                 ],
-                'correlation_id' => "stock-transfer:{$transfer->id}:receive",
-            ]);
+                correlationId: "stock-transfer:{$transfer->id}:receive",
+            );
 
             return $transfer->refresh();
         }, 3);

@@ -2,10 +2,10 @@
 
 namespace App\Actions\Inventory;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\OrganizationPermission;
 use App\Enums\StockCountStatus;
 use App\Enums\StockMovementType;
-use App\Models\AuditLog;
 use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
@@ -24,6 +24,7 @@ final class FinalizeStockCount
 {
     public function __construct(
         private readonly RecordStockMovement $recordStockMovement,
+        private readonly RecordAuditEntry $recordAuditEntry,
     ) {}
 
     /**
@@ -236,23 +237,23 @@ final class FinalizeStockCount
                 'finalized_at' => $finalizedAt,
             ])->save();
 
-            AuditLog::query()->create([
-                'organization_id' => $organization->id,
-                'actor_id' => $actor->id,
-                'action' => 'stock_count.finalized',
-                'entity_type' => 'stock_count',
-                'entity_id' => $count->id,
-                'before_data' => [
+            $this->recordAuditEntry->handle(
+                organization: $organization,
+                actor: $actor,
+                action: 'stock_count.finalized',
+                entityType: 'stock_count',
+                entityId: $count->id,
+                beforeData: [
                     'status' => StockCountStatus::Submitted->value,
                 ],
-                'after_data' => [
+                afterData: [
                     'status' => StockCountStatus::Finalized->value,
                     'finalized_at' => $finalizedAt->toIso8601String(),
                     'line_count' => $lines->count(),
                     'movement_count' => $movementCount,
                 ],
-                'correlation_id' => "stock-count:{$count->id}:finalize",
-            ]);
+                correlationId: "stock-count:{$count->id}:finalize",
+            );
 
             return $count->refresh();
         }, 3);

@@ -2,12 +2,12 @@
 
 namespace App\Actions\Purchasing;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Actions\Inventory\RecordStockMovement;
 use App\Enums\GoodsReceiptStatus;
 use App\Enums\OrganizationPermission;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\StockMovementType;
-use App\Models\AuditLog;
 use App\Models\GoodsReceipt;
 use App\Models\GoodsReceiptLine;
 use App\Models\GoodsReceiptNonStockLine;
@@ -30,6 +30,7 @@ final class FinalizeGoodsReceipt
 {
     public function __construct(
         private readonly RecordStockMovement $recordStockMovement,
+        private readonly RecordAuditEntry $recordAuditEntry,
     ) {}
 
     /**
@@ -217,24 +218,24 @@ final class FinalizeGoodsReceipt
                 'received_by' => $actor->id,
             ])->save();
 
-            AuditLog::query()->create([
-                'organization_id' => $organization->id,
-                'actor_id' => $actor->id,
-                'action' => 'goods_receipt.finalized',
-                'entity_type' => 'goods_receipt',
-                'entity_id' => $receipt->id,
-                'before_data' => [
+            $this->recordAuditEntry->handle(
+                organization: $organization,
+                actor: $actor,
+                action: 'goods_receipt.finalized',
+                entityType: 'goods_receipt',
+                entityId: $receipt->id,
+                beforeData: [
                     'status' => GoodsReceiptStatus::Draft->value,
                 ],
-                'after_data' => [
+                afterData: [
                     'status' => GoodsReceiptStatus::Finalized->value,
                     'purchase_order_id' => $purchaseOrder->id,
                     'received_at' => $finalizedAt->toIso8601String(),
                     'line_count' => $lines->count(),
                     'non_stock_line_count' => $nonStockLines->count(),
                 ],
-                'correlation_id' => "goods_receipt:{$receipt->id}:finalize",
-            ]);
+                correlationId: "goods_receipt:{$receipt->id}:finalize",
+            );
 
             return $receipt->refresh();
         }, 3);

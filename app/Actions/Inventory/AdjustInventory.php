@@ -2,9 +2,9 @@
 
 namespace App\Actions\Inventory;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\OrganizationPermission;
 use App\Enums\StockMovementType;
-use App\Models\AuditLog;
 use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
@@ -22,6 +22,7 @@ final class AdjustInventory
     public function __construct(
         private readonly ConvertQuantity $convertQuantity,
         private readonly RecordStockMovement $recordStockMovement,
+        private readonly RecordAuditEntry $recordAuditEntry,
     ) {}
 
     /**
@@ -128,14 +129,14 @@ final class AdjustInventory
             );
 
             if (! $alreadyRecorded) {
-                AuditLog::query()->create([
-                    'organization_id' => $organization->getKey(),
-                    'actor_id' => $actor->getKey(),
-                    'action' => 'inventory.manual_adjustment',
-                    'entity_type' => 'stock_movement',
-                    'entity_id' => $movement->id,
-                    'before_data' => null,
-                    'after_data' => [
+                $this->recordAuditEntry->handle(
+                    organization: $organization,
+                    actor: $actor,
+                    action: 'inventory.manual_adjustment',
+                    entityType: 'stock_movement',
+                    entityId: $movement->id,
+                    beforeData: null,
+                    afterData: [
                         'location_id' => $location->getKey(),
                         'storage_location_id' => $storageLocation->getKey(),
                         'inventory_item_id' => $inventoryItem->getKey(),
@@ -146,8 +147,8 @@ final class AdjustInventory
                         'occurred_at' => $occurredAt
                             ->toIso8601String(),
                     ],
-                    'correlation_id' => "inventory_adjustment:{$idempotencyKey}",
-                ]);
+                    correlationId: "inventory_adjustment:{$idempotencyKey}",
+                );
             }
 
             return $movement;
