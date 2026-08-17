@@ -7,6 +7,7 @@ import {
     ClipboardList,
     Coins,
     FolderGit2,
+    History,
     LayoutGrid,
     NotebookText,
     PackageCheck,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InventoryValuationReportController from '@/actions/App/Http/Controllers/Inventory/InventoryValuationReportController';
+import PurchasingHistoryReportController from '@/actions/App/Http/Controllers/Inventory/PurchasingHistoryReportController';
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
 import StockMovementLedgerReportController from '@/actions/App/Http/Controllers/Inventory/StockMovementLedgerReportController';
 import StockOnHandReportController from '@/actions/App/Http/Controllers/Inventory/StockOnHandReportController';
@@ -99,6 +101,12 @@ export function AppSidebar() {
             title: 'Inventory valuation',
             href: InventoryValuationReportController.index(),
             icon: Coins,
+        });
+
+        mainNavItems.push({
+            title: 'Purchasing history',
+            href: PurchasingHistoryReportController.index(),
+            icon: History,
         });
     }
 
