@@ -112,6 +112,7 @@ class DemoDataSeeder extends Seeder
 
                 $addOrganizationMember->handle(
                     $organization,
+                    $owner,
                     $user,
                     $account['role'],
                 );
