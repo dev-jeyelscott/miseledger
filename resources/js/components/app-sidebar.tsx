@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
+import StockMovementLedgerReportController from '@/actions/App/Http/Controllers/Inventory/StockMovementLedgerReportController';
 import StockOnHandReportController from '@/actions/App/Http/Controllers/Inventory/StockOnHandReportController';
 import StockTransferController from '@/actions/App/Http/Controllers/Inventory/StockTransferController';
 import WasteController from '@/actions/App/Http/Controllers/Inventory/WasteController';
@@ -84,6 +85,12 @@ export function AppSidebar() {
             title: 'Stock on hand',
             href: StockOnHandReportController.index(),
             icon: PackageSearch,
+        });
+
+        mainNavItems.push({
+            title: 'Stock movement ledger',
+            href: StockMovementLedgerReportController.index(),
+            icon: ClipboardList,
         });
     }
 
