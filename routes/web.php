@@ -143,6 +143,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             )->name('stock-on-hand.index');
 
             Route::get(
+                'stock-on-hand/export',
+                [StockOnHandReportController::class, 'export'],
+            )->name('stock-on-hand.export');
+
+            Route::get(
                 'low-stock',
                 [LowStockReportController::class, 'index'],
             )->name('low-stock.index');
@@ -153,14 +158,29 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             )->name('stock-movements.index');
 
             Route::get(
+                'stock-movements/export',
+                [StockMovementLedgerReportController::class, 'export'],
+            )->name('stock-movements.export');
+
+            Route::get(
                 'valuation',
                 [InventoryValuationReportController::class, 'index'],
             )->name('valuation.index');
 
             Route::get(
+                'valuation/export',
+                [InventoryValuationReportController::class, 'export'],
+            )->name('valuation.export');
+
+            Route::get(
                 'purchasing-history',
                 [PurchasingHistoryReportController::class, 'index'],
             )->name('purchasing-history.index');
+
+            Route::get(
+                'purchasing-history/export',
+                [PurchasingHistoryReportController::class, 'export'],
+            )->name('purchasing-history.export');
 
             Route::get(
                 'items',
@@ -413,6 +433,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             )->name('variance');
 
             Route::get(
+                'variance/export',
+                [StockCountController::class, 'exportVariance'],
+            )->name('variance.export');
+
+            Route::get(
                 'create',
                 [StockCountController::class, 'create'],
             )->name('create');
@@ -460,6 +485,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 '/',
                 [WasteController::class, 'store'],
             )->name('store');
+
+            Route::get(
+                'export',
+                [WasteController::class, 'export'],
+            )->name('export');
         });
 
     Route::prefix('waste-reasons')

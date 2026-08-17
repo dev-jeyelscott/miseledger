@@ -434,3 +434,116 @@ test('report requires reports.view permission', function () {
         ->get($url)
         ->assertForbidden();
 });
+
+test('export streams the same rows as a CSV download', function () {
+    $content = $this
+        ->actingAs($this->actor)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('inventory.purchasing-history.export'))
+        ->assertOk()
+        ->streamedContent();
+
+    expect($content)->toContain('PO-PURCH-HIST');
+    expect($content)->toContain('not_received');
+});
+
+test('export is tenant isolated across organizations', function () {
+    $otherOrganization = Organization::factory()->create();
+
+    $otherLocation = Location::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'active' => true,
+    ]);
+
+    $otherSupplier = Supplier::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'active' => true,
+    ]);
+
+    $otherUnit = UnitOfMeasure::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'dimension' => 'count',
+        'active' => true,
+    ]);
+
+    $otherItem = InventoryItem::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'base_unit_of_measure_id' => $otherUnit->id,
+        'active' => true,
+    ]);
+
+    $otherSupplierItem = SupplierItem::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'supplier_id' => $otherSupplier->id,
+        'inventory_item_id' => $otherItem->id,
+        'purchase_unit_of_measure_id' => $otherUnit->id,
+        'base_quantity' => '1.000000',
+        'current_price' => '5.0000',
+        'currency' => 'USD',
+        'active' => true,
+    ]);
+
+    $otherPurchaseOrder = PurchaseOrder::query()->create([
+        'organization_id' => $otherOrganization->id,
+        'location_id' => $otherLocation->id,
+        'supplier_id' => $otherSupplier->id,
+        'number' => 'PO-EXPORT-OTHER-TENANT',
+        'status' => PurchaseOrderStatus::Draft,
+        'order_date' => '2026-08-01',
+        'expected_delivery_date' => null,
+        'subtotal' => '50.00',
+        'tax_total' => '0.00',
+        'discount_total' => '0.00',
+        'total' => '50.00',
+        'notes' => null,
+        'created_by' => null,
+        'approved_by' => null,
+        'approved_at' => null,
+    ]);
+
+    PurchaseOrderLine::query()->create([
+        'purchase_order_id' => $otherPurchaseOrder->id,
+        'supplier_item_id' => $otherSupplierItem->id,
+        'inventory_item_id' => $otherItem->id,
+        'item_name_snapshot' => $otherItem->name,
+        'supplier_sku_snapshot' => $otherSupplierItem->supplier_sku,
+        'ordered_quantity' => '5.000000',
+        'purchase_unit_of_measure_id' => $otherUnit->id,
+        'base_quantity' => '5.000000',
+        'unit_price' => '5.0000',
+        'line_total' => '25.00',
+        'received_base_quantity' => '0.000000',
+    ]);
+
+    $content = $this
+        ->actingAs($this->actor)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('inventory.purchasing-history.export'))
+        ->assertOk()
+        ->streamedContent();
+
+    expect($content)->toContain('PO-PURCH-HIST');
+    expect($content)->not->toContain('PO-EXPORT-OTHER-TENANT');
+});
+
+test('export requires reports.view permission', function () {
+    $unprivileged = User::factory()->create();
+
+    OrganizationMembership::factory()->create([
+        'organization_id' => $this->organization->id,
+        'user_id' => $unprivileged->id,
+        'role' => OrganizationRole::KitchenStaff,
+    ]);
+
+    $this
+        ->actingAs($unprivileged)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('inventory.purchasing-history.export'))
+        ->assertForbidden();
+});

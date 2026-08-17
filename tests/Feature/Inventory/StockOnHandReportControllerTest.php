@@ -373,3 +373,117 @@ test('report requires reports.view permission', function () {
         ->get($url)
         ->assertForbidden();
 });
+
+test('export streams a CSV with cost fields hidden from members without cost visibility', function () {
+    $url = route('inventory.stock-on-hand.export');
+
+    $response = $this
+        ->actingAs($this->staff)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get($url)
+        ->assertOk();
+
+    $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+
+    $content = $response->streamedContent();
+
+    expect($content)->toContain('Quantity on Hand');
+    expect($content)->toContain($this->item->name);
+    expect($content)->not->toContain('4.0000');
+});
+
+test('export streams a CSV with cost fields to members with cost visibility', function () {
+    $url = route('inventory.stock-on-hand.export');
+
+    $response = $this
+        ->actingAs($this->manager)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get($url)
+        ->assertOk();
+
+    $content = $response->streamedContent();
+
+    expect($content)->toContain($this->item->name);
+    expect($content)->toContain('4.0000');
+});
+
+test('export is tenant isolated across organizations', function () {
+    $otherOrganization = Organization::factory()->create();
+
+    $otherLocation = Location::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'active' => true,
+    ]);
+
+    $otherStorage = makeStorageLocationForStockOnHandTest(
+        $otherOrganization,
+        $otherLocation,
+        'X',
+    );
+
+    $otherUnit = UnitOfMeasure::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'dimension' => 'weight',
+    ]);
+
+    $otherItem = InventoryItem::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'base_unit_of_measure_id' => $otherUnit->id,
+        'active' => true,
+        'name' => 'Other Tenant Item',
+    ]);
+
+    app(RecordStockMovement::class)->handle(
+        organization: $otherOrganization,
+        location: $otherLocation,
+        storageLocation: $otherStorage,
+        inventoryItem: $otherItem,
+        type: StockMovementType::OpeningBalance,
+        baseQuantity: '99',
+        baseUnitOfMeasure: $otherUnit,
+        referenceType: 'opening_balance',
+        referenceId: $otherItem->id,
+        occurredAt: now(),
+        idempotencyKey: "stock-on-hand-export-test:tenant:{$otherItem->id}",
+        inboundUnitCost: '9.0000',
+    );
+
+    $url = route('inventory.stock-on-hand.export');
+
+    $response = $this
+        ->actingAs($this->manager)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get($url)
+        ->assertOk();
+
+    $content = $response->streamedContent();
+
+    expect($content)->toContain($this->item->name);
+    expect($content)->not->toContain('Other Tenant Item');
+});
+
+test('export requires reports.view permission', function () {
+    $unprivileged = User::factory()->create();
+
+    OrganizationMembership::factory()->create([
+        'organization_id' => $this->organization->id,
+        'user_id' => $unprivileged->id,
+        'role' => OrganizationRole::KitchenStaff,
+    ]);
+
+    $url = route('inventory.stock-on-hand.export');
+
+    $this
+        ->actingAs($unprivileged)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get($url)
+        ->assertForbidden();
+});

@@ -348,3 +348,103 @@ test('report requires reports.view permission', function () {
         ->get($url)
         ->assertForbidden();
 });
+
+test('export hides cost fields from members without cost visibility', function () {
+    $content = $this
+        ->actingAs($this->staff)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('inventory.valuation.export'))
+        ->assertOk()
+        ->streamedContent();
+
+    expect($content)->toContain($this->item->name);
+    expect($content)->not->toContain('4.0000');
+});
+
+test('export shows cost fields to members with cost visibility', function () {
+    $content = $this
+        ->actingAs($this->manager)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('inventory.valuation.export'))
+        ->assertOk()
+        ->streamedContent();
+
+    expect($content)->toContain('4.0000');
+    expect($content)->toContain('40.0000');
+});
+
+test('export is tenant isolated across organizations', function () {
+    $otherOrganization = Organization::factory()->create();
+
+    $otherLocation = Location::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'active' => true,
+    ]);
+
+    $otherStorage = makeStorageLocationForValuationTest(
+        $otherOrganization,
+        $otherLocation,
+        'Y',
+    );
+
+    $otherUnit = UnitOfMeasure::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'dimension' => 'weight',
+    ]);
+
+    $otherItem = InventoryItem::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'base_unit_of_measure_id' => $otherUnit->id,
+        'active' => true,
+        'name' => 'Other Tenant Valuation Item',
+    ]);
+
+    app(RecordStockMovement::class)->handle(
+        organization: $otherOrganization,
+        location: $otherLocation,
+        storageLocation: $otherStorage,
+        inventoryItem: $otherItem,
+        type: StockMovementType::OpeningBalance,
+        baseQuantity: '99',
+        baseUnitOfMeasure: $otherUnit,
+        referenceType: 'opening_balance',
+        referenceId: $otherItem->id,
+        occurredAt: now(),
+        idempotencyKey: "valuation-export-test:tenant:{$otherItem->id}",
+        inboundUnitCost: '9.0000',
+    );
+
+    $content = $this
+        ->actingAs($this->manager)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('inventory.valuation.export'))
+        ->assertOk()
+        ->streamedContent();
+
+    expect($content)->toContain($this->item->name);
+    expect($content)->not->toContain('Other Tenant Valuation Item');
+});
+
+test('export requires reports.view permission', function () {
+    $unprivileged = User::factory()->create();
+
+    OrganizationMembership::factory()->create([
+        'organization_id' => $this->organization->id,
+        'user_id' => $unprivileged->id,
+        'role' => OrganizationRole::KitchenStaff,
+    ]);
+
+    $this
+        ->actingAs($unprivileged)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('inventory.valuation.export'))
+        ->assertForbidden();
+});

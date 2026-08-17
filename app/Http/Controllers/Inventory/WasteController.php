@@ -16,6 +16,7 @@ use App\Models\UnitOfMeasure;
 use App\Models\User;
 use App\Models\WasteReason;
 use App\Models\WasteRecord;
+use App\Support\Csv\CsvExport;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Carbon\CarbonImmutable;
@@ -32,6 +33,7 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use stdClass;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * @phpstan-type WasteReportFilters array{
@@ -243,14 +245,111 @@ class WasteController extends Controller
     }
 
     /**
-     * Build filters, aggregate reports, and a bounded page of immutable waste evidence.
-     *
-     * @return array{0: WasteReportFilters, 1: array<array-key, mixed>, 2: WasteAggregateReport}
+     * Stream the same permission- and tenant-scoped waste evidence as a CSV
+     * download.
      */
-    private function reportData(
+    public function export(Request $request): StreamedResponse
+    {
+        $organization = $this->activeOrganization($request);
+
+        Gate::authorize(
+            OrganizationPermission::ReportsView->value,
+            $organization,
+        );
+
+        $canViewCosts = Gate::allows(
+            OrganizationPermission::CostsView->value,
+            $organization,
+        );
+
+        $filters = $this->resolveFilters($request, $organization);
+
+        $evidenceQuery = $this->reportEvidenceQuery(
+            $organization,
+            $filters,
+        );
+
+        $header = [
+            'Occurred At',
+            'Location',
+            'Storage Location',
+            'Item',
+            'SKU',
+            'Reason',
+            'Quantity',
+            'Unit',
+            'Base Quantity',
+            'Base Unit',
+            'Unit Cost',
+            'Total Cost',
+            'Recorded By',
+            'Notes',
+        ];
+
+        $rows = (function () use (
+            $organization,
+            $evidenceQuery,
+            $canViewCosts,
+        ): iterable {
+            foreach (
+                WasteRecord::query()
+                    ->with([
+                        'location:id,name',
+                        'storageLocation:id,name',
+                        'inventoryItem.baseUnitOfMeasure:id,symbol',
+                        'wasteReason:id,name',
+                        'unit:id,symbol',
+                        'recorder:id,name',
+                        'movement:id,reference_type,reference_id',
+                    ])
+                    ->where(
+                        'organization_id',
+                        $organization->id,
+                    )
+                    ->whereIn(
+                        'id',
+                        (clone $evidenceQuery)->select('waste_records.id'),
+                    )
+                    ->orderByDesc('occurred_at')
+                    ->orderByDesc('id')
+                    ->cursor() as $record
+            ) {
+                $data = $this->wasteReportRow($record, $canViewCosts);
+
+                yield [
+                    $data['occurredAt'],
+                    $data['locationName'],
+                    $data['storageLocationName'],
+                    $data['itemName'],
+                    $data['itemSku'],
+                    $data['reasonName'],
+                    $data['quantity'],
+                    $data['unitSymbol'],
+                    $data['baseQuantity'],
+                    $data['baseUnitSymbol'],
+                    $data['unitCost'],
+                    $data['totalCost'],
+                    $data['recordedBy'],
+                    $data['notes'],
+                ];
+            }
+        })();
+
+        return CsvExport::download(
+            'waste.csv',
+            $header,
+            $rows,
+        );
+    }
+
+    /**
+     * Validate and normalize the shared Waste report filter set.
+     *
+     * @return WasteReportFilters
+     */
+    private function resolveFilters(
         Request $request,
         Organization $organization,
-        bool $canViewCosts,
     ): array {
         $validated = $request->validate([
             'location_id' => [
@@ -341,7 +440,7 @@ class WasteController extends Controller
             ]);
         }
 
-        $filters = [
+        return [
             'locationId' => $locationId,
             'inventoryCategoryId' => $inventoryCategoryId,
             'inventoryItemId' => $inventoryItemId,
@@ -349,6 +448,19 @@ class WasteController extends Controller
             'from' => $from,
             'to' => $to,
         ];
+    }
+
+    /**
+     * Build filters, aggregate reports, and a bounded page of immutable waste evidence.
+     *
+     * @return array{0: WasteReportFilters, 1: array<array-key, mixed>, 2: WasteAggregateReport}
+     */
+    private function reportData(
+        Request $request,
+        Organization $organization,
+        bool $canViewCosts,
+    ): array {
+        $filters = $this->resolveFilters($request, $organization);
 
         $evidenceQuery = $this->reportEvidenceQuery(
             $organization,

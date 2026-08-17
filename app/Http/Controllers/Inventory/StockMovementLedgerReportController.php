@@ -10,6 +10,8 @@ use App\Models\Location;
 use App\Models\Organization;
 use App\Models\StockMovement;
 use App\Models\StorageLocation;
+use App\Support\Csv\CsvExport;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -17,6 +19,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class StockMovementLedgerReportController extends Controller
 {
@@ -33,6 +36,116 @@ class StockMovementLedgerReportController extends Controller
             $organization,
         );
 
+        [$filters, $query, $canViewCosts] = $this->filteredQuery(
+            $request,
+            $organization,
+        );
+
+        $rows = (clone $query)
+            ->orderBy('occurred_at')
+            ->orderBy('id')
+            ->paginate(50)
+            ->withQueryString()
+            ->through(
+                fn (StockMovement $movement): array => $this->rowData(
+                    $movement,
+                    $canViewCosts,
+                ),
+            )
+            ->toArray();
+
+        return Inertia::render('inventory/stock-movement-ledger', [
+            'rows' => $rows,
+            'locationOptions' => $this->locationOptions($organization),
+            'storageLocationOptions' => $this->storageLocationOptions(
+                $organization,
+                $filters['locationId'],
+            ),
+            'itemOptions' => $this->itemOptions($organization),
+            'typeOptions' => $this->typeOptions(),
+            'filters' => $filters,
+            'currency' => $organization->currency,
+            'canViewCosts' => $canViewCosts,
+        ]);
+    }
+
+    /**
+     * Stream the same permission- and tenant-scoped ledger as a CSV download.
+     */
+    public function export(Request $request): StreamedResponse
+    {
+        $organization = $this->activeOrganization($request);
+
+        Gate::authorize(
+            OrganizationPermission::ReportsView->value,
+            $organization,
+        );
+
+        [, $query, $canViewCosts] = $this->filteredQuery(
+            $request,
+            $organization,
+        );
+
+        $header = [
+            'Occurred At',
+            'Location',
+            'Storage Location',
+            'Item',
+            'SKU',
+            'Type',
+            'Quantity',
+            'Unit',
+            'Unit Cost',
+            'Total Cost',
+            'Reference Type',
+            'Reference ID',
+            'Actor',
+        ];
+
+        $rows = (function () use ($query, $canViewCosts): iterable {
+            foreach (
+                $query
+                    ->orderBy('occurred_at')
+                    ->orderBy('id')
+                    ->cursor() as $movement
+            ) {
+                $data = $this->rowData($movement, $canViewCosts);
+
+                yield [
+                    $data['occurredAt'],
+                    $data['locationName'],
+                    $data['storageLocationName'],
+                    $data['itemName'],
+                    $data['itemSku'],
+                    $data['type'],
+                    $data['quantity'],
+                    $data['baseUnitSymbol'],
+                    $data['unitCost'],
+                    $data['totalCost'],
+                    $data['referenceType'],
+                    $data['referenceId'],
+                    $data['actorName'],
+                ];
+            }
+        })();
+
+        return CsvExport::download(
+            'stock-movement-ledger.csv',
+            $header,
+            $rows,
+        );
+    }
+
+    /**
+     * Build the shared tenant-scoped, filtered query behind every rendering
+     * of the Stock Movement Ledger report.
+     *
+     * @return array{0: array{locationId: int|null, storageLocationId: int|null, inventoryItemId: int|null, type: string|null, from: string|null, to: string|null}, 1: EloquentBuilder<StockMovement>, 2: bool}
+     */
+    private function filteredQuery(
+        Request $request,
+        Organization $organization,
+    ): array {
         $validated = $request->validate([
             'location_id' => [
                 'nullable',
@@ -149,52 +262,8 @@ class StockMovementLedgerReportController extends Controller
             $organization,
         );
 
-        $rows = $query
-            ->orderBy('occurred_at')
-            ->orderBy('id')
-            ->paginate(50)
-            ->withQueryString()
-            ->through(
-                fn (StockMovement $movement): array => [
-                    'id' => $movement->id,
-                    'occurredAt' => $movement->occurred_at->toIso8601String(),
-                    'locationId' => $movement->location_id,
-                    'locationName' => $movement->location->name,
-                    'storageLocationId' => $movement->storage_location_id,
-                    'storageLocationName' => $movement->storageLocation->name,
-                    'itemId' => $movement->inventory_item_id,
-                    'itemName' => $movement->inventoryItem->name,
-                    'itemSku' => $movement->inventoryItem->sku,
-                    'type' => $movement->type->value,
-                    'quantity' => (string) $movement->quantity,
-                    'baseUnitSymbol' => $movement->baseUnitOfMeasure->symbol,
-                    'unitCost' => $canViewCosts
-                        ? $movement->unit_cost === null
-                            ? null
-                            : (string) $movement->unit_cost
-                        : null,
-                    'totalCost' => $canViewCosts
-                        ? $movement->total_cost === null
-                            ? null
-                            : (string) $movement->total_cost
-                        : null,
-                    'referenceType' => $movement->reference_type,
-                    'referenceId' => $movement->reference_id,
-                    'actorName' => $movement->creator?->name,
-                ],
-            )
-            ->toArray();
-
-        return Inertia::render('inventory/stock-movement-ledger', [
-            'rows' => $rows,
-            'locationOptions' => $this->locationOptions($organization),
-            'storageLocationOptions' => $this->storageLocationOptions(
-                $organization,
-                $locationId,
-            ),
-            'itemOptions' => $this->itemOptions($organization),
-            'typeOptions' => $this->typeOptions(),
-            'filters' => [
+        return [
+            [
                 'locationId' => $locationId,
                 'storageLocationId' => $storageLocationId,
                 'inventoryItemId' => $itemId,
@@ -202,9 +271,45 @@ class StockMovementLedgerReportController extends Controller
                 'from' => $from,
                 'to' => $to,
             ],
-            'currency' => $organization->currency,
-            'canViewCosts' => $canViewCosts,
-        ]);
+            $query,
+            $canViewCosts,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function rowData(
+        StockMovement $movement,
+        bool $canViewCosts,
+    ): array {
+        return [
+            'id' => $movement->id,
+            'occurredAt' => $movement->occurred_at->toIso8601String(),
+            'locationId' => $movement->location_id,
+            'locationName' => $movement->location->name,
+            'storageLocationId' => $movement->storage_location_id,
+            'storageLocationName' => $movement->storageLocation->name,
+            'itemId' => $movement->inventory_item_id,
+            'itemName' => $movement->inventoryItem->name,
+            'itemSku' => $movement->inventoryItem->sku,
+            'type' => $movement->type->value,
+            'quantity' => (string) $movement->quantity,
+            'baseUnitSymbol' => $movement->baseUnitOfMeasure->symbol,
+            'unitCost' => $canViewCosts
+                ? $movement->unit_cost === null
+                    ? null
+                    : (string) $movement->unit_cost
+                : null,
+            'totalCost' => $canViewCosts
+                ? $movement->total_cost === null
+                    ? null
+                    : (string) $movement->total_cost
+                : null,
+            'referenceType' => $movement->reference_type,
+            'referenceId' => $movement->reference_id,
+            'actorName' => $movement->creator?->name,
+        ];
     }
 
     /**

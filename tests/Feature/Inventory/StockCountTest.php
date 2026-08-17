@@ -844,6 +844,145 @@ test(
 );
 
 test(
+    'variance export streams a CSV isolated to the active tenant with cost fields hidden appropriately',
+    function () {
+        recordStockCountOpeningBalanceForTest(
+            $this->organization,
+            $this->location,
+            $this->storageLocation,
+            $this->inventoryItem,
+            $this->gram,
+        );
+
+        $count = createSubmittedStockCountForTest(
+            $this->organization,
+            $this->actor,
+            $this->location,
+            $this->storageLocation,
+            $this->inventoryItem,
+            $this->kilogram,
+            '1.2',
+            'COUNT-EXPORT',
+        );
+
+        app(FinalizeStockCount::class)->handle(
+            $this->organization,
+            $this->actor,
+            $count,
+        );
+
+        $otherOrganization =
+            Organization::factory()->create();
+
+        $otherLocation = Location::factory()->create([
+            'organization_id' => $otherOrganization->id,
+            'active' => true,
+        ]);
+
+        $otherStorage =
+            createStockCountStorageLocationForTest(
+                $otherOrganization,
+                $otherLocation,
+                'EXPORT',
+            );
+
+        $otherUnit = UnitOfMeasure::factory()->create([
+            'organization_id' => $otherOrganization->id,
+            'name' => 'Piece',
+            'symbol' => 'piece',
+            'dimension' => 'count',
+            'active' => true,
+        ]);
+
+        $otherItem = InventoryItem::factory()->create([
+            'organization_id' => $otherOrganization->id,
+            'base_unit_of_measure_id' => $otherUnit->id,
+            'active' => true,
+        ]);
+
+        $otherCount = StockCount::query()->create([
+            'organization_id' => $otherOrganization->id,
+            'location_id' => $otherLocation->id,
+            'storage_location_id' => $otherStorage->id,
+            'number' => 'OTHER-COUNT-EXPORT',
+            'status' => StockCountStatus::Finalized,
+            'counted_at' => now(),
+            'created_by' => null,
+            'submitted_by' => null,
+            'finalized_by' => null,
+            'finalized_at' => now(),
+        ]);
+
+        $otherCount->lines()->create([
+            'inventory_item_id' => $otherItem->id,
+            'expected_base_quantity' => '1.000000',
+            'counted_quantity' => '2.000000',
+            'count_unit_id' => $otherUnit->id,
+            'counted_base_quantity' => '2.000000',
+            'variance_base_quantity' => '1.000000',
+            'variance_unit_cost' => '10.0000',
+            'variance_total_cost' => '10.0000',
+            'notes' => null,
+        ]);
+
+        $date = now()
+            ->setTimezone($this->organization->timezone)
+            ->toDateString();
+
+        $url = route(
+            'stock-counts.variance.export',
+            [
+                'location_id' => $this->location->id,
+                'from' => $date,
+                'to' => $date,
+            ],
+        );
+
+        $staffContent = $this
+            ->actingAs($this->actor)
+            ->withSession([
+                'active_organization_id' => $this->organization->id,
+            ])
+            ->get($url)
+            ->assertOk()
+            ->streamedContent();
+
+        expect($staffContent)->toContain('COUNT-EXPORT');
+        expect($staffContent)->not->toContain('OTHER-COUNT-EXPORT');
+        expect($staffContent)->not->toContain('0.2500');
+
+        $managerContent = $this
+            ->actingAs($this->manager)
+            ->withSession([
+                'active_organization_id' => $this->organization->id,
+            ])
+            ->get($url)
+            ->assertOk()
+            ->streamedContent();
+
+        expect($managerContent)->toContain('0.2500');
+    },
+);
+
+test('variance export requires reports.view permission', function () {
+    $unprivileged = User::factory()->create();
+
+    OrganizationMembership::factory()->create([
+        'organization_id' => $this->organization->id,
+        'user_id' => $unprivileged->id,
+        'role' => OrganizationRole::KitchenStaff,
+    ]);
+
+    $this
+        ->actingAs($unprivileged)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('stock-counts.variance.export'))
+        ->assertForbidden();
+});
+
+test(
     'variance report location filter excludes counts from other locations in the same tenant',
     function () {
         recordStockCountOpeningBalanceForTest(

@@ -19,7 +19,9 @@ use App\Models\StockCountLine;
 use App\Models\StorageLocation;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use App\Support\Csv\CsvExport;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,6 +29,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class StockCountController extends Controller
 {
@@ -374,6 +377,157 @@ class StockCountController extends Controller
             $organization,
         );
 
+        [$filters, $query] = $this->varianceQuery(
+            $request,
+            $organization,
+        );
+
+        $canViewCosts = Gate::allows(
+            OrganizationPermission::CostsView->value,
+            $organization,
+        );
+
+        $counts = $query
+            ->orderByDesc('counted_at')
+            ->orderByDesc('id')
+            ->get();
+
+        $rows = [];
+
+        foreach ($counts as $count) {
+            foreach ($count->lines as $line) {
+                $rows[] = $this->varianceRow(
+                    $count,
+                    $line,
+                    $canViewCosts,
+                );
+            }
+        }
+
+        $locationOptions = Location::query()
+            ->where(
+                'organization_id',
+                $organization->id,
+            )
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(
+                static fn (Location $location): array => [
+                    'id' => $location->id,
+                    'name' => $location->name,
+                ],
+            )
+            ->values()
+            ->all();
+
+        return Inertia::render(
+            'stock-counts/variance',
+            [
+                'rows' => $rows,
+                'locationOptions' => $locationOptions,
+                'filters' => $filters,
+                'currency' => $organization->currency,
+                'canViewCosts' => $canViewCosts,
+            ],
+        );
+    }
+
+    /**
+     * Stream the same permission- and tenant-scoped variance evidence as a
+     * CSV download.
+     */
+    public function exportVariance(Request $request): StreamedResponse
+    {
+        $organization = $this->activeOrganization(
+            $request,
+        );
+
+        Gate::authorize(
+            OrganizationPermission::ReportsView->value,
+            $organization,
+        );
+
+        [, $query] = $this->varianceQuery(
+            $request,
+            $organization,
+        );
+
+        $canViewCosts = Gate::allows(
+            OrganizationPermission::CostsView->value,
+            $organization,
+        );
+
+        $header = [
+            'Count Number',
+            'Counted At',
+            'Location',
+            'Storage Location',
+            'Item',
+            'SKU',
+            'Expected Base Quantity',
+            'Counted Quantity',
+            'Count Unit',
+            'Counted Base Quantity',
+            'Base Unit',
+            'Variance Base Quantity',
+            'Variance Unit Cost',
+            'Variance Total Cost',
+        ];
+
+        $rows = (function () use (
+            $query,
+            $canViewCosts,
+        ): iterable {
+            foreach (
+                $query
+                    ->orderByDesc('counted_at')
+                    ->orderByDesc('id')
+                    ->cursor() as $count
+            ) {
+                foreach ($count->lines as $line) {
+                    $data = $this->varianceRow(
+                        $count,
+                        $line,
+                        $canViewCosts,
+                    );
+
+                    yield [
+                        $data['countNumber'],
+                        $data['countedAt'],
+                        $data['locationName'],
+                        $data['storageLocationName'],
+                        $data['itemName'],
+                        $data['itemSku'],
+                        $data['expectedBaseQuantity'],
+                        $data['countedQuantity'],
+                        $data['countUnitSymbol'],
+                        $data['countedBaseQuantity'],
+                        $data['baseUnitSymbol'],
+                        $data['varianceBaseQuantity'],
+                        $data['varianceUnitCost'],
+                        $data['varianceTotalCost'],
+                    ];
+                }
+            }
+        })();
+
+        return CsvExport::download(
+            'stock-count-variance.csv',
+            $header,
+            $rows,
+        );
+    }
+
+    /**
+     * Build the shared tenant-scoped, filtered query behind every rendering
+     * of the finalized Count Variance report.
+     *
+     * @return array{0: array{locationId: int|null, from: string|null, to: string|null}, 1: EloquentBuilder<StockCount>}
+     */
+    private function varianceQuery(
+        Request $request,
+        Organization $organization,
+    ): array {
         $validated = $request->validate([
             'location_id' => [
                 'nullable',
@@ -469,79 +623,50 @@ class StockCountController extends Controller
             );
         }
 
-        $counts = $query
-            ->orderByDesc('counted_at')
-            ->orderByDesc('id')
-            ->get();
-
-        $canViewCosts = Gate::allows(
-            OrganizationPermission::CostsView->value,
-            $organization,
-        );
-
-        $rows = [];
-
-        foreach ($counts as $count) {
-            foreach ($count->lines as $line) {
-                $rows[] = [
-                    'countId' => $count->id,
-                    'countNumber' => $count->number,
-                    'countedAt' => $count->counted_at
-                        ?->toIso8601String(),
-                    'locationName' => $count->location->name,
-                    'storageLocationName' => $count->storageLocation->name,
-                    'itemName' => $line->inventoryItem->name,
-                    'itemSku' => $line->inventoryItem->sku,
-                    'expectedBaseQuantity' => $line->expected_base_quantity,
-                    'countedQuantity' => $line->counted_quantity,
-                    'countUnitSymbol' => $line->countUnit->symbol,
-                    'countedBaseQuantity' => $line->counted_base_quantity,
-                    'baseUnitSymbol' => $line
-                        ->inventoryItem
-                        ->baseUnitOfMeasure
-                        ->symbol,
-                    'varianceBaseQuantity' => $line->variance_base_quantity,
-                    'varianceUnitCost' => $canViewCosts
-                        ? $line->variance_unit_cost
-                        : null,
-                    'varianceTotalCost' => $canViewCosts
-                        ? $line->variance_total_cost
-                        : null,
-                    'movementId' => $line->movement?->id,
-                ];
-            }
-        }
-
-        $locationOptions = Location::query()
-            ->where(
-                'organization_id',
-                $organization->id,
-            )
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(
-                static fn (Location $location): array => [
-                    'id' => $location->id,
-                    'name' => $location->name,
-                ],
-            )
-            ->values()
-            ->all();
-
-        return Inertia::render(
-            'stock-counts/variance',
+        return [
             [
-                'rows' => $rows,
-                'locationOptions' => $locationOptions,
-                'filters' => [
-                    'locationId' => $locationId,
-                    'from' => $from,
-                    'to' => $to,
-                ],
-                'currency' => $organization->currency,
-                'canViewCosts' => $canViewCosts,
+                'locationId' => $locationId,
+                'from' => $from,
+                'to' => $to,
             ],
-        );
+            $query,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function varianceRow(
+        StockCount $count,
+        StockCountLine $line,
+        bool $canViewCosts,
+    ): array {
+        return [
+            'countId' => $count->id,
+            'countNumber' => $count->number,
+            'countedAt' => $count->counted_at
+                ?->toIso8601String(),
+            'locationName' => $count->location->name,
+            'storageLocationName' => $count->storageLocation->name,
+            'itemName' => $line->inventoryItem->name,
+            'itemSku' => $line->inventoryItem->sku,
+            'expectedBaseQuantity' => $line->expected_base_quantity,
+            'countedQuantity' => $line->counted_quantity,
+            'countUnitSymbol' => $line->countUnit->symbol,
+            'countedBaseQuantity' => $line->counted_base_quantity,
+            'baseUnitSymbol' => $line
+                ->inventoryItem
+                ->baseUnitOfMeasure
+                ->symbol,
+            'varianceBaseQuantity' => $line->variance_base_quantity,
+            'varianceUnitCost' => $canViewCosts
+                ? $line->variance_unit_cost
+                : null,
+            'varianceTotalCost' => $canViewCosts
+                ? $line->variance_total_cost
+                : null,
+            'movementId' => $line->movement?->id,
+        ];
     }
 
     /**

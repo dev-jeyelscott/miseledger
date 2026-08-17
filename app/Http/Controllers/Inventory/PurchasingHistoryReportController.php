@@ -9,7 +9,9 @@ use App\Models\Organization;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\Supplier;
+use App\Support\Csv\CsvExport;
 use Brick\Math\BigDecimal;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -17,6 +19,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PurchasingHistoryReportController extends Controller
 {
@@ -34,6 +37,127 @@ class PurchasingHistoryReportController extends Controller
             $organization,
         );
 
+        [$filters, $query] = $this->filteredQuery(
+            $request,
+            $organization,
+        );
+
+        $purchaseOrders = $query
+            ->orderByDesc('order_date')
+            ->orderByDesc('id')
+            ->get();
+
+        $rows = $purchaseOrders
+            ->flatMap(
+                fn (PurchaseOrder $purchaseOrder): array => $purchaseOrder
+                    ->lines
+                    ->map(
+                        fn (PurchaseOrderLine $line): array => $this->lineData(
+                            $purchaseOrder,
+                            $line,
+                        ),
+                    )
+                    ->all(),
+            )
+            ->values()
+            ->all();
+
+        return Inertia::render('inventory/purchasing-history', [
+            'rows' => $rows,
+            'supplierOptions' => $this->supplierOptions($organization),
+            'locationOptions' => $this->locationOptions($organization),
+            'filters' => $filters,
+            'currency' => $organization->currency,
+        ]);
+    }
+
+    /**
+     * Stream the same permission- and tenant-scoped rows as a CSV download.
+     */
+    public function export(Request $request): StreamedResponse
+    {
+        $organization = $this->activeOrganization($request);
+
+        Gate::authorize(
+            OrganizationPermission::ReportsView->value,
+            $organization,
+        );
+
+        [, $query] = $this->filteredQuery(
+            $request,
+            $organization,
+        );
+
+        $header = [
+            'PO Number',
+            'Status',
+            'Order Date',
+            'Supplier',
+            'Location',
+            'Item',
+            'Supplier SKU',
+            'Ordered Quantity',
+            'Purchase Unit',
+            'Base Quantity',
+            'Base Unit',
+            'Received Base Quantity',
+            'Remaining Base Quantity',
+            'Over Received Base Quantity',
+            'Receipt State',
+            'Unit Price',
+            'Line Total',
+        ];
+
+        $rows = (function () use ($query): iterable {
+            foreach (
+                $query
+                    ->orderByDesc('order_date')
+                    ->orderByDesc('id')
+                    ->cursor() as $purchaseOrder
+            ) {
+                foreach ($purchaseOrder->lines as $line) {
+                    $data = $this->lineData($purchaseOrder, $line);
+
+                    yield [
+                        $data['purchaseOrderNumber'],
+                        $data['purchaseOrderStatus'],
+                        $data['orderDate'],
+                        $data['supplierName'],
+                        $data['locationName'],
+                        $data['itemName'],
+                        $data['supplierSku'],
+                        $data['orderedQuantity'],
+                        $data['purchaseUnitSymbol'],
+                        $data['baseQuantity'],
+                        $data['baseUnitSymbol'],
+                        $data['receivedBaseQuantity'],
+                        $data['remainingBaseQuantity'],
+                        $data['overReceivedBaseQuantity'],
+                        $data['receiptState'],
+                        $data['unitPrice'],
+                        $data['lineTotal'],
+                    ];
+                }
+            }
+        })();
+
+        return CsvExport::download(
+            'purchasing-history.csv',
+            $header,
+            $rows,
+        );
+    }
+
+    /**
+     * Build the shared tenant-scoped, filtered query behind every rendering
+     * of the Purchasing History report.
+     *
+     * @return array{0: array{supplierId: int|null, locationId: int|null, from: string|null, to: string|null}, 1: EloquentBuilder<PurchaseOrder>}
+     */
+    private function filteredQuery(
+        Request $request,
+        Organization $organization,
+    ): array {
         $validated = $request->validate([
             'supplier_id' => [
                 'nullable',
@@ -115,38 +239,15 @@ class PurchasingHistoryReportController extends Controller
             $query->whereDate('order_date', '<=', $to);
         }
 
-        $purchaseOrders = $query
-            ->orderByDesc('order_date')
-            ->orderByDesc('id')
-            ->get();
-
-        $rows = $purchaseOrders
-            ->flatMap(
-                fn (PurchaseOrder $purchaseOrder): array => $purchaseOrder
-                    ->lines
-                    ->map(
-                        fn (PurchaseOrderLine $line): array => $this->lineData(
-                            $purchaseOrder,
-                            $line,
-                        ),
-                    )
-                    ->all(),
-            )
-            ->values()
-            ->all();
-
-        return Inertia::render('inventory/purchasing-history', [
-            'rows' => $rows,
-            'supplierOptions' => $this->supplierOptions($organization),
-            'locationOptions' => $this->locationOptions($organization),
-            'filters' => [
+        return [
+            [
                 'supplierId' => $supplierId,
                 'locationId' => $locationId,
                 'from' => $from,
                 'to' => $to,
             ],
-            'currency' => $organization->currency,
-        ]);
+            $query,
+        ];
     }
 
     /**

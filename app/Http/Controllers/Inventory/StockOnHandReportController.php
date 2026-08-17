@@ -9,6 +9,7 @@ use App\Models\Location;
 use App\Models\Organization;
 use App\Models\StockBalance;
 use App\Models\StorageLocation;
+use App\Support\Csv\CsvExport;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class StockOnHandReportController extends Controller
 {
@@ -32,6 +34,107 @@ class StockOnHandReportController extends Controller
             $organization,
         );
 
+        [$filters, $query, $canViewCosts] = $this->filteredQuery(
+            $request,
+            $organization,
+        );
+
+        $rows = (clone $query)
+            ->orderBy('location_id')
+            ->orderBy('storage_location_id')
+            ->get()
+            ->map(
+                fn (StockBalance $balance): array => $this->rowData(
+                    $balance,
+                    $canViewCosts,
+                ),
+            )
+            ->values()
+            ->all();
+
+        return Inertia::render('inventory/stock-on-hand', [
+            'rows' => $rows,
+            'locationOptions' => $this->locationOptions($organization),
+            'storageLocationOptions' => $this->storageLocationOptions(
+                $organization,
+                $filters['locationId'],
+            ),
+            'categoryOptions' => $this->categoryOptions($organization),
+            'filters' => $filters,
+            'currency' => $organization->currency,
+            'canViewCosts' => $canViewCosts,
+        ]);
+    }
+
+    /**
+     * Stream the same permission- and tenant-scoped rows as a CSV download.
+     */
+    public function export(Request $request): StreamedResponse
+    {
+        $organization = $this->activeOrganization($request);
+
+        Gate::authorize(
+            OrganizationPermission::ReportsView->value,
+            $organization,
+        );
+
+        [, $query, $canViewCosts] = $this->filteredQuery(
+            $request,
+            $organization,
+        );
+
+        $header = [
+            'Location',
+            'Storage Location',
+            'Item',
+            'SKU',
+            'Category',
+            'Quantity on Hand',
+            'Unit',
+            'Average Unit Cost',
+            'Inventory Value',
+        ];
+
+        $rows = (function () use ($query, $canViewCosts): iterable {
+            foreach (
+                $query
+                    ->orderBy('location_id')
+                    ->orderBy('storage_location_id')
+                    ->cursor() as $balance
+            ) {
+                $data = $this->rowData($balance, $canViewCosts);
+
+                yield [
+                    $data['locationName'],
+                    $data['storageLocationName'],
+                    $data['itemName'],
+                    $data['itemSku'],
+                    $data['categoryName'],
+                    $data['quantityOnHand'],
+                    $data['baseUnitSymbol'],
+                    $data['averageUnitCost'],
+                    $data['inventoryValue'],
+                ];
+            }
+        })();
+
+        return CsvExport::download(
+            'stock-on-hand.csv',
+            $header,
+            $rows,
+        );
+    }
+
+    /**
+     * Build the shared tenant-scoped, filtered query behind every rendering
+     * of the Stock on Hand report.
+     *
+     * @return array{0: array{locationId: int|null, storageLocationId: int|null, inventoryCategoryId: int|null, inventoryItemId: int|null}, 1: EloquentBuilder<StockBalance>, 2: bool}
+     */
+    private function filteredQuery(
+        Request $request,
+        Organization $organization,
+    ): array {
         $validated = $request->validate([
             'location_id' => [
                 'nullable',
@@ -129,57 +232,50 @@ class StockOnHandReportController extends Controller
             $organization,
         );
 
-        $rows = $query
-            ->orderBy('location_id')
-            ->orderBy('storage_location_id')
-            ->get()
-            ->map(
-                static fn (StockBalance $balance): array => [
-                    'id' => $balance->id,
-                    'locationId' => $balance->location_id,
-                    'locationName' => $balance->location->name,
-                    'storageLocationId' => $balance->storage_location_id,
-                    'storageLocationName' => $balance->storageLocation->name,
-                    'itemId' => $balance->inventory_item_id,
-                    'itemName' => $balance->inventoryItem->name,
-                    'itemSku' => $balance->inventoryItem->sku,
-                    'categoryName' => $balance
-                        ->inventoryItem
-                        ->inventoryCategory
-                        ?->name,
-                    'quantityOnHand' => $balance->quantity_on_hand,
-                    'baseUnitSymbol' => $balance
-                        ->inventoryItem
-                        ->baseUnitOfMeasure
-                        ->symbol,
-                    'averageUnitCost' => $canViewCosts
-                        ? $balance->average_unit_cost
-                        : null,
-                    'inventoryValue' => $canViewCosts
-                        ? $balance->inventory_value
-                        : null,
-                ],
-            )
-            ->values()
-            ->all();
-
-        return Inertia::render('inventory/stock-on-hand', [
-            'rows' => $rows,
-            'locationOptions' => $this->locationOptions($organization),
-            'storageLocationOptions' => $this->storageLocationOptions(
-                $organization,
-                $locationId,
-            ),
-            'categoryOptions' => $this->categoryOptions($organization),
-            'filters' => [
+        return [
+            [
                 'locationId' => $locationId,
                 'storageLocationId' => $storageLocationId,
                 'inventoryCategoryId' => $categoryId,
                 'inventoryItemId' => $itemId,
             ],
-            'currency' => $organization->currency,
-            'canViewCosts' => $canViewCosts,
-        ]);
+            $query,
+            $canViewCosts,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function rowData(
+        StockBalance $balance,
+        bool $canViewCosts,
+    ): array {
+        return [
+            'id' => $balance->id,
+            'locationId' => $balance->location_id,
+            'locationName' => $balance->location->name,
+            'storageLocationId' => $balance->storage_location_id,
+            'storageLocationName' => $balance->storageLocation->name,
+            'itemId' => $balance->inventory_item_id,
+            'itemName' => $balance->inventoryItem->name,
+            'itemSku' => $balance->inventoryItem->sku,
+            'categoryName' => $balance
+                ->inventoryItem
+                ->inventoryCategory
+                ?->name,
+            'quantityOnHand' => $balance->quantity_on_hand,
+            'baseUnitSymbol' => $balance
+                ->inventoryItem
+                ->baseUnitOfMeasure
+                ->symbol,
+            'averageUnitCost' => $canViewCosts
+                ? $balance->average_unit_cost
+                : null,
+            'inventoryValue' => $canViewCosts
+                ? $balance->inventory_value
+                : null,
+        ];
     }
 
     /**

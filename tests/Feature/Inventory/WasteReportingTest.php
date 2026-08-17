@@ -513,6 +513,136 @@ test(
 );
 
 test(
+    'waste export streams the same filtered evidence as a CSV download',
+    function () {
+        createWasteReportingEvidence(
+            $this->organization,
+            $this->mainLocation,
+            $this->mainStorage,
+            $this->chicken,
+            $this->spoilage,
+            $this->gram,
+            $this->alex,
+            '100.100000',
+            '0.1000',
+            '10.0100',
+            CarbonImmutable::parse(
+                '2026-08-10 10:00:00',
+                'Asia/Manila',
+            )->utc(),
+        );
+
+        $otherOrganization = Organization::factory()->create([
+            'timezone' => 'Asia/Manila',
+        ]);
+        $otherLocation = Location::factory()->create([
+            'organization_id' => $otherOrganization->id,
+            'active' => true,
+        ]);
+        $otherStorage = createWasteReportingStorage(
+            $otherOrganization,
+            $otherLocation,
+            'OTHEREXPORT',
+        );
+        $otherUnit = UnitOfMeasure::factory()->create([
+            'organization_id' => $otherOrganization->id,
+            'dimension' => 'count',
+            'active' => true,
+        ]);
+        $otherItem = InventoryItem::factory()->create([
+            'organization_id' => $otherOrganization->id,
+            'base_unit_of_measure_id' => $otherUnit->id,
+            'active' => true,
+            'name' => 'Other Tenant Waste Item',
+        ]);
+        $otherReason = WasteReason::query()->create([
+            'organization_id' => $otherOrganization->id,
+            'name' => 'Other Tenant Reason',
+            'active' => true,
+        ]);
+
+        createWasteReportingEvidence(
+            $otherOrganization,
+            $otherLocation,
+            $otherStorage,
+            $otherItem,
+            $otherReason,
+            $otherUnit,
+            null,
+            '999.000000',
+            '1.0000',
+            '999.0000',
+            CarbonImmutable::parse(
+                '2026-08-11 12:00:00',
+                'Asia/Manila',
+            )->utc(),
+        );
+
+        $content = $this
+            ->actingAs($this->manager)
+            ->withSession([
+                'active_organization_id' => $this->organization->id,
+            ])
+            ->get(route('waste.export'))
+            ->assertOk()
+            ->streamedContent();
+
+        expect($content)->toContain('Chicken');
+        expect($content)->toContain('10.0100');
+        expect($content)->not->toContain('Other Tenant Waste Item');
+    },
+);
+
+test('waste export hides cost fields from members without cost visibility', function () {
+    createWasteReportingEvidence(
+        $this->organization,
+        $this->mainLocation,
+        $this->mainStorage,
+        $this->chicken,
+        $this->spoilage,
+        $this->gram,
+        $this->alex,
+        '10.000000',
+        '50.0000',
+        '500.0000',
+        CarbonImmutable::parse(
+            '2026-08-15 12:00:00',
+            'Asia/Manila',
+        )->utc(),
+    );
+
+    $content = $this
+        ->actingAs($this->inventoryStaff)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('waste.export'))
+        ->assertOk()
+        ->streamedContent();
+
+    expect($content)->toContain('Chicken');
+    expect($content)->not->toContain('500.0000');
+});
+
+test('waste export requires reports.view permission', function () {
+    $unprivileged = User::factory()->create();
+
+    OrganizationMembership::factory()->create([
+        'organization_id' => $this->organization->id,
+        'user_id' => $unprivileged->id,
+        'role' => OrganizationRole::KitchenStaff,
+    ]);
+
+    $this
+        ->actingAs($unprivileged)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('waste.export'))
+        ->assertForbidden();
+});
+
+test(
     'waste aggregate reports never expose protected cost values',
     function () {
         createWasteReportingEvidence(
