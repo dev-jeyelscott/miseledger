@@ -9,11 +9,13 @@ import {
     LayoutGrid,
     NotebookText,
     PackageCheck,
+    PackageSearch,
     Trash2,
     Truck,
 } from 'lucide-react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
+import StockOnHandReportController from '@/actions/App/Http/Controllers/Inventory/StockOnHandReportController';
 import StockTransferController from '@/actions/App/Http/Controllers/Inventory/StockTransferController';
 import WasteController from '@/actions/App/Http/Controllers/Inventory/WasteController';
 import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/GoodsReceiptController';
@@ -74,6 +76,14 @@ export function AppSidebar() {
             title: 'Inventory',
             href: InventoryItemController.index(),
             icon: Boxes,
+        });
+    }
+
+    if (activeMembership?.permissions.includes('reports.view')) {
+        mainNavItems.push({
+            title: 'Stock on hand',
+            href: StockOnHandReportController.index(),
+            icon: PackageSearch,
         });
     }
 
