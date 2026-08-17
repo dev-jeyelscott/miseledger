@@ -229,18 +229,19 @@ class PurchasingHistoryReportController extends Controller
      */
     private function supplierOptions(Organization $organization): array
     {
-        return Supplier::query()
-            ->where('organization_id', $organization->id)
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(
-                static fn (Supplier $supplier): array => [
-                    'id' => $supplier->id,
-                    'name' => $supplier->name,
-                ],
-            )
-            ->values()
-            ->all();
+        return array_values(
+            Supplier::query()
+                ->where('organization_id', $organization->id)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(
+                    static fn (Supplier $supplier): array => [
+                        'id' => $supplier->id,
+                        'name' => $supplier->name,
+                    ],
+                )
+                ->all(),
+        );
     }
 
     /**
@@ -248,18 +249,19 @@ class PurchasingHistoryReportController extends Controller
      */
     private function locationOptions(Organization $organization): array
     {
-        return Location::query()
-            ->where('organization_id', $organization->id)
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(
-                static fn (Location $location): array => [
-                    'id' => $location->id,
-                    'name' => $location->name,
-                ],
-            )
-            ->values()
-            ->all();
+        return array_values(
+            Location::query()
+                ->where('organization_id', $organization->id)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(
+                    static fn (Location $location): array => [
+                        'id' => $location->id,
+                        'name' => $location->name,
+                    ],
+                )
+                ->all(),
+        );
     }
 
     private function activeOrganization(Request $request): Organization

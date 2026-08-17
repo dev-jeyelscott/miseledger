@@ -212,18 +212,19 @@ class StockMovementLedgerReportController extends Controller
      */
     private function locationOptions(Organization $organization): array
     {
-        return Location::query()
-            ->where('organization_id', $organization->id)
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(
-                static fn (Location $location): array => [
-                    'id' => $location->id,
-                    'name' => $location->name,
-                ],
-            )
-            ->values()
-            ->all();
+        return array_values(
+            Location::query()
+                ->where('organization_id', $organization->id)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(
+                    static fn (Location $location): array => [
+                        'id' => $location->id,
+                        'name' => $location->name,
+                    ],
+                )
+                ->all(),
+        );
     }
 
     /**
@@ -240,17 +241,18 @@ class StockMovementLedgerReportController extends Controller
             $query->where('location_id', $locationId);
         }
 
-        return $query
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(
-                static fn (StorageLocation $storageLocation): array => [
-                    'id' => $storageLocation->id,
-                    'name' => $storageLocation->name,
-                ],
-            )
-            ->values()
-            ->all();
+        return array_values(
+            $query
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(
+                    static fn (StorageLocation $storageLocation): array => [
+                        'id' => $storageLocation->id,
+                        'name' => $storageLocation->name,
+                    ],
+                )
+                ->all(),
+        );
     }
 
     /**
@@ -258,18 +260,19 @@ class StockMovementLedgerReportController extends Controller
      */
     private function itemOptions(Organization $organization): array
     {
-        return InventoryItem::query()
-            ->where('organization_id', $organization->id)
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(
-                static fn (InventoryItem $item): array => [
-                    'id' => $item->id,
-                    'name' => $item->name,
-                ],
-            )
-            ->values()
-            ->all();
+        return array_values(
+            InventoryItem::query()
+                ->where('organization_id', $organization->id)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(
+                    static fn (InventoryItem $item): array => [
+                        'id' => $item->id,
+                        'name' => $item->name,
+                    ],
+                )
+                ->all(),
+        );
     }
 
     /**
