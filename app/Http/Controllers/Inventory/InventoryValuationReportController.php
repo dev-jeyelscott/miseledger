@@ -156,18 +156,19 @@ class InventoryValuationReportController extends Controller
      */
     private function totalsByLocation(Collection $balances): array
     {
-        return $balances
-            ->groupBy('location_id')
-            ->map(
-                fn (Collection $group): array => [
-                    'locationId' => $group->first()->location_id,
-                    'locationName' => $group->first()->location->name,
-                    'quantity' => (string) $this->sumQuantities($group),
-                    'value' => (string) $this->sumValues($group),
-                ],
-            )
-            ->values()
-            ->all();
+        return array_values(
+            $balances
+                ->groupBy('location_id')
+                ->map(
+                    fn (Collection $group): array => [
+                        'locationId' => $group->first()->location_id,
+                        'locationName' => $group->first()->location->name,
+                        'quantity' => (string) $this->sumQuantities($group),
+                        'value' => (string) $this->sumValues($group),
+                    ],
+                )
+                ->all(),
+        );
     }
 
     /**
@@ -176,20 +177,21 @@ class InventoryValuationReportController extends Controller
      */
     private function totalsByCategory(Collection $balances): array
     {
-        return $balances
-            ->groupBy(
-                fn (StockBalance $balance): int|string => $balance->inventoryItem->inventory_category_id ?? 'uncategorized',
-            )
-            ->map(
-                fn (Collection $group): array => [
-                    'categoryId' => $group->first()->inventoryItem->inventory_category_id,
-                    'categoryName' => $group->first()->inventoryItem->inventoryCategory?->name,
-                    'quantity' => (string) $this->sumQuantities($group),
-                    'value' => (string) $this->sumValues($group),
-                ],
-            )
-            ->values()
-            ->all();
+        return array_values(
+            $balances
+                ->groupBy(
+                    fn (StockBalance $balance): int|string => $balance->inventoryItem->inventory_category_id ?? 'uncategorized',
+                )
+                ->map(
+                    fn (Collection $group): array => [
+                        'categoryId' => $group->first()->inventoryItem->inventory_category_id,
+                        'categoryName' => $group->first()->inventoryItem->inventoryCategory?->name,
+                        'quantity' => (string) $this->sumQuantities($group),
+                        'value' => (string) $this->sumValues($group),
+                    ],
+                )
+                ->all(),
+        );
     }
 
     /**
@@ -223,18 +225,19 @@ class InventoryValuationReportController extends Controller
      */
     private function locationOptions(Organization $organization): array
     {
-        return Location::query()
-            ->where('organization_id', $organization->id)
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(
-                static fn (Location $location): array => [
-                    'id' => $location->id,
-                    'name' => $location->name,
-                ],
-            )
-            ->values()
-            ->all();
+        return array_values(
+            Location::query()
+                ->where('organization_id', $organization->id)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(
+                    static fn (Location $location): array => [
+                        'id' => $location->id,
+                        'name' => $location->name,
+                    ],
+                )
+                ->all(),
+        );
     }
 
     /**
@@ -242,18 +245,19 @@ class InventoryValuationReportController extends Controller
      */
     private function categoryOptions(Organization $organization): array
     {
-        return InventoryCategory::query()
-            ->where('organization_id', $organization->id)
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(
-                static fn (InventoryCategory $category): array => [
-                    'id' => $category->id,
-                    'name' => $category->name,
-                ],
-            )
-            ->values()
-            ->all();
+        return array_values(
+            InventoryCategory::query()
+                ->where('organization_id', $organization->id)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(
+                    static fn (InventoryCategory $category): array => [
+                        'id' => $category->id,
+                        'name' => $category->name,
+                    ],
+                )
+                ->all(),
+        );
     }
 
     private function activeOrganization(Request $request): Organization

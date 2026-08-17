@@ -47,6 +47,7 @@ final class LocationItemCostQuery
             ->where('organization_id', $organization->getKey())
             ->where('location_id', $location->getKey())
             ->where('inventory_item_id', $inventoryItem->getKey())
+            ->toBase()
             ->selectRaw('coalesce(sum(quantity_on_hand), 0) as total_quantity, coalesce(sum(inventory_value), 0) as total_value')
             ->first();
 

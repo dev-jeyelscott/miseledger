@@ -176,18 +176,19 @@ class LowStockReportController extends Controller
      */
     private function locationOptions(Organization $organization): array
     {
-        return Location::query()
-            ->where('organization_id', $organization->id)
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(
-                static fn (Location $location): array => [
-                    'id' => $location->id,
-                    'name' => $location->name,
-                ],
-            )
-            ->values()
-            ->all();
+        return array_values(
+            Location::query()
+                ->where('organization_id', $organization->id)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(
+                    static fn (Location $location): array => [
+                        'id' => $location->id,
+                        'name' => $location->name,
+                    ],
+                )
+                ->all(),
+        );
     }
 
     /**
@@ -204,17 +205,18 @@ class LowStockReportController extends Controller
             $query->where('location_id', $locationId);
         }
 
-        return $query
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(
-                static fn (StorageLocation $storageLocation): array => [
-                    'id' => $storageLocation->id,
-                    'name' => $storageLocation->name,
-                ],
-            )
-            ->values()
-            ->all();
+        return array_values(
+            $query
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(
+                    static fn (StorageLocation $storageLocation): array => [
+                        'id' => $storageLocation->id,
+                        'name' => $storageLocation->name,
+                    ],
+                )
+                ->all(),
+        );
     }
 
     /**
@@ -222,18 +224,19 @@ class LowStockReportController extends Controller
      */
     private function categoryOptions(Organization $organization): array
     {
-        return InventoryCategory::query()
-            ->where('organization_id', $organization->id)
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(
-                static fn (InventoryCategory $category): array => [
-                    'id' => $category->id,
-                    'name' => $category->name,
-                ],
-            )
-            ->values()
-            ->all();
+        return array_values(
+            InventoryCategory::query()
+                ->where('organization_id', $organization->id)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(
+                    static fn (InventoryCategory $category): array => [
+                        'id' => $category->id,
+                        'name' => $category->name,
+                    ],
+                )
+                ->all(),
+        );
     }
 
     private function activeOrganization(Request $request): Organization
