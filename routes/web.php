@@ -6,6 +6,7 @@ use App\Http\Controllers\Inventory\InventoryItemController;
 use App\Http\Controllers\Inventory\InventoryItemUnitController;
 use App\Http\Controllers\Inventory\InventoryValuationReportController;
 use App\Http\Controllers\Inventory\OpeningBalanceController;
+use App\Http\Controllers\Inventory\PurchasingHistoryReportController;
 use App\Http\Controllers\Inventory\StockCountController;
 use App\Http\Controllers\Inventory\StockMovementLedgerReportController;
 use App\Http\Controllers\Inventory\StockOnHandReportController;
@@ -149,6 +150,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 'valuation',
                 [InventoryValuationReportController::class, 'index'],
             )->name('valuation.index');
+
+            Route::get(
+                'purchasing-history',
+                [PurchasingHistoryReportController::class, 'index'],
+            )->name('purchasing-history.index');
 
             Route::get(
                 'items',
