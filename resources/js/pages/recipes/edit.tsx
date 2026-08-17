@@ -77,9 +77,7 @@ export default function EditRecipe({ recipe }: Props) {
                                     <select
                                         id="active"
                                         name="active"
-                                        defaultValue={
-                                            recipe.active ? '1' : '0'
-                                        }
+                                        defaultValue={recipe.active ? '1' : '0'}
                                         className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="1">Active</option>

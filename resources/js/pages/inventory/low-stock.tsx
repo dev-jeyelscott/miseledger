@@ -240,9 +240,7 @@ export default function LowStockReport({
                                         </td>
 
                                         <td className="px-4 py-3 text-right">
-                                            {formatDecimal(
-                                                row.quantityOnHand,
-                                            )}{' '}
+                                            {formatDecimal(row.quantityOnHand)}{' '}
                                             {row.baseUnitSymbol}
                                         </td>
                                     </tr>

@@ -33,8 +33,8 @@ export default function RecipesIndex({
                 <div>
                     <h1 className="text-2xl font-semibold">Recipes</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Stable recipe identities for menu items, prepared
-                        items, and batches.
+                        Stable recipe identities for menu items, prepared items,
+                        and batches.
                     </p>
                 </div>
 
@@ -112,9 +112,7 @@ export default function RecipesIndex({
 
                     {canManage && (
                         <div className="h-fit rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                            <h2 className="mb-5 font-medium">
-                                Create recipe
-                            </h2>
+                            <h2 className="mb-5 font-medium">Create recipe</h2>
 
                             <Form
                                 {...RecipeController.store.form()}

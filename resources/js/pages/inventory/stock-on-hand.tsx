@@ -63,10 +63,7 @@ export default function StockOnHandReport({
     canViewCosts,
 }: Props) {
     const totalValue = canViewCosts
-        ? rows.reduce(
-              (sum, row) => sum + Number(row.inventoryValue ?? '0'),
-              0,
-          )
+        ? rows.reduce((sum, row) => sum + Number(row.inventoryValue ?? '0'), 0)
         : null;
 
     return (
@@ -266,9 +263,7 @@ export default function StockOnHandReport({
                                         </td>
 
                                         <td className="px-4 py-3 text-right">
-                                            {formatDecimal(
-                                                row.quantityOnHand,
-                                            )}{' '}
+                                            {formatDecimal(row.quantityOnHand)}{' '}
                                             {row.baseUnitSymbol}
                                         </td>
 
@@ -284,8 +279,7 @@ export default function StockOnHandReport({
                                                 </td>
 
                                                 <td className="px-4 py-3 text-right">
-                                                    {row.inventoryValue ===
-                                                    null
+                                                    {row.inventoryValue === null
                                                         ? '—'
                                                         : `${currency} ${formatDecimal(
                                                               row.inventoryValue,
@@ -301,17 +295,12 @@ export default function StockOnHandReport({
                         {canViewCosts && totalValue !== null && (
                             <tfoot>
                                 <tr className="border-t font-medium">
-                                    <td
-                                        className="px-4 py-3"
-                                        colSpan={6}
-                                    >
+                                    <td className="px-4 py-3" colSpan={6}>
                                         Total value
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         {currency}{' '}
-                                        {formatDecimal(
-                                            totalValue.toFixed(4),
-                                        )}
+                                        {formatDecimal(totalValue.toFixed(4))}
                                     </td>
                                 </tr>
                             </tfoot>

@@ -12,7 +12,6 @@ use App\Models\Recipe;
 use App\Models\RecipeVersion;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 

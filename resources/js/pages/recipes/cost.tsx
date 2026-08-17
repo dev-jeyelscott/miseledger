@@ -219,8 +219,7 @@ export default function RecipeCost({
                                     Total cost
                                 </div>
                                 <div className="mt-2 text-2xl font-semibold">
-                                    {currency}{' '}
-                                    {formatDecimal(cost.totalCost)}
+                                    {currency} {formatDecimal(cost.totalCost)}
                                 </div>
                                 {!cost.complete && (
                                     <p className="mt-2 text-sm text-destructive">
@@ -248,12 +247,8 @@ export default function RecipeCost({
                             <table className="w-full text-sm">
                                 <thead className="border-b text-left">
                                     <tr>
-                                        <th className="px-4 py-3">
-                                            Component
-                                        </th>
-                                        <th className="px-4 py-3">
-                                            Quantity
-                                        </th>
+                                        <th className="px-4 py-3">Component</th>
+                                        <th className="px-4 py-3">Quantity</th>
                                         <th className="px-4 py-3 text-right">
                                             Unit cost
                                         </th>

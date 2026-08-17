@@ -229,9 +229,7 @@ export default function StockMovementLedgerReport({
                                 </Button>
                                 <Button variant="outline" asChild>
                                     <Link
-                                        href={
-                                            StockMovementLedgerReportController.index()
-                                        }
+                                        href={StockMovementLedgerReportController.index()}
                                     >
                                         Clear
                                     </Link>
@@ -381,8 +379,7 @@ export default function StockMovementLedgerReport({
                                 )}
 
                                 <span className="px-2 text-sm text-muted-foreground">
-                                    Page {rows.current_page} of{' '}
-                                    {rows.last_page}
+                                    Page {rows.current_page} of {rows.last_page}
                                 </span>
 
                                 {rows.next_page_url !== null ? (

@@ -172,9 +172,7 @@ export default function PurchasingHistoryReport({
                                 </Button>
                                 <Button variant="outline" asChild>
                                     <Link
-                                        href={
-                                            PurchasingHistoryReportController.index()
-                                        }
+                                        href={PurchasingHistoryReportController.index()}
                                     >
                                         Clear
                                     </Link>
@@ -259,9 +257,7 @@ export default function PurchasingHistoryReport({
                                         </td>
 
                                         <td className="px-4 py-3 text-right">
-                                            {formatDecimal(
-                                                row.orderedQuantity,
-                                            )}{' '}
+                                            {formatDecimal(row.orderedQuantity)}{' '}
                                             {row.purchaseUnitSymbol}
                                         </td>
 

@@ -1051,12 +1051,8 @@ export default function GoodsReceiptForm({
                                     <table className="w-full text-sm">
                                         <thead className="border-b text-left">
                                             <tr>
-                                                <th className="py-2">
-                                                    Action
-                                                </th>
-                                                <th className="py-2">
-                                                    Actor
-                                                </th>
+                                                <th className="py-2">Action</th>
+                                                <th className="py-2">Actor</th>
                                                 <th className="py-2">
                                                     Timestamp
                                                 </th>
@@ -1076,8 +1072,7 @@ export default function GoodsReceiptForm({
                                                             'System'}
                                                     </td>
                                                     <td className="py-2">
-                                                        {entry.createdAt ??
-                                                            '—'}
+                                                        {entry.createdAt ?? '—'}
                                                     </td>
                                                 </tr>
                                             ))}

@@ -177,9 +177,7 @@ export default function InventoryValuationReport({
                             <table className="w-full text-sm">
                                 <thead className="border-b text-left">
                                     <tr>
-                                        <th className="px-4 py-3">
-                                            Location
-                                        </th>
+                                        <th className="px-4 py-3">Location</th>
                                         <th className="px-4 py-3 text-right">
                                             Quantity
                                         </th>
@@ -215,9 +213,7 @@ export default function InventoryValuationReport({
                                                 </td>
                                                 <td className="px-4 py-3 text-right">
                                                     {currency}{' '}
-                                                    {formatDecimal(
-                                                        total.value,
-                                                    )}
+                                                    {formatDecimal(total.value)}
                                                 </td>
                                             </tr>
                                         ))
@@ -230,9 +226,7 @@ export default function InventoryValuationReport({
                             <table className="w-full text-sm">
                                 <thead className="border-b text-left">
                                     <tr>
-                                        <th className="px-4 py-3">
-                                            Category
-                                        </th>
+                                        <th className="px-4 py-3">Category</th>
                                         <th className="px-4 py-3 text-right">
                                             Quantity
                                         </th>
@@ -255,7 +249,10 @@ export default function InventoryValuationReport({
                                     ) : (
                                         categoryTotals.map((total) => (
                                             <tr
-                                                key={total.categoryId ?? 'uncategorized'}
+                                                key={
+                                                    total.categoryId ??
+                                                    'uncategorized'
+                                                }
                                                 className="border-b last:border-b-0"
                                             >
                                                 <td className="px-4 py-3">
@@ -269,9 +266,7 @@ export default function InventoryValuationReport({
                                                 </td>
                                                 <td className="px-4 py-3 text-right">
                                                     {currency}{' '}
-                                                    {formatDecimal(
-                                                        total.value,
-                                                    )}
+                                                    {formatDecimal(total.value)}
                                                 </td>
                                             </tr>
                                         ))
@@ -313,8 +308,8 @@ export default function InventoryValuationReport({
                                         colSpan={canViewCosts ? 6 : 4}
                                         className="px-4 py-8 text-center text-muted-foreground"
                                     >
-                                        No inventory value matches the
-                                        selected filters.
+                                        No inventory value matches the selected
+                                        filters.
                                     </td>
                                 </tr>
                             ) : (
@@ -341,9 +336,7 @@ export default function InventoryValuationReport({
                                         </td>
 
                                         <td className="px-4 py-3 text-right">
-                                            {formatDecimal(
-                                                row.quantityOnHand,
-                                            )}{' '}
+                                            {formatDecimal(row.quantityOnHand)}{' '}
                                             {row.baseUnitSymbol}
                                         </td>
 
@@ -359,8 +352,7 @@ export default function InventoryValuationReport({
                                                 </td>
 
                                                 <td className="px-4 py-3 text-right">
-                                                    {row.inventoryValue ===
-                                                    null
+                                                    {row.inventoryValue === null
                                                         ? '—'
                                                         : `${currency} ${formatDecimal(
                                                               row.inventoryValue,
@@ -380,8 +372,7 @@ export default function InventoryValuationReport({
                                         Total value
                                     </td>
                                     <td className="px-4 py-3 text-right">
-                                        {currency}{' '}
-                                        {formatDecimal(grandTotal)}
+                                        {currency} {formatDecimal(grandTotal)}
                                     </td>
                                 </tr>
                             </tfoot>
