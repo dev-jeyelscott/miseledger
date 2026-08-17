@@ -4,6 +4,7 @@ use App\Http\Controllers\Inventory\InventoryAdjustmentController;
 use App\Http\Controllers\Inventory\InventoryCategoryController;
 use App\Http\Controllers\Inventory\InventoryItemController;
 use App\Http\Controllers\Inventory\InventoryItemUnitController;
+use App\Http\Controllers\Inventory\InventoryValuationReportController;
 use App\Http\Controllers\Inventory\OpeningBalanceController;
 use App\Http\Controllers\Inventory\StockCountController;
 use App\Http\Controllers\Inventory\StockMovementLedgerReportController;
@@ -143,6 +144,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 'stock-movements',
                 [StockMovementLedgerReportController::class, 'index'],
             )->name('stock-movements.index');
+
+            Route::get(
+                'valuation',
+                [InventoryValuationReportController::class, 'index'],
+            )->name('valuation.index');
 
             Route::get(
                 'items',

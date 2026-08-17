@@ -5,6 +5,7 @@ import {
     Boxes,
     ClipboardCheck,
     ClipboardList,
+    Coins,
     FolderGit2,
     LayoutGrid,
     NotebookText,
@@ -14,6 +15,7 @@ import {
     Truck,
 } from 'lucide-react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
+import InventoryValuationReportController from '@/actions/App/Http/Controllers/Inventory/InventoryValuationReportController';
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
 import StockMovementLedgerReportController from '@/actions/App/Http/Controllers/Inventory/StockMovementLedgerReportController';
 import StockOnHandReportController from '@/actions/App/Http/Controllers/Inventory/StockOnHandReportController';
@@ -91,6 +93,12 @@ export function AppSidebar() {
             title: 'Stock movement ledger',
             href: StockMovementLedgerReportController.index(),
             icon: ClipboardList,
+        });
+
+        mainNavItems.push({
+            title: 'Inventory valuation',
+            href: InventoryValuationReportController.index(),
+            icon: Coins,
         });
     }
 
