@@ -149,7 +149,7 @@ beforeEach(function () {
     ]);
 });
 
-test('report lists only balances at zero or negative quantity', function () {
+test('report lists only balances at zero or negative quantity with operational summary', function () {
     $url = route('inventory.low-stock.index');
 
     $this
@@ -165,8 +165,16 @@ test('report lists only balances at zero or negative quantity', function () {
                 ->has('rows', 2)
                 ->where('rows.0.itemId', $this->negativeItem->id)
                 ->where('rows.0.quantityOnHand', '-3.000000')
+                ->where('rows.0.status', 'negative')
                 ->where('rows.1.itemId', $this->zeroItem->id)
-                ->where('rows.1.quantityOnHand', '0.000000'),
+                ->where('rows.1.quantityOnHand', '0.000000')
+                ->where('rows.1.status', 'out_of_stock')
+                ->where('summary.affectedBalanceCount', 2)
+                ->where('summary.outOfStockCount', 1)
+                ->where('summary.negativeCount', 1)
+                ->where('summary.affectedLocationCount', 1)
+                ->where('pagination.current_page', 1)
+                ->where('pagination.total', 2),
         );
 });
 
@@ -212,7 +220,8 @@ test('report location filter excludes balances from other locations', function (
                 ->component('inventory/low-stock')
                 ->has('rows', 1)
                 ->where('rows.0.locationId', $otherLocation->id)
-                ->where('rows.0.quantityOnHand', '-1.000000'),
+                ->where('rows.0.quantityOnHand', '-1.000000')
+                ->where('summary.affectedLocationCount', 1),
         );
 });
 
@@ -325,6 +334,53 @@ test('report item filter narrows results to the requested inventory item', funct
         );
 });
 
+test('report item search matches inventory item name sku or id', function () {
+    $url = route('inventory.low-stock.index', [
+        'item' => 'NEGATIVE-STOCK',
+    ]);
+
+    $this
+        ->actingAs($this->manager)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get($url)
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/low-stock')
+                ->has('rows', 1)
+                ->where('rows.0.itemId', $this->negativeItem->id)
+                ->where('filters.itemSearch', 'NEGATIVE-STOCK')
+                ->where('summary.affectedBalanceCount', 1),
+        );
+});
+
+test('report status filter separates out of stock from negative balances', function () {
+    $url = route('inventory.low-stock.index', [
+        'status' => 'out_of_stock',
+    ]);
+
+    $this
+        ->actingAs($this->manager)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get($url)
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/low-stock')
+                ->has('rows', 1)
+                ->where('rows.0.itemId', $this->zeroItem->id)
+                ->where('rows.0.status', 'out_of_stock')
+                ->where('filters.status', 'out_of_stock')
+                ->where('summary.affectedBalanceCount', 1)
+                ->where('summary.outOfStockCount', 1)
+                ->where('summary.negativeCount', 0),
+        );
+});
+
 test('report is tenant isolated across organizations', function () {
     $otherOrganization = Organization::factory()->create();
 
@@ -376,7 +432,9 @@ test('report is tenant isolated across organizations', function () {
         ->assertInertia(
             fn (Assert $page): Assert => $page
                 ->component('inventory/low-stock')
-                ->has('rows', 2),
+                ->has('rows', 2)
+                ->where('summary.affectedBalanceCount', 2)
+                ->where('summary.affectedLocationCount', 1),
         );
 });
 
