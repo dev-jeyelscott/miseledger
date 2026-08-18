@@ -170,7 +170,7 @@ class DashboardController extends Controller
      */
     private function lowStockAlerts(Organization $organization): array
     {
-        return StockBalance::query()
+        $alerts = StockBalance::query()
             ->select([
                 'id',
                 'organization_id',
@@ -204,8 +204,9 @@ class DashboardController extends Controller
                     ->baseUnitOfMeasure
                     ->symbol,
             ])
-            ->values()
             ->all();
+
+        return array_values($alerts);
     }
 
     /**
@@ -233,7 +234,7 @@ class DashboardController extends Controller
             $columns[] = 'total_cost';
         }
 
-        return StockMovement::query()
+        $activity = StockMovement::query()
             ->select($columns)
             ->with([
                 'location:id,name',
@@ -260,8 +261,9 @@ class DashboardController extends Controller
                 'actorName' => $movement->creator?->name,
                 'occurredAt' => $movement->occurred_at->toIso8601String(),
             ])
-            ->values()
             ->all();
+
+        return array_values($activity);
     }
 
     /**
@@ -280,7 +282,7 @@ class DashboardController extends Controller
         $organizationIds = $user->organizationMemberships()
             ->pluck('organization_id');
 
-        return Organization::query()
+        $stats = Organization::query()
             ->select('id')
             ->withCount([
                 'locations',
@@ -298,8 +300,9 @@ class DashboardController extends Controller
                     'memberships_count',
                 ),
             ])
-            ->values()
             ->all();
+
+        return array_values($stats);
     }
 
     /**

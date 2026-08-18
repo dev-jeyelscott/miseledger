@@ -56,8 +56,8 @@ class InventoryItemController extends Controller
         $sort = isset($validated['sort'])
             ? (string) $validated['sort']
             : null;
-        $direction = isset($validated['direction'])
-            ? (string) $validated['direction']
+        $direction = ($validated['direction'] ?? 'asc') === 'desc'
+            ? 'desc'
             : 'asc';
 
         $itemsQuery = $organization
