@@ -97,12 +97,12 @@ test('inventory item index is paginated and tenant scoped', function () {
         ->assertInertia(
             fn (Assert $page): Assert => $page
                 ->component('inventory/items/index')
-                ->has('items.data', 25)
-                ->where('items.total', 26)
-                ->where('items.current_page', 1)
-                ->where('items.per_page', 25)
+                ->has('items', 25)
+                ->where('pagination.total', 26)
+                ->where('pagination.current_page', 1)
+                ->where('pagination.per_page', 25)
                 ->where(
-                    'items.next_page_url',
+                    'pagination.next_page_url',
                     fn (mixed $url): bool => is_string($url)
                         && str_contains($url, 'status=active'),
                 )
@@ -178,9 +178,9 @@ test('inventory item filters combine search category type and status', function 
         ->assertInertia(
             fn (Assert $page): Assert => $page
                 ->component('inventory/items/index')
-                ->has('items.data', 1)
-                ->where('items.data.0.id', $target->id)
-                ->where('items.data.0.name', 'Fresh Tomato')
+                ->has('items', 1)
+                ->where('items.0.id', $target->id)
+                ->where('items.0.name', 'Fresh Tomato')
                 ->where('filters.search', 'tom')
                 ->where('filters.categoryId', $produce->id)
                 ->where(
@@ -223,9 +223,9 @@ test('inventory item index supports deterministic sorting', function () {
         ->assertInertia(
             fn (Assert $page): Assert => $page
                 ->component('inventory/items/index')
-                ->has('items.data', 2)
-                ->where('items.data.0.sku', 'Z-001')
-                ->where('items.data.1.sku', 'A-001')
+                ->has('items', 2)
+                ->where('items.0.sku', 'Z-001')
+                ->where('items.1.sku', 'A-001')
                 ->where('filters.sort', 'sku')
                 ->where('filters.direction', 'desc'),
         );
@@ -262,7 +262,7 @@ test('auditor inventory index remains read only', function () {
         ->assertInertia(
             fn (Assert $page): Assert => $page
                 ->component('inventory/items/index')
-                ->has('items.data', 1)
+                ->has('items', 1)
                 ->where('canManage', false),
         );
 });

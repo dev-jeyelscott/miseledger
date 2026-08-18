@@ -22,10 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dashboard } from '@/routes';
-import type {
-    InventoryItemListItem,
-    InventoryItemType,
-} from '@/types';
+import type { InventoryItemListItem, InventoryItemType } from '@/types';
 
 type ItemStatus = 'active' | 'inactive';
 
@@ -33,12 +30,12 @@ type SortKey = 'name' | 'sku' | 'type' | 'status';
 
 type SortDirection = 'asc' | 'desc';
 
-type PaginatedInventoryItems = {
+type InventoryItemsPagination = {
     current_page: number;
-    data: InventoryItemListItem[];
     from: number | null;
     last_page: number;
     next_page_url: string | null;
+    per_page: number;
     prev_page_url: string | null;
     to: number | null;
     total: number;
@@ -50,22 +47,32 @@ type CategoryOption = {
     active: boolean;
 };
 
+type Filters = {
+    search: string;
+    categoryId: number | null;
+    type: InventoryItemType | null;
+    status: ItemStatus | null;
+    sort: SortKey | null;
+    direction: SortDirection;
+};
+
 type Props = {
-    items: PaginatedInventoryItems;
+    items: InventoryItemListItem[];
+    pagination: InventoryItemsPagination;
     summary: {
         total: number;
         active: number;
     };
     categoryOptions: CategoryOption[];
-    filters: {
-        search: string;
-        categoryId: number | null;
-        type: InventoryItemType | null;
-        status: ItemStatus | null;
-        sort: SortKey | null;
-        direction: SortDirection;
-    };
+    filters: Filters;
     canManage: boolean;
+};
+
+type SortableHeadingProps = {
+    active: boolean;
+    children: React.ReactNode;
+    direction: SortDirection;
+    href: string;
 };
 
 const itemTypeLabels: Record<InventoryItemType, string> = {
@@ -84,22 +91,56 @@ const itemTypeOptions: InventoryItemType[] = [
     'consumable',
 ];
 
+/**
+ * Render a stable sortable table heading without recreating components per render.
+ */
+function SortableHeading({
+    active,
+    children,
+    direction,
+    href,
+}: SortableHeadingProps) {
+    return (
+        <Link
+            href={href}
+            preserveScroll
+            className="inline-flex items-center gap-1.5 font-medium text-foreground transition-colors hover:text-foreground/70 focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+            {children}
+
+            {active ? (
+                direction === 'asc' ? (
+                    <ArrowUp className="size-3.5" aria-hidden="true" />
+                ) : (
+                    <ArrowDown className="size-3.5" aria-hidden="true" />
+                )
+            ) : (
+                <ArrowUpDown
+                    className="size-3.5 text-muted-foreground"
+                    aria-hidden="true"
+                />
+            )}
+        </Link>
+    );
+}
+
 export default function InventoryItemsIndex({
     items,
+    pagination,
     summary,
     categoryOptions,
     filters,
     canManage,
 }: Props) {
     const hasQueryState =
-        filters.search !== ''
-        || filters.categoryId !== null
-        || filters.type !== null
-        || filters.status !== null
-        || filters.sort !== null;
+        filters.search !== '' ||
+        filters.categoryId !== null ||
+        filters.type !== null ||
+        filters.status !== null ||
+        filters.sort !== null;
 
     /**
-     * Preserve the active filters while changing only the requested sort.
+     * Preserve active filters while changing only the requested sort.
      */
     const sortUrl = (sort: SortKey): string => {
         const direction: SortDirection =
@@ -117,42 +158,6 @@ export default function InventoryItemsIndex({
                 direction,
             },
         }).url;
-    };
-
-    /**
-     * Render a sortable table heading with visible and semantic state.
-     */
-    const SortableHeading = ({
-        sort,
-        children,
-    }: {
-        sort: SortKey;
-        children: React.ReactNode;
-    }) => {
-        const active = filters.sort === sort;
-
-        return (
-            <Link
-                href={sortUrl(sort)}
-                preserveScroll
-                className="inline-flex items-center gap-1.5 font-medium text-foreground transition-colors hover:text-foreground/70 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-                {children}
-
-                {active ? (
-                    filters.direction === 'asc' ? (
-                        <ArrowUp className="size-3.5" aria-hidden="true" />
-                    ) : (
-                        <ArrowDown className="size-3.5" aria-hidden="true" />
-                    )
-                ) : (
-                    <ArrowUpDown
-                        className="size-3.5 text-muted-foreground"
-                        aria-hidden="true"
-                    />
-                )}
-            </Link>
-        );
     };
 
     return (
@@ -246,10 +251,7 @@ export default function InventoryItemsIndex({
                         </div>
 
                         <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                            <Boxes
-                                className="size-5"
-                                aria-hidden="true"
-                            />
+                            <Boxes className="size-5" aria-hidden="true" />
                         </div>
                     </div>
 
@@ -314,10 +316,9 @@ export default function InventoryItemsIndex({
                                         id="inventory-category"
                                         name="category"
                                         defaultValue={
-                                            filters.categoryId?.toString()
-                                            ?? ''
+                                            filters.categoryId?.toString() ?? ''
                                         }
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="">All categories</option>
 
@@ -346,7 +347,7 @@ export default function InventoryItemsIndex({
                                         id="inventory-type"
                                         name="type"
                                         defaultValue={filters.type ?? ''}
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="">All types</option>
 
@@ -369,7 +370,7 @@ export default function InventoryItemsIndex({
                                         id="inventory-status"
                                         name="status"
                                         defaultValue={filters.status ?? ''}
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="">All statuses</option>
                                         <option value="active">Active</option>
@@ -380,10 +381,7 @@ export default function InventoryItemsIndex({
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2 md:col-span-2 xl:col-span-1 xl:justify-end">
-                                    <Button
-                                        type="submit"
-                                        disabled={processing}
-                                    >
+                                    <Button type="submit" disabled={processing}>
                                         {processing
                                             ? 'Applying...'
                                             : 'Apply filters'}
@@ -416,14 +414,17 @@ export default function InventoryItemsIndex({
                                         className="px-4 py-3"
                                         aria-sort={
                                             filters.sort === 'name'
-                                                ? filters.direction
-                                                    === 'asc'
+                                                ? filters.direction === 'asc'
                                                     ? 'ascending'
                                                     : 'descending'
                                                 : 'none'
                                         }
                                     >
-                                        <SortableHeading sort="name">
+                                        <SortableHeading
+                                            href={sortUrl('name')}
+                                            active={filters.sort === 'name'}
+                                            direction={filters.direction}
+                                        >
                                             Item
                                         </SortableHeading>
                                     </th>
@@ -433,14 +434,17 @@ export default function InventoryItemsIndex({
                                         className="px-4 py-3"
                                         aria-sort={
                                             filters.sort === 'sku'
-                                                ? filters.direction
-                                                    === 'asc'
+                                                ? filters.direction === 'asc'
                                                     ? 'ascending'
                                                     : 'descending'
                                                 : 'none'
                                         }
                                     >
-                                        <SortableHeading sort="sku">
+                                        <SortableHeading
+                                            href={sortUrl('sku')}
+                                            active={filters.sort === 'sku'}
+                                            direction={filters.direction}
+                                        >
                                             SKU
                                         </SortableHeading>
                                     </th>
@@ -454,14 +458,17 @@ export default function InventoryItemsIndex({
                                         className="px-4 py-3"
                                         aria-sort={
                                             filters.sort === 'type'
-                                                ? filters.direction
-                                                    === 'asc'
+                                                ? filters.direction === 'asc'
                                                     ? 'ascending'
                                                     : 'descending'
                                                 : 'none'
                                         }
                                     >
-                                        <SortableHeading sort="type">
+                                        <SortableHeading
+                                            href={sortUrl('type')}
+                                            active={filters.sort === 'type'}
+                                            direction={filters.direction}
+                                        >
                                             Type
                                         </SortableHeading>
                                     </th>
@@ -482,14 +489,17 @@ export default function InventoryItemsIndex({
                                         className="px-4 py-3"
                                         aria-sort={
                                             filters.sort === 'status'
-                                                ? filters.direction
-                                                    === 'asc'
+                                                ? filters.direction === 'asc'
                                                     ? 'ascending'
                                                     : 'descending'
                                                 : 'none'
                                         }
                                     >
-                                        <SortableHeading sort="status">
+                                        <SortableHeading
+                                            href={sortUrl('status')}
+                                            active={filters.sort === 'status'}
+                                            direction={filters.direction}
+                                        >
                                             Status
                                         </SortableHeading>
                                     </th>
@@ -508,7 +518,7 @@ export default function InventoryItemsIndex({
                             </thead>
 
                             <tbody>
-                                {items.data.length === 0 ? (
+                                {items.length === 0 ? (
                                     <tr>
                                         <td
                                             colSpan={canManage ? 8 : 7}
@@ -529,7 +539,7 @@ export default function InventoryItemsIndex({
                                         </td>
                                     </tr>
                                 ) : (
-                                    items.data.map((item) => (
+                                    items.map((item) => (
                                         <tr
                                             key={item.id}
                                             className="border-b border-sidebar-border/70 transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
@@ -540,7 +550,7 @@ export default function InventoryItemsIndex({
                                                         href={InventoryItemController.edit(
                                                             item.id,
                                                         )}
-                                                        className="font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                        className="font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                                     >
                                                         {item.name}
                                                     </Link>
@@ -556,8 +566,8 @@ export default function InventoryItemsIndex({
                                             </td>
 
                                             <td className="px-4 py-3">
-                                                {item.inventoryCategory?.name
-                                                    ?? 'Uncategorized'}
+                                                {item.inventoryCategory?.name ??
+                                                    'Uncategorized'}
                                             </td>
 
                                             <td className="px-4 py-3">
@@ -625,23 +635,24 @@ export default function InventoryItemsIndex({
                         </table>
                     </div>
 
-                    {items.total > 0 && (
+                    {pagination.total > 0 && (
                         <div className="flex flex-col gap-3 border-t border-sidebar-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-sidebar-border">
                             <p className="text-sm text-muted-foreground">
-                                Showing {items.from ?? 0} to {items.to ?? 0} of{' '}
-                                {items.total.toLocaleString()} items
+                                Showing {pagination.from ?? 0} to{' '}
+                                {pagination.to ?? 0} of{' '}
+                                {pagination.total.toLocaleString()} items
                             </p>
 
-                            {items.last_page > 1 && (
+                            {pagination.last_page > 1 && (
                                 <div className="flex items-center gap-2">
-                                    {items.prev_page_url !== null ? (
+                                    {pagination.prev_page_url !== null ? (
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             asChild
                                         >
                                             <Link
-                                                href={items.prev_page_url}
+                                                href={pagination.prev_page_url}
                                                 preserveScroll
                                                 preserveState
                                             >
@@ -660,18 +671,18 @@ export default function InventoryItemsIndex({
                                     )}
 
                                     <span className="px-1 text-sm text-muted-foreground">
-                                        Page {items.current_page} of{' '}
-                                        {items.last_page}
+                                        Page {pagination.current_page} of{' '}
+                                        {pagination.last_page}
                                     </span>
 
-                                    {items.next_page_url !== null ? (
+                                    {pagination.next_page_url !== null ? (
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             asChild
                                         >
                                             <Link
-                                                href={items.next_page_url}
+                                                href={pagination.next_page_url}
                                                 preserveScroll
                                                 preserveState
                                             >

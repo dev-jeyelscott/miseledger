@@ -114,7 +114,7 @@ class InventoryItemController extends Controller
             $itemsQuery->orderBy('id');
         }
 
-        $items = $itemsQuery
+        $paginatedItems = $itemsQuery
             ->paginate(25)
             ->withQueryString()
             ->through(
@@ -164,7 +164,17 @@ class InventoryItemController extends Controller
             ->all();
 
         return Inertia::render('inventory/items/index', [
-            'items' => $items,
+            'items' => $paginatedItems->items(),
+            'pagination' => [
+                'current_page' => $paginatedItems->currentPage(),
+                'from' => $paginatedItems->firstItem(),
+                'last_page' => $paginatedItems->lastPage(),
+                'next_page_url' => $paginatedItems->nextPageUrl(),
+                'per_page' => $paginatedItems->perPage(),
+                'prev_page_url' => $paginatedItems->previousPageUrl(),
+                'to' => $paginatedItems->lastItem(),
+                'total' => $paginatedItems->total(),
+            ],
             'summary' => [
                 'total' => $organization->inventoryItems()->count(),
                 'active' => $organization
