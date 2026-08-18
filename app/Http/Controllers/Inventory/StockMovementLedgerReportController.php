@@ -41,6 +41,8 @@ class StockMovementLedgerReportController extends Controller
             $organization,
         );
 
+        $summary = $this->summary($query);
+
         $rows = (clone $query)
             ->orderBy('occurred_at')
             ->orderBy('id')
@@ -56,6 +58,7 @@ class StockMovementLedgerReportController extends Controller
 
         return Inertia::render('inventory/stock-movement-ledger', [
             'rows' => $rows,
+            'summary' => $summary,
             'locationOptions' => $this->locationOptions($organization),
             'storageLocationOptions' => $this->storageLocationOptions(
                 $organization,
@@ -95,12 +98,16 @@ class StockMovementLedgerReportController extends Controller
             'Type',
             'Quantity',
             'Unit',
-            'Unit Cost',
-            'Total Cost',
-            'Reference Type',
-            'Reference ID',
-            'Actor',
         ];
+
+        if ($canViewCosts) {
+            $header[] = 'Unit Cost';
+            $header[] = 'Total Cost';
+        }
+
+        $header[] = 'Reference Type';
+        $header[] = 'Reference ID';
+        $header[] = 'Actor';
 
         $rows = (function () use ($query, $canViewCosts): iterable {
             foreach (
@@ -110,8 +117,7 @@ class StockMovementLedgerReportController extends Controller
                     ->cursor() as $movement
             ) {
                 $data = $this->rowData($movement, $canViewCosts);
-
-                yield [
+                $row = [
                     $data['occurredAt'],
                     $data['locationName'],
                     $data['storageLocationName'],
@@ -120,12 +126,18 @@ class StockMovementLedgerReportController extends Controller
                     $data['type'],
                     $data['quantity'],
                     $data['baseUnitSymbol'],
-                    $data['unitCost'],
-                    $data['totalCost'],
-                    $data['referenceType'],
-                    $data['referenceId'],
-                    $data['actorName'],
                 ];
+
+                if ($canViewCosts) {
+                    $row[] = $data['unitCost'];
+                    $row[] = $data['totalCost'];
+                }
+
+                $row[] = $data['referenceType'];
+                $row[] = $data['referenceId'];
+                $row[] = $data['actorName'];
+
+                yield $row;
             }
         })();
 
@@ -138,9 +150,9 @@ class StockMovementLedgerReportController extends Controller
 
     /**
      * Build the shared tenant-scoped, filtered query behind every rendering
-     * of the Stock Movement Ledger report.
+     * and export of the Stock Movement Ledger report.
      *
-     * @return array{0: array{locationId: int|null, storageLocationId: int|null, inventoryItemId: int|null, type: string|null, from: string|null, to: string|null}, 1: EloquentBuilder<StockMovement>, 2: bool}
+     * @return array{0: array{locationId: int|null, storageLocationId: int|null, inventoryItemId: int|null, type: string|null, from: string|null, to: string|null, reference: string|null}, 1: EloquentBuilder<StockMovement>, 2: bool}
      */
     private function filteredQuery(
         Request $request,
@@ -189,6 +201,11 @@ class StockMovementLedgerReportController extends Controller
                 'nullable',
                 'date_format:Y-m-d',
             ],
+            'reference' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
         ]);
 
         $locationId = isset($validated['location_id'])
@@ -214,6 +231,14 @@ class StockMovementLedgerReportController extends Controller
         $to = isset($validated['to']) && is_string($validated['to'])
             ? $validated['to']
             : null;
+
+        $reference = isset($validated['reference']) && is_string($validated['reference'])
+            ? trim($validated['reference'])
+            : null;
+
+        if ($reference === '') {
+            $reference = null;
+        }
 
         if ($from !== null && $to !== null && $from > $to) {
             throw ValidationException::withMessages([
@@ -257,6 +282,31 @@ class StockMovementLedgerReportController extends Controller
             $query->whereDate('occurred_at', '<=', $to);
         }
 
+        if ($reference !== null) {
+            $normalizedReference = ltrim($reference, '#');
+            $referenceId = ctype_digit($normalizedReference)
+                ? (int) $normalizedReference
+                : null;
+            $referenceTypeSearch = '%'.strtolower($reference).'%';
+
+            $query->where(
+                function (EloquentBuilder $referenceQuery) use (
+                    $referenceId,
+                    $referenceTypeSearch,
+                ): void {
+                    $referenceQuery->where(
+                        'reference_type',
+                        'like',
+                        $referenceTypeSearch,
+                    );
+
+                    if ($referenceId !== null) {
+                        $referenceQuery->orWhere('reference_id', $referenceId);
+                    }
+                },
+            );
+        }
+
         $canViewCosts = Gate::allows(
             OrganizationPermission::CostsView->value,
             $organization,
@@ -270,9 +320,32 @@ class StockMovementLedgerReportController extends Controller
                 'type' => $type?->value,
                 'from' => $from,
                 'to' => $to,
+                'reference' => $reference,
             ],
             $query,
             $canViewCosts,
+        ];
+    }
+
+    /**
+     * Count filtered ledger movements without aggregating heterogeneous units.
+     *
+     * @param  EloquentBuilder<StockMovement>  $query
+     * @return array{totalCount: int, inboundCount: int, outboundCount: int, wasteCount: int}
+     */
+    private function summary(EloquentBuilder $query): array
+    {
+        return [
+            'totalCount' => (clone $query)->count(),
+            'inboundCount' => (clone $query)
+                ->where('quantity', '>', 0)
+                ->count(),
+            'outboundCount' => (clone $query)
+                ->where('quantity', '<', 0)
+                ->count(),
+            'wasteCount' => (clone $query)
+                ->where('type', StockMovementType::Waste->value)
+                ->count(),
         ];
     }
 
