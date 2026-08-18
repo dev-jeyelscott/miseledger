@@ -10,9 +10,11 @@ use App\Models\Organization;
 use App\Models\StockBalance;
 use App\Models\StorageLocation;
 use App\Support\Csv\CsvExport;
+use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -39,10 +41,12 @@ class StockOnHandReportController extends Controller
             $organization,
         );
 
-        $rows = (clone $query)
+        $balances = (clone $query)
             ->orderBy('location_id')
             ->orderBy('storage_location_id')
-            ->get()
+            ->get();
+
+        $rows = $balances
             ->map(
                 fn (StockBalance $balance): array => $this->rowData(
                     $balance,
@@ -54,6 +58,7 @@ class StockOnHandReportController extends Controller
 
         return Inertia::render('inventory/stock-on-hand', [
             'rows' => $rows,
+            'summary' => $this->summaryData($balances, $canViewCosts),
             'locationOptions' => $this->locationOptions($organization),
             'storageLocationOptions' => $this->storageLocationOptions(
                 $organization,
@@ -129,7 +134,7 @@ class StockOnHandReportController extends Controller
      * Build the shared tenant-scoped, filtered query behind every rendering
      * of the Stock on Hand report.
      *
-     * @return array{0: array{locationId: int|null, storageLocationId: int|null, inventoryCategoryId: int|null, inventoryItemId: int|null}, 1: EloquentBuilder<StockBalance>, 2: bool}
+     * @return array{0: array{locationId: int|null, storageLocationId: int|null, inventoryCategoryId: int|null, inventoryItemId: int|null, itemSearch: string|null}, 1: EloquentBuilder<StockBalance>, 2: bool}
      */
     private function filteredQuery(
         Request $request,
@@ -176,6 +181,11 @@ class StockOnHandReportController extends Controller
                     ),
                 ),
             ],
+            'item' => [
+                'nullable',
+                'string',
+                'max:120',
+            ],
         ]);
 
         $locationId = isset($validated['location_id'])
@@ -193,6 +203,14 @@ class StockOnHandReportController extends Controller
         $itemId = isset($validated['inventory_item_id'])
             ? (int) $validated['inventory_item_id']
             : null;
+
+        $itemSearch = isset($validated['item'])
+            ? trim($validated['item'])
+            : null;
+
+        if ($itemSearch === '') {
+            $itemSearch = null;
+        }
 
         $query = StockBalance::query()
             ->with([
@@ -227,6 +245,35 @@ class StockOnHandReportController extends Controller
             $query->where('inventory_item_id', $itemId);
         }
 
+        if ($itemSearch !== null) {
+            $query->whereHas(
+                'inventoryItem',
+                function (EloquentBuilder $itemQuery) use ($itemSearch): void {
+                    $itemQuery->where(
+                        function (
+                            EloquentBuilder $searchQuery
+                        ) use ($itemSearch): void {
+                            $searchQuery
+                                ->whereLike(
+                                    'name',
+                                    "%{$itemSearch}%",
+                                )
+                                ->orWhereLike(
+                                    'sku',
+                                    "%{$itemSearch}%",
+                                );
+
+                            if (ctype_digit($itemSearch)) {
+                                $searchQuery->orWhereKey(
+                                    (int) $itemSearch,
+                                );
+                            }
+                        },
+                    );
+                },
+            );
+        }
+
         $canViewCosts = Gate::allows(
             OrganizationPermission::CostsView->value,
             $organization,
@@ -238,6 +285,7 @@ class StockOnHandReportController extends Controller
                 'storageLocationId' => $storageLocationId,
                 'inventoryCategoryId' => $categoryId,
                 'inventoryItemId' => $itemId,
+                'itemSearch' => $itemSearch,
             ],
             $query,
             $canViewCosts,
@@ -276,6 +324,50 @@ class StockOnHandReportController extends Controller
                 ? $balance->inventory_value
                 : null,
         ];
+    }
+
+    /**
+     * Build operational metrics from the same filtered balance collection used
+     * by the report so card values and table rows cannot drift apart.
+     *
+     * @param  Collection<int, StockBalance>  $balances
+     * @return array{itemsWithStockCount: int, storageLocationCount: int, totalValue: string|null}
+     */
+    private function summaryData(
+        Collection $balances,
+        bool $canViewCosts,
+    ): array {
+        return [
+            'itemsWithStockCount' => $balances
+                ->pluck('inventory_item_id')
+                ->unique()
+                ->count(),
+            'storageLocationCount' => $balances
+                ->pluck('storage_location_id')
+                ->unique()
+                ->count(),
+            'totalValue' => $canViewCosts
+                ? (string) $this->sumValues($balances)
+                : null,
+        ];
+    }
+
+    /**
+     * Sum stock value without introducing floating-point arithmetic.
+     *
+     * @param  Collection<int, StockBalance>  $balances
+     */
+    private function sumValues(Collection $balances): BigDecimal
+    {
+        return $balances->reduce(
+            static fn (
+                BigDecimal $total,
+                StockBalance $balance,
+            ): BigDecimal => $total->plus(
+                $balance->inventory_value,
+            ),
+            BigDecimal::zero(),
+        );
     }
 
     /**

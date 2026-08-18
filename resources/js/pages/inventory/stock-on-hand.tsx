@@ -1,7 +1,18 @@
 import { Form, Head, Link } from '@inertiajs/react';
+import {
+    Boxes,
+    Filter,
+    MapPin,
+    Package,
+    RotateCcw,
+    Search,
+} from 'lucide-react';
+
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import StockOnHandReportController from '@/actions/App/Http/Controllers/Inventory/StockOnHandReportController';
+import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
 
@@ -21,6 +32,12 @@ type StockOnHandRow = {
     inventoryValue: string | null;
 };
 
+type StockOnHandSummary = {
+    itemsWithStockCount: number;
+    storageLocationCount: number;
+    totalValue: string | null;
+};
+
 type Option = {
     id: number;
     name: string;
@@ -28,6 +45,7 @@ type Option = {
 
 type Props = {
     rows: StockOnHandRow[];
+    summary: StockOnHandSummary;
     locationOptions: Option[];
     storageLocationOptions: Option[];
     categoryOptions: Option[];
@@ -36,12 +54,14 @@ type Props = {
         storageLocationId: number | null;
         inventoryCategoryId: number | null;
         inventoryItemId: number | null;
+        itemSearch: string | null;
     };
     currency: string;
     canViewCosts: boolean;
 };
 
-const formatDecimal = (value: string): string => {
+/** Format persisted decimal strings for compact operational display. */
+function formatDecimal(value: string): string {
     const [rawInteger, rawDecimal = ''] = value.trim().split('.');
     const negative = rawInteger.startsWith('-');
     const integerDigits = negative ? rawInteger.slice(1) : rawInteger;
@@ -51,10 +71,19 @@ const formatDecimal = (value: string): string => {
     return `${negative ? '-' : ''}${groupedInteger}${
         decimal === '' ? '' : `.${decimal}`
     }`;
-};
+}
+
+/** Format one currency amount without converting it to floating point. */
+function formatCurrency(value: string, currency: string): string {
+    return `${currency} ${formatDecimal(value)}`;
+}
+
+const selectClassName =
+    'h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
 export default function StockOnHandReport({
     rows,
+    summary,
     locationOptions,
     storageLocationOptions,
     categoryOptions,
@@ -62,20 +91,20 @@ export default function StockOnHandReport({
     currency,
     canViewCosts,
 }: Props) {
-    const totalValue = canViewCosts
-        ? rows.reduce((sum, row) => sum + Number(row.inventoryValue ?? '0'), 0)
-        : null;
+    const itemSearchDefault =
+        filters.itemSearch ?? filters.inventoryItemId?.toString() ?? '';
 
     return (
         <>
-            <Head title="Stock on hand report" />
+            <Head title="Stock on hand" />
 
-            <div className="flex flex-1 flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-semibold">
+                        <h1 className="text-2xl font-semibold tracking-tight">
                             Stock on hand
                         </h1>
+
                         <p className="mt-1 text-sm text-muted-foreground">
                             Current balance quantities and values by location.
                         </p>
@@ -83,9 +112,44 @@ export default function StockOnHandReport({
 
                     <Button variant="outline" asChild>
                         <Link href={InventoryItemController.index()}>
+                            <Package className="size-4" aria-hidden="true" />
                             Inventory items
                         </Link>
                     </Button>
+                </div>
+
+                <div
+                    className={
+                        canViewCosts
+                            ? 'grid gap-4 md:grid-cols-2 xl:grid-cols-3'
+                            : 'grid gap-4 md:grid-cols-2'
+                    }
+                >
+                    {canViewCosts && summary.totalValue !== null && (
+                        <DashboardMetricCard
+                            title="Total stock value"
+                            value={formatCurrency(summary.totalValue, currency)}
+                            description="Across the current filtered stock balances"
+                            icon={Package}
+                            tone="blue"
+                        />
+                    )}
+
+                    <DashboardMetricCard
+                        title="Active items"
+                        value={summary.itemsWithStockCount}
+                        description="Items with stock on hand"
+                        icon={Boxes}
+                        tone="emerald"
+                    />
+
+                    <DashboardMetricCard
+                        title="Locations"
+                        value={summary.storageLocationCount}
+                        description="Storage locations holding stock"
+                        icon={MapPin}
+                        tone="violet"
+                    />
                 </div>
 
                 <Form
@@ -93,15 +157,17 @@ export default function StockOnHandReport({
                     method="get"
                 >
                     {({ processing }) => (
-                        <div className="grid gap-4 rounded-xl border border-sidebar-border/70 p-5 md:grid-cols-[1fr_1fr_1fr_1fr_auto_auto] dark:border-sidebar-border">
+                        <div className="grid gap-4 rounded-xl border border-sidebar-border/70 bg-card p-4 shadow-sm lg:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1.3fr_auto] dark:border-sidebar-border">
                             <div className="grid gap-2">
-                                <Label>Location</Label>
+                                <Label htmlFor="location_id">Location</Label>
+
                                 <select
+                                    id="location_id"
                                     name="location_id"
                                     defaultValue={
                                         filters.locationId?.toString() ?? ''
                                     }
-                                    className="h-9 rounded-md border bg-background px-3 text-sm"
+                                    className={selectClassName}
                                 >
                                     <option value="">All locations</option>
 
@@ -117,14 +183,18 @@ export default function StockOnHandReport({
                             </div>
 
                             <div className="grid gap-2">
-                                <Label>Storage location</Label>
+                                <Label htmlFor="storage_location_id">
+                                    Storage location
+                                </Label>
+
                                 <select
+                                    id="storage_location_id"
                                     name="storage_location_id"
                                     defaultValue={
                                         filters.storageLocationId?.toString() ??
                                         ''
                                     }
-                                    className="h-9 rounded-md border bg-background px-3 text-sm"
+                                    className={selectClassName}
                                 >
                                     <option value="">
                                         All storage locations
@@ -144,14 +214,18 @@ export default function StockOnHandReport({
                             </div>
 
                             <div className="grid gap-2">
-                                <Label>Category</Label>
+                                <Label htmlFor="inventory_category_id">
+                                    Category
+                                </Label>
+
                                 <select
+                                    id="inventory_category_id"
                                     name="inventory_category_id"
                                     defaultValue={
                                         filters.inventoryCategoryId?.toString() ??
                                         ''
                                     }
-                                    className="h-9 rounded-md border bg-background px-3 text-sm"
+                                    className={selectClassName}
                                 >
                                     <option value="">All categories</option>
 
@@ -167,30 +241,51 @@ export default function StockOnHandReport({
                             </div>
 
                             <div className="grid gap-2">
-                                <Label>Item</Label>
-                                <input
-                                    type="number"
-                                    name="inventory_item_id"
-                                    defaultValue={
-                                        filters.inventoryItemId?.toString() ??
-                                        ''
-                                    }
-                                    placeholder="Item ID"
-                                    className="h-9 rounded-md border bg-background px-3 text-sm"
-                                />
+                                <Label htmlFor="item">Item</Label>
+
+                                <div className="relative">
+                                    <Search
+                                        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                                        aria-hidden="true"
+                                    />
+
+                                    <Input
+                                        id="item"
+                                        type="search"
+                                        name="item"
+                                        defaultValue={itemSearchDefault}
+                                        placeholder="Search by item ID, SKU, or name"
+                                        className="pl-9"
+                                        autoComplete="off"
+                                    />
+                                </div>
                             </div>
 
-                            <div className="flex items-end">
-                                <Button type="submit" disabled={processing}>
-                                    Apply
+                            <div className="flex items-end gap-2 lg:col-span-2 xl:col-span-1">
+                                <Button
+                                    type="submit"
+                                    disabled={processing}
+                                    className="min-w-24 flex-1 xl:flex-none"
+                                >
+                                    <Filter
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    {processing ? 'Applying…' : 'Apply'}
                                 </Button>
-                            </div>
 
-                            <div className="flex items-end">
-                                <Button variant="outline" asChild>
+                                <Button
+                                    variant="outline"
+                                    className="flex-1 xl:flex-none"
+                                    asChild
+                                >
                                     <Link
                                         href={StockOnHandReportController.index()}
                                     >
+                                        <RotateCcw
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
                                         Clear
                                     </Link>
                                 </Button>
@@ -199,114 +294,221 @@ export default function StockOnHandReport({
                     )}
                 </Form>
 
-                <div className="overflow-x-auto rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                    <table className="w-full text-sm">
-                        <thead className="border-b text-left">
-                            <tr>
-                                <th className="px-4 py-3">Item</th>
-                                <th className="px-4 py-3">Category</th>
-                                <th className="px-4 py-3">Location</th>
-                                <th className="px-4 py-3">Storage</th>
-                                <th className="px-4 py-3 text-right">
-                                    Quantity
-                                </th>
+                <section
+                    className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border"
+                    aria-labelledby="stock-on-hand-table-title"
+                >
+                    <div className="flex min-h-12 items-center justify-between gap-3 border-b border-sidebar-border/70 px-4 dark:border-sidebar-border">
+                        <div>
+                            <h2
+                                id="stock-on-hand-table-title"
+                                className="text-sm font-semibold"
+                            >
+                                Current stock balances
+                            </h2>
 
-                                {canViewCosts && (
-                                    <>
-                                        <th className="px-4 py-3 text-right">
-                                            Avg. cost
-                                        </th>
-                                        <th className="px-4 py-3 text-right">
-                                            Value
-                                        </th>
-                                    </>
-                                )}
-                            </tr>
-                        </thead>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                                {rows.length}{' '}
+                                {rows.length === 1
+                                    ? 'balance matches'
+                                    : 'balances match'}{' '}
+                                the selected filters
+                            </p>
+                        </div>
+                    </div>
 
-                        <tbody>
-                            {rows.length === 0 ? (
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[900px] text-sm">
+                            <caption className="sr-only">
+                                Current stock balances grouped by item,
+                                location, and storage location.
+                            </caption>
+
+                            <thead className="border-b bg-muted/40 text-left">
                                 <tr>
-                                    <td
-                                        colSpan={canViewCosts ? 7 : 5}
-                                        className="px-4 py-8 text-center text-muted-foreground"
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium text-muted-foreground"
                                     >
-                                        No stock on hand matches the selected
-                                        filters.
-                                    </td>
+                                        Item
+                                    </th>
+
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium text-muted-foreground"
+                                    >
+                                        Category
+                                    </th>
+
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium text-muted-foreground"
+                                    >
+                                        Location
+                                    </th>
+
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium text-muted-foreground"
+                                    >
+                                        Storage
+                                    </th>
+
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 text-right font-medium text-muted-foreground"
+                                    >
+                                        Quantity
+                                    </th>
+
+                                    {canViewCosts && (
+                                        <>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 text-right font-medium text-muted-foreground"
+                                            >
+                                                Avg. cost
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 text-right font-medium text-muted-foreground"
+                                            >
+                                                Value
+                                            </th>
+                                        </>
+                                    )}
                                 </tr>
-                            ) : (
-                                rows.map((row) => (
-                                    <tr
-                                        key={row.id}
-                                        className="border-b last:border-b-0"
-                                    >
-                                        <td className="px-4 py-3">
-                                            <div className="font-medium">
-                                                {row.itemName}
+                            </thead>
+
+                            <tbody>
+                                {rows.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={canViewCosts ? 7 : 5}
+                                            className="px-6 py-14 text-center"
+                                        >
+                                            <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted">
+                                                <Search
+                                                    className="size-5 text-muted-foreground"
+                                                    aria-hidden="true"
+                                                />
                                             </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                {row.itemSku}
-                                            </div>
+
+                                            <p className="mt-3 font-medium">
+                                                No stock balances found
+                                            </p>
+
+                                            <p className="mt-1 text-sm text-muted-foreground">
+                                                Adjust or clear the filters to
+                                                view available stock.
+                                            </p>
                                         </td>
-
-                                        <td className="px-4 py-3">
-                                            {row.categoryName ?? '—'}
-                                        </td>
-
-                                        <td className="px-4 py-3">
-                                            {row.locationName}
-                                        </td>
-
-                                        <td className="px-4 py-3">
-                                            {row.storageLocationName}
-                                        </td>
-
-                                        <td className="px-4 py-3 text-right">
-                                            {formatDecimal(row.quantityOnHand)}{' '}
-                                            {row.baseUnitSymbol}
-                                        </td>
-
-                                        {canViewCosts && (
-                                            <>
-                                                <td className="px-4 py-3 text-right">
-                                                    {row.averageUnitCost ===
-                                                    null
-                                                        ? '—'
-                                                        : `${currency} ${formatDecimal(
-                                                              row.averageUnitCost,
-                                                          )}`}
-                                                </td>
-
-                                                <td className="px-4 py-3 text-right">
-                                                    {row.inventoryValue === null
-                                                        ? '—'
-                                                        : `${currency} ${formatDecimal(
-                                                              row.inventoryValue,
-                                                          )}`}
-                                                </td>
-                                            </>
-                                        )}
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
+                                ) : (
+                                    rows.map((row) => (
+                                        <tr
+                                            key={row.id}
+                                            className="border-b transition-colors last:border-b-0 hover:bg-muted/30"
+                                        >
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div
+                                                        className="flex size-8 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                                                        aria-hidden="true"
+                                                    >
+                                                        <Package className="size-4" />
+                                                    </div>
 
-                        {canViewCosts && totalValue !== null && (
-                            <tfoot>
-                                <tr className="border-t font-medium">
-                                    <td className="px-4 py-3" colSpan={6}>
-                                        Total value
-                                    </td>
-                                    <td className="px-4 py-3 text-right">
-                                        {currency}{' '}
-                                        {formatDecimal(totalValue.toFixed(4))}
-                                    </td>
-                                </tr>
-                            </tfoot>
-                        )}
-                    </table>
-                </div>
+                                                    <div className="min-w-0">
+                                                        <div className="truncate font-medium">
+                                                            {row.itemName}
+                                                        </div>
+
+                                                        <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                            {row.itemSku}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            <td className="px-4 py-3">
+                                                {row.categoryName ?? (
+                                                    <span className="text-muted-foreground">
+                                                        —
+                                                    </span>
+                                                )}
+                                            </td>
+
+                                            <td className="px-4 py-3">
+                                                {row.locationName}
+                                            </td>
+
+                                            <td className="px-4 py-3">
+                                                {row.storageLocationName}
+                                            </td>
+
+                                            <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
+                                                {formatDecimal(
+                                                    row.quantityOnHand,
+                                                )}{' '}
+                                                <span className="font-normal text-muted-foreground">
+                                                    {row.baseUnitSymbol}
+                                                </span>
+                                            </td>
+
+                                            {canViewCosts && (
+                                                <>
+                                                    <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+                                                        {row.averageUnitCost ===
+                                                        null
+                                                            ? '—'
+                                                            : formatCurrency(
+                                                                  row.averageUnitCost,
+                                                                  currency,
+                                                              )}
+                                                    </td>
+
+                                                    <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
+                                                        {row.inventoryValue ===
+                                                        null
+                                                            ? '—'
+                                                            : formatCurrency(
+                                                                  row.inventoryValue,
+                                                                  currency,
+                                                              )}
+                                                    </td>
+                                                </>
+                                            )}
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+
+                            {canViewCosts &&
+                                summary.totalValue !== null &&
+                                rows.length > 0 && (
+                                    <tfoot>
+                                        <tr className="border-t bg-muted/30 font-medium">
+                                            <td
+                                                className="px-4 py-3"
+                                                colSpan={6}
+                                            >
+                                                Total value
+                                            </td>
+
+                                            <td className="px-4 py-3 text-right font-semibold whitespace-nowrap tabular-nums">
+                                                {formatCurrency(
+                                                    summary.totalValue,
+                                                    currency,
+                                                )}
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                )}
+                        </table>
+                    </div>
+                </section>
             </div>
         </>
     );

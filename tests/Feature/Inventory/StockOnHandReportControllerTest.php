@@ -114,11 +114,14 @@ test('report hides cost fields from members without cost visibility', function (
                 ->where('rows.0.baseUnitSymbol', $this->unit->symbol)
                 ->where('rows.0.averageUnitCost', null)
                 ->where('rows.0.inventoryValue', null)
+                ->where('summary.itemsWithStockCount', 1)
+                ->where('summary.storageLocationCount', 1)
+                ->where('summary.totalValue', null)
                 ->where('canViewCosts', false),
         );
 });
 
-test('report shows cost fields to members with cost visibility', function () {
+test('report shows cost fields and summary to members with cost visibility', function () {
     $url = route('inventory.stock-on-hand.index');
 
     $this
@@ -134,6 +137,9 @@ test('report shows cost fields to members with cost visibility', function () {
                 ->has('rows', 1)
                 ->where('rows.0.averageUnitCost', '4.0000')
                 ->where('rows.0.inventoryValue', '40.0000')
+                ->where('summary.itemsWithStockCount', 1)
+                ->where('summary.storageLocationCount', 1)
+                ->where('summary.totalValue', '40.0000')
                 ->where('canViewCosts', true),
         );
 });
@@ -181,7 +187,10 @@ test('report location filter excludes balances from other locations', function (
                 ->component('inventory/stock-on-hand')
                 ->has('rows', 1)
                 ->where('rows.0.locationId', $otherLocation->id)
-                ->where('rows.0.quantityOnHand', '5.000000'),
+                ->where('rows.0.quantityOnHand', '5.000000')
+                ->where('summary.itemsWithStockCount', 1)
+                ->where('summary.storageLocationCount', 1)
+                ->where('summary.totalValue', '10.0000'),
         );
 });
 
@@ -294,6 +303,98 @@ test('report item filter narrows results to the requested inventory item', funct
                 ->component('inventory/stock-on-hand')
                 ->has('rows', 1)
                 ->where('rows.0.itemId', $this->item->id),
+        );
+});
+
+test('report item search matches item id sku and name', function () {
+    foreach (
+        [
+            (string) $this->item->id,
+            'REPORT-',
+            'report test',
+        ] as $search
+    ) {
+        $url = route('inventory.stock-on-hand.index', [
+            'item' => $search,
+        ]);
+
+        $this
+            ->actingAs($this->manager)
+            ->withSession([
+                'active_organization_id' => $this->organization->id,
+            ])
+            ->get($url)
+            ->assertOk()
+            ->assertInertia(
+                fn (Assert $page): Assert => $page
+                    ->component('inventory/stock-on-hand')
+                    ->has('rows', 1)
+                    ->where('rows.0.itemId', $this->item->id)
+                    ->where('filters.itemSearch', $search),
+            );
+    }
+});
+
+test('report item search remains tenant isolated', function () {
+    $otherOrganization = Organization::factory()->create();
+
+    $otherLocation = Location::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'active' => true,
+    ]);
+
+    $otherStorage = makeStorageLocationForStockOnHandTest(
+        $otherOrganization,
+        $otherLocation,
+        'SEARCH-X',
+    );
+
+    $otherUnit = UnitOfMeasure::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'dimension' => 'weight',
+    ]);
+
+    $otherItem = InventoryItem::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'base_unit_of_measure_id' => $otherUnit->id,
+        'name' => 'Cross Tenant Search Target',
+        'sku' => 'CROSS-TENANT-SEARCH',
+        'active' => true,
+    ]);
+
+    app(RecordStockMovement::class)->handle(
+        organization: $otherOrganization,
+        location: $otherLocation,
+        storageLocation: $otherStorage,
+        inventoryItem: $otherItem,
+        type: StockMovementType::OpeningBalance,
+        baseQuantity: '15',
+        baseUnitOfMeasure: $otherUnit,
+        referenceType: 'opening_balance',
+        referenceId: $otherItem->id,
+        occurredAt: now(),
+        idempotencyKey: "stock-on-hand-search-test:tenant:{$otherItem->id}",
+        inboundUnitCost: '3.0000',
+    );
+
+    $url = route('inventory.stock-on-hand.index', [
+        'item' => 'Cross Tenant Search Target',
+    ]);
+
+    $this
+        ->actingAs($this->manager)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get($url)
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/stock-on-hand')
+                ->has('rows', 0)
+                ->where('summary.itemsWithStockCount', 0)
+                ->where('summary.storageLocationCount', 0)
+                ->where('summary.totalValue', '0'),
         );
 });
 
