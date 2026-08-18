@@ -12,16 +12,18 @@ use App\Models\InventoryItem;
 use App\Models\InventoryItemUnit;
 use App\Models\Organization;
 use App\Models\UnitOfMeasure;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class InventoryItemController extends Controller
 {
     /**
-     * Show inventory items belonging to the active organization.
+     * Show the searchable and paginated inventory master for the active organization.
      */
     public function index(Request $request): Response
     {
@@ -32,17 +34,90 @@ class InventoryItemController extends Controller
             $organization,
         );
 
-        $items = $organization
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:120'],
+            'category' => ['nullable', 'integer', 'min:1'],
+            'type' => ['nullable', Rule::enum(InventoryItemType::class)],
+            'status' => ['nullable', Rule::in(['active', 'inactive'])],
+            'sort' => ['nullable', Rule::in(['name', 'sku', 'type', 'status'])],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
+        ]);
+
+        $search = trim((string) ($validated['search'] ?? ''));
+        $categoryId = isset($validated['category'])
+            ? (int) $validated['category']
+            : null;
+        $type = isset($validated['type'])
+            ? (string) $validated['type']
+            : null;
+        $status = isset($validated['status'])
+            ? (string) $validated['status']
+            : null;
+        $sort = isset($validated['sort'])
+            ? (string) $validated['sort']
+            : null;
+        $direction = isset($validated['direction'])
+            ? (string) $validated['direction']
+            : 'asc';
+
+        $itemsQuery = $organization
             ->inventoryItems()
             ->with([
-                'baseUnitOfMeasure:id,name,symbol',
-                'inventoryCategory:id,name',
+                'baseUnitOfMeasure:id,name,symbol,active',
+                'inventoryCategory:id,name,active',
             ])
-            ->withCount('unitConversions')
-            ->orderByDesc('active')
-            ->orderBy('name')
-            ->get()
-            ->map(
+            ->withCount('unitConversions');
+
+        if ($search !== '') {
+            $searchPattern = '%'.$search.'%';
+
+            $itemsQuery->where(
+                static function (Builder $query) use ($searchPattern): void {
+                    $query
+                        ->whereLike('name', $searchPattern)
+                        ->orWhereLike('sku', $searchPattern);
+                },
+            );
+        }
+
+        if ($categoryId !== null) {
+            $itemsQuery->where('inventory_category_id', $categoryId);
+        }
+
+        if ($type !== null) {
+            $itemsQuery->where('type', $type);
+        }
+
+        if ($status !== null) {
+            $itemsQuery->where('active', $status === 'active');
+        }
+
+        if ($sort === null) {
+            $itemsQuery
+                ->orderByDesc('active')
+                ->orderBy('name')
+                ->orderBy('id');
+        } else {
+            $sortColumn = match ($sort) {
+                'sku' => 'sku',
+                'type' => 'type',
+                'status' => 'active',
+                default => 'name',
+            };
+
+            $itemsQuery->orderBy($sortColumn, $direction);
+
+            if ($sortColumn !== 'name') {
+                $itemsQuery->orderBy('name');
+            }
+
+            $itemsQuery->orderBy('id');
+        }
+
+        $items = $itemsQuery
+            ->paginate(25)
+            ->withQueryString()
+            ->through(
                 static fn (InventoryItem $item): array => [
                     'id' => $item->id,
                     'name' => $item->name,
@@ -64,7 +139,25 @@ class InventoryItemController extends Controller
                         : [
                             'id' => $item->inventoryCategory->id,
                             'name' => $item->inventoryCategory->name,
+                            'active' => $item->inventoryCategory->active,
                         ],
+                ],
+            );
+
+        $categoryOptions = $organization
+            ->inventoryCategories()
+            ->orderByDesc('active')
+            ->orderBy('name')
+            ->get([
+                'id',
+                'name',
+                'active',
+            ])
+            ->map(
+                static fn (InventoryCategory $category): array => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'active' => $category->active,
                 ],
             )
             ->values()
@@ -72,6 +165,22 @@ class InventoryItemController extends Controller
 
         return Inertia::render('inventory/items/index', [
             'items' => $items,
+            'summary' => [
+                'total' => $organization->inventoryItems()->count(),
+                'active' => $organization
+                    ->inventoryItems()
+                    ->where('active', true)
+                    ->count(),
+            ],
+            'categoryOptions' => $categoryOptions,
+            'filters' => [
+                'search' => $search,
+                'categoryId' => $categoryId,
+                'type' => $type,
+                'status' => $status,
+                'sort' => $sort,
+                'direction' => $direction,
+            ],
             'canManage' => Gate::allows(
                 OrganizationPermission::InventoryAdjust->value,
                 $organization,

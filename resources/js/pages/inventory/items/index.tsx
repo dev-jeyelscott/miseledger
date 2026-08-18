@@ -1,28 +1,168 @@
-import { Head, Link } from '@inertiajs/react';
-import { Plus } from 'lucide-react';
+import { Form, Head, Link } from '@inertiajs/react';
+import {
+    ArrowDown,
+    ArrowUp,
+    ArrowUpDown,
+    Boxes,
+    CheckCircle2,
+    Pencil,
+    Plus,
+    Ruler,
+    Scale,
+    Search,
+    SlidersHorizontal,
+    Tags,
+} from 'lucide-react';
 import InventoryAdjustmentController from '@/actions/App/Http/Controllers/Inventory/InventoryAdjustmentController';
 import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import OpeningBalanceController from '@/actions/App/Http/Controllers/Inventory/OpeningBalanceController';
 import UnitOfMeasureController from '@/actions/App/Http/Controllers/Inventory/UnitOfMeasureController';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { dashboard } from '@/routes';
-import type { InventoryItemListItem } from '@/types';
+import type {
+    InventoryItemListItem,
+    InventoryItemType,
+} from '@/types';
+
+type ItemStatus = 'active' | 'inactive';
+
+type SortKey = 'name' | 'sku' | 'type' | 'status';
+
+type SortDirection = 'asc' | 'desc';
+
+type PaginatedInventoryItems = {
+    current_page: number;
+    data: InventoryItemListItem[];
+    from: number | null;
+    last_page: number;
+    next_page_url: string | null;
+    prev_page_url: string | null;
+    to: number | null;
+    total: number;
+};
+
+type CategoryOption = {
+    id: number;
+    name: string;
+    active: boolean;
+};
 
 type Props = {
-    items: InventoryItemListItem[];
+    items: PaginatedInventoryItems;
+    summary: {
+        total: number;
+        active: number;
+    };
+    categoryOptions: CategoryOption[];
+    filters: {
+        search: string;
+        categoryId: number | null;
+        type: InventoryItemType | null;
+        status: ItemStatus | null;
+        sort: SortKey | null;
+        direction: SortDirection;
+    };
     canManage: boolean;
 };
 
-export default function InventoryItemsIndex({ items, canManage }: Props) {
+const itemTypeLabels: Record<InventoryItemType, string> = {
+    ingredient: 'Ingredient',
+    finished_item: 'Finished item',
+    prepared_item: 'Prepared item',
+    packaging: 'Packaging',
+    consumable: 'Consumable',
+};
+
+const itemTypeOptions: InventoryItemType[] = [
+    'ingredient',
+    'finished_item',
+    'prepared_item',
+    'packaging',
+    'consumable',
+];
+
+export default function InventoryItemsIndex({
+    items,
+    summary,
+    categoryOptions,
+    filters,
+    canManage,
+}: Props) {
+    const hasQueryState =
+        filters.search !== ''
+        || filters.categoryId !== null
+        || filters.type !== null
+        || filters.status !== null
+        || filters.sort !== null;
+
+    /**
+     * Preserve the active filters while changing only the requested sort.
+     */
+    const sortUrl = (sort: SortKey): string => {
+        const direction: SortDirection =
+            filters.sort === sort && filters.direction === 'asc'
+                ? 'desc'
+                : 'asc';
+
+        return InventoryItemController.index({
+            query: {
+                search: filters.search || undefined,
+                category: filters.categoryId ?? undefined,
+                type: filters.type ?? undefined,
+                status: filters.status ?? undefined,
+                sort,
+                direction,
+            },
+        }).url;
+    };
+
+    /**
+     * Render a sortable table heading with visible and semantic state.
+     */
+    const SortableHeading = ({
+        sort,
+        children,
+    }: {
+        sort: SortKey;
+        children: React.ReactNode;
+    }) => {
+        const active = filters.sort === sort;
+
+        return (
+            <Link
+                href={sortUrl(sort)}
+                preserveScroll
+                className="inline-flex items-center gap-1.5 font-medium text-foreground transition-colors hover:text-foreground/70 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+                {children}
+
+                {active ? (
+                    filters.direction === 'asc' ? (
+                        <ArrowUp className="size-3.5" aria-hidden="true" />
+                    ) : (
+                        <ArrowDown className="size-3.5" aria-hidden="true" />
+                    )
+                ) : (
+                    <ArrowUpDown
+                        className="size-3.5 text-muted-foreground"
+                        aria-hidden="true"
+                    />
+                )}
+            </Link>
+        );
+    };
+
     return (
         <>
-            <Head title="Inventory" />
+            <Head title="Inventory items" />
 
-            <div className="flex flex-1 flex-col gap-6 p-4">
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+                <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-start">
                     <div>
-                        <h1 className="text-2xl font-semibold">
+                        <h1 className="text-2xl font-semibold tracking-tight">
                             Inventory items
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
@@ -34,12 +174,14 @@ export default function InventoryItemsIndex({ items, canManage }: Props) {
                     <div className="flex flex-wrap gap-2">
                         <Button variant="outline" asChild>
                             <Link href={UnitOfMeasureController.index()}>
+                                <Ruler className="size-4" aria-hidden="true" />
                                 Units of measure
                             </Link>
                         </Button>
 
                         <Button variant="outline" asChild>
                             <Link href={InventoryCategoryController.index()}>
+                                <Tags className="size-4" aria-hidden="true" />
                                 Categories
                             </Link>
                         </Button>
@@ -50,6 +192,10 @@ export default function InventoryItemsIndex({ items, canManage }: Props) {
                                     <Link
                                         href={OpeningBalanceController.create()}
                                     >
+                                        <Scale
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
                                         Opening balance
                                     </Link>
                                 </Button>
@@ -58,6 +204,10 @@ export default function InventoryItemsIndex({ items, canManage }: Props) {
                                     <Link
                                         href={InventoryAdjustmentController.create()}
                                     >
+                                        <SlidersHorizontal
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
                                         Adjust inventory
                                     </Link>
                                 </Button>
@@ -66,7 +216,10 @@ export default function InventoryItemsIndex({ items, canManage }: Props) {
                                     <Link
                                         href={InventoryItemController.create()}
                                     >
-                                        <Plus className="size-4" />
+                                        <Plus
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
                                         New item
                                     </Link>
                                 </Button>
@@ -75,67 +228,471 @@ export default function InventoryItemsIndex({ items, canManage }: Props) {
                     </div>
                 </div>
 
-                <div className="overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                    <div className="grid grid-cols-[minmax(0,1fr)_130px_150px_110px_100px] gap-4 border-b border-sidebar-border/70 px-5 py-3 text-xs font-medium text-muted-foreground uppercase dark:border-sidebar-border">
-                        <span>Item</span>
-                        <span>Type</span>
-                        <span>Base UOM</span>
-                        <span>Conversions</span>
-                        <span>Status</span>
+                <section
+                    aria-label="Inventory summary"
+                    className="grid gap-3 sm:grid-cols-2 lg:max-w-2xl"
+                >
+                    <div className="flex items-center justify-between gap-4 rounded-xl border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                        <div>
+                            <p className="text-sm font-medium text-muted-foreground">
+                                Total items
+                            </p>
+                            <p className="mt-1 text-2xl font-semibold tracking-tight">
+                                {summary.total.toLocaleString()}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                All inventory master records
+                            </p>
+                        </div>
+
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                            <Boxes
+                                className="size-5"
+                                aria-hidden="true"
+                            />
+                        </div>
                     </div>
 
-                    {items.length === 0 ? (
-                        <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-                            No inventory items have been created.
+                    <div className="flex items-center justify-between gap-4 rounded-xl border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                        <div>
+                            <p className="text-sm font-medium text-muted-foreground">
+                                Active items
+                            </p>
+                            <p className="mt-1 text-2xl font-semibold tracking-tight">
+                                {summary.active.toLocaleString()}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                Available for current operations
+                            </p>
                         </div>
-                    ) : (
-                        <div className="divide-y divide-sidebar-border/70 dark:divide-sidebar-border">
-                            {items.map((item) => (
-                                <div
-                                    key={item.id}
-                                    className="grid grid-cols-[minmax(0,1fr)_130px_150px_110px_100px] items-center gap-4 px-5 py-4"
-                                >
-                                    <div className="min-w-0">
-                                        {canManage ? (
-                                            <Link
-                                                href={InventoryItemController.edit(
-                                                    item.id,
-                                                )}
-                                                className="font-medium hover:underline"
-                                            >
-                                                {item.name}
-                                            </Link>
-                                        ) : (
-                                            <p className="font-medium">
-                                                {item.name}
-                                            </p>
-                                        )}
 
-                                        <p className="mt-1 text-sm text-muted-foreground">
-                                            {item.sku}
-                                        </p>
-                                    </div>
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                            <CheckCircle2
+                                className="size-5"
+                                aria-hidden="true"
+                            />
+                        </div>
+                    </div>
+                </section>
 
-                                    <span className="text-sm">
-                                        {item.type.replace('_', ' ')}
-                                    </span>
-
-                                    <span className="text-sm">
-                                        {item.baseUnitOfMeasure.symbol}
-                                    </span>
-
-                                    <span className="text-sm">
-                                        {item.conversionCount}
-                                    </span>
-
-                                    <span className="text-sm">
-                                        {item.active ? 'Active' : 'Inactive'}
-                                    </span>
+                <section className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card dark:border-sidebar-border">
+                    <Form
+                        action={InventoryItemController.index().url}
+                        method="get"
+                    >
+                        {({ processing }) => (
+                            <div className="grid gap-3 border-b border-sidebar-border/70 p-4 md:grid-cols-2 xl:grid-cols-[minmax(18rem,1fr)_minmax(10rem,14rem)_minmax(10rem,13rem)_minmax(9rem,11rem)_auto] dark:border-sidebar-border">
+                                <div className="relative md:col-span-2 xl:col-span-1">
+                                    <label
+                                        htmlFor="inventory-search"
+                                        className="sr-only"
+                                    >
+                                        Search inventory items
+                                    </label>
+                                    <Search
+                                        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                                        aria-hidden="true"
+                                    />
+                                    <Input
+                                        id="inventory-search"
+                                        name="search"
+                                        type="search"
+                                        defaultValue={filters.search}
+                                        placeholder="Search by item name or SKU..."
+                                        className="pl-9"
+                                    />
                                 </div>
-                            ))}
+
+                                <div>
+                                    <label
+                                        htmlFor="inventory-category"
+                                        className="sr-only"
+                                    >
+                                        Category
+                                    </label>
+                                    <select
+                                        id="inventory-category"
+                                        name="category"
+                                        defaultValue={
+                                            filters.categoryId?.toString()
+                                            ?? ''
+                                        }
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    >
+                                        <option value="">All categories</option>
+
+                                        {categoryOptions.map((category) => (
+                                            <option
+                                                key={category.id}
+                                                value={category.id}
+                                            >
+                                                {category.name}
+                                                {category.active
+                                                    ? ''
+                                                    : ' (inactive)'}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label
+                                        htmlFor="inventory-type"
+                                        className="sr-only"
+                                    >
+                                        Type
+                                    </label>
+                                    <select
+                                        id="inventory-type"
+                                        name="type"
+                                        defaultValue={filters.type ?? ''}
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    >
+                                        <option value="">All types</option>
+
+                                        {itemTypeOptions.map((type) => (
+                                            <option key={type} value={type}>
+                                                {itemTypeLabels[type]}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label
+                                        htmlFor="inventory-status"
+                                        className="sr-only"
+                                    >
+                                        Status
+                                    </label>
+                                    <select
+                                        id="inventory-status"
+                                        name="status"
+                                        defaultValue={filters.status ?? ''}
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    >
+                                        <option value="">All statuses</option>
+                                        <option value="active">Active</option>
+                                        <option value="inactive">
+                                            Inactive
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 md:col-span-2 xl:col-span-1 xl:justify-end">
+                                    <Button
+                                        type="submit"
+                                        disabled={processing}
+                                    >
+                                        {processing
+                                            ? 'Applying...'
+                                            : 'Apply filters'}
+                                    </Button>
+
+                                    {hasQueryState && (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            asChild
+                                        >
+                                            <Link
+                                                href={InventoryItemController.index()}
+                                            >
+                                                Reset
+                                            </Link>
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </Form>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[880px] text-sm">
+                            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                                <tr className="border-b border-sidebar-border/70 dark:border-sidebar-border">
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3"
+                                        aria-sort={
+                                            filters.sort === 'name'
+                                                ? filters.direction
+                                                    === 'asc'
+                                                    ? 'ascending'
+                                                    : 'descending'
+                                                : 'none'
+                                        }
+                                    >
+                                        <SortableHeading sort="name">
+                                            Item
+                                        </SortableHeading>
+                                    </th>
+
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3"
+                                        aria-sort={
+                                            filters.sort === 'sku'
+                                                ? filters.direction
+                                                    === 'asc'
+                                                    ? 'ascending'
+                                                    : 'descending'
+                                                : 'none'
+                                        }
+                                    >
+                                        <SortableHeading sort="sku">
+                                            SKU
+                                        </SortableHeading>
+                                    </th>
+
+                                    <th scope="col" className="px-4 py-3">
+                                        Category
+                                    </th>
+
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3"
+                                        aria-sort={
+                                            filters.sort === 'type'
+                                                ? filters.direction
+                                                    === 'asc'
+                                                    ? 'ascending'
+                                                    : 'descending'
+                                                : 'none'
+                                        }
+                                    >
+                                        <SortableHeading sort="type">
+                                            Type
+                                        </SortableHeading>
+                                    </th>
+
+                                    <th scope="col" className="px-4 py-3">
+                                        Base UOM
+                                    </th>
+
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 text-right"
+                                    >
+                                        Conversions
+                                    </th>
+
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3"
+                                        aria-sort={
+                                            filters.sort === 'status'
+                                                ? filters.direction
+                                                    === 'asc'
+                                                    ? 'ascending'
+                                                    : 'descending'
+                                                : 'none'
+                                        }
+                                    >
+                                        <SortableHeading sort="status">
+                                            Status
+                                        </SortableHeading>
+                                    </th>
+
+                                    {canManage && (
+                                        <th
+                                            scope="col"
+                                            className="w-20 px-4 py-3 text-right"
+                                        >
+                                            <span className="sr-only">
+                                                Actions
+                                            </span>
+                                        </th>
+                                    )}
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {items.data.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={canManage ? 8 : 7}
+                                            className="px-4 py-12 text-center"
+                                        >
+                                            <div className="mx-auto max-w-sm">
+                                                <p className="font-medium">
+                                                    {hasQueryState
+                                                        ? 'No inventory items match these filters.'
+                                                        : 'No inventory items have been created.'}
+                                                </p>
+                                                <p className="mt-1 text-sm text-muted-foreground">
+                                                    {hasQueryState
+                                                        ? 'Adjust or reset the filters to see more items.'
+                                                        : 'Create an inventory item to begin managing stock master data.'}
+                                                </p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    items.data.map((item) => (
+                                        <tr
+                                            key={item.id}
+                                            className="border-b border-sidebar-border/70 transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
+                                        >
+                                            <td className="px-4 py-3">
+                                                {canManage ? (
+                                                    <Link
+                                                        href={InventoryItemController.edit(
+                                                            item.id,
+                                                        )}
+                                                        className="font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                    >
+                                                        {item.name}
+                                                    </Link>
+                                                ) : (
+                                                    <span className="font-medium">
+                                                        {item.name}
+                                                    </span>
+                                                )}
+                                            </td>
+
+                                            <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                                                {item.sku}
+                                            </td>
+
+                                            <td className="px-4 py-3">
+                                                {item.inventoryCategory?.name
+                                                    ?? 'Uncategorized'}
+                                            </td>
+
+                                            <td className="px-4 py-3">
+                                                {itemTypeLabels[item.type]}
+                                            </td>
+
+                                            <td className="px-4 py-3">
+                                                <span className="font-medium">
+                                                    {
+                                                        item.baseUnitOfMeasure
+                                                            .symbol
+                                                    }
+                                                </span>
+                                                <span className="ml-1.5 text-xs text-muted-foreground">
+                                                    {
+                                                        item.baseUnitOfMeasure
+                                                            .name
+                                                    }
+                                                </span>
+                                            </td>
+
+                                            <td className="px-4 py-3 text-right tabular-nums">
+                                                {item.conversionCount}
+                                            </td>
+
+                                            <td className="px-4 py-3">
+                                                <Badge
+                                                    variant={
+                                                        item.active
+                                                            ? 'secondary'
+                                                            : 'outline'
+                                                    }
+                                                >
+                                                    {item.active
+                                                        ? 'Active'
+                                                        : 'Inactive'}
+                                                </Badge>
+                                            </td>
+
+                                            {canManage && (
+                                                <td className="px-4 py-2 text-right">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        asChild
+                                                    >
+                                                        <Link
+                                                            href={InventoryItemController.edit(
+                                                                item.id,
+                                                            )}
+                                                            aria-label={`Edit ${item.name}`}
+                                                        >
+                                                            <Pencil
+                                                                className="size-4"
+                                                                aria-hidden="true"
+                                                            />
+                                                        </Link>
+                                                    </Button>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {items.total > 0 && (
+                        <div className="flex flex-col gap-3 border-t border-sidebar-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-sidebar-border">
+                            <p className="text-sm text-muted-foreground">
+                                Showing {items.from ?? 0} to {items.to ?? 0} of{' '}
+                                {items.total.toLocaleString()} items
+                            </p>
+
+                            {items.last_page > 1 && (
+                                <div className="flex items-center gap-2">
+                                    {items.prev_page_url !== null ? (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            asChild
+                                        >
+                                            <Link
+                                                href={items.prev_page_url}
+                                                preserveScroll
+                                                preserveState
+                                            >
+                                                Previous
+                                            </Link>
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            disabled
+                                        >
+                                            Previous
+                                        </Button>
+                                    )}
+
+                                    <span className="px-1 text-sm text-muted-foreground">
+                                        Page {items.current_page} of{' '}
+                                        {items.last_page}
+                                    </span>
+
+                                    {items.next_page_url !== null ? (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            asChild
+                                        >
+                                            <Link
+                                                href={items.next_page_url}
+                                                preserveScroll
+                                                preserveState
+                                            >
+                                                Next
+                                            </Link>
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            disabled
+                                        >
+                                            Next
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
-                </div>
+                </section>
             </div>
         </>
     );
