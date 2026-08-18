@@ -264,7 +264,8 @@ class StockOnHandReportController extends Controller
                                 );
 
                             if (ctype_digit($itemSearch)) {
-                                $searchQuery->orWhereKey(
+                                $searchQuery->orWhere(
+                                    'id',
                                     (int) $itemSearch,
                                 );
                             }
