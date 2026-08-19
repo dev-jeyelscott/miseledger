@@ -42,48 +42,30 @@ class StockTransferController extends Controller
      */
     public function index(Request $request): Response
     {
-        $organization =
-            $this->activeOrganization($request);
+        $organization = $this->activeOrganization($request);
 
-        $this->authorizeTransferRead(
+        $this->authorizeTransferRead($organization);
+
+        [$filters, $query] = $this->indexQuery(
+            $request,
             $organization,
         );
 
-        $transfers = StockTransfer::query()
-            ->with([
-                'fromLocation:id,name',
-                'fromStorageLocation:id,name',
-                'toLocation:id,name',
-                'toStorageLocation:id,name',
-            ])
-            ->where(
-                'organization_id',
-                $organization->id,
-            )
-            ->orderByDesc('id')
-            ->get()
+        $summary = $this->indexSummary($organization);
+
+        $paginatedTransfers = $this->applyIndexSort(
+            clone $query,
+            $filters['sort'],
+            $filters['direction'],
+        )
+            ->paginate($filters['perPage'])
+            ->withQueryString();
+
+        $rows = collect($paginatedTransfers->items())
             ->map(
-                static fn (
-                    StockTransfer $transfer,
-                ): array => [
-                    'id' => $transfer->id,
-                    'number' => $transfer->number,
-                    'status' => $transfer->status->value,
-                    'fromLocationName' => $transfer->fromLocation->name,
-                    'fromStorageLocationName' => $transfer
-                        ->fromStorageLocation
-                        ->name,
-                    'toLocationName' => $transfer->toLocation->name,
-                    'toStorageLocationName' => $transfer
-                        ->toStorageLocation
-                        ->name,
-                    'requestedAt' => $transfer->requested_at
-                        ?->toIso8601String(),
-                    'shippedAt' => $transfer->shipped_at
-                        ?->toIso8601String(),
-                    'receivedAt' => $transfer->received_at
-                        ?->toIso8601String(),
-                ],
+                fn (StockTransfer $transfer): array => $this->indexRowData(
+                    $transfer,
+                ),
             )
             ->values()
             ->all();
@@ -91,7 +73,23 @@ class StockTransferController extends Controller
         return Inertia::render(
             'stock-transfers/index',
             [
-                'transfers' => $transfers,
+                'rows' => $rows,
+                'pagination' => [
+                    'currentPage' => $paginatedTransfers->currentPage(),
+                    'from' => $paginatedTransfers->firstItem(),
+                    'lastPage' => $paginatedTransfers->lastPage(),
+                    'nextPageUrl' => $paginatedTransfers->nextPageUrl(),
+                    'perPage' => $paginatedTransfers->perPage(),
+                    'previousPageUrl' => $paginatedTransfers->previousPageUrl(),
+                    'to' => $paginatedTransfers->lastItem(),
+                    'total' => $paginatedTransfers->total(),
+                ],
+                'summary' => $summary,
+                'locationOptions' => $this->indexLocationOptions(
+                    $organization,
+                ),
+                'filters' => $filters,
+                'timezone' => $organization->timezone,
                 'canCreate' => Gate::allows(
                     OrganizationPermission::TransfersCreate
                         ->value,
@@ -619,6 +617,442 @@ class StockTransferController extends Controller
                 'currency' => $organization->currency,
                 'canViewCosts' => $canViewCosts,
             ],
+        );
+    }
+
+    /**
+     * Build the tenant-scoped, server-authoritative Stock Transfers index query.
+     *
+     * @return array{
+     *     0: array{
+     *         search: string|null,
+     *         view: 'all'|'draft'|'shipped'|'received'|'cancelled'|'variance',
+     *         fromLocationId: int|null,
+     *         toLocationId: int|null,
+     *         from: string|null,
+     *         to: string|null,
+     *         sort: 'latest'|'number'|'status'|'requested_at'|'shipped_at'|'received_at',
+     *         direction: 'asc'|'desc',
+     *         perPage: int
+     *     },
+     *     1: EloquentBuilder<StockTransfer>
+     * }
+     */
+    private function indexQuery(
+        Request $request,
+        Organization $organization,
+    ): array {
+        $validated = $request->validate([
+            'search' => [
+                'nullable',
+                'string',
+                'max:120',
+            ],
+            'view' => [
+                'nullable',
+                Rule::in([
+                    'all',
+                    'draft',
+                    'shipped',
+                    'received',
+                    'cancelled',
+                    'variance',
+                ]),
+            ],
+            'from_location_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('locations', 'id')->where(
+                    fn (Builder $query): Builder => $query->where(
+                        'organization_id',
+                        $organization->id,
+                    ),
+                ),
+            ],
+            'to_location_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('locations', 'id')->where(
+                    fn (Builder $query): Builder => $query->where(
+                        'organization_id',
+                        $organization->id,
+                    ),
+                ),
+            ],
+            'from' => [
+                'nullable',
+                'date_format:Y-m-d',
+            ],
+            'to' => [
+                'nullable',
+                'date_format:Y-m-d',
+            ],
+            'sort' => [
+                'nullable',
+                Rule::in([
+                    'latest',
+                    'number',
+                    'status',
+                    'requested_at',
+                    'shipped_at',
+                    'received_at',
+                ]),
+            ],
+            'direction' => [
+                'nullable',
+                Rule::in(['asc', 'desc']),
+            ],
+            'per_page' => [
+                'nullable',
+                'integer',
+                Rule::in([10, 25, 50]),
+            ],
+        ]);
+
+        $search = isset($validated['search'])
+            ? trim((string) $validated['search'])
+            : null;
+
+        if ($search === '') {
+            $search = null;
+        }
+
+        $view = match ($validated['view'] ?? 'all') {
+            'draft' => 'draft',
+            'shipped' => 'shipped',
+            'received' => 'received',
+            'cancelled' => 'cancelled',
+            'variance' => 'variance',
+            default => 'all',
+        };
+
+        $fromLocationId = isset($validated['from_location_id'])
+            ? (int) $validated['from_location_id']
+            : null;
+
+        $toLocationId = isset($validated['to_location_id'])
+            ? (int) $validated['to_location_id']
+            : null;
+
+        $from = isset($validated['from'])
+            ? (string) $validated['from']
+            : null;
+
+        $to = isset($validated['to'])
+            ? (string) $validated['to']
+            : null;
+
+        $sort = match ($validated['sort'] ?? 'latest') {
+            'number' => 'number',
+            'status' => 'status',
+            'requested_at' => 'requested_at',
+            'shipped_at' => 'shipped_at',
+            'received_at' => 'received_at',
+            default => 'latest',
+        };
+
+        $direction = ($validated['direction'] ?? 'desc') === 'asc'
+            ? 'asc'
+            : 'desc';
+
+        $perPage = isset($validated['per_page'])
+            ? (int) $validated['per_page']
+            : 10;
+
+        if (
+            $from !== null
+            && $to !== null
+            && $from > $to
+        ) {
+            throw ValidationException::withMessages([
+                'from' => __(
+                    'The from date must not be after the to date.',
+                ),
+            ]);
+        }
+
+        $query = StockTransfer::query()
+            ->with([
+                'fromLocation:id,name',
+                'fromStorageLocation:id,name',
+                'toLocation:id,name',
+                'toStorageLocation:id,name',
+                'creator:id,name',
+            ])
+            ->withCount('lines')
+            ->withCount([
+                'lines as variance_item_count' => static function ($lineQuery): void {
+                    $lineQuery->where(
+                        'variance_base_quantity',
+                        '!=',
+                        0,
+                    );
+                },
+            ])
+            ->where('organization_id', $organization->id);
+
+        if ($search !== null) {
+            $query->where(
+                function (EloquentBuilder $searchQuery) use ($search): void {
+                    $searchQuery
+                        ->whereLike(
+                            'number',
+                            "%{$search}%",
+                        )
+                        ->orWhereHas(
+                            'fromLocation',
+                            fn ($locationQuery) => $locationQuery->whereLike(
+                                'name',
+                                "%{$search}%",
+                            ),
+                        )
+                        ->orWhereHas(
+                            'fromStorageLocation',
+                            fn ($storageQuery) => $storageQuery->whereLike(
+                                'name',
+                                "%{$search}%",
+                            ),
+                        )
+                        ->orWhereHas(
+                            'toLocation',
+                            fn ($locationQuery) => $locationQuery->whereLike(
+                                'name',
+                                "%{$search}%",
+                            ),
+                        )
+                        ->orWhereHas(
+                            'toStorageLocation',
+                            fn ($storageQuery) => $storageQuery->whereLike(
+                                'name',
+                                "%{$search}%",
+                            ),
+                        )
+                        ->orWhereHas(
+                            'creator',
+                            fn ($creatorQuery) => $creatorQuery->whereLike(
+                                'name',
+                                "%{$search}%",
+                            ),
+                        );
+                },
+            );
+        }
+
+        match ($view) {
+            'draft' => $query->where(
+                'status',
+                StockTransferStatus::Draft->value,
+            ),
+            'shipped' => $query->where(
+                'status',
+                StockTransferStatus::Shipped->value,
+            ),
+            'received' => $query->where(
+                'status',
+                StockTransferStatus::Received->value,
+            ),
+            'cancelled' => $query->where(
+                'status',
+                StockTransferStatus::Cancelled->value,
+            ),
+            'variance' => $query
+                ->where(
+                    'status',
+                    StockTransferStatus::Received->value,
+                )
+                ->whereHas(
+                    'lines',
+                    fn ($lineQuery) => $lineQuery->where(
+                        'variance_base_quantity',
+                        '!=',
+                        0,
+                    ),
+                ),
+            default => $query,
+        };
+
+        if ($fromLocationId !== null) {
+            $query->where('from_location_id', $fromLocationId);
+        }
+
+        if ($toLocationId !== null) {
+            $query->where('to_location_id', $toLocationId);
+        }
+
+        if ($from !== null) {
+            $query->where(
+                'requested_at',
+                '>=',
+                CarbonImmutable::parse(
+                    $from,
+                    $organization->timezone,
+                )
+                    ->startOfDay()
+                    ->utc(),
+            );
+        }
+
+        if ($to !== null) {
+            $query->where(
+                'requested_at',
+                '<=',
+                CarbonImmutable::parse(
+                    $to,
+                    $organization->timezone,
+                )
+                    ->endOfDay()
+                    ->utc(),
+            );
+        }
+
+        return [
+            [
+                'search' => $search,
+                'view' => $view,
+                'fromLocationId' => $fromLocationId,
+                'toLocationId' => $toLocationId,
+                'from' => $from,
+                'to' => $to,
+                'sort' => $sort,
+                'direction' => $direction,
+                'perPage' => $perPage,
+            ],
+            $query,
+        ];
+    }
+
+    /**
+     * Build organization-wide Stock Transfers summary metrics from persisted evidence.
+     *
+     * @return array{
+     *     draftCount: int,
+     *     shippedCount: int,
+     *     receivedCount: int,
+     *     varianceCount: int
+     * }
+     */
+    private function indexSummary(Organization $organization): array
+    {
+        $baseQuery = StockTransfer::query()
+            ->where('organization_id', $organization->id);
+
+        return [
+            'draftCount' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    StockTransferStatus::Draft->value,
+                )
+                ->count(),
+            'shippedCount' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    StockTransferStatus::Shipped->value,
+                )
+                ->count(),
+            'receivedCount' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    StockTransferStatus::Received->value,
+                )
+                ->count(),
+            'varianceCount' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    StockTransferStatus::Received->value,
+                )
+                ->whereHas(
+                    'lines',
+                    fn ($lineQuery) => $lineQuery->where(
+                        'variance_base_quantity',
+                        '!=',
+                        0,
+                    ),
+                )
+                ->count(),
+        ];
+    }
+
+    /**
+     * Serialize one Stock Transfers index row from persisted lifecycle evidence.
+     *
+     * @return array{
+     *     id: int,
+     *     number: string,
+     *     status: string,
+     *     fromLocationName: string,
+     *     fromStorageLocationName: string,
+     *     toLocationName: string,
+     *     toStorageLocationName: string,
+     *     requestedAt: string|null,
+     *     shippedAt: string|null,
+     *     receivedAt: string|null,
+     *     itemCount: int,
+     *     varianceItemCount: int|null,
+     *     requestedByName: string|null
+     * }
+     */
+    private function indexRowData(StockTransfer $transfer): array
+    {
+        return [
+            'id' => $transfer->id,
+            'number' => $transfer->number,
+            'status' => $transfer->status->value,
+            'fromLocationName' => $transfer->fromLocation->name,
+            'fromStorageLocationName' => $transfer->fromStorageLocation->name,
+            'toLocationName' => $transfer->toLocation->name,
+            'toStorageLocationName' => $transfer->toStorageLocation->name,
+            'requestedAt' => $transfer->requested_at?->toIso8601String(),
+            'shippedAt' => $transfer->shipped_at?->toIso8601String(),
+            'receivedAt' => $transfer->received_at?->toIso8601String(),
+            'itemCount' => (int) ($transfer->getAttribute('lines_count') ?? 0),
+            'varianceItemCount' => $transfer->status === StockTransferStatus::Received
+                ? (int) ($transfer->getAttribute('variance_item_count') ?? 0)
+                : null,
+            'requestedByName' => $transfer->creator?->name,
+        ];
+    }
+
+    /**
+     * Apply only explicitly supported Stock Transfers index sort keys.
+     *
+     * @param  EloquentBuilder<StockTransfer>  $query
+     * @param  'latest'|'number'|'status'|'requested_at'|'shipped_at'|'received_at'  $sort
+     * @param  'asc'|'desc'  $direction
+     * @return EloquentBuilder<StockTransfer>
+     */
+    private function applyIndexSort(
+        EloquentBuilder $query,
+        string $sort,
+        string $direction,
+    ): EloquentBuilder {
+        if ($sort === 'latest') {
+            return $query->orderByDesc('id');
+        }
+
+        return $query
+            ->orderBy($sort, $direction)
+            ->orderByDesc('id');
+    }
+
+    /**
+     * Return all tenant locations so historical transfers remain filterable.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    private function indexLocationOptions(Organization $organization): array
+    {
+        return array_values(
+            Location::query()
+                ->where('organization_id', $organization->id)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(
+                    static fn (Location $location): array => [
+                        'id' => $location->id,
+                        'name' => $location->name,
+                    ],
+                )
+                ->all(),
         );
     }
 
