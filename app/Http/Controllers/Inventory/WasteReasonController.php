@@ -7,6 +7,7 @@ use App\Http\Requests\Inventory\StoreWasteReasonRequest;
 use App\Http\Requests\Inventory\UpdateWasteReasonRequest;
 use App\Models\WasteReason;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class WasteReasonController extends Controller
@@ -34,7 +35,7 @@ class WasteReasonController extends Controller
             'message' => __('Waste reason created.'),
         ]);
 
-        return to_route('waste.index');
+        return $this->redirectAfterMutation($request);
     }
 
     /**
@@ -59,6 +60,21 @@ class WasteReasonController extends Controller
             'message' => __('Waste reason status updated.'),
         ]);
 
-        return to_route('waste.index');
+        return $this->redirectAfterMutation($request);
+    }
+
+    /**
+     * Keep modal mutations in their exact same-origin Waste context while
+     * retaining the existing canonical redirect for non-modal requests.
+     */
+    private function redirectAfterMutation(Request $request): RedirectResponse
+    {
+        if (! $request->boolean('_modal')) {
+            return to_route('waste.index');
+        }
+
+        $fallback = route('waste.index');
+
+        return back(fallback: $fallback)->enforceSameOrigin($fallback);
     }
 }

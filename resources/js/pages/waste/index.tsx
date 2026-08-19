@@ -1,4 +1,4 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head, Link, router } from '@inertiajs/react';
 import {
     CheckCircle2,
     ChevronLeft,
@@ -16,15 +16,24 @@ import {
     Tags,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import WasteController from '@/actions/App/Http/Controllers/Inventory/WasteController';
 import WasteReasonController from '@/actions/App/Http/Controllers/Inventory/WasteReasonController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 
 type Option = {
@@ -173,10 +182,7 @@ const selectClassName =
 const textareaClassName =
     'min-h-24 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50';
 
-/**
- * Format persisted decimal strings without converting inventory values to
- * floating-point numbers.
- */
+/** Format persisted decimal strings without binary floating-point conversion. */
 function formatDecimal(value: string): string {
     const [rawInteger, rawDecimal = ''] = value.trim().split('.');
     const negative = rawInteger.startsWith('-');
@@ -189,26 +195,17 @@ function formatDecimal(value: string): string {
     }`;
 }
 
-/**
- * Format one persisted monetary value while preserving the server-supplied
- * decimal representation.
- */
+/** Format one persisted monetary value without losing server precision. */
 function formatCurrency(value: string, currency: string): string {
     return `${currency} ${formatDecimal(value)}`;
 }
 
-/**
- * Preserve the current browser-local rendering used by the existing Waste
- * evidence table.
- */
+/** Preserve the current browser-local rendering for Waste evidence. */
 function formatDate(value: string): string {
     return new Date(value).toLocaleString();
 }
 
-/**
- * Keep CSV export filters synchronized with the currently applied Waste
- * report filters.
- */
+/** Keep CSV export filters synchronized with the active report filters. */
 function buildExportUrl(filters: Props['filters']): string {
     const params = new URLSearchParams();
 
@@ -245,10 +242,7 @@ function buildExportUrl(filters: Props['filters']): string {
     return query === '' ? baseUrl : `${baseUrl}?${query}`;
 }
 
-/**
- * Render required field labels with a visible and screen-reader-friendly
- * required indicator.
- */
+/** Render required field labels with an accessible required indicator. */
 function RequiredLabel({
     htmlFor,
     children,
@@ -267,9 +261,7 @@ function RequiredLabel({
     );
 }
 
-/**
- * Render validation feedback consistently below operational form fields.
- */
+/** Render validation feedback consistently below operational fields. */
 function ErrorText({ message }: { message?: string }) {
     return message ? (
         <p className="text-sm text-destructive" role="alert">
@@ -278,9 +270,7 @@ function ErrorText({ message }: { message?: string }) {
     ) : null;
 }
 
-/**
- * Render quantity aggregates without combining unlike inventory base units.
- */
+/** Render quantity aggregates without combining unlike inventory base units. */
 function QuantityTotals({
     totals,
     align = 'left',
@@ -309,9 +299,7 @@ function QuantityTotals({
     );
 }
 
-/**
- * Provide one compact, reusable container for each Waste aggregate table.
- */
+/** Provide one compact container for each Waste aggregate table. */
 function BreakdownCard({
     id,
     title,
@@ -336,15 +324,597 @@ function BreakdownCard({
                     {description}
                 </p>
             </div>
-
             <div className="overflow-x-auto">{children}</div>
         </section>
     );
 }
 
 /**
- * Render the Waste operational workspace and immutable reporting evidence.
+ * Keep the irreversible waste operation visible in its dedicated workspace.
+ * This is intentionally not modalized because it immediately mutates stock.
  */
+function RecordWasteForm({ recordForm }: { recordForm: RecordForm }) {
+    const [locationId, setLocationId] = useState('');
+    const [storageLocationId, setStorageLocationId] = useState('');
+    const [inventoryItemId, setInventoryItemId] = useState('');
+    const [unitId, setUnitId] = useState('');
+    const [dirty, setDirty] = useState(false);
+
+    useEffect(() => {
+        if (!dirty) {
+            return;
+        }
+
+        const removeBeforeListener = router.on('before', (event) => {
+            if (!window.confirm('Discard the waste details you entered?')) {
+                event.preventDefault();
+            }
+        });
+
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            removeBeforeListener();
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [dirty]);
+
+    const storageOptions = recordForm.storageLocationOptions.filter(
+        (storageLocation) =>
+            storageLocation.locationId.toString() === locationId,
+    );
+    const selectedItem = recordForm.inventoryItemOptions.find(
+        (item) => item.id.toString() === inventoryItemId,
+    );
+    const unitOptions = recordForm.unitOptions.filter((unit) =>
+        selectedItem?.validUnitIds.includes(unit.id),
+    );
+
+    return (
+        <div
+            onChange={() => setDirty(true)}
+            onSubmitCapture={() => setDirty(false)}
+        >
+            <Form
+                action={WasteController.store().url}
+                method="post"
+                errorBag="recordWaste"
+                onError={() => setDirty(true)}
+            >
+                {({ errors, processing }) => (
+                    <div className="grid gap-5 p-5">
+                        <input
+                            type="hidden"
+                            name="operation_id"
+                            value={recordForm.operationId}
+                        />
+
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            <div className="grid gap-2">
+                                <RequiredLabel htmlFor="location_id">
+                                    Location
+                                </RequiredLabel>
+                                <select
+                                    id="location_id"
+                                    name="location_id"
+                                    value={locationId}
+                                    onChange={(event) => {
+                                        setLocationId(event.target.value);
+                                        setStorageLocationId('');
+                                    }}
+                                    aria-invalid={
+                                        errors.location_id ? true : undefined
+                                    }
+                                    className={selectClassName}
+                                    required
+                                >
+                                    <option value="">Select location</option>
+                                    {recordForm.locationOptions.map(
+                                        (option) => (
+                                            <option
+                                                key={option.id}
+                                                value={option.id}
+                                            >
+                                                {option.name}
+                                            </option>
+                                        ),
+                                    )}
+                                </select>
+                                <ErrorText message={errors.location_id} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <RequiredLabel htmlFor="storage_location_id">
+                                    Storage location
+                                </RequiredLabel>
+                                <select
+                                    id="storage_location_id"
+                                    name="storage_location_id"
+                                    value={storageLocationId}
+                                    onChange={(event) =>
+                                        setStorageLocationId(event.target.value)
+                                    }
+                                    disabled={locationId === ''}
+                                    aria-invalid={
+                                        errors.storage_location_id
+                                            ? true
+                                            : undefined
+                                    }
+                                    className={selectClassName}
+                                    required
+                                >
+                                    <option value="">
+                                        {locationId === ''
+                                            ? 'Select location first'
+                                            : 'Select storage location'}
+                                    </option>
+                                    {storageOptions.map((option) => (
+                                        <option
+                                            key={option.id}
+                                            value={option.id}
+                                        >
+                                            {option.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <ErrorText
+                                    message={errors.storage_location_id}
+                                />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <RequiredLabel htmlFor="inventory_item_id">
+                                    Inventory item
+                                </RequiredLabel>
+                                <select
+                                    id="inventory_item_id"
+                                    name="inventory_item_id"
+                                    value={inventoryItemId}
+                                    onChange={(event) => {
+                                        setInventoryItemId(event.target.value);
+                                        setUnitId('');
+                                    }}
+                                    aria-invalid={
+                                        errors.inventory_item_id
+                                            ? true
+                                            : undefined
+                                    }
+                                    className={selectClassName}
+                                    required
+                                >
+                                    <option value="">Select item</option>
+                                    {recordForm.inventoryItemOptions.map(
+                                        (option) => (
+                                            <option
+                                                key={option.id}
+                                                value={option.id}
+                                            >
+                                                {option.name} ({option.sku})
+                                            </option>
+                                        ),
+                                    )}
+                                </select>
+                                <ErrorText message={errors.inventory_item_id} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <RequiredLabel htmlFor="unit_id">
+                                    Unit
+                                </RequiredLabel>
+                                <select
+                                    id="unit_id"
+                                    name="unit_id"
+                                    value={unitId}
+                                    onChange={(event) =>
+                                        setUnitId(event.target.value)
+                                    }
+                                    disabled={inventoryItemId === ''}
+                                    aria-invalid={
+                                        (errors.unit_id ?? errors.unit)
+                                            ? true
+                                            : undefined
+                                    }
+                                    className={selectClassName}
+                                    required
+                                >
+                                    <option value="">
+                                        {inventoryItemId === ''
+                                            ? 'Select item first'
+                                            : 'Select unit'}
+                                    </option>
+                                    {unitOptions.map((option) => (
+                                        <option
+                                            key={option.id}
+                                            value={option.id}
+                                        >
+                                            {option.name} ({option.symbol})
+                                        </option>
+                                    ))}
+                                </select>
+                                <ErrorText
+                                    message={errors.unit_id ?? errors.unit}
+                                />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <RequiredLabel htmlFor="waste_reason_id">
+                                    Reason
+                                </RequiredLabel>
+                                <select
+                                    id="waste_reason_id"
+                                    name="waste_reason_id"
+                                    aria-invalid={
+                                        errors.waste_reason_id
+                                            ? true
+                                            : undefined
+                                    }
+                                    className={selectClassName}
+                                    required
+                                >
+                                    <option value="">Select reason</option>
+                                    {recordForm.reasonOptions.map((option) => (
+                                        <option
+                                            key={option.id}
+                                            value={option.id}
+                                        >
+                                            {option.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <ErrorText message={errors.waste_reason_id} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <RequiredLabel htmlFor="quantity">
+                                    Quantity
+                                </RequiredLabel>
+                                <Input
+                                    id="quantity"
+                                    name="quantity"
+                                    type="number"
+                                    inputMode="decimal"
+                                    min="0.000001"
+                                    step="0.000001"
+                                    placeholder="e.g. 2.5"
+                                    aria-invalid={
+                                        errors.quantity ? true : undefined
+                                    }
+                                    required
+                                />
+                                <ErrorText message={errors.quantity} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <RequiredLabel htmlFor="occurred_at">
+                                    Occurred at
+                                </RequiredLabel>
+                                <Input
+                                    id="occurred_at"
+                                    name="occurred_at"
+                                    type="datetime-local"
+                                    defaultValue={recordForm.defaultOccurredAt}
+                                    aria-invalid={
+                                        errors.occurred_at ? true : undefined
+                                    }
+                                    required
+                                />
+                                <ErrorText message={errors.occurred_at} />
+                            </div>
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="notes">Notes</Label>
+                            <textarea
+                                id="notes"
+                                name="notes"
+                                rows={3}
+                                maxLength={2000}
+                                placeholder="Add any additional details (optional)"
+                                aria-invalid={errors.notes ? true : undefined}
+                                className={textareaClassName}
+                            />
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                                <ErrorText message={errors.notes} />
+                                <span className="ml-auto text-xs text-muted-foreground">
+                                    Up to 2,000 characters
+                                </span>
+                            </div>
+                            <ErrorText message={errors.operation_id} />
+                        </div>
+
+                        {recordForm.reasonOptions.length === 0 && (
+                            <div
+                                className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                                role="alert"
+                            >
+                                Create an active waste reason before recording
+                                waste.
+                            </div>
+                        )}
+
+                        <div>
+                            <Button
+                                type="submit"
+                                disabled={
+                                    processing ||
+                                    recordForm.reasonOptions.length === 0
+                                }
+                            >
+                                <ClipboardList
+                                    className="size-4"
+                                    aria-hidden="true"
+                                />
+                                {processing ? 'Recording…' : 'Record waste'}
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </Form>
+        </div>
+    );
+}
+
+/** Create one lightweight reason without leaving the Waste workspace. */
+function CreateWasteReasonDialog() {
+    const dialog = useGuardedDialog(
+        'Discard the new waste reason you entered?',
+    );
+
+    return (
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>
+                <Button size="sm">
+                    <Plus className="size-4" aria-hidden="true" />
+                    Add reason
+                </Button>
+            </DialogTrigger>
+
+            <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Add waste reason</DialogTitle>
+                    <DialogDescription>
+                        Add a reusable reason for future waste records. Existing
+                        waste history is never rewritten.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div onChange={dialog.markDirty}>
+                    <Form
+                        {...WasteReasonController.store.form()}
+                        errorBag="createWasteReason"
+                        resetOnSuccess
+                        options={{ preserveScroll: true }}
+                        onSuccess={dialog.closeAfterSuccess}
+                    >
+                        {({ errors, processing }) => (
+                            <div className="grid gap-5">
+                                <input type="hidden" name="_modal" value="1" />
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="modal-waste-reason-name">
+                                        Reason name
+                                    </Label>
+                                    <Input
+                                        id="modal-waste-reason-name"
+                                        name="name"
+                                        maxLength={100}
+                                        placeholder="e.g. Spoilage"
+                                        aria-invalid={
+                                            errors.name ? true : undefined
+                                        }
+                                        autoFocus
+                                        required
+                                    />
+                                    <ErrorText message={errors.name} />
+                                </div>
+
+                                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={processing}
+                                        onClick={() =>
+                                            dialog.onOpenChange(false)
+                                        }
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button type="submit" disabled={processing}>
+                                        {processing ? 'Adding…' : 'Add reason'}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </Form>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/** Confirm reason status changes while preserving historical Waste evidence. */
+function WasteReasonStatusDialog({ reason }: { reason: WasteReason }) {
+    const [open, setOpen] = useState(false);
+    const nextActive = !reason.active;
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button type="button" variant="ghost" size="sm">
+                    {reason.active ? 'Deactivate' : 'Activate'}
+                </Button>
+            </DialogTrigger>
+
+            <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>
+                        {reason.active
+                            ? 'Deactivate waste reason?'
+                            : 'Activate waste reason?'}
+                    </DialogTitle>
+                    <DialogDescription>
+                        {reason.active
+                            ? `${reason.name} will no longer be selectable for new waste records. Historical waste records and reports remain unchanged.`
+                            : `${reason.name} will become selectable for new waste records again. Historical waste records remain unchanged.`}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <Form
+                    {...WasteReasonController.update.form(reason.id)}
+                    errorBag={`updateWasteReason${reason.id}`}
+                    options={{ preserveScroll: true }}
+                    onSuccess={() => setOpen(false)}
+                >
+                    {({ errors, processing }) => (
+                        <div className="grid gap-4">
+                            <input type="hidden" name="_modal" value="1" />
+                            <input
+                                type="hidden"
+                                name="active"
+                                value={nextActive ? '1' : '0'}
+                            />
+
+                            <ErrorText message={errors.active} />
+
+                            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={processing}
+                                    onClick={() => setOpen(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    variant={
+                                        reason.active
+                                            ? 'destructive'
+                                            : 'default'
+                                    }
+                                    disabled={processing}
+                                >
+                                    {processing
+                                        ? reason.active
+                                            ? 'Deactivating…'
+                                            : 'Activating…'
+                                        : reason.active
+                                          ? 'Deactivate reason'
+                                          : 'Activate reason'}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </Form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/** Render the permission-scoped Waste reason manager. */
+function WasteReasonsPanel({ wasteReasons }: { wasteReasons: WasteReason[] }) {
+    return (
+        <section
+            className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border"
+            aria-labelledby="waste-reasons-title"
+        >
+            <div className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-sidebar-border/70 px-4 py-3 dark:border-sidebar-border">
+                <div>
+                    <h2 id="waste-reasons-title" className="font-semibold">
+                        Waste reasons
+                    </h2>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                        Manage suggested reasons used when recording waste.
+                    </p>
+                </div>
+                <CreateWasteReasonDialog />
+            </div>
+
+            <div className="overflow-x-auto">
+                <table className="w-full min-w-[440px] text-sm">
+                    <caption className="sr-only">
+                        Configured waste reasons and their active status.
+                    </caption>
+                    <thead className="border-b bg-muted/40 text-left">
+                        <tr>
+                            <th
+                                scope="col"
+                                className="px-4 py-2.5 font-medium text-muted-foreground"
+                            >
+                                Reason
+                            </th>
+                            <th
+                                scope="col"
+                                className="px-4 py-2.5 font-medium text-muted-foreground"
+                            >
+                                Status
+                            </th>
+                            <th
+                                scope="col"
+                                className="px-4 py-2.5 text-right font-medium text-muted-foreground"
+                            >
+                                Actions
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {wasteReasons.length === 0 ? (
+                            <tr>
+                                <td
+                                    colSpan={3}
+                                    className="px-4 py-8 text-center text-muted-foreground"
+                                >
+                                    No waste reasons configured.
+                                </td>
+                            </tr>
+                        ) : (
+                            wasteReasons.map((reason) => (
+                                <tr
+                                    key={reason.id}
+                                    className="border-b border-sidebar-border/70 last:border-b-0 dark:border-sidebar-border"
+                                >
+                                    <td className="px-4 py-2.5 font-medium">
+                                        {reason.name}
+                                    </td>
+                                    <td className="px-4 py-2.5">
+                                        {reason.active ? (
+                                            <Badge
+                                                variant="outline"
+                                                className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
+                                            >
+                                                <CheckCircle2 aria-hidden="true" />
+                                                Active
+                                            </Badge>
+                                        ) : (
+                                            <Badge
+                                                variant="secondary"
+                                                className="text-muted-foreground"
+                                            >
+                                                Inactive
+                                            </Badge>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-2 text-right">
+                                        <WasteReasonStatusDialog
+                                            reason={reason}
+                                        />
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    );
+}
+
+/** Render the Waste operational workspace and immutable reporting evidence. */
 export default function WasteIndex({
     rows,
     report,
@@ -358,29 +928,9 @@ export default function WasteIndex({
     recordForm,
     reportOptions,
 }: Props) {
-    const [recordLocationId, setRecordLocationId] = useState('');
-    const [recordStorageLocationId, setRecordStorageLocationId] = useState('');
-    const [recordInventoryItemId, setRecordInventoryItemId] = useState('');
-    const [recordUnitId, setRecordUnitId] = useState('');
-
     const reportRows = rows?.data ?? [];
     const showRecordForm = canRecord && recordForm !== null;
     const exportUrl = buildExportUrl(filters);
-
-    const selectedStorageLocationOptions =
-        recordForm?.storageLocationOptions.filter(
-            (storageLocation) =>
-                storageLocation.locationId.toString() === recordLocationId,
-        ) ?? [];
-
-    const selectedInventoryItem = recordForm?.inventoryItemOptions.find(
-        (item) => item.id.toString() === recordInventoryItemId,
-    );
-
-    const selectedUnitOptions =
-        recordForm?.unitOptions.filter((unit) =>
-            selectedInventoryItem?.validUnitIds.includes(unit.id),
-        ) ?? [];
 
     const topReason =
         report?.byReason.reduce<WasteReport['byReason'][number] | null>(
@@ -397,16 +947,6 @@ export default function WasteIndex({
                   (topReason.recordCount / report.summary.recordCount) * 100,
               )
             : null;
-
-    const handleRecordLocationChange = (value: string) => {
-        setRecordLocationId(value);
-        setRecordStorageLocationId('');
-    };
-
-    const handleRecordInventoryItemChange = (value: string) => {
-        setRecordInventoryItemId(value);
-        setRecordUnitId('');
-    };
 
     return (
         <>
@@ -426,7 +966,7 @@ export default function WasteIndex({
                 {(showRecordForm || canManageReasons) && (
                     <div
                         className={
-                            showRecordForm
+                            showRecordForm && canManageReasons
                                 ? 'grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]'
                                 : 'grid gap-4'
                         }
@@ -443,7 +983,6 @@ export default function WasteIndex({
                                             aria-hidden="true"
                                         />
                                     </div>
-
                                     <div>
                                         <h2
                                             id="record-waste-title"
@@ -457,638 +996,15 @@ export default function WasteIndex({
                                         </p>
                                     </div>
                                 </div>
-
-                                <Form
-                                    action={WasteController.store().url}
-                                    method="post"
-                                >
-                                    {({ errors, processing }) => (
-                                        <div className="grid gap-5 p-5">
-                                            <input
-                                                type="hidden"
-                                                name="operation_id"
-                                                value={recordForm.operationId}
-                                            />
-
-                                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                                <div className="grid gap-2">
-                                                    <RequiredLabel htmlFor="location_id">
-                                                        Location
-                                                    </RequiredLabel>
-
-                                                    <select
-                                                        id="location_id"
-                                                        name="location_id"
-                                                        value={recordLocationId}
-                                                        onChange={(event) =>
-                                                            handleRecordLocationChange(
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        aria-invalid={
-                                                            errors.location_id
-                                                                ? true
-                                                                : undefined
-                                                        }
-                                                        className={
-                                                            selectClassName
-                                                        }
-                                                        required
-                                                    >
-                                                        <option value="">
-                                                            Select location
-                                                        </option>
-
-                                                        {recordForm.locationOptions.map(
-                                                            (option) => (
-                                                                <option
-                                                                    key={
-                                                                        option.id
-                                                                    }
-                                                                    value={
-                                                                        option.id
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        option.name
-                                                                    }
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </select>
-
-                                                    <ErrorText
-                                                        message={
-                                                            errors.location_id
-                                                        }
-                                                    />
-                                                </div>
-
-                                                <div className="grid gap-2">
-                                                    <RequiredLabel htmlFor="storage_location_id">
-                                                        Storage location
-                                                    </RequiredLabel>
-
-                                                    <select
-                                                        id="storage_location_id"
-                                                        name="storage_location_id"
-                                                        value={
-                                                            recordStorageLocationId
-                                                        }
-                                                        onChange={(event) =>
-                                                            setRecordStorageLocationId(
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            recordLocationId ===
-                                                            ''
-                                                        }
-                                                        aria-invalid={
-                                                            errors.storage_location_id
-                                                                ? true
-                                                                : undefined
-                                                        }
-                                                        className={
-                                                            selectClassName
-                                                        }
-                                                        required
-                                                    >
-                                                        <option value="">
-                                                            {recordLocationId ===
-                                                            ''
-                                                                ? 'Select location first'
-                                                                : 'Select storage location'}
-                                                        </option>
-
-                                                        {selectedStorageLocationOptions.map(
-                                                            (option) => (
-                                                                <option
-                                                                    key={
-                                                                        option.id
-                                                                    }
-                                                                    value={
-                                                                        option.id
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        option.name
-                                                                    }
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </select>
-
-                                                    <ErrorText
-                                                        message={
-                                                            errors.storage_location_id
-                                                        }
-                                                    />
-                                                </div>
-
-                                                <div className="grid gap-2">
-                                                    <RequiredLabel htmlFor="inventory_item_id">
-                                                        Inventory item
-                                                    </RequiredLabel>
-
-                                                    <select
-                                                        id="inventory_item_id"
-                                                        name="inventory_item_id"
-                                                        value={
-                                                            recordInventoryItemId
-                                                        }
-                                                        onChange={(event) =>
-                                                            handleRecordInventoryItemChange(
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        aria-invalid={
-                                                            errors.inventory_item_id
-                                                                ? true
-                                                                : undefined
-                                                        }
-                                                        className={
-                                                            selectClassName
-                                                        }
-                                                        required
-                                                    >
-                                                        <option value="">
-                                                            Select item
-                                                        </option>
-
-                                                        {recordForm.inventoryItemOptions.map(
-                                                            (option) => (
-                                                                <option
-                                                                    key={
-                                                                        option.id
-                                                                    }
-                                                                    value={
-                                                                        option.id
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        option.name
-                                                                    }{' '}
-                                                                    (
-                                                                    {option.sku}
-                                                                    )
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </select>
-
-                                                    <ErrorText
-                                                        message={
-                                                            errors.inventory_item_id
-                                                        }
-                                                    />
-                                                </div>
-
-                                                <div className="grid gap-2">
-                                                    <RequiredLabel htmlFor="unit_id">
-                                                        Unit
-                                                    </RequiredLabel>
-
-                                                    <select
-                                                        id="unit_id"
-                                                        name="unit_id"
-                                                        value={recordUnitId}
-                                                        onChange={(event) =>
-                                                            setRecordUnitId(
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            recordInventoryItemId ===
-                                                            ''
-                                                        }
-                                                        aria-invalid={
-                                                            (errors.unit_id ??
-                                                            errors.unit)
-                                                                ? true
-                                                                : undefined
-                                                        }
-                                                        className={
-                                                            selectClassName
-                                                        }
-                                                        required
-                                                    >
-                                                        <option value="">
-                                                            {recordInventoryItemId ===
-                                                            ''
-                                                                ? 'Select item first'
-                                                                : 'Select unit'}
-                                                        </option>
-
-                                                        {selectedUnitOptions.map(
-                                                            (option) => (
-                                                                <option
-                                                                    key={
-                                                                        option.id
-                                                                    }
-                                                                    value={
-                                                                        option.id
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        option.name
-                                                                    }{' '}
-                                                                    (
-                                                                    {
-                                                                        option.symbol
-                                                                    }
-                                                                    )
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </select>
-
-                                                    <ErrorText
-                                                        message={
-                                                            errors.unit_id ??
-                                                            errors.unit
-                                                        }
-                                                    />
-                                                </div>
-
-                                                <div className="grid gap-2">
-                                                    <RequiredLabel htmlFor="waste_reason_id">
-                                                        Reason
-                                                    </RequiredLabel>
-
-                                                    <select
-                                                        id="waste_reason_id"
-                                                        name="waste_reason_id"
-                                                        aria-invalid={
-                                                            errors.waste_reason_id
-                                                                ? true
-                                                                : undefined
-                                                        }
-                                                        className={
-                                                            selectClassName
-                                                        }
-                                                        required
-                                                    >
-                                                        <option value="">
-                                                            Select reason
-                                                        </option>
-
-                                                        {recordForm.reasonOptions.map(
-                                                            (option) => (
-                                                                <option
-                                                                    key={
-                                                                        option.id
-                                                                    }
-                                                                    value={
-                                                                        option.id
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        option.name
-                                                                    }
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </select>
-
-                                                    <ErrorText
-                                                        message={
-                                                            errors.waste_reason_id
-                                                        }
-                                                    />
-                                                </div>
-
-                                                <div className="grid gap-2">
-                                                    <RequiredLabel htmlFor="quantity">
-                                                        Quantity
-                                                    </RequiredLabel>
-
-                                                    <Input
-                                                        id="quantity"
-                                                        name="quantity"
-                                                        type="number"
-                                                        inputMode="decimal"
-                                                        min="0.000001"
-                                                        step="0.000001"
-                                                        placeholder="e.g. 2.5"
-                                                        aria-invalid={
-                                                            errors.quantity
-                                                                ? true
-                                                                : undefined
-                                                        }
-                                                        required
-                                                    />
-
-                                                    <ErrorText
-                                                        message={
-                                                            errors.quantity
-                                                        }
-                                                    />
-                                                </div>
-
-                                                <div className="grid gap-2">
-                                                    <RequiredLabel htmlFor="occurred_at">
-                                                        Occurred at
-                                                    </RequiredLabel>
-
-                                                    <Input
-                                                        id="occurred_at"
-                                                        name="occurred_at"
-                                                        type="datetime-local"
-                                                        defaultValue={
-                                                            recordForm.defaultOccurredAt
-                                                        }
-                                                        aria-invalid={
-                                                            errors.occurred_at
-                                                                ? true
-                                                                : undefined
-                                                        }
-                                                        required
-                                                    />
-
-                                                    <ErrorText
-                                                        message={
-                                                            errors.occurred_at
-                                                        }
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="notes">
-                                                    Notes
-                                                </Label>
-
-                                                <textarea
-                                                    id="notes"
-                                                    name="notes"
-                                                    rows={3}
-                                                    maxLength={2000}
-                                                    placeholder="Add any additional details (optional)"
-                                                    aria-invalid={
-                                                        errors.notes
-                                                            ? true
-                                                            : undefined
-                                                    }
-                                                    className={
-                                                        textareaClassName
-                                                    }
-                                                />
-
-                                                <div className="flex flex-wrap items-start justify-between gap-2">
-                                                    <ErrorText
-                                                        message={errors.notes}
-                                                    />
-
-                                                    <span className="ml-auto text-xs text-muted-foreground">
-                                                        Up to 2,000 characters
-                                                    </span>
-                                                </div>
-
-                                                <ErrorText
-                                                    message={
-                                                        errors.operation_id
-                                                    }
-                                                />
-                                            </div>
-
-                                            {recordForm.reasonOptions.length ===
-                                                0 && (
-                                                <div
-                                                    className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                                                    role="alert"
-                                                >
-                                                    Create an active waste
-                                                    reason before recording
-                                                    waste.
-                                                </div>
-                                            )}
-
-                                            <div>
-                                                <Button
-                                                    type="submit"
-                                                    disabled={
-                                                        processing ||
-                                                        recordForm.reasonOptions
-                                                            .length === 0
-                                                    }
-                                                >
-                                                    <ClipboardList
-                                                        className="size-4"
-                                                        aria-hidden="true"
-                                                    />
-                                                    {processing
-                                                        ? 'Recording…'
-                                                        : 'Record waste'}
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </Form>
+                                <RecordWasteForm recordForm={recordForm} />
                             </section>
                         )}
 
                         <div className="grid content-start gap-4">
                             {canManageReasons && (
-                                <section
-                                    className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border"
-                                    aria-labelledby="waste-reasons-title"
-                                >
-                                    <div className="border-b border-sidebar-border/70 px-4 py-3 dark:border-sidebar-border">
-                                        <h2
-                                            id="waste-reasons-title"
-                                            className="font-semibold"
-                                        >
-                                            Waste reasons
-                                        </h2>
-                                        <p className="mt-0.5 text-xs text-muted-foreground">
-                                            Manage suggested reasons used when
-                                            recording waste.
-                                        </p>
-                                    </div>
-
-                                    <div className="p-4">
-                                        <Form
-                                            action={
-                                                WasteReasonController.store()
-                                                    .url
-                                            }
-                                            method="post"
-                                        >
-                                            {({ errors, processing }) => (
-                                                <div className="grid gap-2">
-                                                    <div className="flex items-start gap-2">
-                                                        <div className="min-w-0 flex-1">
-                                                            <Label
-                                                                htmlFor="new_waste_reason_name"
-                                                                className="sr-only"
-                                                            >
-                                                                New waste reason
-                                                            </Label>
-
-                                                            <Input
-                                                                id="new_waste_reason_name"
-                                                                name="name"
-                                                                placeholder="New reason (e.g. Spoilage)"
-                                                                maxLength={100}
-                                                                aria-invalid={
-                                                                    errors.name
-                                                                        ? true
-                                                                        : undefined
-                                                                }
-                                                                required
-                                                            />
-                                                        </div>
-
-                                                        <Button
-                                                            type="submit"
-                                                            disabled={
-                                                                processing
-                                                            }
-                                                        >
-                                                            <Plus
-                                                                className="size-4"
-                                                                aria-hidden="true"
-                                                            />
-                                                            {processing
-                                                                ? 'Adding…'
-                                                                : 'Add reason'}
-                                                        </Button>
-                                                    </div>
-
-                                                    <ErrorText
-                                                        message={errors.name}
-                                                    />
-                                                </div>
-                                            )}
-                                        </Form>
-                                    </div>
-
-                                    <div className="overflow-x-auto border-t border-sidebar-border/70 dark:border-sidebar-border">
-                                        <table className="w-full min-w-[440px] text-sm">
-                                            <caption className="sr-only">
-                                                Configured waste reasons and
-                                                their active status.
-                                            </caption>
-
-                                            <thead className="border-b bg-muted/40 text-left">
-                                                <tr>
-                                                    <th
-                                                        scope="col"
-                                                        className="px-4 py-2.5 font-medium text-muted-foreground"
-                                                    >
-                                                        Reason
-                                                    </th>
-                                                    <th
-                                                        scope="col"
-                                                        className="px-4 py-2.5 font-medium text-muted-foreground"
-                                                    >
-                                                        Status
-                                                    </th>
-                                                    <th
-                                                        scope="col"
-                                                        className="px-4 py-2.5 text-right font-medium text-muted-foreground"
-                                                    >
-                                                        Actions
-                                                    </th>
-                                                </tr>
-                                            </thead>
-
-                                            <tbody>
-                                                {wasteReasons.length === 0 ? (
-                                                    <tr>
-                                                        <td
-                                                            colSpan={3}
-                                                            className="px-4 py-8 text-center text-muted-foreground"
-                                                        >
-                                                            No waste reasons
-                                                            configured.
-                                                        </td>
-                                                    </tr>
-                                                ) : (
-                                                    wasteReasons.map(
-                                                        (reason) => (
-                                                            <tr
-                                                                key={reason.id}
-                                                                className="border-b border-sidebar-border/70 last:border-b-0 dark:border-sidebar-border"
-                                                            >
-                                                                <td className="px-4 py-2.5 font-medium">
-                                                                    {
-                                                                        reason.name
-                                                                    }
-                                                                </td>
-
-                                                                <td className="px-4 py-2.5">
-                                                                    {reason.active ? (
-                                                                        <Badge
-                                                                            variant="outline"
-                                                                            className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
-                                                                        >
-                                                                            <CheckCircle2 aria-hidden="true" />
-                                                                            Active
-                                                                        </Badge>
-                                                                    ) : (
-                                                                        <Badge
-                                                                            variant="secondary"
-                                                                            className="text-muted-foreground"
-                                                                        >
-                                                                            Inactive
-                                                                        </Badge>
-                                                                    )}
-                                                                </td>
-
-                                                                <td className="px-4 py-2 text-right">
-                                                                    <Form
-                                                                        action={
-                                                                            WasteReasonController.update(
-                                                                                reason.id,
-                                                                            )
-                                                                                .url
-                                                                        }
-                                                                        method="put"
-                                                                    >
-                                                                        {({
-                                                                            processing,
-                                                                        }) => (
-                                                                            <>
-                                                                                <input
-                                                                                    type="hidden"
-                                                                                    name="active"
-                                                                                    value={
-                                                                                        reason.active
-                                                                                            ? '0'
-                                                                                            : '1'
-                                                                                    }
-                                                                                />
-
-                                                                                <Button
-                                                                                    type="submit"
-                                                                                    variant="ghost"
-                                                                                    size="sm"
-                                                                                    disabled={
-                                                                                        processing
-                                                                                    }
-                                                                                >
-                                                                                    {reason.active
-                                                                                        ? 'Deactivate'
-                                                                                        : 'Activate'}
-                                                                                </Button>
-                                                                            </>
-                                                                        )}
-                                                                    </Form>
-                                                                </td>
-                                                            </tr>
-                                                        ),
-                                                    )
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </section>
+                                <WasteReasonsPanel
+                                    wasteReasons={wasteReasons}
+                                />
                             )}
 
                             {showRecordForm && (
@@ -1101,7 +1017,6 @@ export default function WasteIndex({
                                             className="mt-0.5 size-4 shrink-0 text-blue-600 dark:text-blue-400"
                                             aria-hidden="true"
                                         />
-
                                         <div>
                                             <h2
                                                 id="inventory-impact-title"
@@ -1109,7 +1024,6 @@ export default function WasteIndex({
                                             >
                                                 Inventory impact
                                             </h2>
-
                                             <ul className="mt-2 grid gap-2 text-xs text-muted-foreground">
                                                 <li className="flex items-start gap-2">
                                                     <CheckCircle2
@@ -1119,7 +1033,6 @@ export default function WasteIndex({
                                                     Waste decreases stock on
                                                     hand immediately.
                                                 </li>
-
                                                 <li className="flex items-start gap-2">
                                                     <CheckCircle2
                                                         className="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
@@ -1128,7 +1041,6 @@ export default function WasteIndex({
                                                     Waste evidence and its stock
                                                     movement remain traceable.
                                                 </li>
-
                                                 <li className="flex items-start gap-2">
                                                     <CheckCircle2
                                                         className="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
@@ -1158,7 +1070,6 @@ export default function WasteIndex({
                             >
                                 Waste report
                             </h2>
-
                             <p className="mt-0.5 text-sm text-muted-foreground">
                                 Summarize and analyze finalized waste by period,
                                 location, category, item, reason, and employee.
@@ -1183,7 +1094,6 @@ export default function WasteIndex({
                                             <Label htmlFor="report_location_id">
                                                 Location
                                             </Label>
-
                                             <select
                                                 id="report_location_id"
                                                 name="location_id"
@@ -1201,7 +1111,6 @@ export default function WasteIndex({
                                                 <option value="">
                                                     All locations
                                                 </option>
-
                                                 {reportOptions.locations.map(
                                                     (option) => (
                                                         <option
@@ -1219,7 +1128,6 @@ export default function WasteIndex({
                                             <Label htmlFor="report_inventory_category_id">
                                                 Category
                                             </Label>
-
                                             <select
                                                 id="report_inventory_category_id"
                                                 name="inventory_category_id"
@@ -1237,7 +1145,6 @@ export default function WasteIndex({
                                                 <option value="">
                                                     All categories
                                                 </option>
-
                                                 {reportOptions.inventoryCategories.map(
                                                     (option) => (
                                                         <option
@@ -1255,7 +1162,6 @@ export default function WasteIndex({
                                             <Label htmlFor="report_inventory_item_id">
                                                 Item
                                             </Label>
-
                                             <select
                                                 id="report_inventory_item_id"
                                                 name="inventory_item_id"
@@ -1273,7 +1179,6 @@ export default function WasteIndex({
                                                 <option value="">
                                                     All items
                                                 </option>
-
                                                 {reportOptions.inventoryItems.map(
                                                     (option) => (
                                                         <option
@@ -1291,7 +1196,6 @@ export default function WasteIndex({
                                             <Label htmlFor="report_waste_reason_id">
                                                 Reason
                                             </Label>
-
                                             <select
                                                 id="report_waste_reason_id"
                                                 name="waste_reason_id"
@@ -1309,7 +1213,6 @@ export default function WasteIndex({
                                                 <option value="">
                                                     All reasons
                                                 </option>
-
                                                 {reportOptions.wasteReasons.map(
                                                     (option) => (
                                                         <option
@@ -1327,7 +1230,6 @@ export default function WasteIndex({
                                             <Label htmlFor="report_from">
                                                 From
                                             </Label>
-
                                             <Input
                                                 id="report_from"
                                                 name="from"
@@ -1347,7 +1249,6 @@ export default function WasteIndex({
                                             <Label htmlFor="report_to">
                                                 To
                                             </Label>
-
                                             <Input
                                                 id="report_to"
                                                 name="to"
@@ -1373,7 +1274,6 @@ export default function WasteIndex({
                                                     ? 'Applying…'
                                                     : 'Apply'}
                                             </Button>
-
                                             <Button
                                                 variant="outline"
                                                 className="flex-1 xl:flex-none"
@@ -1389,7 +1289,6 @@ export default function WasteIndex({
                                                     Clear
                                                 </Link>
                                             </Button>
-
                                             <Button
                                                 variant="outline"
                                                 className="flex-1 xl:flex-none"
@@ -1435,7 +1334,6 @@ export default function WasteIndex({
                                 icon={ClipboardList}
                                 tone="blue"
                             />
-
                             <DashboardMetricCard
                                 title="Waste quantity"
                                 value={
@@ -1447,7 +1345,6 @@ export default function WasteIndex({
                                 icon={Package}
                                 tone="violet"
                             />
-
                             {canViewCosts && (
                                 <DashboardMetricCard
                                     title="Waste value"
@@ -1464,7 +1361,6 @@ export default function WasteIndex({
                                     tone="emerald"
                                 />
                             )}
-
                             <DashboardMetricCard
                                 title="Top reason"
                                 value={topReason?.reasonName ?? '—'}
@@ -1496,7 +1392,6 @@ export default function WasteIndex({
                                     <caption className="sr-only">
                                         Waste grouped by reason.
                                     </caption>
-
                                     <thead className="border-b bg-muted/40 text-left">
                                         <tr>
                                             <th
@@ -1517,7 +1412,6 @@ export default function WasteIndex({
                                             >
                                                 Quantity
                                             </th>
-
                                             {canViewCosts && (
                                                 <th
                                                     scope="col"
@@ -1528,7 +1422,6 @@ export default function WasteIndex({
                                             )}
                                         </tr>
                                     </thead>
-
                                     <tbody>
                                         {report.byReason.length === 0 ? (
                                             <tr>
@@ -1551,11 +1444,9 @@ export default function WasteIndex({
                                                     <td className="px-4 py-2.5 font-medium">
                                                         {row.reasonName}
                                                     </td>
-
                                                     <td className="px-4 py-2.5 text-right tabular-nums">
                                                         {row.recordCount.toLocaleString()}
                                                     </td>
-
                                                     <td className="px-4 py-2.5 text-right">
                                                         <QuantityTotals
                                                             totals={
@@ -1564,7 +1455,6 @@ export default function WasteIndex({
                                                             align="right"
                                                         />
                                                     </td>
-
                                                     {canViewCosts && (
                                                         <td className="px-4 py-2.5 text-right font-medium whitespace-nowrap tabular-nums">
                                                             {row.totalCost ===
@@ -1580,18 +1470,15 @@ export default function WasteIndex({
                                             ))
                                         )}
                                     </tbody>
-
                                     {report.byReason.length > 0 && (
                                         <tfoot>
                                             <tr className="border-t bg-muted/30 font-medium">
                                                 <td className="px-4 py-2.5">
                                                     Total
                                                 </td>
-
                                                 <td className="px-4 py-2.5 text-right tabular-nums">
                                                     {report.summary.recordCount.toLocaleString()}
                                                 </td>
-
                                                 <td className="px-4 py-2.5 text-right font-semibold">
                                                     <QuantityTotals
                                                         totals={
@@ -1601,7 +1488,6 @@ export default function WasteIndex({
                                                         align="right"
                                                     />
                                                 </td>
-
                                                 {canViewCosts && (
                                                     <td className="px-4 py-2.5 text-right font-semibold whitespace-nowrap tabular-nums">
                                                         {report.summary
@@ -1629,7 +1515,6 @@ export default function WasteIndex({
                                     <caption className="sr-only">
                                         Waste grouped by employee.
                                     </caption>
-
                                     <thead className="border-b bg-muted/40 text-left">
                                         <tr>
                                             <th
@@ -1650,7 +1535,6 @@ export default function WasteIndex({
                                             >
                                                 Quantity
                                             </th>
-
                                             {canViewCosts && (
                                                 <th
                                                     scope="col"
@@ -1661,7 +1545,6 @@ export default function WasteIndex({
                                             )}
                                         </tr>
                                     </thead>
-
                                     <tbody>
                                         {report.byEmployee.length === 0 ? (
                                             <tr>
@@ -1687,11 +1570,9 @@ export default function WasteIndex({
                                                     <td className="px-4 py-2.5 font-medium">
                                                         {row.employeeName}
                                                     </td>
-
                                                     <td className="px-4 py-2.5 text-right tabular-nums">
                                                         {row.recordCount.toLocaleString()}
                                                     </td>
-
                                                     <td className="px-4 py-2.5 text-right">
                                                         <QuantityTotals
                                                             totals={
@@ -1700,7 +1581,6 @@ export default function WasteIndex({
                                                             align="right"
                                                         />
                                                     </td>
-
                                                     {canViewCosts && (
                                                         <td className="px-4 py-2.5 text-right font-medium whitespace-nowrap tabular-nums">
                                                             {row.totalCost ===
@@ -1716,18 +1596,15 @@ export default function WasteIndex({
                                             ))
                                         )}
                                     </tbody>
-
                                     {report.byEmployee.length > 0 && (
                                         <tfoot>
                                             <tr className="border-t bg-muted/30 font-medium">
                                                 <td className="px-4 py-2.5">
                                                     Total
                                                 </td>
-
                                                 <td className="px-4 py-2.5 text-right tabular-nums">
                                                     {report.summary.recordCount.toLocaleString()}
                                                 </td>
-
                                                 <td className="px-4 py-2.5 text-right font-semibold">
                                                     <QuantityTotals
                                                         totals={
@@ -1737,7 +1614,6 @@ export default function WasteIndex({
                                                         align="right"
                                                     />
                                                 </td>
-
                                                 {canViewCosts && (
                                                     <td className="px-4 py-2.5 text-right font-semibold whitespace-nowrap tabular-nums">
                                                         {report.summary
@@ -1765,7 +1641,6 @@ export default function WasteIndex({
                                     <caption className="sr-only">
                                         Waste grouped by inventory item.
                                     </caption>
-
                                     <thead className="border-b bg-muted/40 text-left">
                                         <tr>
                                             <th
@@ -1786,7 +1661,6 @@ export default function WasteIndex({
                                             >
                                                 Quantity
                                             </th>
-
                                             {canViewCosts && (
                                                 <th
                                                     scope="col"
@@ -1797,7 +1671,6 @@ export default function WasteIndex({
                                             )}
                                         </tr>
                                     </thead>
-
                                     <tbody>
                                         {report.byItem.length === 0 ? (
                                             <tr>
@@ -1825,11 +1698,9 @@ export default function WasteIndex({
                                                             {row.itemSku}
                                                         </div>
                                                     </td>
-
                                                     <td className="px-4 py-2.5 text-right tabular-nums">
                                                         {row.recordCount.toLocaleString()}
                                                     </td>
-
                                                     <td className="px-4 py-2.5 text-right font-medium whitespace-nowrap tabular-nums">
                                                         {formatDecimal(
                                                             row.totalQuantity,
@@ -1838,7 +1709,6 @@ export default function WasteIndex({
                                                             {row.baseUnitSymbol}
                                                         </span>
                                                     </td>
-
                                                     {canViewCosts && (
                                                         <td className="px-4 py-2.5 text-right font-medium whitespace-nowrap tabular-nums">
                                                             {row.totalCost ===
@@ -1854,18 +1724,15 @@ export default function WasteIndex({
                                             ))
                                         )}
                                     </tbody>
-
                                     {report.byItem.length > 0 && (
                                         <tfoot>
                                             <tr className="border-t bg-muted/30 font-medium">
                                                 <td className="px-4 py-2.5">
                                                     Total
                                                 </td>
-
                                                 <td className="px-4 py-2.5 text-right tabular-nums">
                                                     {report.summary.recordCount.toLocaleString()}
                                                 </td>
-
                                                 <td className="px-4 py-2.5 text-right font-semibold">
                                                     <QuantityTotals
                                                         totals={
@@ -1875,7 +1742,6 @@ export default function WasteIndex({
                                                         align="right"
                                                     />
                                                 </td>
-
                                                 {canViewCosts && (
                                                     <td className="px-4 py-2.5 text-right font-semibold whitespace-nowrap tabular-nums">
                                                         {report.summary
@@ -1903,7 +1769,6 @@ export default function WasteIndex({
                                     <caption className="sr-only">
                                         Waste grouped by location.
                                     </caption>
-
                                     <thead className="border-b bg-muted/40 text-left">
                                         <tr>
                                             <th
@@ -1924,7 +1789,6 @@ export default function WasteIndex({
                                             >
                                                 Quantity
                                             </th>
-
                                             {canViewCosts && (
                                                 <th
                                                     scope="col"
@@ -1935,7 +1799,6 @@ export default function WasteIndex({
                                             )}
                                         </tr>
                                     </thead>
-
                                     <tbody>
                                         {report.byLocation.length === 0 ? (
                                             <tr>
@@ -1958,11 +1821,9 @@ export default function WasteIndex({
                                                     <td className="px-4 py-2.5 font-medium">
                                                         {row.locationName}
                                                     </td>
-
                                                     <td className="px-4 py-2.5 text-right tabular-nums">
                                                         {row.recordCount.toLocaleString()}
                                                     </td>
-
                                                     <td className="px-4 py-2.5 text-right">
                                                         <QuantityTotals
                                                             totals={
@@ -1971,7 +1832,6 @@ export default function WasteIndex({
                                                             align="right"
                                                         />
                                                     </td>
-
                                                     {canViewCosts && (
                                                         <td className="px-4 py-2.5 text-right font-medium whitespace-nowrap tabular-nums">
                                                             {row.totalCost ===
@@ -1987,18 +1847,15 @@ export default function WasteIndex({
                                             ))
                                         )}
                                     </tbody>
-
                                     {report.byLocation.length > 0 && (
                                         <tfoot>
                                             <tr className="border-t bg-muted/30 font-medium">
                                                 <td className="px-4 py-2.5">
                                                     Total
                                                 </td>
-
                                                 <td className="px-4 py-2.5 text-right tabular-nums">
                                                     {report.summary.recordCount.toLocaleString()}
                                                 </td>
-
                                                 <td className="px-4 py-2.5 text-right font-semibold">
                                                     <QuantityTotals
                                                         totals={
@@ -2008,7 +1865,6 @@ export default function WasteIndex({
                                                         align="right"
                                                     />
                                                 </td>
-
                                                 {canViewCosts && (
                                                     <td className="px-4 py-2.5 text-right font-semibold whitespace-nowrap tabular-nums">
                                                         {report.summary
@@ -2045,7 +1901,6 @@ export default function WasteIndex({
                                         selected report totals.
                                     </p>
                                 </div>
-
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                     <Tags
                                         className="size-3.5"
@@ -2064,7 +1919,6 @@ export default function WasteIndex({
                                         quantities, recorder, and authorized
                                         cost information.
                                     </caption>
-
                                     <thead className="border-b bg-muted/40 text-left">
                                         <tr>
                                             <th
@@ -2115,7 +1969,6 @@ export default function WasteIndex({
                                             >
                                                 Recorded by
                                             </th>
-
                                             {canViewCosts && (
                                                 <>
                                                     <th
@@ -2134,7 +1987,6 @@ export default function WasteIndex({
                                             )}
                                         </tr>
                                     </thead>
-
                                     <tbody>
                                         {reportRows.length === 0 ? (
                                             <tr>
@@ -2150,11 +2002,9 @@ export default function WasteIndex({
                                                             aria-hidden="true"
                                                         />
                                                     </div>
-
                                                     <p className="mt-3 font-medium">
                                                         No waste evidence found
                                                     </p>
-
                                                     <p className="mt-1 text-sm text-muted-foreground">
                                                         Adjust or clear the
                                                         report filters to view
@@ -2181,13 +2031,11 @@ export default function WasteIndex({
                                                                 : `#${row.movementId}`}
                                                         </div>
                                                     </td>
-
                                                     <td className="px-4 py-3 whitespace-nowrap">
                                                         {formatDate(
                                                             row.occurredAt,
                                                         )}
                                                     </td>
-
                                                     <td className="px-4 py-3">
                                                         <div className="font-medium whitespace-nowrap">
                                                             {row.locationName}
@@ -2198,7 +2046,6 @@ export default function WasteIndex({
                                                             }
                                                         </div>
                                                     </td>
-
                                                     <td className="px-4 py-3">
                                                         <div className="font-medium whitespace-nowrap">
                                                             {row.itemName}
@@ -2207,11 +2054,9 @@ export default function WasteIndex({
                                                             {row.itemSku}
                                                         </div>
                                                     </td>
-
                                                     <td className="px-4 py-3 whitespace-nowrap">
                                                         {row.reasonName}
                                                     </td>
-
                                                     <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
                                                         {formatDecimal(
                                                             row.quantity,
@@ -2220,7 +2065,6 @@ export default function WasteIndex({
                                                             {row.unitSymbol}
                                                         </span>
                                                     </td>
-
                                                     <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
                                                         {formatDecimal(
                                                             row.baseQuantity,
@@ -2229,20 +2073,17 @@ export default function WasteIndex({
                                                             {row.baseUnitSymbol}
                                                         </span>
                                                     </td>
-
                                                     <td className="px-4 py-3">
                                                         <div className="font-medium whitespace-nowrap">
                                                             {row.recordedBy ??
                                                                 '—'}
                                                         </div>
-
                                                         {row.notes && (
                                                             <div className="mt-0.5 max-w-64 text-xs leading-5 text-muted-foreground">
                                                                 {row.notes}
                                                             </div>
                                                         )}
                                                     </td>
-
                                                     {canViewCosts && (
                                                         <>
                                                             <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
@@ -2254,7 +2095,6 @@ export default function WasteIndex({
                                                                           currency,
                                                                       )}
                                                             </td>
-
                                                             <td className="px-4 py-3 text-right font-semibold whitespace-nowrap tabular-nums">
                                                                 {row.totalCost ===
                                                                 null
@@ -2281,7 +2121,6 @@ export default function WasteIndex({
                                         {rows.total.toLocaleString()} waste
                                         records.
                                     </p>
-
                                     {rows.last_page > 1 && (
                                         <nav
                                             className="flex items-center gap-2"
@@ -2321,7 +2160,6 @@ export default function WasteIndex({
                                                     />
                                                 </Button>
                                             )}
-
                                             <span
                                                 className="flex size-9 items-center justify-center rounded-md bg-primary text-sm font-medium text-primary-foreground tabular-nums"
                                                 aria-current="page"
@@ -2329,7 +2167,6 @@ export default function WasteIndex({
                                             >
                                                 {rows.current_page}
                                             </span>
-
                                             {rows.next_page_url !== null ? (
                                                 <Button
                                                     variant="outline"
