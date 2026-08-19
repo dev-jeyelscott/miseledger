@@ -1,12 +1,22 @@
-import { Form, Head, Link } from '@inertiajs/react';
-import { useState } from 'react';
+import { Form, Head, Link, router } from '@inertiajs/react';
+import { useEffect, useRef, useState } from 'react';
 import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/GoodsReceiptController';
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
 import InputError from '@/components/input-error';
-import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { navigateToPreviousPage } from '@/lib/navigation-history';
 import { dashboard } from '@/routes';
 
 type PurchaseOrderLine = {
@@ -115,6 +125,11 @@ type Props = {
     auditTrail: AuditEntry[];
 };
 
+type DirtyStateTrackerProps = {
+    dirty: boolean;
+    onChange: (dirty: boolean) => void;
+};
+
 const emptyLine = (): LineState => ({
     purchaseOrderLineId: '',
     storageLocationId: '',
@@ -151,6 +166,20 @@ const formatDecimal = (value: string): string => {
     }`;
 };
 
+/** Keep navigation guards synchronized with the Inertia Form dirty state. */
+function DirtyStateTracker({ dirty, onChange }: DirtyStateTrackerProps) {
+    useEffect(() => {
+        onChange(dirty);
+    }, [dirty, onChange]);
+
+    return null;
+}
+
+/** Return the first server-side lifecycle error for a compact dialog alert. */
+function firstActionError(errors: Record<string, string>): string | null {
+    return Object.values(errors)[0] ?? null;
+}
+
 /**
  * Render receipt editing, PO fulfillment, non-stock evidence, and movement traceability.
  */
@@ -164,6 +193,63 @@ export default function GoodsReceiptForm({
     auditTrail,
 }: Props) {
     const editable = goodsReceipt === null || goodsReceipt.status === 'draft';
+
+    const [draftDirty, setDraftDirty] = useState(false);
+    const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+    const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
+    const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+    const allowNextNavigation = useRef(false);
+
+    useEffect(() => {
+        if (!draftDirty) {
+            return;
+        }
+
+        const removeBeforeListener = router.on('before', (event) => {
+            if (event.detail.visit.method !== 'get') {
+                return;
+            }
+
+            if (allowNextNavigation.current) {
+                allowNextNavigation.current = false;
+
+                return;
+            }
+
+            return window.confirm(
+                'You have unsaved goods receipt changes. Leave without saving them?',
+            );
+        });
+
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            removeBeforeListener();
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [draftDirty]);
+
+    const requestBackNavigation = () => {
+        if (draftDirty) {
+            setLeaveDialogOpen(true);
+
+            return;
+        }
+
+        navigateToPreviousPage(GoodsReceiptController.index().url);
+    };
+
+    const discardChangesAndNavigateBack = () => {
+        allowNextNavigation.current = true;
+        setDraftDirty(false);
+        setLeaveDialogOpen(false);
+        navigateToPreviousPage(GoodsReceiptController.index().url);
+    };
 
     const [lines, setLines] = useState<LineState[]>(
         goodsReceipt?.lines.map((line) => ({
@@ -283,9 +369,22 @@ export default function GoodsReceiptForm({
                 </div>
 
                 {editable ? (
-                    <Form {...formAttributes} className="space-y-6">
-                        {({ processing, errors }) => (
+                    <Form
+                        {...formAttributes}
+                        setDefaultsOnSuccess
+                        options={{
+                            preserveState: 'errors',
+                            replace: goodsReceipt === null,
+                        }}
+                        className="space-y-6"
+                    >
+                        {({ processing, errors, isDirty }) => (
                             <>
+                                <DirtyStateTracker
+                                    dirty={isDirty}
+                                    onChange={setDraftDirty}
+                                />
+
                                 <div className="grid gap-5 rounded-xl border border-sidebar-border/70 p-5 md:grid-cols-2 dark:border-sidebar-border">
                                     <div className="grid gap-2">
                                         <Label htmlFor="number">
@@ -894,17 +993,23 @@ export default function GoodsReceiptForm({
                                     <InputError message={errors.lines} />
                                 </div>
 
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2">
                                     <Button type="submit" disabled={processing}>
-                                        {goodsReceipt === null
-                                            ? 'Create draft'
-                                            : 'Save draft'}
+                                        {processing
+                                            ? 'Saving…'
+                                            : goodsReceipt === null
+                                              ? 'Create draft'
+                                              : 'Save draft'}
                                     </Button>
 
-                                    <PreviousPageButton
-                                        fallback={GoodsReceiptController.index.url()}
+                                    <Button
+                                        type="button"
                                         variant="outline"
-                                    />
+                                        disabled={processing}
+                                        onClick={requestBackNavigation}
+                                    >
+                                        Back
+                                    </Button>
                                 </div>
                             </>
                         )}
@@ -1083,43 +1188,252 @@ export default function GoodsReceiptForm({
                 )}
 
                 {goodsReceipt?.status === 'draft' && canFinalize && (
-                    <div className="flex gap-2">
-                        <Form
-                            {...GoodsReceiptController.finalize.form(
-                                goodsReceipt.id,
-                            )}
-                        >
-                            {({ processing }) => (
-                                <Button type="submit" disabled={processing}>
-                                    Finalize receipt
-                                </Button>
-                            )}
-                        </Form>
+                    <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                            <Dialog
+                                open={finalizeDialogOpen}
+                                onOpenChange={setFinalizeDialogOpen}
+                            >
+                                <DialogTrigger asChild>
+                                    <Button type="button" disabled={draftDirty}>
+                                        Finalize receipt
+                                    </Button>
+                                </DialogTrigger>
 
-                        <Form
-                            {...GoodsReceiptController.cancel.form(
-                                goodsReceipt.id,
-                            )}
-                        >
-                            {({ processing }) => (
-                                <Button
-                                    type="submit"
-                                    variant="outline"
-                                    disabled={processing}
-                                >
-                                    Cancel receipt
-                                </Button>
-                            )}
-                        </Form>
+                                <DialogContent>
+                                    <Form
+                                        {...GoodsReceiptController.finalize.form(
+                                            goodsReceipt.id,
+                                        )}
+                                        options={{
+                                            preserveState: 'errors',
+                                        }}
+                                        onSuccess={() =>
+                                            setFinalizeDialogOpen(false)
+                                        }
+                                    >
+                                        {({ processing, errors }) => {
+                                            const actionError =
+                                                firstActionError(errors);
+
+                                            return (
+                                                <div className="space-y-4">
+                                                    <DialogHeader>
+                                                        <DialogTitle>
+                                                            Finalize goods
+                                                            receipt?
+                                                        </DialogTitle>
+                                                        <DialogDescription>
+                                                            Finalizing posts
+                                                            accepted quantities
+                                                            to inventory,
+                                                            updates purchase
+                                                            order fulfillment,
+                                                            records audit
+                                                            history, and makes
+                                                            this receipt
+                                                            immutable. Rejected
+                                                            and damaged
+                                                            quantities remain
+                                                            stock-neutral.
+                                                        </DialogDescription>
+                                                    </DialogHeader>
+
+                                                    {actionError !== null && (
+                                                        <p
+                                                            role="alert"
+                                                            className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                                                        >
+                                                            {actionError}
+                                                        </p>
+                                                    )}
+
+                                                    <DialogFooter>
+                                                        <DialogClose asChild>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                disabled={
+                                                                    processing
+                                                                }
+                                                            >
+                                                                Keep draft
+                                                            </Button>
+                                                        </DialogClose>
+
+                                                        <Button
+                                                            type="submit"
+                                                            disabled={
+                                                                processing
+                                                            }
+                                                        >
+                                                            {processing
+                                                                ? 'Finalizing…'
+                                                                : 'Finalize receipt'}
+                                                        </Button>
+                                                    </DialogFooter>
+                                                </div>
+                                            );
+                                        }}
+                                    </Form>
+                                </DialogContent>
+                            </Dialog>
+
+                            <Dialog
+                                open={cancelDialogOpen}
+                                onOpenChange={setCancelDialogOpen}
+                            >
+                                <DialogTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={draftDirty}
+                                    >
+                                        Cancel receipt
+                                    </Button>
+                                </DialogTrigger>
+
+                                <DialogContent>
+                                    <Form
+                                        {...GoodsReceiptController.cancel.form(
+                                            goodsReceipt.id,
+                                        )}
+                                        options={{
+                                            preserveState: 'errors',
+                                        }}
+                                        onSuccess={() =>
+                                            setCancelDialogOpen(false)
+                                        }
+                                    >
+                                        {({ processing, errors }) => {
+                                            const actionError =
+                                                firstActionError(errors);
+
+                                            return (
+                                                <div className="space-y-4">
+                                                    <DialogHeader>
+                                                        <DialogTitle>
+                                                            Cancel goods
+                                                            receipt?
+                                                        </DialogTitle>
+                                                        <DialogDescription>
+                                                            Cancelling this
+                                                            draft stops it from
+                                                            being edited or
+                                                            finalized. The
+                                                            receipt remains in
+                                                            history and no
+                                                            inventory or
+                                                            purchase order
+                                                            received quantities
+                                                            are changed.
+                                                        </DialogDescription>
+                                                    </DialogHeader>
+
+                                                    {actionError !== null && (
+                                                        <p
+                                                            role="alert"
+                                                            className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                                                        >
+                                                            {actionError}
+                                                        </p>
+                                                    )}
+
+                                                    <DialogFooter>
+                                                        <DialogClose asChild>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                disabled={
+                                                                    processing
+                                                                }
+                                                            >
+                                                                Keep draft
+                                                            </Button>
+                                                        </DialogClose>
+
+                                                        <Button
+                                                            type="submit"
+                                                            variant="destructive"
+                                                            disabled={
+                                                                processing
+                                                            }
+                                                        >
+                                                            {processing
+                                                                ? 'Cancelling…'
+                                                                : 'Cancel receipt'}
+                                                        </Button>
+                                                    </DialogFooter>
+                                                </div>
+                                            );
+                                        }}
+                                    </Form>
+                                </DialogContent>
+                            </Dialog>
+                        </div>
+
+                        {draftDirty && (
+                            <p className="text-sm text-muted-foreground">
+                                Save or discard your draft changes before
+                                finalizing or cancelling this receipt.
+                            </p>
+                        )}
                     </div>
                 )}
 
-                <Button variant="outline" asChild className="w-fit">
-                    <Link href={PurchaseOrderController.edit(purchaseOrder.id)}>
-                        View purchase order
-                    </Link>
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                    {!editable && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={requestBackNavigation}
+                        >
+                            Back
+                        </Button>
+                    )}
+
+                    <Button variant="outline" asChild>
+                        <Link
+                            href={PurchaseOrderController.edit(
+                                purchaseOrder.id,
+                            )}
+                        >
+                            View purchase order
+                        </Link>
+                    </Button>
+                </div>
             </div>
+
+            <Dialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            Discard unsaved receipt changes?
+                        </DialogTitle>
+                        <DialogDescription>
+                            Your unsaved goods receipt changes will be lost.
+                            This does not undo any receipt state or inventory
+                            activity already saved on the server.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button type="button" variant="outline">
+                                Stay on page
+                            </Button>
+                        </DialogClose>
+
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={discardChangesAndNavigateBack}
+                        >
+                            Discard and leave
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }
