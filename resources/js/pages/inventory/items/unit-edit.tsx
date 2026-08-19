@@ -1,7 +1,8 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InventoryItemUnitController from '@/actions/App/Http/Controllers/Inventory/InventoryItemUnitController';
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -95,15 +96,17 @@ export default function EditInventoryItemUnit({ item, conversion }: Props) {
                                         Save conversion
                                     </Button>
 
-                                    <Button variant="outline" asChild>
-                                        <Link
-                                            href={InventoryItemController.edit(
+                                    <PreviousPageButton
+                                        variant="outline"
+                                        fallback={
+                                            InventoryItemController.edit(
                                                 item.id,
-                                            )}
-                                        >
-                                            Back
-                                        </Link>
-                                    </Button>
+                                            ).url
+                                        }
+                                        disabled={processing}
+                                    >
+                                        Back
+                                    </PreviousPageButton>
                                 </div>
                             </>
                         )}

@@ -1,10 +1,19 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InventoryItemUnitController from '@/actions/App/Http/Controllers/Inventory/InventoryItemUnitController';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type {
     InventoryCategoryData,
@@ -18,6 +27,128 @@ type Props = {
     categories: InventoryCategoryData[];
     availableConversionUnits: UnitOfMeasureData[];
 };
+
+type EditInventoryItemUnitDialogProps = {
+    baseUnitSymbol: string;
+    conversion: InventoryItemDetail['unitConversions'][number];
+    inventoryItemId: number;
+    trigger: React.ReactNode;
+};
+
+/** Edit one conversion factor without leaving the inventory item context. */
+function EditInventoryItemUnitDialog({
+    baseUnitSymbol,
+    conversion,
+    inventoryItemId,
+    trigger,
+}: EditInventoryItemUnitDialogProps) {
+    const dialog = useGuardedDialog(
+        'Discard the unit conversion changes you entered?',
+    );
+
+    return (
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Edit unit conversion</DialogTitle>
+                    <DialogDescription>
+                        1 {conversion.unitOfMeasure.symbol} to {baseUnitSymbol}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div onChange={dialog.markDirty}>
+                    <Form
+                        {...InventoryItemUnitController.update.form([
+                            inventoryItemId,
+                            conversion.id,
+                        ])}
+                        errorBag={`editInventoryItemUnit${conversion.id}`}
+                        className="space-y-5"
+                        onSuccess={dialog.closeAfterSuccess}
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <input type="hidden" name="_modal" value="1" />
+
+                                <div className="grid gap-2">
+                                    <Label
+                                        htmlFor={`conversion-quantity-${conversion.id}`}
+                                    >
+                                        Quantity in base unit
+                                    </Label>
+
+                                    <Input
+                                        id={`conversion-quantity-${conversion.id}`}
+                                        name="quantity_in_base_unit"
+                                        type="number"
+                                        min="0.000001"
+                                        step="0.000001"
+                                        defaultValue={
+                                            conversion.quantityInBaseUnit
+                                        }
+                                        required
+                                        autoFocus
+                                    />
+
+                                    <p className="text-xs text-muted-foreground">
+                                        1 {conversion.unitOfMeasure.symbol} ={' '}
+                                        quantity × {baseUnitSymbol}
+                                    </p>
+
+                                    <InputError
+                                        message={errors.quantity_in_base_unit}
+                                    />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label
+                                        htmlFor={`conversion-active-${conversion.id}`}
+                                    >
+                                        Status
+                                    </Label>
+
+                                    <select
+                                        id={`conversion-active-${conversion.id}`}
+                                        name="active"
+                                        defaultValue={
+                                            conversion.active ? '1' : '0'
+                                        }
+                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    >
+                                        <option value="1">Active</option>
+                                        <option value="0">Inactive</option>
+                                    </select>
+
+                                    <InputError message={errors.active} />
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                    <Button type="submit" disabled={processing}>
+                                        {processing
+                                            ? 'Saving...'
+                                            : 'Save conversion'}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={processing}
+                                        onClick={() =>
+                                            dialog.onOpenChange(false)
+                                        }
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function EditInventoryItem({
     item,
@@ -257,22 +388,22 @@ export default function EditInventoryItem({
                                                 </p>
                                             </div>
 
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                asChild
-                                            >
-                                                <Link
-                                                    href={InventoryItemUnitController.edit(
-                                                        [
-                                                            item.id,
-                                                            conversion.id,
-                                                        ],
-                                                    )}
-                                                >
-                                                    Edit
-                                                </Link>
-                                            </Button>
+                                            <EditInventoryItemUnitDialog
+                                                inventoryItemId={item.id}
+                                                conversion={conversion}
+                                                baseUnitSymbol={
+                                                    item.baseUnitOfMeasure
+                                                        .symbol
+                                                }
+                                                trigger={
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                    >
+                                                        Edit
+                                                    </Button>
+                                                }
+                                            />
                                         </div>
                                     ))}
                                 </div>

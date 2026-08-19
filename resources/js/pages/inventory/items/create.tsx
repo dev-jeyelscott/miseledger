@@ -2,6 +2,7 @@ import { Form, Head, Link } from '@inertiajs/react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import UnitOfMeasureController from '@/actions/App/Http/Controllers/Inventory/UnitOfMeasureController';
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -196,13 +197,16 @@ export default function CreateInventoryItem({ units, categories }: Props) {
                                             Create item
                                         </Button>
 
-                                        <Button variant="outline" asChild>
-                                            <Link
-                                                href={InventoryItemController.index()}
-                                            >
-                                                Cancel
-                                            </Link>
-                                        </Button>
+                                        <PreviousPageButton
+                                            variant="outline"
+                                            fallback={
+                                                InventoryItemController.index()
+                                                    .url
+                                            }
+                                            disabled={processing}
+                                        >
+                                            Cancel
+                                        </PreviousPageButton>
                                     </div>
                                 </>
                             )}

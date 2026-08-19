@@ -1,10 +1,20 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type { InventoryCategoryData } from '@/types';
 
@@ -12,6 +22,105 @@ type Props = {
     categories: InventoryCategoryData[];
     canManage: boolean;
 };
+
+type EditInventoryCategoryDialogProps = {
+    category: InventoryCategoryData;
+    trigger: React.ReactNode;
+};
+
+/** Edit a lightweight category record without leaving the category index. */
+function EditInventoryCategoryDialog({
+    category,
+    trigger,
+}: EditInventoryCategoryDialogProps) {
+    const dialog = useGuardedDialog(
+        'Discard the inventory category changes you entered?',
+    );
+
+    return (
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Edit inventory category</DialogTitle>
+                    <DialogDescription>{category.name}</DialogDescription>
+                </DialogHeader>
+
+                <div onChange={dialog.markDirty}>
+                    <Form
+                        {...InventoryCategoryController.update.form(
+                            category.id,
+                        )}
+                        errorBag={`editInventoryCategory${category.id}`}
+                        className="space-y-5"
+                        onSuccess={dialog.closeAfterSuccess}
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <input type="hidden" name="_modal" value="1" />
+
+                                <div className="grid gap-2">
+                                    <Label
+                                        htmlFor={`category-name-${category.id}`}
+                                    >
+                                        Name
+                                    </Label>
+                                    <Input
+                                        id={`category-name-${category.id}`}
+                                        name="name"
+                                        defaultValue={category.name}
+                                        required
+                                        autoFocus
+                                    />
+                                    <InputError message={errors.name} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label
+                                        htmlFor={`category-active-${category.id}`}
+                                    >
+                                        Status
+                                    </Label>
+                                    <select
+                                        id={`category-active-${category.id}`}
+                                        name="active"
+                                        defaultValue={
+                                            category.active ? '1' : '0'
+                                        }
+                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    >
+                                        <option value="1">Active</option>
+                                        <option value="0">Inactive</option>
+                                    </select>
+                                    <InputError message={errors.active} />
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                    <Button type="submit" disabled={processing}>
+                                        {processing
+                                            ? 'Saving...'
+                                            : 'Save category'}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={processing}
+                                        onClick={() =>
+                                            dialog.onOpenChange(false)
+                                        }
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function InventoryCategoriesIndex({
     categories,
@@ -63,19 +172,17 @@ export default function InventoryCategoriesIndex({
                                         </div>
 
                                         {canManage && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                asChild
-                                            >
-                                                <Link
-                                                    href={InventoryCategoryController.edit(
-                                                        category.id,
-                                                    )}
-                                                >
-                                                    Edit
-                                                </Link>
-                                            </Button>
+                                            <EditInventoryCategoryDialog
+                                                category={category}
+                                                trigger={
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                    >
+                                                        Edit
+                                                    </Button>
+                                                }
+                                            />
                                         )}
                                     </div>
                                 ))
@@ -127,11 +234,12 @@ export default function InventoryCategoriesIndex({
                 </div>
 
                 <div>
-                    <Button variant="outline" asChild>
-                        <Link href={InventoryItemController.index()}>
-                            Back to inventory
-                        </Link>
-                    </Button>
+                    <PreviousPageButton
+                        variant="outline"
+                        fallback={InventoryItemController.index().url}
+                    >
+                        Back to inventory
+                    </PreviousPageButton>
                 </div>
             </div>
         </>

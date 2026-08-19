@@ -1,8 +1,9 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import { useState } from 'react';
 import InventoryAdjustmentController from '@/actions/App/Http/Controllers/Inventory/InventoryAdjustmentController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -342,17 +343,15 @@ export default function InventoryAdjustmentCreate({
                                             : 'Record adjustment'}
                                     </Button>
 
-                                    <Button
-                                        type="button"
+                                    <PreviousPageButton
                                         variant="outline"
-                                        asChild
+                                        fallback={
+                                            InventoryItemController.index().url
+                                        }
+                                        disabled={processing}
                                     >
-                                        <Link
-                                            href={InventoryItemController.index()}
-                                        >
-                                            Cancel
-                                        </Link>
-                                    </Button>
+                                        Cancel
+                                    </PreviousPageButton>
                                 </div>
                             </div>
                         )}

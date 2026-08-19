@@ -1,10 +1,20 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import UnitOfMeasureController from '@/actions/App/Http/Controllers/Inventory/UnitOfMeasureController';
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type { UnitOfMeasureMasterData } from '@/types';
 
@@ -12,6 +22,139 @@ type Props = {
     units: UnitOfMeasureMasterData[];
     canManage: boolean;
 };
+
+type EditUnitOfMeasureDialogProps = {
+    trigger: React.ReactNode;
+    unit: UnitOfMeasureMasterData;
+};
+
+/** Edit one UOM without leaving the master-data list context. */
+function EditUnitOfMeasureDialog({
+    trigger,
+    unit,
+}: EditUnitOfMeasureDialogProps) {
+    const dialog = useGuardedDialog(
+        'Discard the unit of measure changes you entered?',
+    );
+
+    return (
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Edit unit of measure</DialogTitle>
+                    <DialogDescription>
+                        {unit.name} ({unit.symbol})
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div onChange={dialog.markDirty}>
+                    <Form
+                        {...UnitOfMeasureController.update.form(unit.id)}
+                        errorBag={`editUnitOfMeasure${unit.id}`}
+                        className="space-y-5"
+                        onSuccess={dialog.closeAfterSuccess}
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <input type="hidden" name="_modal" value="1" />
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor={`unit-name-${unit.id}`}>
+                                        Name
+                                    </Label>
+                                    <Input
+                                        id={`unit-name-${unit.id}`}
+                                        name="name"
+                                        defaultValue={unit.name}
+                                        required
+                                        autoFocus
+                                    />
+                                    <InputError message={errors.name} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor={`unit-symbol-${unit.id}`}>
+                                        Symbol
+                                    </Label>
+                                    <Input
+                                        id={`unit-symbol-${unit.id}`}
+                                        name="symbol"
+                                        defaultValue={unit.symbol}
+                                        required
+                                    />
+                                    <InputError message={errors.symbol} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label
+                                        htmlFor={`unit-dimension-${unit.id}`}
+                                    >
+                                        Dimension
+                                    </Label>
+
+                                    <select
+                                        id={`unit-dimension-${unit.id}`}
+                                        name="dimension"
+                                        defaultValue={unit.dimension}
+                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    >
+                                        <option value="weight">Weight</option>
+                                        <option value="volume">Volume</option>
+                                        <option value="count">Count</option>
+                                    </select>
+
+                                    <InputError message={errors.dimension} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor={`unit-active-${unit.id}`}>
+                                        Status
+                                    </Label>
+
+                                    <select
+                                        id={`unit-active-${unit.id}`}
+                                        name="active"
+                                        defaultValue={unit.active ? '1' : '0'}
+                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    >
+                                        <option value="1">Active</option>
+                                        <option value="0">Inactive</option>
+                                    </select>
+
+                                    <InputError message={errors.active} />
+                                </div>
+
+                                <p className="text-xs text-muted-foreground">
+                                    Referenced units keep their symbol,
+                                    dimension, and active-state protections from
+                                    the existing inventory rules.
+                                </p>
+
+                                <div className="flex flex-wrap gap-2">
+                                    <Button type="submit" disabled={processing}>
+                                        {processing ? 'Saving...' : 'Save unit'}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={processing}
+                                        onClick={() =>
+                                            dialog.onOpenChange(false)
+                                        }
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function UnitsOfMeasureIndex({ units, canManage }: Props) {
     return (
@@ -59,19 +202,17 @@ export default function UnitsOfMeasureIndex({ units, canManage }: Props) {
                                         </div>
 
                                         {canManage && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                asChild
-                                            >
-                                                <Link
-                                                    href={UnitOfMeasureController.edit(
-                                                        unit.id,
-                                                    )}
-                                                >
-                                                    Edit
-                                                </Link>
-                                            </Button>
+                                            <EditUnitOfMeasureDialog
+                                                unit={unit}
+                                                trigger={
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                    >
+                                                        Edit
+                                                    </Button>
+                                                }
+                                            />
                                         )}
                                     </div>
                                 ))
@@ -163,11 +304,12 @@ export default function UnitsOfMeasureIndex({ units, canManage }: Props) {
                 </div>
 
                 <div>
-                    <Button variant="outline" asChild>
-                        <Link href={InventoryItemController.index()}>
-                            Back to inventory
-                        </Link>
-                    </Button>
+                    <PreviousPageButton
+                        variant="outline"
+                        fallback={InventoryItemController.index().url}
+                    >
+                        Back to inventory
+                    </PreviousPageButton>
                 </div>
             </div>
         </>

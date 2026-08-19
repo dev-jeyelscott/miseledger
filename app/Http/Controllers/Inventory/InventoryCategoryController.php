@@ -122,6 +122,10 @@ class InventoryCategoryController extends Controller
             'message' => __('Inventory category updated.'),
         ]);
 
+        if ($request->boolean('_modal')) {
+            return back();
+        }
+
         return to_route(
             'inventory.categories.edit',
             $inventoryCategory,

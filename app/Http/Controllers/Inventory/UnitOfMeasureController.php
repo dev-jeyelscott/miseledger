@@ -146,6 +146,10 @@ class UnitOfMeasureController extends Controller
             'message' => __('Unit of measure updated.'),
         ]);
 
+        if ($request->boolean('_modal')) {
+            return back();
+        }
+
         return to_route(
             'inventory.units.edit',
             $unitOfMeasure,

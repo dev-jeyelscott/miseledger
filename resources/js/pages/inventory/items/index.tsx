@@ -18,11 +18,26 @@ import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventor
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import OpeningBalanceController from '@/actions/App/Http/Controllers/Inventory/OpeningBalanceController';
 import UnitOfMeasureController from '@/actions/App/Http/Controllers/Inventory/UnitOfMeasureController';
+import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
-import type { InventoryItemListItem, InventoryItemType } from '@/types';
+import type {
+    InventoryItemListItem,
+    InventoryItemType,
+    UnitOfMeasureData,
+} from '@/types';
 
 type ItemStatus = 'active' | 'inactive';
 
@@ -64,6 +79,7 @@ type Props = {
         active: number;
     };
     categoryOptions: CategoryOption[];
+    createUnitOptions: UnitOfMeasureData[];
     filters: Filters;
     canManage: boolean;
 };
@@ -73,6 +89,12 @@ type SortableHeadingProps = {
     children: React.ReactNode;
     direction: SortDirection;
     href: string;
+};
+
+type CreateInventoryItemDialogProps = {
+    categories: CategoryOption[];
+    trigger: React.ReactNode;
+    units: UnitOfMeasureData[];
 };
 
 const itemTypeLabels: Record<InventoryItemType, string> = {
@@ -124,11 +146,229 @@ function SortableHeading({
     );
 }
 
+/** Create a compact inventory master record without leaving index context. */
+function CreateInventoryItemDialog({
+    categories,
+    trigger,
+    units,
+}: CreateInventoryItemDialogProps) {
+    const dialog = useGuardedDialog(
+        'Discard the inventory item details you entered?',
+    );
+    const activeCategories = categories.filter((category) => category.active);
+
+    return (
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>Create inventory item</DialogTitle>
+                    <DialogDescription>
+                        Create the master record and select the base unit used
+                        to store stock.
+                    </DialogDescription>
+                </DialogHeader>
+
+                {units.length === 0 ? (
+                    <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                            Create at least one active unit of measure before
+                            creating an inventory item.
+                        </p>
+
+                        <Button asChild>
+                            <Link href={UnitOfMeasureController.index()}>
+                                Manage units
+                            </Link>
+                        </Button>
+                    </div>
+                ) : (
+                    <div onChange={dialog.markDirty}>
+                        <Form
+                            {...InventoryItemController.store.form()}
+                            errorBag="createInventoryItem"
+                            className="space-y-5"
+                            resetOnSuccess
+                            onSuccess={dialog.closeAfterSuccess}
+                        >
+                            {({ processing, errors }) => (
+                                <>
+                                    <input
+                                        type="hidden"
+                                        name="_modal"
+                                        value="1"
+                                    />
+                                    <input
+                                        type="hidden"
+                                        name="active"
+                                        value="1"
+                                    />
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="modal-item-name">
+                                            Name
+                                        </Label>
+                                        <Input
+                                            id="modal-item-name"
+                                            name="name"
+                                            required
+                                            autoFocus
+                                            placeholder="All-purpose flour"
+                                        />
+                                        <InputError message={errors.name} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="modal-item-sku">
+                                            SKU
+                                        </Label>
+                                        <Input
+                                            id="modal-item-sku"
+                                            name="sku"
+                                            required
+                                            autoComplete="off"
+                                            placeholder="FLOUR-001"
+                                        />
+                                        <InputError message={errors.sku} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="modal-item-type">
+                                            Item type
+                                        </Label>
+                                        <select
+                                            id="modal-item-type"
+                                            name="type"
+                                            defaultValue="ingredient"
+                                            required
+                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        >
+                                            {itemTypeOptions.map((type) => (
+                                                <option key={type} value={type}>
+                                                    {itemTypeLabels[type]}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <InputError message={errors.type} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="modal-item-category">
+                                            Category
+                                        </Label>
+                                        <select
+                                            id="modal-item-category"
+                                            name="inventory_category_id"
+                                            defaultValue=""
+                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        >
+                                            <option value="">
+                                                Uncategorized
+                                            </option>
+                                            {activeCategories.map(
+                                                (category) => (
+                                                    <option
+                                                        key={category.id}
+                                                        value={category.id}
+                                                    >
+                                                        {category.name}
+                                                    </option>
+                                                ),
+                                            )}
+                                        </select>
+                                        <InputError
+                                            message={
+                                                errors.inventory_category_id
+                                            }
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="modal-item-yield">
+                                            Yield (%)
+                                        </Label>
+                                        <Input
+                                            id="modal-item-yield"
+                                            name="yield_percentage"
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            step="0.01"
+                                            defaultValue="100.00"
+                                            required
+                                        />
+                                        <InputError
+                                            message={errors.yield_percentage}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="modal-item-base-unit">
+                                            Base unit
+                                        </Label>
+                                        <select
+                                            id="modal-item-base-unit"
+                                            name="base_unit_of_measure_id"
+                                            required
+                                            defaultValue=""
+                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        >
+                                            <option value="" disabled>
+                                                Select unit
+                                            </option>
+                                            {units.map((unit) => (
+                                                <option
+                                                    key={unit.id}
+                                                    value={unit.id}
+                                                >
+                                                    {unit.name} ({unit.symbol})
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <InputError
+                                            message={
+                                                errors.base_unit_of_measure_id
+                                            }
+                                        />
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button
+                                            type="submit"
+                                            disabled={processing}
+                                        >
+                                            {processing
+                                                ? 'Creating...'
+                                                : 'Create item'}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            disabled={processing}
+                                            onClick={() =>
+                                                dialog.onOpenChange(false)
+                                            }
+                                        >
+                                            Cancel
+                                        </Button>
+                                    </div>
+                                </>
+                            )}
+                        </Form>
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function InventoryItemsIndex({
     items,
     pagination,
     summary,
     categoryOptions,
+    createUnitOptions,
     filters,
     canManage,
 }: Props) {
@@ -217,17 +457,19 @@ export default function InventoryItemsIndex({
                                     </Link>
                                 </Button>
 
-                                <Button asChild>
-                                    <Link
-                                        href={InventoryItemController.create()}
-                                    >
-                                        <Plus
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                        New item
-                                    </Link>
-                                </Button>
+                                <CreateInventoryItemDialog
+                                    categories={categoryOptions}
+                                    units={createUnitOptions}
+                                    trigger={
+                                        <Button>
+                                            <Plus
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            New item
+                                        </Button>
+                                    }
+                                />
                             </>
                         )}
                     </div>

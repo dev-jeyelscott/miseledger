@@ -163,6 +163,11 @@ class InventoryItemController extends Controller
             ->values()
             ->all();
 
+        $canManage = Gate::allows(
+            OrganizationPermission::InventoryAdjust->value,
+            $organization,
+        );
+
         return Inertia::render('inventory/items/index', [
             'items' => $paginatedItems->items(),
             'pagination' => [
@@ -183,6 +188,9 @@ class InventoryItemController extends Controller
                     ->count(),
             ],
             'categoryOptions' => $categoryOptions,
+            'createUnitOptions' => $canManage
+                ? $this->activeUnitOptions($organization)
+                : [],
             'filters' => [
                 'search' => $search,
                 'categoryId' => $categoryId,
@@ -191,10 +199,7 @@ class InventoryItemController extends Controller
                 'sort' => $sort,
                 'direction' => $direction,
             ],
-            'canManage' => Gate::allows(
-                OrganizationPermission::InventoryAdjust->value,
-                $organization,
-            ),
+            'canManage' => $canManage,
         ]);
     }
 
@@ -254,6 +259,10 @@ class InventoryItemController extends Controller
             'type' => 'success',
             'message' => __('Inventory item created.'),
         ]);
+
+        if ($request->boolean('_modal')) {
+            return back();
+        }
 
         return to_route('inventory.items.edit', $item);
     }

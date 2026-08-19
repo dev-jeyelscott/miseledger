@@ -149,6 +149,10 @@ class InventoryItemUnitController extends Controller
             'message' => __('Item unit conversion updated.'),
         ]);
 
+        if ($request->boolean('_modal')) {
+            return back();
+        }
+
         return to_route(
             'inventory.items.units.edit',
             [

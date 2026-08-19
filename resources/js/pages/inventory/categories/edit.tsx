@@ -1,7 +1,8 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -68,13 +69,16 @@ export default function EditInventoryCategory({ category }: Props) {
                                         Save category
                                     </Button>
 
-                                    <Button variant="outline" asChild>
-                                        <Link
-                                            href={InventoryCategoryController.index()}
-                                        >
-                                            Back
-                                        </Link>
-                                    </Button>
+                                    <PreviousPageButton
+                                        variant="outline"
+                                        fallback={
+                                            InventoryCategoryController.index()
+                                                .url
+                                        }
+                                        disabled={processing}
+                                    >
+                                        Back
+                                    </PreviousPageButton>
                                 </div>
                             </>
                         )}
