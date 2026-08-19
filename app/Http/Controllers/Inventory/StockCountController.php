@@ -27,6 +27,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -38,35 +39,28 @@ class StockCountController extends Controller
      */
     public function index(Request $request): Response
     {
-        $organization = $this->activeOrganization(
-            $request,
-        );
+        $organization = $this->activeOrganization($request);
 
         $this->authorizeCountRead($organization);
 
-        $counts = StockCount::query()
-            ->with([
-                'location:id,name',
-                'storageLocation:id,name',
-            ])
-            ->where(
-                'organization_id',
-                $organization->id,
-            )
-            ->orderByDesc('id')
-            ->get()
+        [$filters, $query] = $this->indexQuery(
+            $request,
+            $organization,
+        );
+
+        $summary = $this->indexSummary($organization);
+
+        $paginatedCounts = $this->applyIndexSort(
+            clone $query,
+            $filters['sort'],
+            $filters['direction'],
+        )
+            ->paginate($filters['perPage'])
+            ->withQueryString();
+
+        $rows = collect($paginatedCounts->items())
             ->map(
-                static fn (StockCount $count): array => [
-                    'id' => $count->id,
-                    'number' => $count->number,
-                    'status' => $count->status->value,
-                    'locationName' => $count->location->name,
-                    'storageLocationName' => $count->storageLocation->name,
-                    'countedAt' => $count->counted_at
-                        ?->toIso8601String(),
-                    'finalizedAt' => $count->finalized_at
-                        ?->toIso8601String(),
-                ],
+                fn (StockCount $count): array => $this->indexRowData($count),
             )
             ->values()
             ->all();
@@ -74,15 +68,31 @@ class StockCountController extends Controller
         return Inertia::render(
             'stock-counts/index',
             [
-                'counts' => $counts,
+                'rows' => $rows,
+                'pagination' => [
+                    'currentPage' => $paginatedCounts->currentPage(),
+                    'from' => $paginatedCounts->firstItem(),
+                    'lastPage' => $paginatedCounts->lastPage(),
+                    'nextPageUrl' => $paginatedCounts->nextPageUrl(),
+                    'perPage' => $paginatedCounts->perPage(),
+                    'previousPageUrl' => $paginatedCounts->previousPageUrl(),
+                    'to' => $paginatedCounts->lastItem(),
+                    'total' => $paginatedCounts->total(),
+                ],
+                'summary' => $summary,
+                'locationOptions' => $this->indexLocationOptions($organization),
+                'storageLocationOptions' => $this->indexStorageLocationOptions(
+                    $organization,
+                    $filters['locationId'],
+                ),
+                'filters' => $filters,
+                'timezone' => $organization->timezone,
                 'canCreate' => Gate::allows(
-                    OrganizationPermission::CountsCreate
-                        ->value,
+                    OrganizationPermission::CountsCreate->value,
                     $organization,
                 ),
                 'canViewReport' => Gate::allows(
-                    OrganizationPermission::ReportsView
-                        ->value,
+                    OrganizationPermission::ReportsView->value,
                     $organization,
                 ),
             ],
@@ -515,6 +525,467 @@ class StockCountController extends Controller
             'stock-count-variance.csv',
             $header,
             $rows,
+        );
+    }
+
+    /**
+     * Build the tenant-scoped, server-authoritative query for the stock-count
+     * operations index.
+     *
+     * @return array{
+     *     0: array{
+     *         search: string|null,
+     *         view: 'all'|'open'|'draft'|'submitted'|'finalized'|'cancelled'|'variance',
+     *         locationId: int|null,
+     *         storageLocationId: int|null,
+     *         from: string|null,
+     *         to: string|null,
+     *         sort: 'latest'|'number'|'status'|'counted_at'|'finalized_at',
+     *         direction: 'asc'|'desc',
+     *         perPage: int
+     *     },
+     *     1: EloquentBuilder<StockCount>
+     * }
+     */
+    private function indexQuery(
+        Request $request,
+        Organization $organization,
+    ): array {
+        $validated = $request->validate([
+            'search' => [
+                'nullable',
+                'string',
+                'max:120',
+            ],
+            'view' => [
+                'nullable',
+                Rule::in([
+                    'all',
+                    'open',
+                    'draft',
+                    'submitted',
+                    'finalized',
+                    'cancelled',
+                    'variance',
+                ]),
+            ],
+            'location_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('locations', 'id')->where(
+                    fn (Builder $query): Builder => $query->where(
+                        'organization_id',
+                        $organization->id,
+                    ),
+                ),
+            ],
+            'storage_location_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('storage_locations', 'id')->where(
+                    fn (Builder $query): Builder => $query->where(
+                        'organization_id',
+                        $organization->id,
+                    ),
+                ),
+            ],
+            'from' => [
+                'nullable',
+                'date_format:Y-m-d',
+            ],
+            'to' => [
+                'nullable',
+                'date_format:Y-m-d',
+            ],
+            'sort' => [
+                'nullable',
+                Rule::in([
+                    'latest',
+                    'number',
+                    'status',
+                    'counted_at',
+                    'finalized_at',
+                ]),
+            ],
+            'direction' => [
+                'nullable',
+                Rule::in(['asc', 'desc']),
+            ],
+            'per_page' => [
+                'nullable',
+                'integer',
+                Rule::in([10, 25, 50]),
+            ],
+        ]);
+
+        $search = isset($validated['search'])
+            ? trim((string) $validated['search'])
+            : null;
+
+        if ($search === '') {
+            $search = null;
+        }
+
+        $view = match ($validated['view'] ?? 'all') {
+            'open' => 'open',
+            'draft' => 'draft',
+            'submitted' => 'submitted',
+            'finalized' => 'finalized',
+            'cancelled' => 'cancelled',
+            'variance' => 'variance',
+            default => 'all',
+        };
+
+        $locationId = isset($validated['location_id'])
+            ? (int) $validated['location_id']
+            : null;
+
+        $storageLocationId = isset($validated['storage_location_id'])
+            ? (int) $validated['storage_location_id']
+            : null;
+
+        $from = isset($validated['from'])
+            ? (string) $validated['from']
+            : null;
+
+        $to = isset($validated['to'])
+            ? (string) $validated['to']
+            : null;
+
+        $sort = match ($validated['sort'] ?? 'latest') {
+            'number' => 'number',
+            'status' => 'status',
+            'counted_at' => 'counted_at',
+            'finalized_at' => 'finalized_at',
+            default => 'latest',
+        };
+
+        $direction = ($validated['direction'] ?? 'desc') === 'asc'
+            ? 'asc'
+            : 'desc';
+
+        $perPage = isset($validated['per_page'])
+            ? (int) $validated['per_page']
+            : 10;
+
+        if (
+            $from !== null
+            && $to !== null
+            && $from > $to
+        ) {
+            throw ValidationException::withMessages([
+                'from' => __('The from date must not be after the to date.'),
+            ]);
+        }
+
+        if (
+            $locationId !== null
+            && $storageLocationId !== null
+            && ! StorageLocation::query()
+                ->where('organization_id', $organization->id)
+                ->where('location_id', $locationId)
+                ->whereKey($storageLocationId)
+                ->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'storage_location_id' => __(
+                    'The selected storage location does not belong to the selected location.',
+                ),
+            ]);
+        }
+
+        $query = StockCount::query()
+            ->with([
+                'location:id,name',
+                'storageLocation:id,name',
+                'submitter:id,name',
+            ])
+            ->withCount([
+                'lines as variance_item_count' => static function ($lineQuery): void {
+                    $lineQuery->where(
+                        'variance_base_quantity',
+                        '!=',
+                        0,
+                    );
+                },
+            ])
+            ->where('organization_id', $organization->id);
+
+        if ($search !== null) {
+            $query->where(
+                function (EloquentBuilder $searchQuery) use ($search): void {
+                    $searchQuery
+                        ->whereLike(
+                            'number',
+                            "%{$search}%",
+                        )
+                        ->orWhereHas(
+                            'location',
+                            fn ($locationQuery) => $locationQuery->whereLike(
+                                'name',
+                                "%{$search}%",
+                            ),
+                        )
+                        ->orWhereHas(
+                            'storageLocation',
+                            fn ($storageQuery) => $storageQuery->whereLike(
+                                'name',
+                                "%{$search}%",
+                            ),
+                        );
+                },
+            );
+        }
+
+        match ($view) {
+            'open' => $query->whereIn('status', [
+                StockCountStatus::Draft->value,
+                StockCountStatus::Submitted->value,
+            ]),
+            'draft' => $query->where(
+                'status',
+                StockCountStatus::Draft->value,
+            ),
+            'submitted' => $query->where(
+                'status',
+                StockCountStatus::Submitted->value,
+            ),
+            'finalized' => $query->where(
+                'status',
+                StockCountStatus::Finalized->value,
+            ),
+            'cancelled' => $query->where(
+                'status',
+                StockCountStatus::Cancelled->value,
+            ),
+            'variance' => $query
+                ->where(
+                    'status',
+                    StockCountStatus::Finalized->value,
+                )
+                ->whereHas(
+                    'lines',
+                    fn ($lineQuery) => $lineQuery->where(
+                        'variance_base_quantity',
+                        '!=',
+                        0,
+                    ),
+                ),
+            default => $query,
+        };
+
+        if ($locationId !== null) {
+            $query->where('location_id', $locationId);
+        }
+
+        if ($storageLocationId !== null) {
+            $query->where('storage_location_id', $storageLocationId);
+        }
+
+        if ($from !== null) {
+            $query->where(
+                'counted_at',
+                '>=',
+                CarbonImmutable::parse(
+                    $from,
+                    $organization->timezone,
+                )
+                    ->startOfDay()
+                    ->utc(),
+            );
+        }
+
+        if ($to !== null) {
+            $query->where(
+                'counted_at',
+                '<=',
+                CarbonImmutable::parse(
+                    $to,
+                    $organization->timezone,
+                )
+                    ->endOfDay()
+                    ->utc(),
+            );
+        }
+
+        return [
+            [
+                'search' => $search,
+                'view' => $view,
+                'locationId' => $locationId,
+                'storageLocationId' => $storageLocationId,
+                'from' => $from,
+                'to' => $to,
+                'sort' => $sort,
+                'direction' => $direction,
+                'perPage' => $perPage,
+            ],
+            $query,
+        ];
+    }
+
+    /**
+     * Build organization-wide Stock Counts metrics without mixing filtered
+     * table state into the operational headline numbers.
+     *
+     * @return array{
+     *     totalCount: int,
+     *     openCount: int,
+     *     finalizedTodayCount: int,
+     *     varianceAlertCount: int
+     * }
+     */
+    private function indexSummary(Organization $organization): array
+    {
+        $baseQuery = StockCount::query()
+            ->where('organization_id', $organization->id);
+
+        $today = CarbonImmutable::now($organization->timezone);
+
+        return [
+            'totalCount' => (clone $baseQuery)->count(),
+            'openCount' => (clone $baseQuery)
+                ->whereIn('status', [
+                    StockCountStatus::Draft->value,
+                    StockCountStatus::Submitted->value,
+                ])
+                ->count(),
+            'finalizedTodayCount' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    StockCountStatus::Finalized->value,
+                )
+                ->whereBetween('finalized_at', [
+                    $today->startOfDay()->utc(),
+                    $today->endOfDay()->utc(),
+                ])
+                ->count(),
+            'varianceAlertCount' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    StockCountStatus::Finalized->value,
+                )
+                ->whereHas(
+                    'lines',
+                    fn ($lineQuery) => $lineQuery->where(
+                        'variance_base_quantity',
+                        '!=',
+                        0,
+                    ),
+                )
+                ->count(),
+        ];
+    }
+
+    /**
+     * Serialize one Stock Counts index row from persisted workflow evidence.
+     *
+     * @return array{
+     *     id: int,
+     *     number: string,
+     *     status: string,
+     *     locationName: string,
+     *     storageLocationName: string,
+     *     countedByName: string|null,
+     *     countedAt: string|null,
+     *     finalizedAt: string|null,
+     *     varianceItemCount: int|null
+     * }
+     */
+    private function indexRowData(StockCount $count): array
+    {
+        return [
+            'id' => $count->id,
+            'number' => $count->number,
+            'status' => $count->status->value,
+            'locationName' => $count->location->name,
+            'storageLocationName' => $count->storageLocation->name,
+            'countedByName' => $count->submitter?->name,
+            'countedAt' => $count->counted_at?->toIso8601String(),
+            'finalizedAt' => $count->finalized_at?->toIso8601String(),
+            'varianceItemCount' => $count->status === StockCountStatus::Finalized
+                ? (int) ($count->getAttribute('variance_item_count') ?? 0)
+                : null,
+        ];
+    }
+
+    /**
+     * Apply only explicitly supported sort keys so index ordering stays
+     * deterministic and cannot accept arbitrary columns from the request.
+     *
+     * @param  EloquentBuilder<StockCount>  $query
+     * @return EloquentBuilder<StockCount>
+     */
+    private function applyIndexSort(
+        EloquentBuilder $query,
+        string $sort,
+        string $direction,
+    ): EloquentBuilder {
+        if ($sort === 'latest') {
+            return $query->orderByDesc('id');
+        }
+
+        return $query
+            ->orderBy($sort, $direction)
+            ->orderByDesc('id');
+    }
+
+    /**
+     * Return all tenant locations so historical counts remain filterable even
+     * after a location is deactivated.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    private function indexLocationOptions(Organization $organization): array
+    {
+        return array_values(
+            Location::query()
+                ->where('organization_id', $organization->id)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(
+                    static fn (Location $location): array => [
+                        'id' => $location->id,
+                        'name' => $location->name,
+                    ],
+                )
+                ->all(),
+        );
+    }
+
+    /**
+     * Return tenant storage locations, narrowed by the selected location when
+     * present, while preserving historical locations in the filter.
+     *
+     * @return list<array{id: int, locationId: int, name: string}>
+     */
+    private function indexStorageLocationOptions(
+        Organization $organization,
+        ?int $locationId,
+    ): array {
+        $query = StorageLocation::query()
+            ->where('organization_id', $organization->id);
+
+        if ($locationId !== null) {
+            $query->where('location_id', $locationId);
+        }
+
+        return array_values(
+            $query
+                ->orderBy('name')
+                ->get([
+                    'id',
+                    'location_id',
+                    'name',
+                ])
+                ->map(
+                    static fn (StorageLocation $storageLocation): array => [
+                        'id' => $storageLocation->id,
+                        'locationId' => $storageLocation->location_id,
+                        'name' => $storageLocation->name,
+                    ],
+                )
+                ->all(),
         );
     }
 
