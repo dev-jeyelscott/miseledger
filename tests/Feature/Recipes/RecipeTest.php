@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\OrganizationRole;
+use App\Enums\RecipeType;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\Recipe;
@@ -123,9 +124,159 @@ test('recipes index only exposes the active organization recipes', function () {
         ->assertInertia(
             fn (Assert $page) => $page
                 ->component('recipes/index')
-                ->has('recipes', 1)
-                ->where('recipes.0.id', $recipe->id)
-                ->where('recipes.0.name', 'Cheeseburger'),
+                ->has('rows', 1)
+                ->where('rows.0.id', $recipe->id)
+                ->where('rows.0.name', 'Cheeseburger')
+                ->where('rows.0.versionCount', 0)
+                ->where('rows.0.publishedVersionCount', 0)
+                ->where('rows.0.draftVersionCount', 0)
+                ->where('rows.0.latestVersionNumber', null)
+                ->where('pagination.total', 1)
+                ->where('summary.totalCount', 1)
+                ->missing('rows.0.cost'),
+        );
+});
+
+test('recipes index filters recipe identity data while keeping tenant summary stable', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+    $otherOrganization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Manager,
+        ]);
+
+    $matchingRecipe = Recipe::factory()
+        ->for($organization)
+        ->create([
+            'code' => 'RCP-300',
+            'name' => 'Alpha Burger',
+            'type' => RecipeType::MenuItem,
+            'active' => true,
+        ]);
+
+    Recipe::factory()
+        ->for($organization)
+        ->create([
+            'code' => 'RCP-200',
+            'name' => 'Burger Sauce',
+            'type' => RecipeType::PreparedItem,
+            'active' => true,
+        ]);
+
+    Recipe::factory()
+        ->for($organization)
+        ->create([
+            'code' => 'RCP-100',
+            'name' => 'Legacy Burger',
+            'type' => RecipeType::MenuItem,
+            'active' => false,
+        ]);
+
+    Recipe::factory()
+        ->for($otherOrganization)
+        ->create([
+            'code' => 'RCP-999',
+            'name' => 'Hidden Burger',
+            'type' => RecipeType::MenuItem,
+            'active' => true,
+        ]);
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->get(route('recipes.index', [
+            'search' => 'Burger',
+            'type' => RecipeType::MenuItem->value,
+            'activity' => 'active',
+            'sort' => 'name',
+            'direction' => 'asc',
+            'per_page' => 10,
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page) => $page
+                ->component('recipes/index')
+                ->has('rows', 1)
+                ->where('rows.0.id', $matchingRecipe->id)
+                ->where('filters.search', 'Burger')
+                ->where('filters.type', RecipeType::MenuItem->value)
+                ->where('filters.activity', 'active')
+                ->where('filters.sort', 'name')
+                ->where('filters.direction', 'asc')
+                ->where('filters.perPage', 10)
+                ->where('summary.totalCount', 3)
+                ->where('summary.activeCount', 2)
+                ->where('summary.menuItemCount', 2)
+                ->where('summary.preparedItemCount', 1)
+                ->where('summary.batchCount', 0)
+                ->where('canManage', true)
+                ->where('canViewCosts', true),
+        );
+});
+
+test('recipes index sorts and paginates deterministically', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Manager,
+        ]);
+
+    foreach (range(1, 12) as $index) {
+        Recipe::factory()
+            ->for($organization)
+            ->create([
+                'code' => sprintf('RCP-%03d', $index),
+                'name' => sprintf('Recipe %02d', $index),
+            ]);
+    }
+
+    $query = [
+        'sort' => 'name',
+        'direction' => 'asc',
+        'per_page' => 10,
+    ];
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->get(route('recipes.index', $query))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page) => $page
+                ->has('rows', 10)
+                ->where('rows.0.name', 'Recipe 01')
+                ->where('rows.9.name', 'Recipe 10')
+                ->where('pagination.currentPage', 1)
+                ->where('pagination.lastPage', 2)
+                ->where('pagination.total', 12),
+        );
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->get(route('recipes.index', [
+            ...$query,
+            'page' => 2,
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page) => $page
+                ->has('rows', 2)
+                ->where('rows.0.name', 'Recipe 11')
+                ->where('rows.1.name', 'Recipe 12')
+                ->where('pagination.currentPage', 2)
+                ->where('pagination.total', 12),
         );
 });
 
@@ -145,7 +296,13 @@ test('kitchen staff can view recipes but cannot modify them', function () {
     ])
         ->actingAs($user)
         ->get(route('recipes.index'))
-        ->assertOk();
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page) => $page
+                ->component('recipes/index')
+                ->where('canManage', false)
+                ->where('canViewCosts', false),
+        );
 
     $this->withSession([
         'active_organization_id' => $organization->id,
