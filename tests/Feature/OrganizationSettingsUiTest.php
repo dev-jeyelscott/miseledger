@@ -1,13 +1,16 @@
 <?php
 
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 
 test('organization settings uses the approved responsive overview and details layout', function () {
     $source = File::get(
         resource_path('js/pages/organizations/settings.tsx'),
     );
 
-    expect($source)
+    $normalizedSource = Str::squish($source);
+
+    expect($normalizedSource)
         ->toContain("import { Badge } from '@/components/ui/badge';")
         ->toContain("from '@/components/ui/card';")
         ->toContain('Organization overview')
