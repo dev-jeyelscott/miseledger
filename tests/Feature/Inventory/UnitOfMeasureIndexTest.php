@@ -190,16 +190,16 @@ test('modal unit creation returns to the current filtered index context', functi
     ]);
 });
 
-test('unit index frontend uses guarded sheet filters and dense table', function () {
+test('unit index frontend uses guarded dialogs filters and dense table', function () {
     $source = file_get_contents(
         resource_path('js/pages/inventory/units/index.tsx'),
     );
 
     expect($source)
-        ->toContain('CreateUnitOfMeasureSheet')
+        ->toContain('CreateUnitOfMeasureDialog')
         ->toContain('EditUnitOfMeasureDialog')
         ->toContain('useGuardedDialog')
-        ->toContain('<SheetContent')
+        ->toContain('<DialogContent')
         ->toContain('name="_modal"')
         ->toContain('name="search"')
         ->toContain('name="dimension"')
@@ -207,5 +207,6 @@ test('unit index frontend uses guarded sheet filters and dense table', function 
         ->toContain('overflow-x-auto')
         ->toContain('Used by')
         ->toContain('Updated')
-        ->toContain('PreviousPageButton');
+        ->toContain('PreviousPageButton')
+        ->not->toContain('CreateUnitOfMeasureSheet');
 });

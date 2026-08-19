@@ -16,15 +16,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-    Sheet,
-    SheetContent,
-    SheetDescription,
-    SheetFooter,
-    SheetHeader,
-    SheetTitle,
-    SheetTrigger,
-} from '@/components/ui/sheet';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type { UnitDimension, UnitOfMeasureMasterData } from '@/types';
@@ -53,7 +44,7 @@ type Props = {
     canManage: boolean;
 };
 
-type CreateUnitOfMeasureSheetProps = {
+type CreateUnitOfMeasureDialogProps = {
     trigger: React.ReactNode;
 };
 
@@ -74,151 +65,135 @@ const selectClassName =
     'h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
 /** Create a UOM without leaving the current master-data context. */
-function CreateUnitOfMeasureSheet({ trigger }: CreateUnitOfMeasureSheetProps) {
-    const sheet = useGuardedDialog(
+function CreateUnitOfMeasureDialog({
+    trigger,
+}: CreateUnitOfMeasureDialogProps) {
+    const dialog = useGuardedDialog(
         'Discard the unit of measure details you entered?',
     );
 
     return (
-        <Sheet open={sheet.open} onOpenChange={sheet.onOpenChange}>
-            <SheetTrigger asChild>{trigger}</SheetTrigger>
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
 
-            <SheetContent className="w-full gap-0 overflow-hidden p-0 sm:max-w-md">
-                <SheetHeader className="border-b border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                    <SheetTitle>Create unit</SheetTitle>
-                    <SheetDescription>
-                        Add a unit of measure to the active organization.
-                    </SheetDescription>
-                </SheetHeader>
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Create unit</DialogTitle>
+                    <DialogDescription>
+                        Add a new unit of measure to the active organization.
+                    </DialogDescription>
+                </DialogHeader>
 
-                <div
-                    className="flex min-h-0 flex-1 flex-col"
-                    onChange={sheet.markDirty}
-                >
+                <div onChange={dialog.markDirty}>
                     <Form
                         {...UnitOfMeasureController.store.form()}
                         errorBag="createUnitOfMeasure"
-                        className="flex min-h-0 flex-1 flex-col"
+                        className="space-y-5"
                         resetOnSuccess
-                        onSuccess={sheet.closeAfterSuccess}
+                        onSuccess={dialog.closeAfterSuccess}
                     >
                         {({ processing, errors }) => (
                             <>
                                 <input type="hidden" name="_modal" value="1" />
 
-                                <div className="flex-1 space-y-5 overflow-y-auto p-5">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="create-unit-name">
-                                            Name
-                                        </Label>
-                                        <Input
-                                            id="create-unit-name"
-                                            name="name"
-                                            required
-                                            autoFocus
-                                            autoComplete="off"
-                                            aria-invalid={Boolean(errors.name)}
-                                            placeholder="Kilogram"
-                                        />
-                                        <InputError message={errors.name} />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="create-unit-symbol">
-                                            Symbol
-                                        </Label>
-                                        <Input
-                                            id="create-unit-symbol"
-                                            name="symbol"
-                                            required
-                                            autoComplete="off"
-                                            aria-invalid={Boolean(
-                                                errors.symbol,
-                                            )}
-                                            placeholder="kg"
-                                        />
-                                        <InputError message={errors.symbol} />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="create-unit-dimension">
-                                            Dimension
-                                        </Label>
-
-                                        <select
-                                            id="create-unit-dimension"
-                                            name="dimension"
-                                            defaultValue="count"
-                                            required
-                                            aria-invalid={Boolean(
-                                                errors.dimension,
-                                            )}
-                                            className={selectClassName}
-                                        >
-                                            {dimensionOptions.map(
-                                                (dimension) => (
-                                                    <option
-                                                        key={dimension}
-                                                        value={dimension}
-                                                    >
-                                                        {
-                                                            dimensionLabels[
-                                                                dimension
-                                                            ]
-                                                        }
-                                                    </option>
-                                                ),
-                                            )}
-                                        </select>
-
-                                        <InputError
-                                            message={errors.dimension}
-                                        />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="create-unit-status">
-                                            Status
-                                        </Label>
-
-                                        <select
-                                            id="create-unit-status"
-                                            name="active"
-                                            defaultValue="1"
-                                            required
-                                            aria-invalid={Boolean(
-                                                errors.active,
-                                            )}
-                                            className={selectClassName}
-                                        >
-                                            <option value="1">Active</option>
-                                            <option value="0">Inactive</option>
-                                        </select>
-
-                                        <InputError message={errors.active} />
-                                    </div>
-
-                                    <div className="flex gap-3 rounded-lg border border-sidebar-border/70 bg-muted/30 p-3 text-sm text-muted-foreground dark:border-sidebar-border">
-                                        <Info
-                                            className="mt-0.5 size-4 shrink-0"
-                                            aria-hidden="true"
-                                        />
-                                        <p>
-                                            Dimensions organize units as weight,
-                                            volume, or count. Pack and
-                                            cross-dimension relationships remain
-                                            item-specific.
-                                        </p>
-                                    </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="create-unit-name">
+                                        Name
+                                    </Label>
+                                    <Input
+                                        id="create-unit-name"
+                                        name="name"
+                                        required
+                                        autoFocus
+                                        autoComplete="off"
+                                        aria-invalid={Boolean(errors.name)}
+                                        placeholder="Kilogram"
+                                    />
+                                    <InputError message={errors.name} />
                                 </div>
 
-                                <SheetFooter className="border-t border-sidebar-border/70 bg-background p-4 sm:flex-row sm:justify-end dark:border-sidebar-border">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="create-unit-symbol">
+                                        Symbol
+                                    </Label>
+                                    <Input
+                                        id="create-unit-symbol"
+                                        name="symbol"
+                                        required
+                                        autoComplete="off"
+                                        aria-invalid={Boolean(errors.symbol)}
+                                        placeholder="kg"
+                                    />
+                                    <InputError message={errors.symbol} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="create-unit-dimension">
+                                        Dimension
+                                    </Label>
+
+                                    <select
+                                        id="create-unit-dimension"
+                                        name="dimension"
+                                        defaultValue="count"
+                                        required
+                                        aria-invalid={Boolean(errors.dimension)}
+                                        className={selectClassName}
+                                    >
+                                        {dimensionOptions.map((dimension) => (
+                                            <option
+                                                key={dimension}
+                                                value={dimension}
+                                            >
+                                                {dimensionLabels[dimension]}
+                                            </option>
+                                        ))}
+                                    </select>
+
+                                    <InputError message={errors.dimension} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="create-unit-status">
+                                        Status
+                                    </Label>
+
+                                    <select
+                                        id="create-unit-status"
+                                        name="active"
+                                        defaultValue="1"
+                                        required
+                                        aria-invalid={Boolean(errors.active)}
+                                        className={selectClassName}
+                                    >
+                                        <option value="1">Active</option>
+                                        <option value="0">Inactive</option>
+                                    </select>
+
+                                    <InputError message={errors.active} />
+                                </div>
+
+                                <div className="flex gap-3 rounded-lg border border-sidebar-border/70 bg-muted/30 p-3 text-sm text-muted-foreground dark:border-sidebar-border">
+                                    <Info
+                                        className="mt-0.5 size-4 shrink-0"
+                                        aria-hidden="true"
+                                    />
+
+                                    <p>
+                                        Dimensions organize units as weight,
+                                        volume, or count. Pack and
+                                        cross-dimension relationships remain
+                                        item-specific.
+                                    </p>
+                                </div>
+
+                                <div className="flex flex-wrap justify-end gap-2">
                                     <Button
                                         type="button"
                                         variant="outline"
                                         disabled={processing}
                                         onClick={() =>
-                                            sheet.onOpenChange(false)
+                                            dialog.onOpenChange(false)
                                         }
                                     >
                                         Cancel
@@ -229,13 +204,13 @@ function CreateUnitOfMeasureSheet({ trigger }: CreateUnitOfMeasureSheetProps) {
                                             ? 'Creating...'
                                             : 'Create unit'}
                                     </Button>
-                                </SheetFooter>
+                                </div>
                             </>
                         )}
                     </Form>
                 </div>
-            </SheetContent>
-        </Sheet>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -353,6 +328,7 @@ function EditUnitOfMeasureDialog({
                                         className="mt-0.5 size-4 shrink-0"
                                         aria-hidden="true"
                                     />
+
                                     <p>
                                         {unit.usageCount > 0
                                             ? `This unit is referenced by ${unit.usageCount.toLocaleString()} item configuration${unit.usageCount === 1 ? '' : 's'}. Existing inventory rules protect referenced symbols, dimensions, and active state.`
@@ -441,7 +417,7 @@ export default function UnitsOfMeasureIndex({
                     </div>
 
                     {canManage && (
-                        <CreateUnitOfMeasureSheet
+                        <CreateUnitOfMeasureDialog
                             trigger={
                                 <Button>
                                     <Plus
@@ -569,30 +545,35 @@ export default function UnitsOfMeasureIndex({
                                     >
                                         Name
                                     </th>
+
                                     <th
                                         scope="col"
                                         className="px-4 py-3 font-medium"
                                     >
                                         Symbol
                                     </th>
+
                                     <th
                                         scope="col"
                                         className="px-4 py-3 font-medium"
                                     >
                                         Dimension
                                     </th>
+
                                     <th
                                         scope="col"
                                         className="px-4 py-3 font-medium"
                                     >
                                         Status
                                     </th>
+
                                     <th
                                         scope="col"
                                         className="px-4 py-3 text-right font-medium"
                                     >
                                         Used by
                                     </th>
+
                                     <th
                                         scope="col"
                                         className="px-4 py-3 font-medium"
