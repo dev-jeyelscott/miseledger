@@ -4,23 +4,28 @@ namespace App\Http\Controllers\Suppliers;
 
 use App\Actions\Suppliers\SaveSupplier;
 use App\Enums\OrganizationPermission;
+use App\Enums\PurchaseOrderStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Suppliers\SaveSupplierRequest;
 use App\Models\InventoryItem;
 use App\Models\Organization;
+use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\SupplierItem;
 use App\Models\UnitOfMeasure;
+use Brick\Math\BigDecimal;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class SupplierController extends Controller
 {
     /**
-     * List suppliers from the active organization only.
+     * List the active organization's suppliers with bounded operational filtering.
      */
     public function index(Request $request): Response
     {
@@ -31,36 +36,370 @@ class SupplierController extends Controller
             $organization,
         );
 
-        $suppliers = $organization
-            ->suppliers()
+        $validated = $request->validate([
+            'search' => [
+                'nullable',
+                'string',
+                'max:120',
+            ],
+            'status' => [
+                'nullable',
+                'string',
+                Rule::in([
+                    'active',
+                    'inactive',
+                ]),
+            ],
+            'sort' => [
+                'nullable',
+                'string',
+                Rule::in([
+                    'name_asc',
+                    'name_desc',
+                    'code_asc',
+                    'code_desc',
+                    'items_desc',
+                ]),
+            ],
+            'per_page' => [
+                'nullable',
+                'integer',
+                Rule::in([
+                    10,
+                    25,
+                    50,
+                ]),
+            ],
+        ]);
+
+        $search = isset($validated['search'])
+            && is_string($validated['search'])
+                ? trim($validated['search'])
+                : null;
+
+        if ($search === '') {
+            $search = null;
+        }
+
+        $status = isset($validated['status'])
+            && is_string($validated['status'])
+                ? $validated['status']
+                : null;
+
+        $sort = isset($validated['sort'])
+            && is_string($validated['sort'])
+                ? $validated['sort']
+                : 'name_asc';
+
+        $perPage = isset($validated['per_page'])
+            ? (int) $validated['per_page']
+            : 10;
+
+        $query = Supplier::query()
+            ->select('suppliers.*')
+            ->where(
+                'organization_id',
+                $organization->id,
+            )
+            ->addSelect([
+                'last_purchase_order_number' => PurchaseOrder::query()
+                    ->select('number')
+                    ->whereColumn(
+                        'purchase_orders.supplier_id',
+                        'suppliers.id',
+                    )
+                    ->whereColumn(
+                        'purchase_orders.organization_id',
+                        'suppliers.organization_id',
+                    )
+                    ->orderByDesc('order_date')
+                    ->orderByDesc('id')
+                    ->limit(1),
+
+                'last_purchase_order_date' => PurchaseOrder::query()
+                    ->select('order_date')
+                    ->whereColumn(
+                        'purchase_orders.supplier_id',
+                        'suppliers.id',
+                    )
+                    ->whereColumn(
+                        'purchase_orders.organization_id',
+                        'suppliers.organization_id',
+                    )
+                    ->orderByDesc('order_date')
+                    ->orderByDesc('id')
+                    ->limit(1),
+            ])
             ->withCount([
                 'supplierItems as item_count',
-            ])
-            ->orderByDesc('active')
-            ->orderBy('name')
-            ->get()
+            ]);
+
+        if ($search !== null) {
+            $searchPattern = "%{$search}%";
+
+            $query->where(
+                function (
+                    EloquentBuilder $searchQuery,
+                ) use ($searchPattern): void {
+                    $searchQuery
+                        ->whereLike(
+                            'name',
+                            $searchPattern,
+                        )
+                        ->orWhereLike(
+                            'code',
+                            $searchPattern,
+                        )
+                        ->orWhereLike(
+                            'contact_name',
+                            $searchPattern,
+                        )
+                        ->orWhereLike(
+                            'email',
+                            $searchPattern,
+                        )
+                        ->orWhereLike(
+                            'phone',
+                            $searchPattern,
+                        );
+                },
+            );
+        }
+
+        if ($status !== null) {
+            $query->where(
+                'active',
+                $status === 'active',
+            );
+        }
+
+        switch ($sort) {
+            case 'name_desc':
+                $query
+                    ->orderByDesc('name')
+                    ->orderByDesc('id');
+
+                break;
+
+            case 'code_asc':
+                $query
+                    ->orderBy('code')
+                    ->orderBy('id');
+
+                break;
+
+            case 'code_desc':
+                $query
+                    ->orderByDesc('code')
+                    ->orderByDesc('id');
+
+                break;
+
+            case 'items_desc':
+                $query
+                    ->orderByDesc('item_count')
+                    ->orderBy('name')
+                    ->orderBy('id');
+
+                break;
+
+            case 'name_asc':
+            default:
+                $query
+                    ->orderBy('name')
+                    ->orderBy('id');
+
+                break;
+        }
+
+        $paginator = $query
+            ->paginate($perPage)
+            ->withQueryString();
+
+        $suppliers = collect($paginator->items())
             ->map(
-                static fn (Supplier $supplier): array => [
-                    'id' => $supplier->id,
-                    'name' => $supplier->name,
-                    'code' => $supplier->code,
-                    'contactName' => $supplier->contact_name,
-                    'email' => $supplier->email,
-                    'phone' => $supplier->phone,
-                    'itemCount' => $supplier->item_count ?? 0,
-                    'active' => $supplier->active,
-                ],
+                static function (Supplier $supplier): array {
+                    $lastPurchaseOrderNumber = $supplier->getAttribute(
+                        'last_purchase_order_number',
+                    );
+
+                    $lastPurchaseOrderDate = $supplier->getAttribute(
+                        'last_purchase_order_date',
+                    );
+
+                    return [
+                        'id' => $supplier->id,
+                        'name' => $supplier->name,
+                        'code' => $supplier->code,
+                        'contactName' => $supplier->contact_name,
+                        'email' => $supplier->email,
+                        'phone' => $supplier->phone,
+                        'paymentTerms' => $supplier->payment_terms,
+                        'leadTimeDays' => $supplier->lead_time_days,
+                        'itemCount' => (int) ($supplier->item_count ?? 0),
+                        'active' => $supplier->active,
+
+                        'lastPurchaseOrderNumber' => $lastPurchaseOrderNumber !== null
+                                ? (string) $lastPurchaseOrderNumber
+                                : null,
+
+                        'lastPurchaseOrderDate' => $lastPurchaseOrderDate !== null
+                                ? (string) $lastPurchaseOrderDate
+                                : null,
+                    ];
+                },
             )
             ->values()
             ->all();
 
+        $pageLinks = [];
+        $currentPage = $paginator->currentPage();
+        $lastPage = $paginator->lastPage();
+
+        if ($lastPage > 1) {
+            $pageStart = max(
+                1,
+                $currentPage - 2,
+            );
+
+            $pageEnd = min(
+                $lastPage,
+                $currentPage + 2,
+            );
+
+            foreach (
+                $paginator->getUrlRange(
+                    $pageStart,
+                    $pageEnd,
+                ) as $page => $url
+            ) {
+                $pageLinks[] = [
+                    'page' => $page,
+                    'url' => $url,
+                    'active' => $page === $currentPage,
+                ];
+            }
+        }
+
+        $canViewCosts = Gate::allows(
+            OrganizationPermission::CostsView->value,
+            $organization,
+        );
+
         return Inertia::render('suppliers/index', [
             'suppliers' => $suppliers,
+
+            'summary' => [
+                'totalSuppliers' => Supplier::query()
+                    ->where(
+                        'organization_id',
+                        $organization->id,
+                    )
+                    ->count(),
+
+                'activeSuppliers' => Supplier::query()
+                    ->where(
+                        'organization_id',
+                        $organization->id,
+                    )
+                    ->where('active', true)
+                    ->count(),
+
+                'linkedItems' => SupplierItem::query()
+                    ->where(
+                        'organization_id',
+                        $organization->id,
+                    )
+                    ->count(),
+
+                'openPurchaseOrders' => PurchaseOrder::query()
+                    ->where(
+                        'organization_id',
+                        $organization->id,
+                    )
+                    ->whereIn(
+                        'status',
+                        [
+                            PurchaseOrderStatus::Draft->value,
+                            PurchaseOrderStatus::Approved->value,
+                            PurchaseOrderStatus::PartiallyReceived->value,
+                        ],
+                    )
+                    ->count(),
+
+                'purchaseValueYtd' => $canViewCosts
+                    ? $this->purchaseValueYtd($organization)
+                    : null,
+            ],
+
+            'pagination' => [
+                'currentPage' => $currentPage,
+                'lastPage' => $lastPage,
+                'perPage' => $paginator->perPage(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+                'total' => $paginator->total(),
+                'previousPageUrl' => $paginator->previousPageUrl(),
+                'nextPageUrl' => $paginator->nextPageUrl(),
+                'pages' => $pageLinks,
+            ],
+
+            'filters' => [
+                'search' => $search,
+                'status' => $status,
+                'sort' => $sort,
+                'perPage' => $perPage,
+            ],
+
+            'currency' => $organization->currency,
+            'canViewCosts' => $canViewCosts,
+
             'canManage' => Gate::allows(
                 OrganizationPermission::PurchasingManage->value,
                 $organization,
             ),
         ]);
+    }
+
+    /**
+     * Calculate current-year committed PO value using decimal-safe arithmetic.
+     */
+    private function purchaseValueYtd(
+        Organization $organization,
+    ): string {
+        $total = BigDecimal::zero();
+        $currentYear = now($organization->timezone)->year;
+
+        $purchaseOrders = PurchaseOrder::query()
+            ->select([
+                'id',
+                'total',
+            ])
+            ->where(
+                'organization_id',
+                $organization->id,
+            )
+            ->whereYear(
+                'order_date',
+                $currentYear,
+            )
+            ->whereIn(
+                'status',
+                [
+                    PurchaseOrderStatus::Approved->value,
+                    PurchaseOrderStatus::PartiallyReceived->value,
+                    PurchaseOrderStatus::Received->value,
+                ],
+            )
+            ->cursor();
+
+        foreach ($purchaseOrders as $purchaseOrder) {
+            $total = $total->plus(
+                $purchaseOrder->total,
+            );
+        }
+
+        return (string) $total->toScale(2);
     }
 
     /**
