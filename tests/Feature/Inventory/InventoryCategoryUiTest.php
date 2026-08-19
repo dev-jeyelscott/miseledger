@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\File;
 
-test('inventory category index uses the approved compact management layout', function () {
+test('inventory category index uses the approved compact modal-first management layout', function () {
     $source = File::get(
         resource_path('js/pages/inventory/categories/index.tsx'),
     );
@@ -18,13 +18,17 @@ test('inventory category index uses the approved compact management layout', fun
         ->toContain('Status')
         ->toContain('Actions')
         ->toContain('<Badge')
+        ->toContain('CreateInventoryCategoryDialog')
         ->toContain('EditInventoryCategoryDialog')
+        ->toContain('DialogTrigger')
         ->toContain('useGuardedDialog')
         ->toContain('name="_modal"')
         ->toContain('PreviousPageButton')
         ->toContain('Create category')
         ->toContain('name="active"')
         ->toContain('Inactive categories')
+        ->not->toContain('create-category-heading')
+        ->not->toContain('Create a category using the form on this page.')
         ->not->toContain('Drag to reorder')
         ->not->toContain('DropdownMenu');
 });
@@ -38,5 +42,5 @@ test('inventory category redesign keeps management controls permission gated', f
         ->toContain('canManage')
         ->toContain('{canManage && (')
         ->toContain('InventoryCategoryController.store.form()')
-        ->toContain('InventoryCategoryController.update.form(category.id)');
+        ->toContain('InventoryCategoryController.update.form(');
 });

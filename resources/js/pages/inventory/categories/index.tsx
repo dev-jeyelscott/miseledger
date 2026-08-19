@@ -29,6 +29,10 @@ type Props = {
 
 type CategoryStatusFilter = 'all' | 'active' | 'inactive';
 
+type CreateInventoryCategoryDialogProps = {
+    trigger: ReactNode;
+};
+
 type EditInventoryCategoryDialogProps = {
     category: InventoryCategoryData;
     trigger: ReactNode;
@@ -37,6 +41,108 @@ type EditInventoryCategoryDialogProps = {
 /** Format a category count with the correct singular or plural label. */
 function formatCategoryCount(count: number): string {
     return `${count.toLocaleString()} ${count === 1 ? 'category' : 'categories'}`;
+}
+
+/** Create a lightweight category without leaving the category index. */
+function CreateInventoryCategoryDialog({
+    trigger,
+}: CreateInventoryCategoryDialogProps) {
+    const dialog = useGuardedDialog(
+        'Discard the new inventory category you entered?',
+    );
+
+    return (
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Create inventory category</DialogTitle>
+                    <DialogDescription>
+                        Add a category for organizing inventory master records.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div onChange={dialog.markDirty}>
+                    <Form
+                        {...InventoryCategoryController.store.form()}
+                        errorBag="createInventoryCategory"
+                        className="space-y-5"
+                        resetOnSuccess
+                        onSuccess={dialog.closeAfterSuccess}
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <input type="hidden" name="_modal" value="1" />
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="create-category-name">
+                                        Name
+                                    </Label>
+                                    <Input
+                                        id="create-category-name"
+                                        name="name"
+                                        required
+                                        autoFocus
+                                        placeholder="e.g., Dry Goods"
+                                    />
+                                    <InputError message={errors.name} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="create-category-active">
+                                        Status
+                                    </Label>
+                                    <select
+                                        id="create-category-active"
+                                        name="active"
+                                        defaultValue="1"
+                                        aria-describedby="create-category-status-help"
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    >
+                                        <option value="1">Active</option>
+                                        <option value="0">Inactive</option>
+                                    </select>
+                                    <p
+                                        id="create-category-status-help"
+                                        className="text-xs text-muted-foreground"
+                                    >
+                                        Inactive categories remain available for
+                                        existing records but are excluded from
+                                        new item category choices.
+                                    </p>
+                                    <InputError message={errors.active} />
+                                </div>
+
+                                <div className="flex flex-wrap justify-end gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={processing}
+                                        onClick={() =>
+                                            dialog.onOpenChange(false)
+                                        }
+                                    >
+                                        Cancel
+                                    </Button>
+
+                                    <Button type="submit" disabled={processing}>
+                                        <Plus
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        {processing
+                                            ? 'Creating...'
+                                            : 'Create category'}
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
 }
 
 /** Edit a lightweight category record without leaving the category index. */
@@ -121,13 +227,7 @@ function EditInventoryCategoryDialog({
                                     <InputError message={errors.active} />
                                 </div>
 
-                                <div className="flex flex-wrap gap-2">
-                                    <Button type="submit" disabled={processing}>
-                                        {processing
-                                            ? 'Saving...'
-                                            : 'Save category'}
-                                    </Button>
-
+                                <div className="flex flex-wrap justify-end gap-2">
                                     <Button
                                         type="button"
                                         variant="outline"
@@ -137,6 +237,12 @@ function EditInventoryCategoryDialog({
                                         }
                                     >
                                         Cancel
+                                    </Button>
+
+                                    <Button type="submit" disabled={processing}>
+                                        {processing
+                                            ? 'Saving...'
+                                            : 'Save category'}
                                     </Button>
                                 </div>
                             </>
@@ -199,290 +305,210 @@ export default function InventoryCategoriesIndex({
                         </p>
                     </div>
 
-                    <PreviousPageButton
-                        variant="outline"
-                        fallback={InventoryItemController.index().url}
-                    >
-                        Back to inventory
-                    </PreviousPageButton>
-                </div>
-
-                <div
-                    className={
-                        canManage
-                            ? 'grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]'
-                            : ''
-                    }
-                >
-                    <section
-                        aria-label="Inventory categories"
-                        className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card dark:border-sidebar-border"
-                    >
-                        <div className="grid gap-3 border-b border-sidebar-border/70 p-4 md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-center dark:border-sidebar-border">
-                            <div className="relative">
-                                <label
-                                    htmlFor="category-search"
-                                    className="sr-only"
-                                >
-                                    Search categories
-                                </label>
-                                <Search
-                                    className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                                    aria-hidden="true"
-                                />
-                                <Input
-                                    id="category-search"
-                                    type="search"
-                                    value={search}
-                                    onChange={(event) =>
-                                        setSearch(event.target.value)
-                                    }
-                                    placeholder="Search categories..."
-                                    className="pl-9"
-                                />
-                            </div>
-
-                            <div>
-                                <label
-                                    htmlFor="category-status-filter"
-                                    className="sr-only"
-                                >
-                                    Filter by status
-                                </label>
-                                <select
-                                    id="category-status-filter"
-                                    value={statusFilter}
-                                    onChange={(event) =>
-                                        setStatusFilter(
-                                            event.target
-                                                .value as CategoryStatusFilter,
-                                        )
-                                    }
-                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                >
-                                    <option value="all">All statuses</option>
-                                    <option value="active">Active</option>
-                                    <option value="inactive">Inactive</option>
-                                </select>
-                            </div>
-
-                            <div className="flex items-center gap-2 md:justify-end">
-                                <p
-                                    aria-live="polite"
-                                    className="text-sm whitespace-nowrap text-muted-foreground"
-                                >
-                                    {categoryCount}
-                                </p>
-
-                                {hasFilters && (
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                            setSearch('');
-                                            setStatusFilter('all');
-                                        }}
-                                    >
-                                        Reset
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                        {canManage && (
+                            <CreateInventoryCategoryDialog
+                                trigger={
+                                    <Button>
+                                        <Plus
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        Create category
                                     </Button>
-                                )}
-                            </div>
-                        </div>
+                                }
+                            />
+                        )}
 
-                        <div className="overflow-x-auto">
-                            <table className="w-full min-w-[560px] text-sm">
-                                <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-                                    <tr className="border-b border-sidebar-border/70 dark:border-sidebar-border">
-                                        <th
-                                            scope="col"
-                                            className="px-4 py-3 font-medium"
-                                        >
-                                            Category name
-                                        </th>
-                                        <th
-                                            scope="col"
-                                            className="w-36 px-4 py-3 font-medium"
-                                        >
-                                            Status
-                                        </th>
-
-                                        {canManage && (
-                                            <th
-                                                scope="col"
-                                                className="w-32 px-4 py-3 text-right font-medium"
-                                            >
-                                                Actions
-                                            </th>
-                                        )}
-                                    </tr>
-                                </thead>
-
-                                <tbody>
-                                    {filteredCategories.length === 0 ? (
-                                        <tr>
-                                            <td
-                                                colSpan={canManage ? 3 : 2}
-                                                className="px-4 py-12 text-center"
-                                            >
-                                                <div className="mx-auto max-w-sm">
-                                                    <p className="font-medium">
-                                                        {hasFilters
-                                                            ? 'No categories match these filters.'
-                                                            : 'No inventory categories have been created.'}
-                                                    </p>
-                                                    <p className="mt-1 text-sm text-muted-foreground">
-                                                        {hasFilters
-                                                            ? 'Adjust or reset the filters to see more categories.'
-                                                            : canManage
-                                                              ? 'Create a category using the form on this page.'
-                                                              : 'Categories will appear here when they are available.'}
-                                                    </p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        filteredCategories.map((category) => (
-                                            <tr
-                                                key={category.id}
-                                                className="border-b border-sidebar-border/70 transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
-                                            >
-                                                <td className="px-4 py-3">
-                                                    <span className="font-medium">
-                                                        {category.name}
-                                                    </span>
-                                                </td>
-
-                                                <td className="px-4 py-3">
-                                                    <Badge
-                                                        variant={
-                                                            category.active
-                                                                ? 'secondary'
-                                                                : 'outline'
-                                                        }
-                                                    >
-                                                        {category.active
-                                                            ? 'Active'
-                                                            : 'Inactive'}
-                                                    </Badge>
-                                                </td>
-
-                                                {canManage && (
-                                                    <td className="px-4 py-2 text-right">
-                                                        <EditInventoryCategoryDialog
-                                                            category={category}
-                                                            trigger={
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    aria-label={`Edit ${category.name}`}
-                                                                >
-                                                                    <Pencil
-                                                                        className="size-3.5"
-                                                                        aria-hidden="true"
-                                                                    />
-                                                                    Edit
-                                                                </Button>
-                                                            }
-                                                        />
-                                                    </td>
-                                                )}
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-
-                    {canManage && (
-                        <section
-                            aria-labelledby="create-category-heading"
-                            className="h-fit rounded-xl border border-sidebar-border/70 bg-card p-5 dark:border-sidebar-border"
+                        <PreviousPageButton
+                            variant="outline"
+                            fallback={InventoryItemController.index().url}
                         >
-                            <div className="mb-5">
-                                <h2
-                                    id="create-category-heading"
-                                    className="font-semibold"
-                                >
-                                    Create category
-                                </h2>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                    Add a category for organizing inventory
-                                    master records.
-                                </p>
-                            </div>
-
-                            <Form
-                                {...InventoryCategoryController.store.form()}
-                                className="space-y-5"
-                                resetOnSuccess
-                            >
-                                {({ processing, errors }) => (
-                                    <>
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="category-name">
-                                                Name
-                                            </Label>
-                                            <Input
-                                                id="category-name"
-                                                name="name"
-                                                required
-                                                placeholder="e.g., Dry Goods"
-                                            />
-                                            <InputError message={errors.name} />
-                                        </div>
-
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="category-active">
-                                                Status
-                                            </Label>
-                                            <select
-                                                id="category-active"
-                                                name="active"
-                                                defaultValue="1"
-                                                aria-describedby="create-category-status-help"
-                                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                            >
-                                                <option value="1">
-                                                    Active
-                                                </option>
-                                                <option value="0">
-                                                    Inactive
-                                                </option>
-                                            </select>
-                                            <p
-                                                id="create-category-status-help"
-                                                className="text-xs text-muted-foreground"
-                                            >
-                                                Inactive categories are kept for
-                                                records but excluded from new
-                                                item category choices.
-                                            </p>
-                                            <InputError
-                                                message={errors.active}
-                                            />
-                                        </div>
-
-                                        <Button
-                                            type="submit"
-                                            disabled={processing}
-                                            className="w-full"
-                                        >
-                                            <Plus
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                            {processing
-                                                ? 'Creating...'
-                                                : 'Create category'}
-                                        </Button>
-                                    </>
-                                )}
-                            </Form>
-                        </section>
-                    )}
+                            Back
+                        </PreviousPageButton>
+                    </div>
                 </div>
+
+                <section
+                    aria-label="Inventory categories"
+                    className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card dark:border-sidebar-border"
+                >
+                    <div className="grid gap-3 border-b border-sidebar-border/70 p-4 md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-center dark:border-sidebar-border">
+                        <div className="relative">
+                            <label
+                                htmlFor="category-search"
+                                className="sr-only"
+                            >
+                                Search categories
+                            </label>
+                            <Search
+                                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                                aria-hidden="true"
+                            />
+                            <Input
+                                id="category-search"
+                                type="search"
+                                value={search}
+                                onChange={(event) =>
+                                    setSearch(event.target.value)
+                                }
+                                placeholder="Search categories..."
+                                className="pl-9"
+                            />
+                        </div>
+
+                        <div>
+                            <label
+                                htmlFor="category-status-filter"
+                                className="sr-only"
+                            >
+                                Filter by status
+                            </label>
+                            <select
+                                id="category-status-filter"
+                                value={statusFilter}
+                                onChange={(event) =>
+                                    setStatusFilter(
+                                        event.target
+                                            .value as CategoryStatusFilter,
+                                    )
+                                }
+                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            >
+                                <option value="all">All statuses</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+
+                        <div className="flex items-center gap-2 md:justify-end">
+                            <p
+                                aria-live="polite"
+                                className="text-sm whitespace-nowrap text-muted-foreground"
+                            >
+                                {categoryCount}
+                            </p>
+
+                            {hasFilters && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                        setSearch('');
+                                        setStatusFilter('all');
+                                    }}
+                                >
+                                    Reset
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[560px] text-sm">
+                            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                                <tr className="border-b border-sidebar-border/70 dark:border-sidebar-border">
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium"
+                                    >
+                                        Category name
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        className="w-36 px-4 py-3 font-medium"
+                                    >
+                                        Status
+                                    </th>
+
+                                    {canManage && (
+                                        <th
+                                            scope="col"
+                                            className="w-32 px-4 py-3 text-right font-medium"
+                                        >
+                                            Actions
+                                        </th>
+                                    )}
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {filteredCategories.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={canManage ? 3 : 2}
+                                            className="px-4 py-12 text-center"
+                                        >
+                                            <div className="mx-auto max-w-sm">
+                                                <p className="font-medium">
+                                                    {hasFilters
+                                                        ? 'No categories match these filters.'
+                                                        : 'No inventory categories have been created.'}
+                                                </p>
+                                                <p className="mt-1 text-sm text-muted-foreground">
+                                                    {hasFilters
+                                                        ? 'Adjust or reset the filters to see more categories.'
+                                                        : canManage
+                                                          ? 'Create a category to start organizing inventory items.'
+                                                          : 'Categories will appear here when they are available.'}
+                                                </p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredCategories.map((category) => (
+                                        <tr
+                                            key={category.id}
+                                            className="border-b border-sidebar-border/70 transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
+                                        >
+                                            <td className="px-4 py-3">
+                                                <span className="font-medium">
+                                                    {category.name}
+                                                </span>
+                                            </td>
+
+                                            <td className="px-4 py-3">
+                                                <Badge
+                                                    variant={
+                                                        category.active
+                                                            ? 'secondary'
+                                                            : 'outline'
+                                                    }
+                                                >
+                                                    {category.active
+                                                        ? 'Active'
+                                                        : 'Inactive'}
+                                                </Badge>
+                                            </td>
+
+                                            {canManage && (
+                                                <td className="px-4 py-2 text-right">
+                                                    <EditInventoryCategoryDialog
+                                                        category={category}
+                                                        trigger={
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                aria-label={`Edit ${category.name}`}
+                                                            >
+                                                                <Pencil
+                                                                    className="size-3.5"
+                                                                    aria-hidden="true"
+                                                                />
+                                                                Edit
+                                                            </Button>
+                                                        }
+                                                    />
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
             </div>
         </>
     );
