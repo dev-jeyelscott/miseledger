@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Purchasing;
 use App\Actions\Purchasing\CancelGoodsReceipt;
 use App\Actions\Purchasing\FinalizeGoodsReceipt;
 use App\Actions\Purchasing\SaveGoodsReceipt;
+use App\Enums\GoodsReceiptStatus;
 use App\Enums\OrganizationPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Purchasing\GoodsReceiptTransitionRequest;
@@ -13,23 +14,47 @@ use App\Models\AuditLog;
 use App\Models\GoodsReceipt;
 use App\Models\GoodsReceiptLine;
 use App\Models\GoodsReceiptNonStockLine;
+use App\Models\Location;
 use App\Models\Organization;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\StorageLocation;
+use App\Models\Supplier;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
 use Brick\Math\BigDecimal;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/**
+ * @phpstan-type GoodsReceiptIndexFilters array{
+ *     search: string|null,
+ *     status: string|null,
+ *     supplierId: int|null,
+ *     locationId: int|null,
+ *     from: string|null,
+ *     to: string|null,
+ *     sort: string
+ * }
+ * @phpstan-type GoodsReceiptIndexSummary array{
+ *     totalCount: int,
+ *     draftCount: int,
+ *     finalizedCount: int,
+ *     receivedThisWeekCount: int
+ * }
+ */
 class GoodsReceiptController extends Controller
 {
     /**
-     * List receiving history for the active tenant.
+     * List tenant-scoped receiving history with operational filters and summaries.
      */
     public function index(Request $request): Response
     {
@@ -40,36 +65,67 @@ class GoodsReceiptController extends Controller
             $organization,
         );
 
-        $receipts = GoodsReceipt::query()
+        $filters = $this->resolveIndexFilters(
+            $request,
+            $organization,
+        );
+
+        $receiptsQuery = $this->indexQuery(
+            $organization,
+            $filters,
+        );
+
+        $this->applyIndexSort(
+            $receiptsQuery,
+            $filters['sort'],
+        );
+
+        $receipts = $receiptsQuery
             ->with([
                 'purchaseOrder:id,number',
                 'supplier:id,name',
                 'location:id,name',
                 'receiver:id,name',
             ])
-            ->where('organization_id', $organization->id)
-            ->orderByDesc('id')
-            ->get()
-            ->map(
+            ->withCount('lines')
+            ->paginate(25)
+            ->withQueryString()
+            ->through(
                 static fn (GoodsReceipt $receipt): array => [
                     'id' => $receipt->id,
                     'number' => $receipt->number,
                     'status' => $receipt->status->value,
+                    'purchaseOrderId' => $receipt->purchaseOrder->id,
                     'purchaseOrderNumber' => $receipt
                         ->purchaseOrder
                         ->number,
                     'supplierName' => $receipt->supplier->name,
                     'locationName' => $receipt->location->name,
+                    'acceptedLineCount' => (int) $receipt->getAttribute(
+                        'lines_count',
+                    ),
                     'receivedAt' => $receipt->received_at
                         ?->toIso8601String(),
                     'receivedBy' => $receipt->receiver?->name,
                 ],
             )
-            ->values()
-            ->all();
+            ->toArray();
 
         return Inertia::render('goods-receipts/index', [
             'receipts' => $receipts,
+            'summary' => $this->indexSummary($organization),
+            'supplierOptions' => $this->indexSupplierOptions(
+                $organization,
+            ),
+            'locationOptions' => $this->indexLocationOptions(
+                $organization,
+            ),
+            'filters' => $filters,
+            'timezone' => $organization->timezone,
+            'canFinalize' => Gate::allows(
+                OrganizationPermission::ReceivingFinalize->value,
+                $organization,
+            ),
         ]);
     }
 
@@ -313,6 +369,394 @@ class GoodsReceiptController extends Controller
         return to_route(
             'goods-receipts.edit',
             $goodsReceipt,
+        );
+    }
+
+    /**
+     * Validate and normalize server-authoritative Receiving list filters.
+     *
+     * @return GoodsReceiptIndexFilters
+     */
+    private function resolveIndexFilters(
+        Request $request,
+        Organization $organization,
+    ): array {
+        $validated = $request->validate([
+            'search' => [
+                'nullable',
+                'string',
+                'max:120',
+            ],
+            'status' => [
+                'nullable',
+                'string',
+                Rule::in(
+                    array_map(
+                        static fn (
+                            GoodsReceiptStatus $status,
+                        ): string => $status->value,
+                        GoodsReceiptStatus::cases(),
+                    ),
+                ),
+            ],
+            'supplier_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('suppliers', 'id')->where(
+                    fn (Builder $query): Builder => $query->where(
+                        'organization_id',
+                        $organization->id,
+                    ),
+                ),
+            ],
+            'location_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('locations', 'id')->where(
+                    fn (Builder $query): Builder => $query->where(
+                        'organization_id',
+                        $organization->id,
+                    ),
+                ),
+            ],
+            'from' => [
+                'nullable',
+                'date_format:Y-m-d',
+            ],
+            'to' => [
+                'nullable',
+                'date_format:Y-m-d',
+            ],
+            'sort' => [
+                'nullable',
+                'string',
+                Rule::in([
+                    'latest',
+                    'oldest',
+                    'receipt_asc',
+                    'receipt_desc',
+                    'status',
+                ]),
+            ],
+        ]);
+
+        $search = isset($validated['search'])
+            && is_string($validated['search'])
+                ? trim($validated['search'])
+                : null;
+
+        if ($search === '') {
+            $search = null;
+        }
+
+        $status = isset($validated['status'])
+            && is_string($validated['status'])
+                ? $validated['status']
+                : null;
+
+        $supplierId = isset($validated['supplier_id'])
+            ? (int) $validated['supplier_id']
+            : null;
+
+        $locationId = isset($validated['location_id'])
+            ? (int) $validated['location_id']
+            : null;
+
+        $from = isset($validated['from'])
+            && is_string($validated['from'])
+                ? $validated['from']
+                : null;
+
+        $to = isset($validated['to'])
+            && is_string($validated['to'])
+                ? $validated['to']
+                : null;
+
+        $sort = isset($validated['sort'])
+            && is_string($validated['sort'])
+                ? $validated['sort']
+                : 'latest';
+
+        if (
+            $from !== null
+            && $to !== null
+            && $from > $to
+        ) {
+            throw ValidationException::withMessages([
+                'from' => __(
+                    'The received-from date must not be after the received-to date.',
+                ),
+            ]);
+        }
+
+        return [
+            'search' => $search,
+            'status' => $status,
+            'supplierId' => $supplierId,
+            'locationId' => $locationId,
+            'from' => $from,
+            'to' => $to,
+            'sort' => $sort,
+        ];
+    }
+
+    /**
+     * Build the filtered tenant-scoped query used by the Receiving register.
+     *
+     * @param  GoodsReceiptIndexFilters  $filters
+     * @return EloquentBuilder<GoodsReceipt>
+     */
+    private function indexQuery(
+        Organization $organization,
+        array $filters,
+    ): EloquentBuilder {
+        $query = GoodsReceipt::query()
+            ->where('organization_id', $organization->id);
+
+        if ($filters['search'] !== null) {
+            $searchPattern = "%{$filters['search']}%";
+
+            $query->where(
+                function (
+                    EloquentBuilder $searchQuery,
+                ) use ($searchPattern): void {
+                    $searchQuery
+                        ->whereLike(
+                            'number',
+                            $searchPattern,
+                        )
+                        ->orWhereHas(
+                            'purchaseOrder',
+                            fn (
+                                EloquentBuilder $purchaseOrderQuery,
+                            ): EloquentBuilder => $purchaseOrderQuery
+                                ->whereLike(
+                                    'number',
+                                    $searchPattern,
+                                ),
+                        )
+                        ->orWhereHas(
+                            'supplier',
+                            fn (
+                                EloquentBuilder $supplierQuery,
+                            ): EloquentBuilder => $supplierQuery->whereLike(
+                                'name',
+                                $searchPattern,
+                            ),
+                        );
+                },
+            );
+        }
+
+        if ($filters['status'] !== null) {
+            $query->where(
+                'status',
+                $filters['status'],
+            );
+        }
+
+        if ($filters['supplierId'] !== null) {
+            $query->where(
+                'supplier_id',
+                $filters['supplierId'],
+            );
+        }
+
+        if ($filters['locationId'] !== null) {
+            $query->where(
+                'location_id',
+                $filters['locationId'],
+            );
+        }
+
+        if ($filters['from'] !== null) {
+            $from = CarbonImmutable::parse(
+                $filters['from'],
+                $organization->timezone,
+            )
+                ->startOfDay()
+                ->utc();
+
+            $query->where(
+                'received_at',
+                '>=',
+                $from,
+            );
+        }
+
+        if ($filters['to'] !== null) {
+            $to = CarbonImmutable::parse(
+                $filters['to'],
+                $organization->timezone,
+            )
+                ->endOfDay()
+                ->utc();
+
+            $query->where(
+                'received_at',
+                '<=',
+                $to,
+            );
+        }
+
+        return $query;
+    }
+
+    /**
+     * Apply deterministic database-portable ordering to Receiving rows.
+     *
+     * @param  EloquentBuilder<GoodsReceipt>  $query
+     */
+    private function applyIndexSort(
+        EloquentBuilder $query,
+        string $sort,
+    ): void {
+        if ($sort === 'oldest') {
+            $query->orderBy('id');
+
+            return;
+        }
+
+        if ($sort === 'receipt_asc') {
+            $query
+                ->orderBy('number')
+                ->orderBy('id');
+
+            return;
+        }
+
+        if ($sort === 'receipt_desc') {
+            $query
+                ->orderByDesc('number')
+                ->orderByDesc('id');
+
+            return;
+        }
+
+        if ($sort === 'status') {
+            $query
+                ->orderBy('status')
+                ->orderByDesc('id');
+
+            return;
+        }
+
+        $query->orderByDesc('id');
+    }
+
+    /**
+     * Build stable organization-wide Receiving metrics.
+     *
+     * @return GoodsReceiptIndexSummary
+     */
+    private function indexSummary(
+        Organization $organization,
+    ): array {
+        $businessNow = CarbonImmutable::now(
+            $organization->timezone,
+        );
+
+        $weekStart = $businessNow
+            ->startOfWeek()
+            ->startOfDay()
+            ->utc();
+
+        $weekEnd = $businessNow
+            ->endOfWeek()
+            ->endOfDay()
+            ->utc();
+
+        $baseQuery = GoodsReceipt::query()
+            ->where(
+                'organization_id',
+                $organization->id,
+            );
+
+        return [
+            'totalCount' => (clone $baseQuery)->count(),
+
+            'draftCount' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    GoodsReceiptStatus::Draft->value,
+                )
+                ->count(),
+
+            'finalizedCount' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    GoodsReceiptStatus::Finalized->value,
+                )
+                ->count(),
+
+            'receivedThisWeekCount' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    GoodsReceiptStatus::Finalized->value,
+                )
+                ->whereBetween(
+                    'received_at',
+                    [$weekStart, $weekEnd],
+                )
+                ->count(),
+        ];
+    }
+
+    /**
+     * Return every tenant supplier so historical receipts remain filterable.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    private function indexSupplierOptions(
+        Organization $organization,
+    ): array {
+        return array_values(
+            Supplier::query()
+                ->where(
+                    'organization_id',
+                    $organization->id,
+                )
+                ->orderBy('name')
+                ->get([
+                    'id',
+                    'name',
+                ])
+                ->map(
+                    static fn (Supplier $supplier): array => [
+                        'id' => $supplier->id,
+                        'name' => $supplier->name,
+                    ],
+                )
+                ->all(),
+        );
+    }
+
+    /**
+     * Return every tenant location so historical receipts remain filterable.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    private function indexLocationOptions(
+        Organization $organization,
+    ): array {
+        return array_values(
+            Location::query()
+                ->where(
+                    'organization_id',
+                    $organization->id,
+                )
+                ->orderBy('name')
+                ->get([
+                    'id',
+                    'name',
+                ])
+                ->map(
+                    static fn (Location $location): array => [
+                        'id' => $location->id,
+                        'name' => $location->name,
+                    ],
+                )
+                ->all(),
         );
     }
 
