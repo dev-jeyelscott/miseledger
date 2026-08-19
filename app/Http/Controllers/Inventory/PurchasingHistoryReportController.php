@@ -13,6 +13,7 @@ use App\Models\Supplier;
 use App\Support\Csv\CsvExport;
 use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -374,9 +375,10 @@ class PurchasingHistoryReportController extends Controller
     }
 
     /**
-     * Apply the persisted ordered-versus-received receipt-state rules.
+     * Apply persisted ordered-versus-received receipt-state rules to a
+     * relationship query without depending on a narrower related-model type.
      *
-     * @param  EloquentBuilder<PurchaseOrderLine>  $query
+     * @param  EloquentBuilder<Model>  $query
      */
     private function applyReceiptStateConstraint(
         EloquentBuilder $query,
