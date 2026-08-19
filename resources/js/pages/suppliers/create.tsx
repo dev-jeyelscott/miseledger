@@ -1,6 +1,7 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -114,14 +115,20 @@ export default function CreateSupplier() {
 
                                 <div className="flex gap-2">
                                     <Button type="submit" disabled={processing}>
-                                        Create supplier
+                                        {processing
+                                            ? 'Creating…'
+                                            : 'Create supplier'}
                                     </Button>
 
-                                    <Button variant="outline" asChild>
-                                        <Link href={SupplierController.index()}>
-                                            Cancel
-                                        </Link>
-                                    </Button>
+                                    <PreviousPageButton
+                                        variant="outline"
+                                        disabled={processing}
+                                        fallback={
+                                            SupplierController.index().url
+                                        }
+                                    >
+                                        Cancel
+                                    </PreviousPageButton>
                                 </div>
                             </>
                         )}

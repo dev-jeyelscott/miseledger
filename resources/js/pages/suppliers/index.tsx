@@ -15,10 +15,20 @@ import {
 
 import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
+import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 
 type SupplierStatus = 'active' | 'inactive';
@@ -82,6 +92,15 @@ type Props = {
     canManage: boolean;
 };
 
+type CreateSupplierDialogProps = {
+    trigger: React.ReactNode;
+};
+
+type EditSupplierDialogProps = {
+    supplier: Supplier;
+    trigger: React.ReactNode;
+};
+
 const selectClassName =
     'h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
@@ -136,6 +155,355 @@ function supplierStatusClassName(active: boolean): string {
         : 'border-border bg-muted/50 text-muted-foreground';
 }
 
+/** Create a supplier master record without leaving the directory context. */
+function CreateSupplierDialog({ trigger }: CreateSupplierDialogProps) {
+    const dialog = useGuardedDialog(
+        'Discard the supplier details you entered?',
+    );
+
+    return (
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>New supplier</DialogTitle>
+                    <DialogDescription>
+                        Add a vendor to the active organization.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div onChange={dialog.markDirty}>
+                    <Form
+                        {...SupplierController.store.form()}
+                        errorBag="createSupplier"
+                        className="space-y-5"
+                        resetOnSuccess
+                        onSuccess={dialog.closeAfterSuccess}
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <input type="hidden" name="_modal" value="1" />
+                                <input type="hidden" name="active" value="1" />
+
+                                <div className="grid gap-5 sm:grid-cols-2">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="create-supplier-name">
+                                            Name
+                                        </Label>
+                                        <Input
+                                            id="create-supplier-name"
+                                            name="name"
+                                            required
+                                            autoFocus
+                                            placeholder="Metro Food Supply"
+                                        />
+                                        <InputError message={errors.name} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="create-supplier-code">
+                                            Code
+                                        </Label>
+                                        <Input
+                                            id="create-supplier-code"
+                                            name="code"
+                                            required
+                                            placeholder="METRO"
+                                        />
+                                        <InputError message={errors.code} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="create-supplier-contact-name">
+                                            Contact name
+                                        </Label>
+                                        <Input
+                                            id="create-supplier-contact-name"
+                                            name="contact_name"
+                                        />
+                                        <InputError
+                                            message={errors.contact_name}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="create-supplier-email">
+                                            Email
+                                        </Label>
+                                        <Input
+                                            id="create-supplier-email"
+                                            name="email"
+                                            type="email"
+                                        />
+                                        <InputError message={errors.email} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="create-supplier-phone">
+                                            Phone
+                                        </Label>
+                                        <Input
+                                            id="create-supplier-phone"
+                                            name="phone"
+                                        />
+                                        <InputError message={errors.phone} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="create-supplier-payment-terms">
+                                            Payment terms
+                                        </Label>
+                                        <Input
+                                            id="create-supplier-payment-terms"
+                                            name="payment_terms"
+                                            placeholder="Net 30"
+                                        />
+                                        <InputError
+                                            message={errors.payment_terms}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="create-supplier-lead-time-days">
+                                            Lead time (days)
+                                        </Label>
+                                        <Input
+                                            id="create-supplier-lead-time-days"
+                                            name="lead_time_days"
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                        />
+                                        <InputError
+                                            message={errors.lead_time_days}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap justify-end gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={processing}
+                                        onClick={() =>
+                                            dialog.onOpenChange(false)
+                                        }
+                                    >
+                                        Cancel
+                                    </Button>
+
+                                    <Button type="submit" disabled={processing}>
+                                        {processing
+                                            ? 'Creating…'
+                                            : 'Create supplier'}
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/** Edit supplier master data without leaving the directory context. */
+function EditSupplierDialog({ supplier, trigger }: EditSupplierDialogProps) {
+    const dialog = useGuardedDialog(
+        'Discard the supplier changes you entered?',
+    );
+
+    return (
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Edit supplier</DialogTitle>
+                    <DialogDescription>
+                        Update {supplier.name} supplier master data.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div onChange={dialog.markDirty}>
+                    <Form
+                        {...SupplierController.update.form(supplier.id)}
+                        errorBag={`editSupplier${supplier.id}`}
+                        className="space-y-5"
+                        onSuccess={dialog.closeAfterSuccess}
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <input type="hidden" name="_modal" value="1" />
+
+                                <div className="grid gap-5 sm:grid-cols-2">
+                                    <div className="grid gap-2">
+                                        <Label
+                                            htmlFor={`edit-supplier-name-${supplier.id}`}
+                                        >
+                                            Name
+                                        </Label>
+                                        <Input
+                                            id={`edit-supplier-name-${supplier.id}`}
+                                            name="name"
+                                            required
+                                            autoFocus
+                                            defaultValue={supplier.name}
+                                        />
+                                        <InputError message={errors.name} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label
+                                            htmlFor={`edit-supplier-code-${supplier.id}`}
+                                        >
+                                            Code
+                                        </Label>
+                                        <Input
+                                            id={`edit-supplier-code-${supplier.id}`}
+                                            name="code"
+                                            required
+                                            defaultValue={supplier.code}
+                                        />
+                                        <InputError message={errors.code} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label
+                                            htmlFor={`edit-supplier-contact-name-${supplier.id}`}
+                                        >
+                                            Contact name
+                                        </Label>
+                                        <Input
+                                            id={`edit-supplier-contact-name-${supplier.id}`}
+                                            name="contact_name"
+                                            defaultValue={
+                                                supplier.contactName ?? ''
+                                            }
+                                        />
+                                        <InputError
+                                            message={errors.contact_name}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label
+                                            htmlFor={`edit-supplier-email-${supplier.id}`}
+                                        >
+                                            Email
+                                        </Label>
+                                        <Input
+                                            id={`edit-supplier-email-${supplier.id}`}
+                                            name="email"
+                                            type="email"
+                                            defaultValue={supplier.email ?? ''}
+                                        />
+                                        <InputError message={errors.email} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label
+                                            htmlFor={`edit-supplier-phone-${supplier.id}`}
+                                        >
+                                            Phone
+                                        </Label>
+                                        <Input
+                                            id={`edit-supplier-phone-${supplier.id}`}
+                                            name="phone"
+                                            defaultValue={supplier.phone ?? ''}
+                                        />
+                                        <InputError message={errors.phone} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label
+                                            htmlFor={`edit-supplier-payment-terms-${supplier.id}`}
+                                        >
+                                            Payment terms
+                                        </Label>
+                                        <Input
+                                            id={`edit-supplier-payment-terms-${supplier.id}`}
+                                            name="payment_terms"
+                                            defaultValue={
+                                                supplier.paymentTerms ?? ''
+                                            }
+                                            placeholder="Net 30"
+                                        />
+                                        <InputError
+                                            message={errors.payment_terms}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label
+                                            htmlFor={`edit-supplier-lead-time-days-${supplier.id}`}
+                                        >
+                                            Lead time (days)
+                                        </Label>
+                                        <Input
+                                            id={`edit-supplier-lead-time-days-${supplier.id}`}
+                                            name="lead_time_days"
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                            defaultValue={
+                                                supplier.leadTimeDays ?? ''
+                                            }
+                                        />
+                                        <InputError
+                                            message={errors.lead_time_days}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label
+                                            htmlFor={`edit-supplier-active-${supplier.id}`}
+                                        >
+                                            Status
+                                        </Label>
+                                        <select
+                                            id={`edit-supplier-active-${supplier.id}`}
+                                            name="active"
+                                            defaultValue={
+                                                supplier.active ? '1' : '0'
+                                            }
+                                            className={selectClassName}
+                                        >
+                                            <option value="1">Active</option>
+                                            <option value="0">Inactive</option>
+                                        </select>
+                                        <InputError message={errors.active} />
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap justify-end gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={processing}
+                                        onClick={() =>
+                                            dialog.onOpenChange(false)
+                                        }
+                                    >
+                                        Cancel
+                                    </Button>
+
+                                    <Button type="submit" disabled={processing}>
+                                        {processing
+                                            ? 'Saving…'
+                                            : 'Save supplier'}
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function SuppliersIndex({
     suppliers,
     summary,
@@ -175,12 +543,17 @@ export default function SuppliersIndex({
                     </div>
 
                     {canManage && (
-                        <Button asChild>
-                            <Link href={SupplierController.create()}>
-                                <Plus className="size-4" aria-hidden="true" />
-                                New supplier
-                            </Link>
-                        </Button>
+                        <CreateSupplierDialog
+                            trigger={
+                                <Button type="button">
+                                    <Plus
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    New supplier
+                                </Button>
+                            }
+                        />
                     )}
                 </div>
 
@@ -567,16 +940,28 @@ export default function SuppliersIndex({
                                             </td>
 
                                             <td className="px-4 py-3 text-right">
-                                                <Link
-                                                    href={SupplierController.edit(
-                                                        supplier.id,
-                                                    )}
-                                                    className="text-sm font-medium text-muted-foreground hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                                >
-                                                    {canManage
-                                                        ? 'Edit'
-                                                        : 'View'}
-                                                </Link>
+                                                {canManage ? (
+                                                    <EditSupplierDialog
+                                                        supplier={supplier}
+                                                        trigger={
+                                                            <button
+                                                                type="button"
+                                                                className="text-sm font-medium text-muted-foreground hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                        }
+                                                    />
+                                                ) : (
+                                                    <Link
+                                                        href={SupplierController.edit(
+                                                            supplier.id,
+                                                        )}
+                                                        className="text-sm font-medium text-muted-foreground hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                    >
+                                                        View
+                                                    </Link>
+                                                )}
                                             </td>
                                         </tr>
                                     ))

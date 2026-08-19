@@ -1,7 +1,8 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
 import SupplierItemController from '@/actions/App/Http/Controllers/Suppliers/SupplierItemController';
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -305,11 +306,13 @@ export default function EditSupplierItem({
                             </dl>
                         )}
 
-                        <Button variant="outline" className="mt-5" asChild>
-                            <Link href={SupplierController.edit(supplier.id)}>
-                                Back to supplier
-                            </Link>
-                        </Button>
+                        <PreviousPageButton
+                            variant="outline"
+                            className="mt-5"
+                            fallback={SupplierController.edit(supplier.id).url}
+                        >
+                            Back to supplier
+                        </PreviousPageButton>
                     </div>
 
                     <div className="space-y-6">

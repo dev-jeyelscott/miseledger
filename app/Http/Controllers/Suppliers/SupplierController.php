@@ -418,7 +418,7 @@ class SupplierController extends Controller
     }
 
     /**
-     * Persist a supplier.
+     * Persist a supplier while preserving index context for modal submissions.
      */
     public function store(
         SaveSupplierRequest $request,
@@ -439,6 +439,10 @@ class SupplierController extends Controller
             'type' => 'success',
             'message' => __('Supplier created.'),
         ]);
+
+        if ($request->boolean('_modal')) {
+            return back();
+        }
 
         return to_route('suppliers.edit', $supplier);
     }
@@ -560,7 +564,7 @@ class SupplierController extends Controller
     }
 
     /**
-     * Update supplier master data without deleting history.
+     * Update supplier master data while preserving index context for modal submissions.
      */
     public function update(
         SaveSupplierRequest $request,
@@ -587,6 +591,10 @@ class SupplierController extends Controller
             'type' => 'success',
             'message' => __('Supplier updated.'),
         ]);
+
+        if ($request->boolean('_modal')) {
+            return back();
+        }
 
         return to_route('suppliers.edit', $supplier);
     }
