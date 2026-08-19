@@ -37,7 +37,18 @@ class DemoSupplierSeeder extends Seeder
             /** @var array<string, Supplier> $suppliers */
             $suppliers = [];
 
-            /** @var list<array<string, mixed>> $supplierDefinitions */
+            /**
+             * @var list<array{
+             *     name: string,
+             *     code: string,
+             *     contact_name: string|null,
+             *     email: string|null,
+             *     phone: string|null,
+             *     payment_terms: string|null,
+             *     lead_time_days: int|null,
+             *     active: bool
+             * }> $supplierDefinitions
+             */
             $supplierDefinitions = [
                 [
                     'name' => 'Metro Fresh Foods Trading',
