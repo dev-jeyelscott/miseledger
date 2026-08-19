@@ -319,13 +319,6 @@ export default function InventoryCategoriesIndex({
                                 }
                             />
                         )}
-
-                        <PreviousPageButton
-                            variant="outline"
-                            fallback={InventoryItemController.index().url}
-                        >
-                            Back
-                        </PreviousPageButton>
                     </div>
                 </div>
 
@@ -509,6 +502,15 @@ export default function InventoryCategoriesIndex({
                         </table>
                     </div>
                 </section>
+
+                <div>
+                    <PreviousPageButton
+                        variant="outline"
+                        fallback={InventoryItemController.index().url}
+                    >
+                        Back to inventory
+                    </PreviousPageButton>
+                </div>
             </div>
         </>
     );
