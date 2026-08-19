@@ -914,6 +914,8 @@ class StockCountController extends Controller
      * deterministic and cannot accept arbitrary columns from the request.
      *
      * @param  EloquentBuilder<StockCount>  $query
+     * @param  'latest'|'number'|'status'|'counted_at'|'finalized_at'  $sort
+     * @param  'asc'|'desc'  $direction
      * @return EloquentBuilder<StockCount>
      */
     private function applyIndexSort(
