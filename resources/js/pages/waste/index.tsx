@@ -1079,14 +1079,30 @@ export default function WasteIndex({
                         <Form action={WasteController.index().url} method="get">
                             {({ errors, processing }) => (
                                 <div className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
-                                    <div className="flex items-center gap-2 border-b border-sidebar-border/70 px-4 py-3 dark:border-sidebar-border">
-                                        <Filter
-                                            className="size-4 text-muted-foreground"
-                                            aria-hidden="true"
-                                        />
-                                        <span className="text-sm font-semibold">
-                                            Report filters
-                                        </span>
+                                    <div className="flex items-center justify-between gap-2 border-b border-sidebar-border/70 px-4 py-3 dark:border-sidebar-border">
+                                        <div>
+                                            <Filter
+                                                className="size-4 text-muted-foreground"
+                                                aria-hidden="true"
+                                            />
+                                            <span className="text-sm font-semibold">
+                                                Report filters
+                                            </span>
+                                        </div>
+
+                                        <Button
+                                            variant="outline"
+                                            className="flex-1 xl:flex-none"
+                                            asChild
+                                        >
+                                            <a href={exportUrl}>
+                                                <Download
+                                                    className="size-4"
+                                                    aria-hidden="true"
+                                                />
+                                                Export CSV
+                                            </a>
+                                        </Button>
                                     </div>
 
                                     <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-7">
@@ -1288,19 +1304,6 @@ export default function WasteIndex({
                                                     />
                                                     Clear
                                                 </Link>
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                className="flex-1 xl:flex-none"
-                                                asChild
-                                            >
-                                                <a href={exportUrl}>
-                                                    <Download
-                                                        className="size-4"
-                                                        aria-hidden="true"
-                                                    />
-                                                    Export CSV
-                                                </a>
                                             </Button>
                                         </div>
 
