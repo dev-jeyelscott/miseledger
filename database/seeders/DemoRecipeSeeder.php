@@ -8,7 +8,6 @@ use App\Actions\Recipes\SaveRecipeVersion;
 use App\Enums\RecipeType;
 use App\Models\InventoryItem;
 use App\Models\Organization;
-use App\Models\Recipe;
 use App\Models\RecipeVersion;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
@@ -59,10 +58,10 @@ class DemoRecipeSeeder extends Seeder
                     'yield_unit_id' => $this->unit($organization, 'l')->id,
                     'notes' => 'Standard two-liter house marinade batch.',
                     'components' => [
-                        $this->itemComponent($organization, 'SOY-SAUCE', '1.200000', 'l', '100.0000'),
-                        $this->itemComponent($organization, 'CANE-VINEGAR', '0.600000', 'l', '100.0000'),
-                        $this->itemComponent($organization, 'GARLIC', '0.150000', 'kg', '88.0000'),
-                        $this->itemComponent($organization, 'BROWN-SUGAR', '0.080000', 'kg', '100.0000'),
+                        $this->itemComponent($organization, 'SOY-SAUCE', '1.200000', 'l', '100.00'),
+                        $this->itemComponent($organization, 'CANE-VINEGAR', '0.600000', 'l', '100.00'),
+                        $this->itemComponent($organization, 'GARLIC', '0.150000', 'kg', '88.00'),
+                        $this->itemComponent($organization, 'BROWN-SUGAR', '0.080000', 'kg', '100.00'),
                     ],
                 ],
             );
@@ -100,9 +99,9 @@ class DemoRecipeSeeder extends Seeder
                     'yield_unit_id' => $this->unit($organization, 'kg')->id,
                     'notes' => 'Five-kilogram production batch for branch service.',
                     'components' => [
-                        $this->itemComponent($organization, 'JASMINE-RICE', '5.000000', 'kg', '100.0000'),
-                        $this->itemComponent($organization, 'GARLIC', '0.120000', 'kg', '88.0000'),
-                        $this->itemComponent($organization, 'COOKING-OIL', '0.100000', 'l', '100.0000'),
+                        $this->itemComponent($organization, 'JASMINE-RICE', '5.000000', 'kg', '100.00'),
+                        $this->itemComponent($organization, 'GARLIC', '0.120000', 'kg', '88.00'),
+                        $this->itemComponent($organization, 'COOKING-OIL', '0.100000', 'l', '100.00'),
                     ],
                 ],
             );
@@ -138,9 +137,9 @@ class DemoRecipeSeeder extends Seeder
                     'yield_unit_id' => $this->unit($organization, 'piece')->id,
                     'notes' => 'Standard single-serve iced latte formulation.',
                     'components' => [
-                        $this->itemComponent($organization, 'COFFEE-BEAN', '0.018000', 'kg', '100.0000'),
-                        $this->itemComponent($organization, 'FRESH-MILK', '0.180000', 'l', '100.0000'),
-                        $this->itemComponent($organization, 'BROWN-SUGAR', '0.015000', 'kg', '100.0000'),
+                        $this->itemComponent($organization, 'COFFEE-BEAN', '0.018000', 'kg', '100.00'),
+                        $this->itemComponent($organization, 'FRESH-MILK', '0.180000', 'l', '100.00'),
+                        $this->itemComponent($organization, 'BROWN-SUGAR', '0.015000', 'kg', '100.00'),
                     ],
                 ],
             );
@@ -176,10 +175,10 @@ class DemoRecipeSeeder extends Seeder
                     'yield_unit_id' => $this->unit($organization, 'piece')->id,
                     'notes' => 'Current plated Chicken Adobo recipe.',
                     'components' => [
-                        $this->itemComponent($organization, 'CHK-THIGH', '0.250000', 'kg', '92.0000'),
+                        $this->itemComponent($organization, 'CHK-THIGH', '0.250000', 'kg', '92.00'),
                         $this->recipeComponent($organization, $marinadeV1, '0.120000', 'l'),
-                        $this->itemComponent($organization, 'RED-ONION', '0.060000', 'kg', '90.0000'),
-                        $this->itemComponent($organization, 'COOKING-OIL', '0.020000', 'l', '100.0000'),
+                        $this->itemComponent($organization, 'RED-ONION', '0.060000', 'kg', '90.00'),
+                        $this->itemComponent($organization, 'COOKING-OIL', '0.020000', 'l', '100.00'),
                     ],
                 ],
             );
@@ -205,10 +204,10 @@ class DemoRecipeSeeder extends Seeder
                     'yield_unit_id' => $this->unit($organization, 'piece')->id,
                     'notes' => 'Draft revision under kitchen tasting review; not yet effective.',
                     'components' => [
-                        $this->itemComponent($organization, 'CHK-THIGH', '0.230000', 'kg', '92.0000'),
+                        $this->itemComponent($organization, 'CHK-THIGH', '0.230000', 'kg', '92.00'),
                         $this->recipeComponent($organization, $marinadeV1, '0.100000', 'l'),
-                        $this->itemComponent($organization, 'RED-ONION', '0.050000', 'kg', '90.0000'),
-                        $this->itemComponent($organization, 'COOKING-OIL', '0.018000', 'l', '100.0000'),
+                        $this->itemComponent($organization, 'RED-ONION', '0.050000', 'kg', '90.00'),
+                        $this->itemComponent($organization, 'COOKING-OIL', '0.018000', 'l', '100.00'),
                     ],
                 ],
             );
@@ -274,7 +273,7 @@ class DemoRecipeSeeder extends Seeder
             'unit_of_measure_id' => $this
                 ->unit($organization, $unitSymbol)
                 ->id,
-            'yield_percentage' => '100.0000',
+            'yield_percentage' => '100.00',
             'notes' => null,
         ];
     }
