@@ -1,8 +1,12 @@
 import { Form, Head } from '@inertiajs/react';
+import { Plus, Search } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import OrganizationLocationController from '@/actions/App/Http/Controllers/OrganizationLocationController';
 import OrganizationStorageLocationController from '@/actions/App/Http/Controllers/OrganizationStorageLocationController';
 import InputError from '@/components/input-error';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -28,36 +32,166 @@ type Props = {
     storageLocations: StorageLocationSummary[];
 };
 
+type StorageLocationStatusFilter = 'all' | 'active' | 'inactive';
+
+type CreateStorageLocationDialogProps = {
+    organization: OrganizationSummary;
+    location: LocationSummary;
+    trigger: ReactNode;
+};
+
 type EditStorageLocationDialogProps = {
     organization: OrganizationSummary;
     location: LocationSummary;
     storageLocation: StorageLocationSummary;
+    trigger: ReactNode;
 };
+
+/** Format a storage-location count with the correct singular or plural label. */
+function formatStorageLocationCount(count: number): string {
+    return `${count.toLocaleString()} ${
+        count === 1 ? 'storage location' : 'storage locations'
+    }`;
+}
+
+/** Create a storage location without leaving the parent location workspace. */
+function CreateStorageLocationDialog({
+    organization,
+    location,
+    trigger,
+}: CreateStorageLocationDialogProps) {
+    const dialog = useGuardedDialog(
+        'Discard the new storage-location details you entered?',
+    );
+
+    return (
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Add storage location</DialogTitle>
+                    <DialogDescription>
+                        Create a storage area inside {location.name}. Codes must
+                        be unique within this restaurant location.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div onChange={dialog.markDirty}>
+                    <Form
+                        {...OrganizationStorageLocationController.store.form([
+                            organization.id,
+                            location.id,
+                        ])}
+                        errorBag="createStorageLocation"
+                        className="space-y-5"
+                        resetOnSuccess
+                        onSuccess={dialog.closeAfterSuccess}
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <input type="hidden" name="active" value="1" />
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="create-storage-location-name">
+                                        Storage location name
+                                    </Label>
+
+                                    <Input
+                                        id="create-storage-location-name"
+                                        name="name"
+                                        required
+                                        autoFocus
+                                        autoComplete="off"
+                                        placeholder="e.g., Walk-in Chiller"
+                                    />
+
+                                    <InputError message={errors.name} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="create-storage-location-code">
+                                        Storage location code
+                                    </Label>
+
+                                    <Input
+                                        id="create-storage-location-code"
+                                        name="code"
+                                        required
+                                        autoComplete="off"
+                                        placeholder="e.g., CHILLER"
+                                        aria-describedby="create-storage-location-code-help"
+                                    />
+
+                                    <p
+                                        id="create-storage-location-code-help"
+                                        className="text-xs text-muted-foreground"
+                                    >
+                                        Letters, numbers, hyphens, and
+                                        underscores only. Codes must be unique
+                                        within this restaurant location.
+                                    </p>
+
+                                    <InputError message={errors.code} />
+                                </div>
+
+                                <p className="text-xs text-muted-foreground">
+                                    New storage locations are active by default.
+                                </p>
+
+                                <div className="flex flex-wrap justify-end gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={processing}
+                                        onClick={() =>
+                                            dialog.onOpenChange(false)
+                                        }
+                                    >
+                                        Cancel
+                                    </Button>
+
+                                    <Button type="submit" disabled={processing}>
+                                        <Plus
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        {processing
+                                            ? 'Adding...'
+                                            : 'Add storage location'}
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 /** Edit one storage location without leaving its parent management workspace. */
 function EditStorageLocationDialog({
     organization,
     location,
     storageLocation,
+    trigger,
 }: EditStorageLocationDialogProps) {
     const dialog = useGuardedDialog(
         'Discard the storage-location changes you entered?',
     );
     const fieldPrefix = `edit-storage-location-${storageLocation.id}`;
+    const statusHelpId = `${fieldPrefix}-status-help`;
 
     return (
         <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
-            <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                    Edit
-                </Button>
-            </DialogTrigger>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
 
-            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-xl">
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>Edit storage location</DialogTitle>
                     <DialogDescription>
-                        {organization.name} · {location.name}
+                        Update {storageLocation.name} inside {location.name}.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -76,27 +210,40 @@ function EditStorageLocationDialog({
                             <>
                                 <div className="grid gap-2">
                                     <Label htmlFor={`${fieldPrefix}-name`}>
-                                        Name
+                                        Storage location name
                                     </Label>
+
                                     <Input
                                         id={`${fieldPrefix}-name`}
                                         name="name"
                                         required
+                                        autoFocus
+                                        autoComplete="off"
                                         defaultValue={storageLocation.name}
                                     />
+
                                     <InputError message={errors.name} />
                                 </div>
 
                                 <div className="grid gap-2">
                                     <Label htmlFor={`${fieldPrefix}-code`}>
-                                        Code
+                                        Storage location code
                                     </Label>
+
                                     <Input
                                         id={`${fieldPrefix}-code`}
                                         name="code"
                                         required
+                                        autoComplete="off"
                                         defaultValue={storageLocation.code}
                                     />
+
+                                    <p className="text-xs text-muted-foreground">
+                                        Letters, numbers, hyphens, and
+                                        underscores only. Codes must remain
+                                        unique within this restaurant location.
+                                    </p>
+
                                     <InputError message={errors.code} />
                                 </div>
 
@@ -104,24 +251,33 @@ function EditStorageLocationDialog({
                                     <Label htmlFor={`${fieldPrefix}-active`}>
                                         Status
                                     </Label>
+
                                     <select
                                         id={`${fieldPrefix}-active`}
                                         name="active"
                                         defaultValue={
                                             storageLocation.active ? '1' : '0'
                                         }
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        aria-describedby={statusHelpId}
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="1">Active</option>
                                         <option value="0">Inactive</option>
                                     </select>
+
+                                    <p
+                                        id={statusHelpId}
+                                        className="text-xs text-muted-foreground"
+                                    >
+                                        Deactivation may be blocked while a
+                                        shipped stock transfer is awaiting
+                                        receipt here.
+                                    </p>
+
                                     <InputError message={errors.active} />
                                 </div>
 
-                                <div className="flex flex-wrap gap-2">
-                                    <Button type="submit" disabled={processing}>
-                                        Save storage location
-                                    </Button>
+                                <div className="flex flex-wrap justify-end gap-2">
                                     <Button
                                         type="button"
                                         variant="outline"
@@ -131,6 +287,12 @@ function EditStorageLocationDialog({
                                         }
                                     >
                                         Cancel
+                                    </Button>
+
+                                    <Button type="submit" disabled={processing}>
+                                        {processing
+                                            ? 'Saving...'
+                                            : 'Save storage location'}
                                     </Button>
                                 </div>
                             </>
@@ -142,124 +304,319 @@ function EditStorageLocationDialog({
     );
 }
 
+/** Render storage locations as a compact operational management workspace. */
 export default function StorageLocationsIndex({
     organization,
     location,
     storageLocations,
 }: Props) {
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] =
+        useState<StorageLocationStatusFilter>('all');
+
+    const filteredStorageLocations = useMemo(() => {
+        const normalizedSearch = search.trim().toLowerCase();
+
+        return storageLocations.filter((storageLocation) => {
+            const matchesSearch =
+                normalizedSearch === '' ||
+                storageLocation.name.toLowerCase().includes(normalizedSearch) ||
+                storageLocation.code.toLowerCase().includes(normalizedSearch);
+
+            const matchesStatus =
+                statusFilter === 'all' ||
+                (statusFilter === 'active' && storageLocation.active) ||
+                (statusFilter === 'inactive' && !storageLocation.active);
+
+            return matchesSearch && matchesStatus;
+        });
+    }, [search, statusFilter, storageLocations]);
+
+    const activeStorageLocationCount = storageLocations.filter(
+        (storageLocation) => storageLocation.active,
+    ).length;
+
+    const hasFilters = search.trim() !== '' || statusFilter !== 'all';
+
+    const storageLocationCount =
+        filteredStorageLocations.length === storageLocations.length
+            ? formatStorageLocationCount(storageLocations.length)
+            : `${filteredStorageLocations.length.toLocaleString()} of ${formatStorageLocationCount(
+                  storageLocations.length,
+              )}`;
+
     return (
         <>
             <Head title={`${location.name} storage locations`} />
 
-            <div className="flex flex-1 flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-2xl font-semibold">
-                        Storage locations
-                    </h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        {organization.name} · {location.name}
-                    </p>
-                </div>
+            <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                    <div>
+                        <h1 className="text-2xl font-semibold tracking-tight">
+                            Storage locations
+                        </h1>
 
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-                    <div className="rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                        <div className="border-b border-sidebar-border/70 px-5 py-4 dark:border-sidebar-border">
-                            <h2 className="font-medium">
-                                Current storage locations
-                            </h2>
-                        </div>
-
-                        {storageLocations.length === 0 ? (
-                            <div className="px-5 py-8 text-sm text-muted-foreground">
-                                No storage locations are configured.
-                            </div>
-                        ) : (
-                            <div className="divide-y divide-sidebar-border/70 dark:divide-sidebar-border">
-                                {storageLocations.map((storageLocation) => (
-                                    <div
-                                        key={storageLocation.id}
-                                        className="flex items-center justify-between gap-4 px-5 py-4"
-                                    >
-                                        <div className="min-w-0">
-                                            <p className="truncate font-medium">
-                                                {storageLocation.name}
-                                            </p>
-                                            <p className="mt-1 text-sm text-muted-foreground">
-                                                {storageLocation.code} ·{' '}
-                                                {storageLocation.active
-                                                    ? 'Active'
-                                                    : 'Inactive'}
-                                            </p>
-                                        </div>
-
-                                        <EditStorageLocationDialog
-                                            organization={organization}
-                                            location={location}
-                                            storageLocation={storageLocation}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                            Manage storage areas for {organization.name} ·{' '}
+                            {location.name}.
+                        </p>
                     </div>
 
-                    <div className="h-fit rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                        <div className="mb-5">
-                            <h2 className="font-medium">
+                    <CreateStorageLocationDialog
+                        organization={organization}
+                        location={location}
+                        trigger={
+                            <Button>
+                                <Plus className="size-4" aria-hidden="true" />
                                 Add storage location
-                            </h2>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                Codes must be unique inside this restaurant
-                                location.
-                            </p>
+                            </Button>
+                        }
+                    />
+                </div>
+
+                <section
+                    aria-label="Storage location summary"
+                    className="grid max-w-xl gap-3 sm:grid-cols-2"
+                >
+                    <div className="rounded-xl border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                        <p className="text-sm text-muted-foreground">
+                            Total storage locations
+                        </p>
+
+                        <p className="mt-1 text-2xl font-semibold tabular-nums">
+                            {storageLocations.length.toLocaleString()}
+                        </p>
+                    </div>
+
+                    <div className="rounded-xl border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                        <p className="text-sm text-muted-foreground">
+                            Active locations
+                        </p>
+
+                        <p className="mt-1 text-2xl font-semibold tabular-nums">
+                            {activeStorageLocationCount.toLocaleString()}
+                        </p>
+                    </div>
+                </section>
+
+                <section
+                    aria-label="Storage locations"
+                    className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card dark:border-sidebar-border"
+                >
+                    <div className="grid gap-3 border-b border-sidebar-border/70 p-4 md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-center dark:border-sidebar-border">
+                        <div className="relative">
+                            <label
+                                htmlFor="storage-location-search"
+                                className="sr-only"
+                            >
+                                Search storage locations
+                            </label>
+
+                            <Search
+                                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                                aria-hidden="true"
+                            />
+
+                            <Input
+                                id="storage-location-search"
+                                type="search"
+                                value={search}
+                                onChange={(event) =>
+                                    setSearch(event.target.value)
+                                }
+                                placeholder="Search storage locations by name or code..."
+                                className="pl-9"
+                            />
                         </div>
 
-                        <Form
-                            {...OrganizationStorageLocationController.store.form(
-                                [organization.id, location.id],
+                        <div>
+                            <label
+                                htmlFor="storage-location-status-filter"
+                                className="sr-only"
+                            >
+                                Filter storage locations by status
+                            </label>
+
+                            <select
+                                id="storage-location-status-filter"
+                                value={statusFilter}
+                                onChange={(event) =>
+                                    setStatusFilter(
+                                        event.target
+                                            .value as StorageLocationStatusFilter,
+                                    )
+                                }
+                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            >
+                                <option value="all">All statuses</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+
+                        <div className="flex items-center gap-2 md:justify-end">
+                            <p
+                                aria-live="polite"
+                                className="text-sm whitespace-nowrap text-muted-foreground"
+                            >
+                                {storageLocationCount}
+                            </p>
+
+                            {hasFilters && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                        setSearch('');
+                                        setStatusFilter('all');
+                                    }}
+                                >
+                                    Reset
+                                </Button>
                             )}
-                            errorBag="createStorageLocation"
-                            className="space-y-5"
-                            resetOnSuccess
-                        >
-                            {({ processing, errors }) => (
-                                <>
-                                    <input
-                                        type="hidden"
-                                        name="active"
-                                        value="1"
-                                    />
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="name">Name</Label>
-                                        <Input
-                                            id="name"
-                                            name="name"
-                                            required
-                                            placeholder="Walk-in Chiller"
-                                        />
-                                        <InputError message={errors.name} />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="code">Code</Label>
-                                        <Input
-                                            id="code"
-                                            name="code"
-                                            required
-                                            placeholder="CHILLER"
-                                        />
-                                        <InputError message={errors.code} />
-                                    </div>
-
-                                    <Button type="submit" disabled={processing}>
-                                        Add storage location
-                                    </Button>
-                                </>
-                            )}
-                        </Form>
+                        </div>
                     </div>
-                </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[680px] text-sm">
+                            <caption className="sr-only">
+                                Storage locations configured for {location.name}
+                            </caption>
+
+                            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                                <tr className="border-b border-sidebar-border/70 dark:border-sidebar-border">
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium"
+                                    >
+                                        Name
+                                    </th>
+
+                                    <th
+                                        scope="col"
+                                        className="w-44 px-4 py-3 font-medium"
+                                    >
+                                        Code
+                                    </th>
+
+                                    <th
+                                        scope="col"
+                                        className="w-40 px-4 py-3 font-medium"
+                                    >
+                                        Status
+                                    </th>
+
+                                    <th
+                                        scope="col"
+                                        className="w-32 px-4 py-3 text-right font-medium"
+                                    >
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {filteredStorageLocations.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={4}
+                                            className="px-4 py-12 text-center"
+                                        >
+                                            <div className="mx-auto max-w-sm">
+                                                <p className="font-medium">
+                                                    {hasFilters
+                                                        ? 'No storage locations match these filters.'
+                                                        : 'No storage locations have been configured yet.'}
+                                                </p>
+
+                                                <p className="mt-1 text-sm text-muted-foreground">
+                                                    {hasFilters
+                                                        ? 'Adjust or reset the filters to see more storage locations.'
+                                                        : 'Add your first storage location to organize inventory inside this restaurant location.'}
+                                                </p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredStorageLocations.map(
+                                        (storageLocation) => (
+                                            <tr
+                                                key={storageLocation.id}
+                                                className="border-b border-sidebar-border/70 transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
+                                            >
+                                                <td className="px-4 py-3">
+                                                    <span className="font-medium">
+                                                        {storageLocation.name}
+                                                    </span>
+                                                </td>
+
+                                                <td className="px-4 py-3">
+                                                    <span className="rounded-md bg-muted px-2 py-1 font-mono text-xs">
+                                                        {storageLocation.code}
+                                                    </span>
+                                                </td>
+
+                                                <td className="px-4 py-3">
+                                                    <Badge
+                                                        variant={
+                                                            storageLocation.active
+                                                                ? 'secondary'
+                                                                : 'outline'
+                                                        }
+                                                        className={
+                                                            storageLocation.active
+                                                                ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                                                : 'text-muted-foreground'
+                                                        }
+                                                    >
+                                                        <span
+                                                            className={
+                                                                storageLocation.active
+                                                                    ? 'size-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400'
+                                                                    : 'size-1.5 rounded-full bg-muted-foreground'
+                                                            }
+                                                            aria-hidden="true"
+                                                        />
+                                                        {storageLocation.active
+                                                            ? 'Active'
+                                                            : 'Inactive'}
+                                                    </Badge>
+                                                </td>
+
+                                                <td className="px-4 py-2">
+                                                    <div
+                                                        className="flex justify-end"
+                                                        aria-label={`Actions for ${storageLocation.name}`}
+                                                    >
+                                                        <EditStorageLocationDialog
+                                                            organization={
+                                                                organization
+                                                            }
+                                                            location={location}
+                                                            storageLocation={
+                                                                storageLocation
+                                                            }
+                                                            trigger={
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    aria-label={`Edit ${storageLocation.name}`}
+                                                                >
+                                                                    Edit
+                                                                </Button>
+                                                            }
+                                                        />
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ),
+                                    )
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
 
                 <div>
                     <PreviousPageButton
