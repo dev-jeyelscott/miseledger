@@ -119,6 +119,7 @@ test('database seeder creates a connected presentation-ready demo dataset', func
         ->and(
             InventoryItem::query()
                 ->where('organization_id', $organization->id)
+                ->where('active', true)
                 ->whereDoesntHave(
                     'baseUnitOfMeasure',
                     fn ($query) => $query
@@ -127,7 +128,7 @@ test('database seeder creates a connected presentation-ready demo dataset', func
                 )
                 ->count(),
         )
-        ->toBe(1);
+        ->toBe(0);
 
     $inactiveItem = InventoryItem::query()
         ->where('organization_id', $organization->id)
