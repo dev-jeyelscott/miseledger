@@ -6,6 +6,7 @@ use App\Actions\Purchasing\ApprovePurchaseOrder;
 use App\Actions\Purchasing\CancelPurchaseOrder;
 use App\Actions\Purchasing\SavePurchaseOrder;
 use App\Enums\OrganizationPermission;
+use App\Enums\PurchaseOrderStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Purchasing\PurchaseOrderTransitionRequest;
 use App\Http\Requests\Purchasing\SavePurchaseOrderRequest;
@@ -16,16 +17,38 @@ use App\Models\PurchaseOrderLine;
 use App\Models\Supplier;
 use App\Models\SupplierItem;
 use App\Models\User;
+use Brick\Math\BigDecimal;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/**
+ * @phpstan-type PurchaseOrderIndexFilters array{
+ *     search: string|null,
+ *     status: string|null,
+ *     supplierId: int|null,
+ *     locationId: int|null,
+ *     from: string|null,
+ *     to: string|null
+ * }
+ * @phpstan-type PurchaseOrderIndexSummary array{
+ *     openCount: int,
+ *     awaitingDeliveryCount: int,
+ *     partiallyReceivedCount: int,
+ *     thisMonthSpend: string|null
+ * }
+ */
 class PurchaseOrderController extends Controller
 {
     /**
-     * List tenant-scoped purchase orders.
+     * List tenant-scoped purchase orders with operational filters and summaries.
      */
     public function index(Request $request): Response
     {
@@ -36,16 +59,24 @@ class PurchaseOrderController extends Controller
             $organization,
         );
 
-        $purchaseOrders = PurchaseOrder::query()
+        $filters = $this->resolveIndexFilters($request, $organization);
+
+        $canViewCosts = Gate::allows(
+            OrganizationPermission::CostsView->value,
+            $organization,
+        );
+
+        $purchaseOrders = $this->indexQuery($organization, $filters)
             ->with([
                 'supplier:id,name',
                 'location:id,name',
             ])
-            ->where('organization_id', $organization->id)
+            ->withCount('lines')
             ->orderByDesc('order_date')
             ->orderByDesc('id')
-            ->get()
-            ->map(
+            ->paginate(25)
+            ->withQueryString()
+            ->through(
                 static fn (PurchaseOrder $purchaseOrder): array => [
                     'id' => $purchaseOrder->id,
                     'number' => $purchaseOrder->number,
@@ -57,19 +88,33 @@ class PurchaseOrderController extends Controller
                     'expectedDeliveryDate' => $purchaseOrder
                         ->expected_delivery_date
                         ?->toDateString(),
+                    'lineCount' => (int) $purchaseOrder->getAttribute(
+                        'lines_count',
+                    ),
                     'total' => $purchaseOrder->total,
                 ],
             )
-            ->values()
-            ->all();
+            ->toArray();
 
         return Inertia::render('purchase-orders/index', [
             'purchaseOrders' => $purchaseOrders,
+            'summary' => $this->indexSummary(
+                $organization,
+                $canViewCosts,
+            ),
+            'supplierOptions' => $this->indexSupplierOptions(
+                $organization,
+            ),
+            'locationOptions' => $this->indexLocationOptions(
+                $organization,
+            ),
+            'filters' => $filters,
             'currency' => $organization->currency,
             'canManage' => Gate::allows(
                 OrganizationPermission::PurchasingManage->value,
                 $organization,
             ),
+            'canViewCosts' => $canViewCosts,
         ]);
     }
 
@@ -281,6 +326,344 @@ class PurchaseOrderController extends Controller
     }
 
     /**
+     * Validate and normalize server-authoritative Purchase Orders list filters.
+     *
+     * @return PurchaseOrderIndexFilters
+     */
+    private function resolveIndexFilters(
+        Request $request,
+        Organization $organization,
+    ): array {
+        $validated = $request->validate([
+            'search' => [
+                'nullable',
+                'string',
+                'max:120',
+            ],
+            'status' => [
+                'nullable',
+                'string',
+                Rule::in(
+                    array_map(
+                        static fn (
+                            PurchaseOrderStatus $status,
+                        ): string => $status->value,
+                        PurchaseOrderStatus::cases(),
+                    ),
+                ),
+            ],
+            'supplier_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('suppliers', 'id')->where(
+                    fn (Builder $query): Builder => $query->where(
+                        'organization_id',
+                        $organization->id,
+                    ),
+                ),
+            ],
+            'location_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('locations', 'id')->where(
+                    fn (Builder $query): Builder => $query->where(
+                        'organization_id',
+                        $organization->id,
+                    ),
+                ),
+            ],
+            'from' => [
+                'nullable',
+                'date_format:Y-m-d',
+            ],
+            'to' => [
+                'nullable',
+                'date_format:Y-m-d',
+            ],
+        ]);
+
+        $search = isset($validated['search'])
+            && is_string($validated['search'])
+                ? trim($validated['search'])
+                : null;
+
+        if ($search === '') {
+            $search = null;
+        }
+
+        $status = isset($validated['status'])
+            && is_string($validated['status'])
+                ? $validated['status']
+                : null;
+
+        $supplierId = isset($validated['supplier_id'])
+            ? (int) $validated['supplier_id']
+            : null;
+
+        $locationId = isset($validated['location_id'])
+            ? (int) $validated['location_id']
+            : null;
+
+        $from = isset($validated['from'])
+            && is_string($validated['from'])
+                ? $validated['from']
+                : null;
+
+        $to = isset($validated['to'])
+            && is_string($validated['to'])
+                ? $validated['to']
+                : null;
+
+        if (
+            $from !== null
+            && $to !== null
+            && $from > $to
+        ) {
+            throw ValidationException::withMessages([
+                'from' => __(
+                    'The from date must not be after the to date.',
+                ),
+            ]);
+        }
+
+        return [
+            'search' => $search,
+            'status' => $status,
+            'supplierId' => $supplierId,
+            'locationId' => $locationId,
+            'from' => $from,
+            'to' => $to,
+        ];
+    }
+
+    /**
+     * Build the filtered tenant-scoped query used by the Purchase Orders list.
+     *
+     * @param  PurchaseOrderIndexFilters  $filters
+     * @return EloquentBuilder<PurchaseOrder>
+     */
+    private function indexQuery(
+        Organization $organization,
+        array $filters,
+    ): EloquentBuilder {
+        $query = PurchaseOrder::query()
+            ->where('organization_id', $organization->id);
+
+        if ($filters['search'] !== null) {
+            $searchPattern = "%{$filters['search']}%";
+
+            $query->where(
+                function (
+                    EloquentBuilder $searchQuery,
+                ) use ($searchPattern): void {
+                    $searchQuery
+                        ->whereLike(
+                            'number',
+                            $searchPattern,
+                        )
+                        ->orWhereHas(
+                            'supplier',
+                            fn (
+                                EloquentBuilder $supplierQuery,
+                            ): EloquentBuilder => $supplierQuery->whereLike(
+                                'name',
+                                $searchPattern,
+                            ),
+                        );
+                },
+            );
+        }
+
+        if ($filters['status'] !== null) {
+            $query->where(
+                'status',
+                $filters['status'],
+            );
+        }
+
+        if ($filters['supplierId'] !== null) {
+            $query->where(
+                'supplier_id',
+                $filters['supplierId'],
+            );
+        }
+
+        if ($filters['locationId'] !== null) {
+            $query->where(
+                'location_id',
+                $filters['locationId'],
+            );
+        }
+
+        if ($filters['from'] !== null) {
+            $query->whereDate(
+                'order_date',
+                '>=',
+                $filters['from'],
+            );
+        }
+
+        if ($filters['to'] !== null) {
+            $query->whereDate(
+                'order_date',
+                '<=',
+                $filters['to'],
+            );
+        }
+
+        return $query;
+    }
+
+    /**
+     * Build stable organization-wide operational Purchase Orders metrics.
+     *
+     * @return PurchaseOrderIndexSummary
+     */
+    private function indexSummary(
+        Organization $organization,
+        bool $canViewCosts,
+    ): array {
+        $baseQuery = PurchaseOrder::query()
+            ->where(
+                'organization_id',
+                $organization->id,
+            );
+
+        return [
+            'openCount' => (clone $baseQuery)
+                ->whereIn('status', [
+                    PurchaseOrderStatus::Draft->value,
+                    PurchaseOrderStatus::Approved->value,
+                    PurchaseOrderStatus::PartiallyReceived->value,
+                ])
+                ->count(),
+
+            'awaitingDeliveryCount' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    PurchaseOrderStatus::Approved->value,
+                )
+                ->count(),
+
+            'partiallyReceivedCount' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    PurchaseOrderStatus::PartiallyReceived->value,
+                )
+                ->count(),
+
+            'thisMonthSpend' => $canViewCosts
+                ? $this->thisMonthPurchaseOrderSpend($organization)
+                : null,
+        ];
+    }
+
+    /**
+     * Sum this business month's non-draft, non-cancelled PO totals exactly.
+     */
+    private function thisMonthPurchaseOrderSpend(
+        Organization $organization,
+    ): string {
+        $businessNow = CarbonImmutable::now(
+            $organization->timezone,
+        );
+
+        $from = $businessNow
+            ->startOfMonth()
+            ->toDateString();
+
+        $to = $businessNow
+            ->endOfMonth()
+            ->toDateString();
+
+        $total = BigDecimal::zero();
+
+        foreach (
+            PurchaseOrder::query()
+                ->where(
+                    'organization_id',
+                    $organization->id,
+                )
+                ->whereBetween(
+                    'order_date',
+                    [$from, $to],
+                )
+                ->whereIn('status', [
+                    PurchaseOrderStatus::Approved->value,
+                    PurchaseOrderStatus::PartiallyReceived->value,
+                    PurchaseOrderStatus::Received->value,
+                ])
+                ->select([
+                    'id',
+                    'total',
+                ])
+                ->cursor() as $purchaseOrder
+        ) {
+            $total = $total->plus(
+                $purchaseOrder->total,
+            );
+        }
+
+        return (string) $total->toScale(2);
+    }
+
+    /**
+     * Return every tenant supplier so historical POs remain filterable.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    private function indexSupplierOptions(
+        Organization $organization,
+    ): array {
+        return Supplier::query()
+            ->where(
+                'organization_id',
+                $organization->id,
+            )
+            ->orderBy('name')
+            ->get([
+                'id',
+                'name',
+            ])
+            ->map(
+                static fn (Supplier $supplier): array => [
+                    'id' => $supplier->id,
+                    'name' => $supplier->name,
+                ],
+            )
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Return every tenant location so historical POs remain filterable.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    private function indexLocationOptions(
+        Organization $organization,
+    ): array {
+        return Location::query()
+            ->where(
+                'organization_id',
+                $organization->id,
+            )
+            ->orderBy('name')
+            ->get([
+                'id',
+                'name',
+            ])
+            ->map(
+                static fn (Location $location): array => [
+                    'id' => $location->id,
+                    'name' => $location->name,
+                ],
+            )
+            ->values()
+            ->all();
+    }
+
+    /**
      * Build active supplier-item and location form options.
      *
      * @return array<string, mixed>
@@ -292,7 +675,10 @@ class PurchaseOrderController extends Controller
                 'inventoryItem:id,name,sku,active',
                 'purchaseUnitOfMeasure:id,name,symbol,active',
             ])
-            ->where('organization_id', $organization->id)
+            ->where(
+                'organization_id',
+                $organization->id,
+            )
             ->where('active', true)
             ->whereNotNull('current_price')
             ->get()
@@ -307,11 +693,16 @@ class PurchaseOrderController extends Controller
             ->groupBy('supplier_id');
 
         $suppliers = Supplier::query()
-            ->where('organization_id', $organization->id)
+            ->where(
+                'organization_id',
+                $organization->id,
+            )
             ->where('active', true)
             ->orderBy('name')
             ->get()
-            ->map(function (Supplier $supplier) use ($supplierItems): array {
+            ->map(function (
+                Supplier $supplier,
+            ) use ($supplierItems): array {
                 $items = $supplierItems->get(
                     $supplier->id,
                     collect(),
@@ -326,15 +717,18 @@ class PurchaseOrderController extends Controller
                                 SupplierItem $supplierItem,
                             ): array => [
                                 'id' => $supplierItem->id,
-                                'supplierSku' => $supplierItem->supplier_sku,
+                                'supplierSku' => $supplierItem
+                                    ->supplier_sku,
                                 'itemName' => $supplierItem
                                     ->inventoryItem
                                     ->name,
                                 'purchaseUnit' => $supplierItem
                                     ->purchaseUnitOfMeasure
                                     ->symbol,
-                                'baseQuantity' => $supplierItem->base_quantity,
-                                'currentPrice' => $supplierItem->current_price,
+                                'baseQuantity' => $supplierItem
+                                    ->base_quantity,
+                                'currentPrice' => $supplierItem
+                                    ->current_price,
                             ],
                         )
                         ->values()
@@ -345,10 +739,16 @@ class PurchaseOrderController extends Controller
             ->all();
 
         $locations = Location::query()
-            ->where('organization_id', $organization->id)
+            ->where(
+                'organization_id',
+                $organization->id,
+            )
             ->where('active', true)
             ->orderBy('name')
-            ->get(['id', 'name'])
+            ->get([
+                'id',
+                'name',
+            ])
             ->map(
                 static fn (Location $location): array => [
                     'id' => $location->id,
@@ -381,7 +781,9 @@ class PurchaseOrderController extends Controller
             'supplierName' => $purchaseOrder->supplier->name,
             'locationId' => $purchaseOrder->location_id,
             'locationName' => $purchaseOrder->location->name,
-            'orderDate' => $purchaseOrder->order_date->toDateString(),
+            'orderDate' => $purchaseOrder
+                ->order_date
+                ->toDateString(),
             'expectedDeliveryDate' => $purchaseOrder
                 ->expected_delivery_date
                 ?->toDateString(),
@@ -390,7 +792,8 @@ class PurchaseOrderController extends Controller
             'discountTotal' => $purchaseOrder->discount_total,
             'total' => $purchaseOrder->total,
             'notes' => $purchaseOrder->notes,
-            'approvedAt' => $purchaseOrder->approved_at
+            'approvedAt' => $purchaseOrder
+                ->approved_at
                 ?->toIso8601String(),
             'lines' => $purchaseOrder
                 ->lines
@@ -399,13 +802,21 @@ class PurchaseOrderController extends Controller
                         PurchaseOrderLine $line,
                     ): array => [
                         'id' => $line->id,
-                        'supplierItemId' => $line->supplier_item_id,
-                        'itemName' => $line->item_name_snapshot,
-                        'supplierSku' => $line->supplier_sku_snapshot,
-                        'orderedQuantity' => $line->ordered_quantity,
+                        'supplierItemId' => $line
+                            ->supplier_item_id,
+                        'itemName' => $line
+                            ->item_name_snapshot,
+                        'supplierSku' => $line
+                            ->supplier_sku_snapshot,
+                        'orderedQuantity' => $line
+                            ->ordered_quantity,
                         'purchaseUnit' => [
-                            'id' => $line->purchaseUnitOfMeasure->id,
-                            'symbol' => $line->purchaseUnitOfMeasure->symbol,
+                            'id' => $line
+                                ->purchaseUnitOfMeasure
+                                ->id,
+                            'symbol' => $line
+                                ->purchaseUnitOfMeasure
+                                ->symbol,
                         ],
                         'baseQuantity' => $line->base_quantity,
                         'unitPrice' => $line->unit_price,
