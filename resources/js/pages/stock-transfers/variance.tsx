@@ -3,6 +3,7 @@ import StockTransferController from '@/actions/App/Http/Controllers/Inventory/St
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { navigateToPreviousPage } from '@/lib/navigation-history';
 import { dashboard } from '@/routes';
 
 type VarianceRow = {
@@ -79,16 +80,23 @@ export default function StockTransferVariance({
                         </p>
                     </div>
 
-                    <Button variant="outline" asChild>
-                        <Link href={StockTransferController.index()}>
-                            Stock transfers
-                        </Link>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                            navigateToPreviousPage(
+                                StockTransferController.index().url,
+                            )
+                        }
+                    >
+                        Back
                     </Button>
                 </div>
 
                 <Form
                     action={StockTransferController.variance().url}
                     method="get"
+                    options={{ replace: true }}
                 >
                     {({ processing }) => (
                         <div className="grid gap-4 rounded-xl border border-sidebar-border/70 p-5 md:grid-cols-[2fr_1fr_1fr_auto_auto] dark:border-sidebar-border">
@@ -142,6 +150,7 @@ export default function StockTransferVariance({
                                 <Button variant="outline" asChild>
                                     <Link
                                         href={StockTransferController.variance()}
+                                        replace
                                     >
                                         Clear
                                     </Link>

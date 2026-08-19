@@ -1,10 +1,21 @@
-import { Form, Head, Link } from '@inertiajs/react';
-import { useState } from 'react';
+import { Form, Head, router } from '@inertiajs/react';
+import { useEffect, useRef, useState } from 'react';
 import StockTransferController from '@/actions/App/Http/Controllers/Inventory/StockTransferController';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { navigateToPreviousPage } from '@/lib/navigation-history';
 import { dashboard } from '@/routes';
 
 type LocationOption = {
@@ -92,6 +103,11 @@ type Props = {
     canViewCosts: boolean;
 };
 
+type DirtyStateTrackerProps = {
+    dirty: boolean;
+    onChange: (dirty: boolean) => void;
+};
+
 const emptyLine = (): LineState => ({
     inventoryItemId: '',
     requestedQuantity: '1',
@@ -113,6 +129,20 @@ const formatDecimal = (value: string): string => {
 const formatDate = (value: string | null): string =>
     value === null ? '—' : new Date(value).toLocaleString();
 
+/** Keep parent navigation guards synchronized with Inertia Form dirty state. */
+function DirtyStateTracker({ dirty, onChange }: DirtyStateTrackerProps) {
+    useEffect(() => {
+        onChange(dirty);
+    }, [dirty, onChange]);
+
+    return null;
+}
+
+/** Return the first server-side action error for a compact dialog summary. */
+function firstActionError(errors: Record<string, string>): string | null {
+    return Object.values(errors)[0] ?? null;
+}
+
 export default function StockTransferForm({
     stockTransfer,
     locationOptions,
@@ -128,6 +158,67 @@ export default function StockTransferForm({
     const editable =
         canCreate &&
         (stockTransfer === null || stockTransfer.status === 'draft');
+
+    const [draftDirty, setDraftDirty] = useState(false);
+    const [receiptDirty, setReceiptDirty] = useState(false);
+    const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+    const [shipDialogOpen, setShipDialogOpen] = useState(false);
+    const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+    const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
+    const allowNextNavigation = useRef(false);
+    const hasUnsavedChanges = draftDirty || receiptDirty;
+
+    useEffect(() => {
+        if (!hasUnsavedChanges) {
+            return;
+        }
+
+        const removeBeforeListener = router.on('before', (event) => {
+            if (event.detail.visit.method !== 'get') {
+                return;
+            }
+
+            if (allowNextNavigation.current) {
+                allowNextNavigation.current = false;
+
+                return;
+            }
+
+            return window.confirm(
+                'You have unsaved stock transfer changes. Leave without saving them?',
+            );
+        });
+
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            removeBeforeListener();
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [hasUnsavedChanges]);
+
+    const requestBackNavigation = () => {
+        if (hasUnsavedChanges) {
+            setLeaveDialogOpen(true);
+
+            return;
+        }
+
+        navigateToPreviousPage(StockTransferController.index().url);
+    };
+
+    const discardChangesAndNavigateBack = () => {
+        allowNextNavigation.current = true;
+        setDraftDirty(false);
+        setReceiptDirty(false);
+        setLeaveDialogOpen(false);
+        navigateToPreviousPage(StockTransferController.index().url);
+    };
 
     const firstLocationId = locationOptions[0]?.id.toString() ?? '';
 
@@ -306,9 +397,18 @@ export default function StockTransferForm({
                 </div>
 
                 {editable ? (
-                    <Form {...formAttributes}>
-                        {({ processing, errors }) => (
+                    <Form
+                        {...formAttributes}
+                        setDefaultsOnSuccess
+                        options={{ replace: stockTransfer === null }}
+                    >
+                        {({ processing, errors, isDirty }) => (
                             <div className="space-y-6">
+                                <DirtyStateTracker
+                                    dirty={isDirty}
+                                    onChange={setDraftDirty}
+                                />
+
                                 <div className="grid gap-4 rounded-xl border border-sidebar-border/70 p-5 md:grid-cols-2 dark:border-sidebar-border">
                                     <div className="grid gap-2">
                                         <Label>Transfer number</Label>
@@ -676,17 +776,19 @@ export default function StockTransferForm({
 
                                 <div className="flex gap-2">
                                     <Button type="submit" disabled={processing}>
-                                        {stockTransfer === null
-                                            ? 'Create draft'
-                                            : 'Save draft'}
+                                        {processing
+                                            ? 'Saving…'
+                                            : stockTransfer === null
+                                              ? 'Create draft'
+                                              : 'Save draft'}
                                     </Button>
 
-                                    <Button variant="outline" asChild>
-                                        <Link
-                                            href={StockTransferController.index()}
-                                        >
-                                            Back
-                                        </Link>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={requestBackNavigation}
+                                    >
+                                        Back
                                     </Button>
                                 </div>
                             </div>
@@ -875,49 +977,221 @@ export default function StockTransferForm({
                 )}
 
                 {stockTransfer?.status === 'draft' && (
-                    <div className="flex gap-2">
-                        {canShip && (
-                            <Form
-                                {...StockTransferController.ship.form(
-                                    stockTransfer.id,
-                                )}
-                            >
-                                {({ processing }) => (
-                                    <Button type="submit" disabled={processing}>
-                                        Ship transfer
-                                    </Button>
-                                )}
-                            </Form>
-                        )}
+                    <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                            {canShip && (
+                                <Dialog
+                                    open={shipDialogOpen}
+                                    onOpenChange={setShipDialogOpen}
+                                >
+                                    <DialogTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            disabled={draftDirty}
+                                        >
+                                            Ship transfer
+                                        </Button>
+                                    </DialogTrigger>
 
-                        {canCreate && (
-                            <Form
-                                {...StockTransferController.cancel.form(
-                                    stockTransfer.id,
-                                )}
-                            >
-                                {({ processing }) => (
-                                    <Button
-                                        type="submit"
-                                        variant="outline"
-                                        disabled={processing}
-                                    >
-                                        Cancel transfer
-                                    </Button>
-                                )}
-                            </Form>
+                                    <DialogContent>
+                                        <Form
+                                            {...StockTransferController.ship.form(
+                                                stockTransfer.id,
+                                            )}
+                                            onSuccess={() =>
+                                                setShipDialogOpen(false)
+                                            }
+                                        >
+                                            {({ processing, errors }) => {
+                                                const actionError =
+                                                    firstActionError(errors);
+
+                                                return (
+                                                    <div className="space-y-4">
+                                                        <DialogHeader>
+                                                            <DialogTitle>
+                                                                Ship stock
+                                                                transfer?
+                                                            </DialogTitle>
+                                                            <DialogDescription>
+                                                                Shipping posts
+                                                                outbound stock
+                                                                movements and
+                                                                removes the
+                                                                shipped
+                                                                quantities from
+                                                                the source
+                                                                storage. Review
+                                                                the saved draft
+                                                                before
+                                                                continuing.
+                                                            </DialogDescription>
+                                                        </DialogHeader>
+
+                                                        {actionError !==
+                                                            null && (
+                                                            <p
+                                                                role="alert"
+                                                                className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                                                            >
+                                                                {actionError}
+                                                            </p>
+                                                        )}
+
+                                                        <DialogFooter>
+                                                            <DialogClose
+                                                                asChild
+                                                            >
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="outline"
+                                                                    disabled={
+                                                                        processing
+                                                                    }
+                                                                >
+                                                                    Keep draft
+                                                                </Button>
+                                                            </DialogClose>
+                                                            <Button
+                                                                type="submit"
+                                                                disabled={
+                                                                    processing
+                                                                }
+                                                            >
+                                                                {processing
+                                                                    ? 'Shipping…'
+                                                                    : 'Ship transfer'}
+                                                            </Button>
+                                                        </DialogFooter>
+                                                    </div>
+                                                );
+                                            }}
+                                        </Form>
+                                    </DialogContent>
+                                </Dialog>
+                            )}
+
+                            {canCreate && (
+                                <Dialog
+                                    open={cancelDialogOpen}
+                                    onOpenChange={setCancelDialogOpen}
+                                >
+                                    <DialogTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            disabled={draftDirty}
+                                        >
+                                            Cancel transfer
+                                        </Button>
+                                    </DialogTrigger>
+
+                                    <DialogContent>
+                                        <Form
+                                            {...StockTransferController.cancel.form(
+                                                stockTransfer.id,
+                                            )}
+                                            onSuccess={() =>
+                                                setCancelDialogOpen(false)
+                                            }
+                                        >
+                                            {({ processing, errors }) => {
+                                                const actionError =
+                                                    firstActionError(errors);
+
+                                                return (
+                                                    <div className="space-y-4">
+                                                        <DialogHeader>
+                                                            <DialogTitle>
+                                                                Cancel stock
+                                                                transfer?
+                                                            </DialogTitle>
+                                                            <DialogDescription>
+                                                                Cancelling
+                                                                closes this
+                                                                draft without
+                                                                moving
+                                                                inventory. The
+                                                                cancelled
+                                                                transfer remains
+                                                                in the audit
+                                                                history and can
+                                                                no longer be
+                                                                edited or
+                                                                shipped.
+                                                            </DialogDescription>
+                                                        </DialogHeader>
+
+                                                        {actionError !==
+                                                            null && (
+                                                            <p
+                                                                role="alert"
+                                                                className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                                                            >
+                                                                {actionError}
+                                                            </p>
+                                                        )}
+
+                                                        <DialogFooter>
+                                                            <DialogClose
+                                                                asChild
+                                                            >
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="outline"
+                                                                    disabled={
+                                                                        processing
+                                                                    }
+                                                                >
+                                                                    Keep draft
+                                                                </Button>
+                                                            </DialogClose>
+                                                            <Button
+                                                                type="submit"
+                                                                variant="destructive"
+                                                                disabled={
+                                                                    processing
+                                                                }
+                                                            >
+                                                                {processing
+                                                                    ? 'Cancelling…'
+                                                                    : 'Cancel transfer'}
+                                                            </Button>
+                                                        </DialogFooter>
+                                                    </div>
+                                                );
+                                            }}
+                                        </Form>
+                                    </DialogContent>
+                                </Dialog>
+                            )}
+                        </div>
+
+                        {draftDirty && (canShip || canCreate) && (
+                            <p className="text-xs text-muted-foreground">
+                                Save draft changes before shipping or cancelling
+                                this transfer.
+                            </p>
                         )}
                     </div>
                 )}
 
                 {stockTransfer?.status === 'shipped' && canReceive && (
                     <Form
+                        id="receive-stock-transfer-form"
                         {...StockTransferController.receive.form(
                             stockTransfer.id,
                         )}
+                        setDefaultsOnSuccess
+                        onSuccess={() => setReceiveDialogOpen(false)}
                     >
-                        {({ processing, errors }) => (
+                        {({ processing, errors, isDirty }) => (
                             <div className="space-y-4 rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
+                                <DirtyStateTracker
+                                    dirty={isDirty}
+                                    onChange={setReceiptDirty}
+                                />
+
                                 <div>
                                     <h2 className="font-medium">
                                         Receive transfer
@@ -928,76 +1202,171 @@ export default function StockTransferForm({
                                     </p>
                                 </div>
 
-                                {stockTransfer.lines.map((line, index) => (
-                                    <div
-                                        key={line.id}
-                                        className="grid gap-4 md:grid-cols-[2fr_1fr]"
-                                    >
-                                        <input
-                                            type="hidden"
-                                            name={`lines[${index}][id]`}
-                                            value={line.id}
-                                        />
+                                {stockTransfer.lines.map((line, index) => {
+                                    const inputId = `received-base-quantity-${line.id}`;
 
-                                        <div>
-                                            <div className="font-medium">
-                                                {line.itemName}
+                                    return (
+                                        <div
+                                            key={line.id}
+                                            className="grid gap-4 md:grid-cols-[2fr_1fr]"
+                                        >
+                                            <input
+                                                type="hidden"
+                                                name={`lines[${index}][id]`}
+                                                value={line.id}
+                                            />
+
+                                            <div>
+                                                <div className="font-medium">
+                                                    {line.itemName}
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    Shipped:{' '}
+                                                    {line.shippedBaseQuantity ===
+                                                    null
+                                                        ? '—'
+                                                        : formatDecimal(
+                                                              line.shippedBaseQuantity,
+                                                          )}{' '}
+                                                    {line.baseUnitSymbol}
+                                                </div>
                                             </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                Shipped:{' '}
-                                                {line.shippedBaseQuantity ===
-                                                null
-                                                    ? '—'
-                                                    : formatDecimal(
-                                                          line.shippedBaseQuantity,
-                                                      )}{' '}
-                                                {line.baseUnitSymbol}
+
+                                            <div className="grid gap-2">
+                                                <Label htmlFor={inputId}>
+                                                    Received (
+                                                    {line.baseUnitSymbol})
+                                                </Label>
+                                                <Input
+                                                    id={inputId}
+                                                    name={`lines[${index}][received_base_quantity]`}
+                                                    type="number"
+                                                    min="0"
+                                                    max="999999999.999999"
+                                                    step="0.000001"
+                                                    defaultValue={
+                                                        line.shippedBaseQuantity ??
+                                                        '0'
+                                                    }
+                                                    required
+                                                />
+                                                <InputError
+                                                    message={
+                                                        errors[
+                                                            `lines.${index}.received_base_quantity`
+                                                        ]
+                                                    }
+                                                />
                                             </div>
                                         </div>
-
-                                        <div className="grid gap-2">
-                                            <Label>
-                                                Received ({line.baseUnitSymbol})
-                                            </Label>
-                                            <Input
-                                                name={`lines[${index}][received_base_quantity]`}
-                                                type="number"
-                                                min="0"
-                                                max="999999999.999999"
-                                                step="0.000001"
-                                                defaultValue={
-                                                    line.shippedBaseQuantity ??
-                                                    '0'
-                                                }
-                                                required
-                                            />
-                                            <InputError
-                                                message={
-                                                    errors[
-                                                        `lines.${index}.received_base_quantity`
-                                                    ]
-                                                }
-                                            />
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
 
                                 <InputError message={errors.lines} />
 
-                                <Button type="submit" disabled={processing}>
-                                    Confirm receipt
-                                </Button>
+                                <Dialog
+                                    open={receiveDialogOpen}
+                                    onOpenChange={setReceiveDialogOpen}
+                                >
+                                    <DialogTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            disabled={processing}
+                                        >
+                                            Review receipt
+                                        </Button>
+                                    </DialogTrigger>
+
+                                    <DialogContent>
+                                        <DialogHeader>
+                                            <DialogTitle>
+                                                Confirm transfer receipt?
+                                            </DialogTitle>
+                                            <DialogDescription>
+                                                Receipt posts inbound stock to
+                                                the destination and permanently
+                                                records the received quantities
+                                                and any variance. Review all
+                                                quantities before continuing.
+                                            </DialogDescription>
+                                        </DialogHeader>
+
+                                        {Object.keys(errors).length > 0 && (
+                                            <p
+                                                role="alert"
+                                                className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                                            >
+                                                Correct the receipt validation
+                                                errors before confirming again.
+                                            </p>
+                                        )}
+
+                                        <DialogFooter>
+                                            <DialogClose asChild>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    disabled={processing}
+                                                >
+                                                    Review quantities
+                                                </Button>
+                                            </DialogClose>
+                                            <Button
+                                                type="submit"
+                                                form="receive-stock-transfer-form"
+                                                disabled={processing}
+                                            >
+                                                {processing
+                                                    ? 'Recording…'
+                                                    : 'Confirm receipt'}
+                                            </Button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
                             </div>
                         )}
                     </Form>
                 )}
 
-                <Button variant="outline" asChild className="w-fit">
-                    <Link href={StockTransferController.index()}>
-                        Back to stock transfers
-                    </Link>
-                </Button>
+                {!editable && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="w-fit"
+                        onClick={requestBackNavigation}
+                    >
+                        Back
+                    </Button>
+                )}
             </div>
+
+            <Dialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Discard unsaved changes?</DialogTitle>
+                        <DialogDescription>
+                            Your unsaved stock transfer changes will be lost.
+                            This does not undo any transfer state already saved
+                            on the server.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button type="button" variant="outline">
+                                Stay on page
+                            </Button>
+                        </DialogClose>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={discardChangesAndNavigateBack}
+                        >
+                            Discard and leave
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }
