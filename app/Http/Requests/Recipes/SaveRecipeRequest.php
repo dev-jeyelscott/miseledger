@@ -73,6 +73,11 @@ class SaveRecipeRequest extends FormRequest
                 'required',
                 'boolean',
             ],
+            'return_to' => [
+                'nullable',
+                'string',
+                'max:2048',
+            ],
         ];
     }
 
@@ -101,6 +106,26 @@ class SaveRecipeRequest extends FormRequest
         return Recipe::query()
             ->where('organization_id', $organization->id)
             ->find((int) $routeId);
+    }
+
+    /**
+     * Return a validated relative in-app URL for restoring caller context.
+     */
+    public function returnTo(): ?string
+    {
+        $returnTo = $this->validated('return_to');
+
+        if (
+            ! is_string($returnTo)
+            || $returnTo === ''
+            || ! str_starts_with($returnTo, '/')
+            || str_starts_with($returnTo, '//')
+            || str_contains($returnTo, "\0")
+        ) {
+            return null;
+        }
+
+        return $returnTo;
     }
 
     protected function prepareForValidation(): void

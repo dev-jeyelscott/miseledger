@@ -54,6 +54,101 @@ test('a manager can create and deactivate a recipe', function () {
     expect($recipe->refresh()->active)->toBeFalse();
 });
 
+test('recipe modal mutations return to the exact invoking index context', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Manager,
+        ]);
+
+    $query = [
+        'search' => 'Burger',
+        'type' => RecipeType::MenuItem->value,
+        'activity' => 'active',
+        'sort' => 'updated_at',
+        'direction' => 'desc',
+        'per_page' => 25,
+        'page' => 2,
+    ];
+
+    $relativeReturnTo = route('recipes.index', $query, false);
+    $expectedReturnTo = route('recipes.index', $query);
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->post(route('recipes.store'), [
+            'code' => 'RCP-100',
+            'name' => 'Burger',
+            'type' => RecipeType::MenuItem->value,
+            'active' => true,
+            'return_to' => $relativeReturnTo,
+        ])
+        ->assertRedirect($expectedReturnTo);
+
+    $recipe = Recipe::query()->sole();
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->put(route('recipes.update', $recipe), [
+            'code' => 'RCP-100',
+            'name' => 'Updated Burger',
+            'type' => RecipeType::MenuItem->value,
+            'active' => true,
+            'return_to' => $relativeReturnTo,
+        ])
+        ->assertRedirect($expectedReturnTo);
+
+    expect($recipe->refresh()->name)->toBe('Updated Burger');
+});
+
+test('unsafe recipe return targets use canonical fallbacks', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Manager,
+        ]);
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->post(route('recipes.store'), [
+            'code' => 'RCP-101',
+            'name' => 'Safe Redirect Recipe',
+            'type' => RecipeType::MenuItem->value,
+            'active' => true,
+            'return_to' => 'https://example.invalid/phishing',
+        ])
+        ->assertRedirect(route('recipes.index'));
+
+    $recipe = Recipe::query()->sole();
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->put(route('recipes.update', $recipe), [
+            'code' => $recipe->code,
+            'name' => 'Updated Safe Redirect Recipe',
+            'type' => RecipeType::MenuItem->value,
+            'active' => true,
+            'return_to' => '//example.invalid/phishing',
+        ])
+        ->assertRedirect(route('recipes.edit', $recipe));
+});
+
 test('recipe codes are unique within an organization but reusable elsewhere', function () {
     $user = User::factory()->create();
     $organization = Organization::factory()->create();

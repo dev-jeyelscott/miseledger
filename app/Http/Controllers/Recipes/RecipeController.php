@@ -98,7 +98,9 @@ class RecipeController extends Controller
             'message' => __('Recipe created.'),
         ]);
 
-        return to_route('recipes.index');
+        return redirect()->to(
+            $request->returnTo() ?? route('recipes.index'),
+        );
     }
 
     public function edit(
@@ -155,7 +157,9 @@ class RecipeController extends Controller
             'message' => __('Recipe updated.'),
         ]);
 
-        return to_route('recipes.edit', $recipe);
+        return redirect()->to(
+            $request->returnTo() ?? route('recipes.edit', $recipe),
+        );
     }
 
     /**

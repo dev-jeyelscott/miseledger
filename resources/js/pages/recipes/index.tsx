@@ -1,4 +1,4 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head, Link, useForm, usePage } from '@inertiajs/react';
 import {
     Ban,
     Boxes,
@@ -18,6 +18,7 @@ import {
     RotateCcw,
     Search,
 } from 'lucide-react';
+import { useState } from 'react';
 
 import RecipeController from '@/actions/App/Http/Controllers/Recipes/RecipeController';
 import RecipeCostController from '@/actions/App/Http/Controllers/Recipes/RecipeCostController';
@@ -25,6 +26,14 @@ import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-car
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
@@ -82,6 +91,20 @@ type Props = {
     filters: Filters;
     canManage: boolean;
     canViewCosts: boolean;
+};
+
+type RecipeFormData = {
+    code: string;
+    name: string;
+    type: RecipeType;
+    active: boolean;
+    return_to: string;
+};
+
+type RecipeIdentityDialogProps = {
+    recipe: RecipeRow | null;
+    returnTo: string;
+    onClose: () => void;
 };
 
 const typeLabels: Record<RecipeType, string> = {
@@ -193,6 +216,211 @@ function SortIndicator({
     );
 }
 
+/**
+ * Create or update one stable recipe identity without leaving the index.
+ * Version composition and costing remain separate workflows.
+ */
+function RecipeIdentityDialog({
+    recipe,
+    returnTo,
+    onClose,
+}: RecipeIdentityDialogProps) {
+    const isCreate = recipe === null;
+
+    const form = useForm<RecipeFormData>({
+        code: recipe?.code ?? '',
+        name: recipe?.name ?? '',
+        type: recipe?.type ?? 'menu_item',
+        active: recipe?.active ?? true,
+        return_to: returnTo,
+    });
+
+    const closeDialog = (): void => {
+        if (form.processing) {
+            return;
+        }
+
+        if (
+            form.isDirty &&
+            !window.confirm('Discard unsaved recipe changes?')
+        ) {
+            return;
+        }
+
+        form.reset();
+        form.clearErrors();
+        onClose();
+    };
+
+    const handleSuccess = (): void => {
+        form.reset();
+        form.clearErrors();
+        onClose();
+    };
+
+    const submit = (): void => {
+        if (recipe === null) {
+            form.submit(RecipeController.store(), {
+                preserveScroll: true,
+                errorBag: 'createRecipe',
+                onSuccess: handleSuccess,
+            });
+
+            return;
+        }
+
+        form.submit(RecipeController.update(recipe.id), {
+            preserveScroll: true,
+            errorBag: 'editRecipe',
+            onSuccess: handleSuccess,
+        });
+    };
+
+    return (
+        <Dialog
+            open
+            onOpenChange={(open) => {
+                if (!open) {
+                    closeDialog();
+                }
+            }}
+        >
+            <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>
+                        {isCreate ? 'Create recipe' : 'Edit recipe'}
+                    </DialogTitle>
+                    <DialogDescription>
+                        {isCreate
+                            ? 'Create the stable recipe identity. Yield, components, and formulation belong to recipe versions.'
+                            : 'Update recipe identity metadata without changing historical recipe versions.'}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <form
+                    className="space-y-5"
+                    aria-busy={form.processing}
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        submit();
+                    }}
+                >
+                    <div className="grid gap-2">
+                        <Label htmlFor="recipe-dialog-code">Code</Label>
+                        <Input
+                            id="recipe-dialog-code"
+                            value={form.data.code}
+                            required
+                            autoFocus
+                            autoComplete="off"
+                            placeholder={isCreate ? 'RCP-00001' : undefined}
+                            disabled={form.processing}
+                            aria-invalid={form.errors.code ? true : undefined}
+                            onChange={(event) =>
+                                form.setData('code', event.target.value)
+                            }
+                        />
+                        <InputError message={form.errors.code} />
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label htmlFor="recipe-dialog-name">Name</Label>
+                        <Input
+                            id="recipe-dialog-name"
+                            value={form.data.name}
+                            required
+                            autoComplete="off"
+                            placeholder={isCreate ? 'Cheeseburger' : undefined}
+                            disabled={form.processing}
+                            aria-invalid={form.errors.name ? true : undefined}
+                            onChange={(event) =>
+                                form.setData('name', event.target.value)
+                            }
+                        />
+                        <InputError message={form.errors.name} />
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label htmlFor="recipe-dialog-type">Type</Label>
+                        <select
+                            id="recipe-dialog-type"
+                            value={form.data.type}
+                            className={selectClassName}
+                            disabled={form.processing}
+                            aria-invalid={form.errors.type ? true : undefined}
+                            onChange={(event) =>
+                                form.setData(
+                                    'type',
+                                    event.target.value as RecipeType,
+                                )
+                            }
+                        >
+                            <option value="menu_item">Menu item</option>
+                            <option value="prepared_item">Prepared item</option>
+                            <option value="batch">Batch</option>
+                        </select>
+                        <InputError message={form.errors.type} />
+                    </div>
+
+                    {!isCreate && (
+                        <div className="grid gap-2">
+                            <Label htmlFor="recipe-dialog-active">Status</Label>
+                            <select
+                                id="recipe-dialog-active"
+                                value={form.data.active ? '1' : '0'}
+                                className={selectClassName}
+                                disabled={form.processing}
+                                aria-invalid={
+                                    form.errors.active ? true : undefined
+                                }
+                                onChange={(event) =>
+                                    form.setData(
+                                        'active',
+                                        event.target.value === '1',
+                                    )
+                                }
+                            >
+                                <option value="1">Active</option>
+                                <option value="0">Inactive</option>
+                            </select>
+                            <InputError message={form.errors.active} />
+                        </div>
+                    )}
+
+                    <InputError message={form.errors.return_to} />
+
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            disabled={form.processing}
+                            onClick={closeDialog}
+                        >
+                            Cancel
+                        </Button>
+
+                        <Button type="submit" disabled={form.processing}>
+                            {isCreate && (
+                                <Plus className="size-4" aria-hidden="true" />
+                            )}
+                            {!isCreate && (
+                                <Pencil className="size-4" aria-hidden="true" />
+                            )}
+                            {form.processing
+                                ? isCreate
+                                    ? 'Creating…'
+                                    : 'Saving…'
+                                : isCreate
+                                  ? 'Create recipe'
+                                  : 'Save recipe'}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 /** Render the server-authoritative Recipes operational index. */
 export default function RecipesIndex({
     rows,
@@ -202,6 +430,10 @@ export default function RecipesIndex({
     canManage,
     canViewCosts,
 }: Props) {
+    const currentUrl = usePage().url;
+    const [createOpen, setCreateOpen] = useState(false);
+    const [editingRecipe, setEditingRecipe] = useState<RecipeRow | null>(null);
+
     const hasFilters =
         filters.search !== null ||
         filters.type !== 'all' ||
@@ -248,11 +480,12 @@ export default function RecipesIndex({
                     </div>
 
                     {canManage && (
-                        <Button asChild>
-                            <a href="#create-code">
-                                <Plus className="size-4" aria-hidden="true" />
-                                New recipe
-                            </a>
+                        <Button
+                            type="button"
+                            onClick={() => setCreateOpen(true)}
+                        >
+                            <Plus className="size-4" aria-hidden="true" />
+                            New recipe
                         </Button>
                     )}
                 </div>
@@ -295,555 +528,410 @@ export default function RecipesIndex({
                     />
                 </div>
 
-                <div
-                    className={
-                        canManage
-                            ? 'grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]'
-                            : ''
-                    }
-                >
-                    <section className="min-w-0 overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
-                        <Form
-                            action={RecipeController.index().url}
-                            method="get"
-                        >
-                            {({ errors, processing }) => (
-                                <div className="grid gap-4 border-b border-sidebar-border/70 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1.5fr)_0.85fr_0.85fr_0.65fr_auto] dark:border-sidebar-border">
-                                    <input
-                                        type="hidden"
-                                        name="sort"
-                                        value={filters.sort}
-                                    />
-                                    <input
-                                        type="hidden"
-                                        name="direction"
-                                        value={filters.direction}
-                                    />
+                <section className="min-w-0 overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
+                    <Form action={RecipeController.index().url} method="get">
+                        {({ errors, processing }) => (
+                            <div className="grid gap-4 border-b border-sidebar-border/70 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1.5fr)_0.85fr_0.85fr_0.65fr_auto] dark:border-sidebar-border">
+                                <input
+                                    type="hidden"
+                                    name="sort"
+                                    value={filters.sort}
+                                />
+                                <input
+                                    type="hidden"
+                                    name="direction"
+                                    value={filters.direction}
+                                />
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="search">Search</Label>
-                                        <div className="relative">
-                                            <Search
-                                                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                                                aria-hidden="true"
-                                            />
-                                            <Input
-                                                id="search"
-                                                type="search"
-                                                name="search"
-                                                defaultValue={
-                                                    filters.search ?? ''
-                                                }
-                                                placeholder="Name or recipe code"
-                                                className="pl-9"
-                                                autoComplete="off"
-                                                aria-invalid={
-                                                    errors.search
-                                                        ? true
-                                                        : undefined
-                                                }
-                                            />
-                                        </div>
-                                        <InputError message={errors.search} />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="type">Type</Label>
-                                        <select
-                                            id="type"
-                                            name="type"
-                                            defaultValue={filters.type}
-                                            className={selectClassName}
+                                <div className="grid gap-2">
+                                    <Label htmlFor="search">Search</Label>
+                                    <div className="relative">
+                                        <Search
+                                            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                                            aria-hidden="true"
+                                        />
+                                        <Input
+                                            id="search"
+                                            type="search"
+                                            name="search"
+                                            defaultValue={filters.search ?? ''}
+                                            placeholder="Name or recipe code"
+                                            className="pl-9"
+                                            autoComplete="off"
                                             aria-invalid={
-                                                errors.type ? true : undefined
+                                                errors.search ? true : undefined
                                             }
-                                        >
-                                            <option value="all">
-                                                All types
-                                            </option>
-                                            <option value="menu_item">
-                                                Menu item
-                                            </option>
-                                            <option value="prepared_item">
-                                                Prepared item
-                                            </option>
-                                            <option value="batch">Batch</option>
-                                        </select>
-                                        <InputError message={errors.type} />
+                                        />
                                     </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="activity">
-                                            Activity
-                                        </Label>
-                                        <select
-                                            id="activity"
-                                            name="activity"
-                                            defaultValue={filters.activity}
-                                            className={selectClassName}
-                                            aria-invalid={
-                                                errors.activity
-                                                    ? true
-                                                    : undefined
-                                            }
-                                        >
-                                            <option value="all">
-                                                All activity
-                                            </option>
-                                            <option value="active">
-                                                Active
-                                            </option>
-                                            <option value="inactive">
-                                                Inactive
-                                            </option>
-                                        </select>
-                                        <InputError message={errors.activity} />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="per_page">Rows</Label>
-                                        <select
-                                            id="per_page"
-                                            name="per_page"
-                                            defaultValue={filters.perPage}
-                                            className={selectClassName}
-                                            aria-invalid={
-                                                errors.per_page
-                                                    ? true
-                                                    : undefined
-                                            }
-                                        >
-                                            <option value="10">10</option>
-                                            <option value="25">25</option>
-                                            <option value="50">50</option>
-                                        </select>
-                                        <InputError message={errors.per_page} />
-                                    </div>
-
-                                    <div className="flex items-end gap-2 sm:col-span-2 xl:col-span-1">
-                                        <Button
-                                            type="submit"
-                                            disabled={processing}
-                                            className="flex-1 xl:flex-none"
-                                        >
-                                            <Filter
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                            {processing ? 'Applying…' : 'Apply'}
-                                        </Button>
-
-                                        {hasFilters && (
-                                            <Button
-                                                variant="outline"
-                                                className="flex-1 xl:flex-none"
-                                                asChild
-                                            >
-                                                <Link
-                                                    href={RecipeController.index()}
-                                                >
-                                                    <RotateCcw
-                                                        className="size-4"
-                                                        aria-hidden="true"
-                                                    />
-                                                    Reset
-                                                </Link>
-                                            </Button>
-                                        )}
-                                    </div>
+                                    <InputError message={errors.search} />
                                 </div>
-                            )}
-                        </Form>
 
-                        <div className="overflow-x-auto">
-                            <table className="w-full min-w-[820px] text-sm">
-                                <thead className="border-b bg-muted/30 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="type">Type</Label>
+                                    <select
+                                        id="type"
+                                        name="type"
+                                        defaultValue={filters.type}
+                                        className={selectClassName}
+                                        aria-invalid={
+                                            errors.type ? true : undefined
+                                        }
+                                    >
+                                        <option value="all">All types</option>
+                                        <option value="menu_item">
+                                            Menu item
+                                        </option>
+                                        <option value="prepared_item">
+                                            Prepared item
+                                        </option>
+                                        <option value="batch">Batch</option>
+                                    </select>
+                                    <InputError message={errors.type} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="activity">Activity</Label>
+                                    <select
+                                        id="activity"
+                                        name="activity"
+                                        defaultValue={filters.activity}
+                                        className={selectClassName}
+                                        aria-invalid={
+                                            errors.activity ? true : undefined
+                                        }
+                                    >
+                                        <option value="all">
+                                            All activity
+                                        </option>
+                                        <option value="active">Active</option>
+                                        <option value="inactive">
+                                            Inactive
+                                        </option>
+                                    </select>
+                                    <InputError message={errors.activity} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="per_page">Rows</Label>
+                                    <select
+                                        id="per_page"
+                                        name="per_page"
+                                        defaultValue={filters.perPage}
+                                        className={selectClassName}
+                                        aria-invalid={
+                                            errors.per_page ? true : undefined
+                                        }
+                                    >
+                                        <option value="10">10</option>
+                                        <option value="25">25</option>
+                                        <option value="50">50</option>
+                                    </select>
+                                    <InputError message={errors.per_page} />
+                                </div>
+
+                                <div className="flex items-end gap-2 sm:col-span-2 xl:col-span-1">
+                                    <Button
+                                        type="submit"
+                                        disabled={processing}
+                                        className="flex-1 xl:flex-none"
+                                    >
+                                        <Filter
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        {processing ? 'Applying…' : 'Apply'}
+                                    </Button>
+
+                                    {hasFilters && (
+                                        <Button
+                                            variant="outline"
+                                            className="flex-1 xl:flex-none"
+                                            asChild
+                                        >
+                                            <Link
+                                                href={RecipeController.index()}
+                                            >
+                                                <RotateCcw
+                                                    className="size-4"
+                                                    aria-hidden="true"
+                                                />
+                                                Reset
+                                            </Link>
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </Form>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[820px] text-sm">
+                            <thead className="border-b bg-muted/30 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                                <tr>
+                                    <th className="px-4 py-3">
+                                        <Link
+                                            href={sortHref('name')}
+                                            className="inline-flex items-center gap-1.5 hover:text-foreground focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                        >
+                                            Recipe
+                                            <SortIndicator
+                                                active={filters.sort === 'name'}
+                                                direction={filters.direction}
+                                            />
+                                        </Link>
+                                    </th>
+                                    <th className="px-4 py-3">
+                                        <Link
+                                            href={sortHref('type')}
+                                            className="inline-flex items-center gap-1.5 hover:text-foreground focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                        >
+                                            Type
+                                            <SortIndicator
+                                                active={filters.sort === 'type'}
+                                                direction={filters.direction}
+                                            />
+                                        </Link>
+                                    </th>
+                                    <th className="px-4 py-3">Versions</th>
+                                    <th className="px-4 py-3">
+                                        <Link
+                                            href={sortHref('activity')}
+                                            className="inline-flex items-center gap-1.5 hover:text-foreground focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                        >
+                                            Activity
+                                            <SortIndicator
+                                                active={
+                                                    filters.sort === 'activity'
+                                                }
+                                                direction={filters.direction}
+                                            />
+                                        </Link>
+                                    </th>
+                                    <th className="px-4 py-3">
+                                        <Link
+                                            href={sortHref('updated_at')}
+                                            className="inline-flex items-center gap-1.5 hover:text-foreground focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                        >
+                                            Updated
+                                            <SortIndicator
+                                                active={
+                                                    filters.sort ===
+                                                    'updated_at'
+                                                }
+                                                direction={filters.direction}
+                                            />
+                                        </Link>
+                                    </th>
+                                    <th className="px-4 py-3 text-right">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {rows.length === 0 ? (
                                     <tr>
-                                        <th className="px-4 py-3">
-                                            <Link
-                                                href={sortHref('name')}
-                                                className="inline-flex items-center gap-1.5 hover:text-foreground focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                            >
-                                                Recipe
-                                                <SortIndicator
-                                                    active={
-                                                        filters.sort === 'name'
-                                                    }
-                                                    direction={
-                                                        filters.direction
-                                                    }
-                                                />
-                                            </Link>
-                                        </th>
-                                        <th className="px-4 py-3">
-                                            <Link
-                                                href={sortHref('type')}
-                                                className="inline-flex items-center gap-1.5 hover:text-foreground focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                            >
-                                                Type
-                                                <SortIndicator
-                                                    active={
-                                                        filters.sort === 'type'
-                                                    }
-                                                    direction={
-                                                        filters.direction
-                                                    }
-                                                />
-                                            </Link>
-                                        </th>
-                                        <th className="px-4 py-3">Versions</th>
-                                        <th className="px-4 py-3">
-                                            <Link
-                                                href={sortHref('activity')}
-                                                className="inline-flex items-center gap-1.5 hover:text-foreground focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                            >
-                                                Activity
-                                                <SortIndicator
-                                                    active={
-                                                        filters.sort ===
-                                                        'activity'
-                                                    }
-                                                    direction={
-                                                        filters.direction
-                                                    }
-                                                />
-                                            </Link>
-                                        </th>
-                                        <th className="px-4 py-3">
-                                            <Link
-                                                href={sortHref('updated_at')}
-                                                className="inline-flex items-center gap-1.5 hover:text-foreground focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                            >
-                                                Updated
-                                                <SortIndicator
-                                                    active={
-                                                        filters.sort ===
-                                                        'updated_at'
-                                                    }
-                                                    direction={
-                                                        filters.direction
-                                                    }
-                                                />
-                                            </Link>
-                                        </th>
-                                        <th className="px-4 py-3 text-right">
-                                            Actions
-                                        </th>
+                                        <td
+                                            colSpan={6}
+                                            className="px-4 py-12 text-center text-muted-foreground"
+                                        >
+                                            {summary.totalCount === 0
+                                                ? 'No recipes have been created.'
+                                                : 'No recipes match the current filters.'}
+                                        </td>
                                     </tr>
-                                </thead>
-
-                                <tbody>
-                                    {rows.length === 0 ? (
-                                        <tr>
-                                            <td
-                                                colSpan={6}
-                                                className="px-4 py-12 text-center text-muted-foreground"
-                                            >
-                                                {summary.totalCount === 0
-                                                    ? 'No recipes have been created.'
-                                                    : 'No recipes match the current filters.'}
+                                ) : (
+                                    rows.map((row) => (
+                                        <tr
+                                            key={row.id}
+                                            className="border-b border-sidebar-border/60 last:border-b-0 hover:bg-muted/20 dark:border-sidebar-border"
+                                        >
+                                            <td className="px-4 py-3.5">
+                                                <div className="font-medium">
+                                                    {row.name}
+                                                </div>
+                                                <div className="mt-0.5 font-mono text-xs text-muted-foreground">
+                                                    {row.code}
+                                                </div>
                                             </td>
-                                        </tr>
-                                    ) : (
-                                        rows.map((row) => (
-                                            <tr
-                                                key={row.id}
-                                                className="border-b border-sidebar-border/60 last:border-b-0 hover:bg-muted/20 dark:border-sidebar-border"
-                                            >
-                                                <td className="px-4 py-3.5">
-                                                    <div className="font-medium">
-                                                        {row.name}
-                                                    </div>
-                                                    <div className="mt-0.5 font-mono text-xs text-muted-foreground">
-                                                        {row.code}
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3.5">
-                                                    <TypeBadge
-                                                        type={row.type}
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-3.5">
-                                                    <VersionCoverage
-                                                        row={row}
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-3.5">
-                                                    <ActivityBadge
-                                                        active={row.active}
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-3.5 text-muted-foreground">
-                                                    {row.updatedAt === null ? (
-                                                        '—'
-                                                    ) : (
-                                                        <time
-                                                            dateTime={
-                                                                row.updatedAt
+                                            <td className="px-4 py-3.5">
+                                                <TypeBadge type={row.type} />
+                                            </td>
+                                            <td className="px-4 py-3.5">
+                                                <VersionCoverage row={row} />
+                                            </td>
+                                            <td className="px-4 py-3.5">
+                                                <ActivityBadge
+                                                    active={row.active}
+                                                />
+                                            </td>
+                                            <td className="px-4 py-3.5 text-muted-foreground">
+                                                {row.updatedAt === null ? (
+                                                    '—'
+                                                ) : (
+                                                    <time
+                                                        dateTime={row.updatedAt}
+                                                    >
+                                                        {formatUpdatedAt(
+                                                            row.updatedAt,
+                                                        )}
+                                                    </time>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-3.5">
+                                                <div className="flex justify-end gap-1.5">
+                                                    {canViewCosts && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            asChild
+                                                        >
+                                                            <Link
+                                                                href={RecipeCostController.show(
+                                                                    row.id,
+                                                                )}
+                                                            >
+                                                                <Coins
+                                                                    className="size-4"
+                                                                    aria-hidden="true"
+                                                                />
+                                                                Cost
+                                                            </Link>
+                                                        </Button>
+                                                    )}
+
+                                                    {canManage && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                setEditingRecipe(
+                                                                    row,
+                                                                )
                                                             }
                                                         >
-                                                            {formatUpdatedAt(
-                                                                row.updatedAt,
-                                                            )}
-                                                        </time>
+                                                            <Pencil
+                                                                className="size-4"
+                                                                aria-hidden="true"
+                                                            />
+                                                            Edit
+                                                        </Button>
                                                     )}
-                                                </td>
-                                                <td className="px-4 py-3.5">
-                                                    <div className="flex justify-end gap-1.5">
-                                                        {canViewCosts && (
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                asChild
-                                                            >
-                                                                <Link
-                                                                    href={RecipeCostController.show(
-                                                                        row.id,
-                                                                    )}
-                                                                >
-                                                                    <Coins
-                                                                        className="size-4"
-                                                                        aria-hidden="true"
-                                                                    />
-                                                                    Cost
-                                                                </Link>
-                                                            </Button>
+
+                                                    {!canViewCosts &&
+                                                        !canManage && (
+                                                            <span className="text-muted-foreground">
+                                                                —
+                                                            </span>
                                                         )}
-
-                                                        {canManage && (
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                asChild
-                                                            >
-                                                                <Link
-                                                                    href={RecipeController.edit(
-                                                                        row.id,
-                                                                    )}
-                                                                >
-                                                                    <Pencil
-                                                                        className="size-4"
-                                                                        aria-hidden="true"
-                                                                    />
-                                                                    Edit
-                                                                </Link>
-                                                            </Button>
-                                                        )}
-
-                                                        {!canViewCosts &&
-                                                            !canManage && (
-                                                                <span className="text-muted-foreground">
-                                                                    —
-                                                                </span>
-                                                            )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div className="flex flex-col gap-3 border-t border-sidebar-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-sidebar-border">
-                            <p className="text-xs text-muted-foreground">
-                                {pagination.total === 0
-                                    ? '0 recipes'
-                                    : `Showing ${pagination.from ?? 0} to ${pagination.to ?? 0} of ${pagination.total.toLocaleString()} recipes`}
-                            </p>
-
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground">
-                                    Page {pagination.currentPage} of{' '}
-                                    {pagination.lastPage}
-                                </span>
-
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    disabled={
-                                        pagination.previousPageUrl === null
-                                    }
-                                    asChild={
-                                        pagination.previousPageUrl !== null
-                                    }
-                                >
-                                    {pagination.previousPageUrl === null ? (
-                                        <span>
-                                            <ChevronLeft
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                            <span className="sr-only">
-                                                Previous page
-                                            </span>
-                                        </span>
-                                    ) : (
-                                        <Link
-                                            href={pagination.previousPageUrl}
-                                            aria-label="Previous page"
-                                        >
-                                            <ChevronLeft
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                        </Link>
-                                    )}
-                                </Button>
-
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    disabled={pagination.nextPageUrl === null}
-                                    asChild={pagination.nextPageUrl !== null}
-                                >
-                                    {pagination.nextPageUrl === null ? (
-                                        <span>
-                                            <ChevronRight
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                            <span className="sr-only">
-                                                Next page
-                                            </span>
-                                        </span>
-                                    ) : (
-                                        <Link
-                                            href={pagination.nextPageUrl}
-                                            aria-label="Next page"
-                                        >
-                                            <ChevronRight
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                        </Link>
-                                    )}
-                                </Button>
-                            </div>
-                        </div>
-
-                        <div className="border-t border-sidebar-border/70 bg-muted/20 px-4 py-3 text-xs text-muted-foreground dark:border-sidebar-border">
-                            Yield belongs to a specific recipe version. Current
-                            cost remains location-specific and is opened through
-                            the permitted Cost action instead of being estimated
-                            on this index.
-                        </div>
-                    </section>
-
-                    {canManage && (
-                        <aside
-                            id="create-recipe"
-                            className="h-fit rounded-xl border border-sidebar-border/70 bg-card p-5 shadow-sm xl:sticky xl:top-4 dark:border-sidebar-border"
-                        >
-                            <div className="mb-5">
-                                <h2 className="font-semibold">Create recipe</h2>
-                                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                                    Create the stable recipe identity first.
-                                    Yield, components, and formulation belong to
-                                    recipe versions.
-                                </p>
-                            </div>
-
-                            <Form
-                                {...RecipeController.store.form()}
-                                className="space-y-4"
-                                resetOnSuccess
-                            >
-                                {({ processing, errors }) => (
-                                    <>
-                                        <input
-                                            type="hidden"
-                                            name="active"
-                                            value="1"
-                                        />
-
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="create-code">
-                                                Code
-                                            </Label>
-                                            <Input
-                                                id="create-code"
-                                                name="code"
-                                                required
-                                                placeholder="RCP-00001"
-                                                autoComplete="off"
-                                                className="scroll-mt-24"
-                                                aria-invalid={
-                                                    errors.code
-                                                        ? true
-                                                        : undefined
-                                                }
-                                            />
-                                            <InputError message={errors.code} />
-                                        </div>
-
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="create-name">
-                                                Name
-                                            </Label>
-                                            <Input
-                                                id="create-name"
-                                                name="name"
-                                                required
-                                                placeholder="Cheeseburger"
-                                                autoComplete="off"
-                                                aria-invalid={
-                                                    errors.name
-                                                        ? true
-                                                        : undefined
-                                                }
-                                            />
-                                            <InputError message={errors.name} />
-                                        </div>
-
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="create-type">
-                                                Type
-                                            </Label>
-                                            <select
-                                                id="create-type"
-                                                name="type"
-                                                defaultValue="menu_item"
-                                                className={selectClassName}
-                                                aria-invalid={
-                                                    errors.type
-                                                        ? true
-                                                        : undefined
-                                                }
-                                            >
-                                                <option value="menu_item">
-                                                    Menu item
-                                                </option>
-                                                <option value="prepared_item">
-                                                    Prepared item
-                                                </option>
-                                                <option value="batch">
-                                                    Batch
-                                                </option>
-                                            </select>
-                                            <InputError message={errors.type} />
-                                        </div>
-
-                                        <Button
-                                            type="submit"
-                                            disabled={processing}
-                                            className="w-full"
-                                        >
-                                            <Plus
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                            {processing
-                                                ? 'Creating…'
-                                                : 'Create recipe'}
-                                        </Button>
-                                    </>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
                                 )}
-                            </Form>
-                        </aside>
-                    )}
-                </div>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="flex flex-col gap-3 border-t border-sidebar-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-sidebar-border">
+                        <p className="text-xs text-muted-foreground">
+                            {pagination.total === 0
+                                ? '0 recipes'
+                                : `Showing ${pagination.from ?? 0} to ${pagination.to ?? 0} of ${pagination.total.toLocaleString()} recipes`}
+                        </p>
+
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                                Page {pagination.currentPage} of{' '}
+                                {pagination.lastPage}
+                            </span>
+
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                disabled={pagination.previousPageUrl === null}
+                                asChild={pagination.previousPageUrl !== null}
+                            >
+                                {pagination.previousPageUrl === null ? (
+                                    <span>
+                                        <ChevronLeft
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        <span className="sr-only">
+                                            Previous page
+                                        </span>
+                                    </span>
+                                ) : (
+                                    <Link
+                                        href={pagination.previousPageUrl}
+                                        aria-label="Previous page"
+                                    >
+                                        <ChevronLeft
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                    </Link>
+                                )}
+                            </Button>
+
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                disabled={pagination.nextPageUrl === null}
+                                asChild={pagination.nextPageUrl !== null}
+                            >
+                                {pagination.nextPageUrl === null ? (
+                                    <span>
+                                        <ChevronRight
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        <span className="sr-only">
+                                            Next page
+                                        </span>
+                                    </span>
+                                ) : (
+                                    <Link
+                                        href={pagination.nextPageUrl}
+                                        aria-label="Next page"
+                                    >
+                                        <ChevronRight
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                    </Link>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="border-t border-sidebar-border/70 bg-muted/20 px-4 py-3 text-xs text-muted-foreground dark:border-sidebar-border">
+                        Yield belongs to a specific recipe version. Current cost
+                        remains location-specific and is opened through the
+                        permitted Cost action instead of being estimated on this
+                        index.
+                    </div>
+                </section>
             </div>
+
+            {createOpen && (
+                <RecipeIdentityDialog
+                    recipe={null}
+                    returnTo={currentUrl}
+                    onClose={() => setCreateOpen(false)}
+                />
+            )}
+
+            {editingRecipe !== null && (
+                <RecipeIdentityDialog
+                    key={editingRecipe.id}
+                    recipe={editingRecipe}
+                    returnTo={currentUrl}
+                    onClose={() => setEditingRecipe(null)}
+                />
+            )}
         </>
     );
 }
