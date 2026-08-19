@@ -140,11 +140,64 @@ test('report shows cost fields and aggregated totals to members with cost visibi
                 ->has('locationTotals', 1)
                 ->where('locationTotals.0.locationId', $this->location->id)
                 ->where('locationTotals.0.value', '40.0000')
+                ->missing('locationTotals.0.quantity')
                 ->has('categoryTotals', 1)
                 ->where('categoryTotals.0.categoryId', $this->category->id)
                 ->where('categoryTotals.0.value', '40.0000')
+                ->missing('categoryTotals.0.quantity')
                 ->where('grandTotal', '40.0000')
                 ->where('canViewCosts', true),
+        );
+});
+
+test('valuation summaries never aggregate incompatible item quantities', function () {
+    $volumeUnit = UnitOfMeasure::factory()->create([
+        'organization_id' => $this->organization->id,
+        'dimension' => 'volume',
+    ]);
+
+    $volumeItem = InventoryItem::factory()->create([
+        'organization_id' => $this->organization->id,
+        'base_unit_of_measure_id' => $volumeUnit->id,
+        'inventory_category_id' => $this->category->id,
+        'name' => 'Valuation Volume Item',
+        'sku' => 'VALUATION-VOLUME',
+        'active' => true,
+    ]);
+
+    app(RecordStockMovement::class)->handle(
+        organization: $this->organization,
+        location: $this->location,
+        storageLocation: $this->storageLocation,
+        inventoryItem: $volumeItem,
+        type: StockMovementType::OpeningBalance,
+        baseQuantity: '3',
+        baseUnitOfMeasure: $volumeUnit,
+        referenceType: 'opening_balance',
+        referenceId: $volumeItem->id,
+        occurredAt: now(),
+        idempotencyKey: "valuation-test:mixed-unit:{$volumeItem->id}",
+        inboundUnitCost: '2.0000',
+    );
+
+    $this
+        ->actingAs($this->manager)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('inventory.valuation.index'))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/valuation')
+                ->has('rows', 2)
+                ->has('locationTotals', 1)
+                ->where('locationTotals.0.value', '46.0000')
+                ->missing('locationTotals.0.quantity')
+                ->has('categoryTotals', 1)
+                ->where('categoryTotals.0.value', '46.0000')
+                ->missing('categoryTotals.0.quantity')
+                ->where('grandTotal', '46.0000'),
         );
 });
 
@@ -375,6 +428,62 @@ test('export shows cost fields to members with cost visibility', function () {
 
     expect($content)->toContain('4.0000');
     expect($content)->toContain('40.0000');
+});
+
+test('export respects active location and category filters', function () {
+    $otherLocation = Location::factory()->create([
+        'organization_id' => $this->organization->id,
+        'active' => true,
+    ]);
+
+    $otherStorage = makeStorageLocationForValuationTest(
+        $this->organization,
+        $otherLocation,
+        'FILTER',
+    );
+
+    $otherCategory = InventoryCategory::factory()->create([
+        'organization_id' => $this->organization->id,
+        'active' => true,
+    ]);
+
+    $otherItem = InventoryItem::factory()->create([
+        'organization_id' => $this->organization->id,
+        'base_unit_of_measure_id' => $this->unit->id,
+        'inventory_category_id' => $otherCategory->id,
+        'name' => 'Excluded Valuation Export Item',
+        'active' => true,
+    ]);
+
+    app(RecordStockMovement::class)->handle(
+        organization: $this->organization,
+        location: $otherLocation,
+        storageLocation: $otherStorage,
+        inventoryItem: $otherItem,
+        type: StockMovementType::OpeningBalance,
+        baseQuantity: '5',
+        baseUnitOfMeasure: $this->unit,
+        referenceType: 'opening_balance',
+        referenceId: $otherItem->id,
+        occurredAt: now(),
+        idempotencyKey: "valuation-export-test:filters:{$otherItem->id}",
+        inboundUnitCost: '8.0000',
+    );
+
+    $content = $this
+        ->actingAs($this->manager)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('inventory.valuation.export', [
+            'location_id' => $this->location->id,
+            'inventory_category_id' => $this->category->id,
+        ]))
+        ->assertOk()
+        ->streamedContent();
+
+    expect($content)->toContain($this->item->name);
+    expect($content)->not->toContain('Excluded Valuation Export Item');
 });
 
 test('export is tenant isolated across organizations', function () {

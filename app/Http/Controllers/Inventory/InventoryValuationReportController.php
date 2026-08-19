@@ -211,6 +211,8 @@ class InventoryValuationReportController extends Controller
     }
 
     /**
+     * Convert one current stock balance into the report's authorized row shape.
+     *
      * @return array<string, mixed>
      */
     private function rowData(
@@ -244,8 +246,10 @@ class InventoryValuationReportController extends Controller
     }
 
     /**
+     * Aggregate monetary value by location without adding incompatible item units.
+     *
      * @param  Collection<int, StockBalance>  $balances
-     * @return list<array{locationId: int, locationName: string, quantity: string, value: string}>
+     * @return list<array{locationId: int, locationName: string, value: string}>
      */
     private function totalsByLocation(Collection $balances): array
     {
@@ -256,7 +260,6 @@ class InventoryValuationReportController extends Controller
                     fn (Collection $group): array => [
                         'locationId' => $group->first()->location_id,
                         'locationName' => $group->first()->location->name,
-                        'quantity' => (string) $this->sumQuantities($group),
                         'value' => (string) $this->sumValues($group),
                     ],
                 )
@@ -265,8 +268,10 @@ class InventoryValuationReportController extends Controller
     }
 
     /**
+     * Aggregate monetary value by category without adding incompatible item units.
+     *
      * @param  Collection<int, StockBalance>  $balances
-     * @return list<array{categoryId: int|null, categoryName: string|null, quantity: string, value: string}>
+     * @return list<array{categoryId: int|null, categoryName: string|null, value: string}>
      */
     private function totalsByCategory(Collection $balances): array
     {
@@ -279,7 +284,6 @@ class InventoryValuationReportController extends Controller
                     fn (Collection $group): array => [
                         'categoryId' => $group->first()->inventoryItem->inventory_category_id,
                         'categoryName' => $group->first()->inventoryItem->inventoryCategory?->name,
-                        'quantity' => (string) $this->sumQuantities($group),
                         'value' => (string) $this->sumValues($group),
                     ],
                 )
@@ -288,19 +292,8 @@ class InventoryValuationReportController extends Controller
     }
 
     /**
-     * @param  Collection<int, StockBalance>  $balances
-     */
-    private function sumQuantities(Collection $balances): BigDecimal
-    {
-        return $balances->reduce(
-            static fn (BigDecimal $total, StockBalance $balance): BigDecimal => $total->plus(
-                $balance->quantity_on_hand,
-            ),
-            BigDecimal::zero(),
-        );
-    }
-
-    /**
+     * Sum monetary stock value using decimal-safe arithmetic.
+     *
      * @param  Collection<int, StockBalance>  $balances
      */
     private function sumValues(Collection $balances): BigDecimal
@@ -314,6 +307,8 @@ class InventoryValuationReportController extends Controller
     }
 
     /**
+     * Return tenant-scoped location options for the report filter.
+     *
      * @return list<array{id: int, name: string}>
      */
     private function locationOptions(Organization $organization): array
@@ -334,6 +329,8 @@ class InventoryValuationReportController extends Controller
     }
 
     /**
+     * Return tenant-scoped category options for the report filter.
+     *
      * @return list<array{id: int, name: string}>
      */
     private function categoryOptions(Organization $organization): array
@@ -353,6 +350,9 @@ class InventoryValuationReportController extends Controller
         );
     }
 
+    /**
+     * Resolve the server-authoritative organization context for this request.
+     */
     private function activeOrganization(Request $request): Organization
     {
         $organization = $request->attributes->get(
