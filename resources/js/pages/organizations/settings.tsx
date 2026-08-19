@@ -1,8 +1,25 @@
 import { Form, Head } from '@inertiajs/react';
+import {
+    Building2,
+    CircleDollarSign,
+    Clock3,
+    Hash,
+    Link2,
+    Save,
+} from 'lucide-react';
 import OrganizationController from '@/actions/App/Http/Controllers/OrganizationController';
 import InputError from '@/components/input-error';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
@@ -19,13 +36,41 @@ type Props = {
 };
 
 export default function OrganizationSettings({ organization }: Props) {
+    const overviewItems = [
+        {
+            label: 'Organization name',
+            value: organization.name,
+            icon: Building2,
+        },
+        {
+            label: 'Organization ID',
+            value: `#${organization.id}`,
+            icon: Hash,
+        },
+        {
+            label: 'Slug',
+            value: organization.slug,
+            icon: Link2,
+        },
+        {
+            label: 'Timezone',
+            value: organization.timezone,
+            icon: Clock3,
+        },
+        {
+            label: 'Currency',
+            value: organization.currency,
+            icon: CircleDollarSign,
+        },
+    ];
+
     return (
         <>
             <Head title="Organization settings" />
 
-            <div className="flex flex-1 flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-2xl font-semibold">
+            <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+                <div className="mx-auto w-full max-w-7xl">
+                    <h1 className="text-2xl font-semibold tracking-tight">
                         Organization settings
                     </h1>
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -33,93 +78,373 @@ export default function OrganizationSettings({ organization }: Props) {
                     </p>
                 </div>
 
-                <div className="max-w-xl rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                    <Form
-                        {...OrganizationController.update.form(organization.id)}
-                        className="space-y-5"
-                    >
-                        {({ processing, errors }) => (
-                            <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="name">Name</Label>
-                                    <Input
-                                        id="name"
-                                        name="name"
-                                        defaultValue={organization.name}
-                                        required
-                                        maxLength={160}
+                <div className="mx-auto grid w-full max-w-7xl gap-6 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+                    <Card className="h-fit">
+                        <CardHeader>
+                            <div className="flex items-start gap-3">
+                                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                                    <Building2
+                                        className="size-5"
+                                        aria-hidden="true"
                                     />
-                                    <InputError message={errors.name} />
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="slug">Slug</Label>
-                                    <Input
-                                        id="slug"
-                                        name="slug"
-                                        defaultValue={organization.slug}
-                                        required
-                                        maxLength={160}
-                                    />
-                                    <InputError message={errors.slug} />
+                                <div className="grid gap-1">
+                                    <CardTitle>Organization overview</CardTitle>
+                                    <CardDescription>
+                                        These details identify the active
+                                        organization across MiseLedger.
+                                    </CardDescription>
                                 </div>
+                            </div>
+                        </CardHeader>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="timezone">Timezone</Label>
-                                    <Input
-                                        id="timezone"
-                                        name="timezone"
-                                        defaultValue={organization.timezone}
-                                        required
-                                        maxLength={64}
-                                        placeholder="Asia/Manila"
-                                    />
-                                    <InputError message={errors.timezone} />
-                                </div>
+                        <CardContent className="space-y-4">
+                            {overviewItems.map(
+                                ({ label, value, icon: Icon }) => (
+                                    <div
+                                        key={label}
+                                        className="flex items-start gap-3"
+                                    >
+                                        <Icon
+                                            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                                            aria-hidden="true"
+                                        />
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="currency">Currency</Label>
-                                    <Input
-                                        id="currency"
-                                        name="currency"
-                                        defaultValue={organization.currency}
-                                        required
-                                        maxLength={3}
-                                        placeholder="PHP"
-                                    />
-                                    <InputError message={errors.currency} />
-                                </div>
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-medium text-muted-foreground">
+                                                {label}
+                                            </p>
+                                            <p className="mt-0.5 text-sm font-medium break-words">
+                                                {value}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ),
+                            )}
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="active">Status</Label>
-                                    <select
-                                        id="active"
-                                        name="active"
-                                        defaultValue={
-                                            organization.active ? '1' : '0'
+                            <div className="border-t pt-4">
+                                <p className="text-xs font-medium text-muted-foreground">
+                                    Status
+                                </p>
+
+                                <Badge
+                                    variant="outline"
+                                    className="mt-1.5 gap-1.5"
+                                >
+                                    <span
+                                        className={
+                                            organization.active
+                                                ? 'size-1.5 rounded-full bg-emerald-500'
+                                                : 'size-1.5 rounded-full bg-muted-foreground'
                                         }
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                    >
-                                        <option value="1">Active</option>
-                                        <option value="0">Inactive</option>
-                                    </select>
-                                    <InputError message={errors.active} />
-                                </div>
+                                        aria-hidden="true"
+                                    />
+                                    {organization.active
+                                        ? 'Active'
+                                        : 'Inactive'}
+                                </Badge>
+                            </div>
+                        </CardContent>
+                    </Card>
 
-                                <div className="flex gap-2">
-                                    <Button type="submit" disabled={processing}>
-                                        Save settings
-                                    </Button>
-                                    <PreviousPageButton
-                                        fallback={dashboard.url()}
-                                        variant="outline"
-                                    >
-                                        Cancel
-                                    </PreviousPageButton>
-                                </div>
-                            </>
-                        )}
-                    </Form>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Organization details</CardTitle>
+                            <CardDescription>
+                                Update the configuration used throughout this
+                                organization.
+                            </CardDescription>
+                        </CardHeader>
+
+                        <Form
+                            {...OrganizationController.update.form(
+                                organization.id,
+                            )}
+                            className="flex flex-col gap-6"
+                        >
+                            {({ processing, errors }) => (
+                                <>
+                                    <CardContent className="space-y-6">
+                                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] md:gap-8">
+                                            <div>
+                                                <Label htmlFor="name">
+                                                    Name
+                                                </Label>
+                                                <p
+                                                    id="name-help"
+                                                    className="mt-1 text-xs leading-relaxed text-muted-foreground"
+                                                >
+                                                    The name shown throughout
+                                                    MiseLedger.
+                                                </p>
+                                            </div>
+
+                                            <div className="grid gap-2">
+                                                <Input
+                                                    id="name"
+                                                    name="name"
+                                                    defaultValue={
+                                                        organization.name
+                                                    }
+                                                    required
+                                                    maxLength={160}
+                                                    aria-describedby="name-help"
+                                                    aria-invalid={Boolean(
+                                                        errors.name,
+                                                    )}
+                                                />
+                                                <InputError
+                                                    message={errors.name}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="border-t" />
+
+                                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] md:gap-8">
+                                            <div>
+                                                <Label htmlFor="slug">
+                                                    Slug
+                                                </Label>
+                                                <p
+                                                    id="slug-help"
+                                                    className="mt-1 text-xs leading-relaxed text-muted-foreground"
+                                                >
+                                                    Used as the organization's
+                                                    unique URL-friendly
+                                                    identifier.
+                                                </p>
+                                            </div>
+
+                                            <div className="grid gap-2">
+                                                <Input
+                                                    id="slug"
+                                                    name="slug"
+                                                    defaultValue={
+                                                        organization.slug
+                                                    }
+                                                    required
+                                                    maxLength={160}
+                                                    autoComplete="off"
+                                                    aria-describedby="slug-help slug-format-help"
+                                                    aria-invalid={Boolean(
+                                                        errors.slug,
+                                                    )}
+                                                />
+                                                <p
+                                                    id="slug-format-help"
+                                                    className="text-xs text-muted-foreground"
+                                                >
+                                                    Letters, numbers, dashes,
+                                                    and underscores are accepted
+                                                    and normalized to lowercase.
+                                                </p>
+                                                <InputError
+                                                    message={errors.slug}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="border-t" />
+
+                                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] md:gap-8">
+                                            <div>
+                                                <Label htmlFor="timezone">
+                                                    Timezone
+                                                </Label>
+                                                <p
+                                                    id="timezone-help"
+                                                    className="mt-1 text-xs leading-relaxed text-muted-foreground"
+                                                >
+                                                    Used when displaying and
+                                                    interpreting operational
+                                                    dates and times.
+                                                </p>
+                                            </div>
+
+                                            <div className="grid gap-2">
+                                                <Input
+                                                    id="timezone"
+                                                    name="timezone"
+                                                    defaultValue={
+                                                        organization.timezone
+                                                    }
+                                                    required
+                                                    maxLength={64}
+                                                    placeholder="Asia/Manila"
+                                                    autoComplete="off"
+                                                    aria-describedby="timezone-help timezone-format-help"
+                                                    aria-invalid={Boolean(
+                                                        errors.timezone,
+                                                    )}
+                                                />
+                                                <p
+                                                    id="timezone-format-help"
+                                                    className="text-xs text-muted-foreground"
+                                                >
+                                                    Use a valid IANA timezone,
+                                                    for example Asia/Manila.
+                                                </p>
+                                                <InputError
+                                                    message={errors.timezone}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="border-t" />
+
+                                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] md:gap-8">
+                                            <div>
+                                                <Label htmlFor="currency">
+                                                    Currency
+                                                </Label>
+                                                <p
+                                                    id="currency-help"
+                                                    className="mt-1 text-xs leading-relaxed text-muted-foreground"
+                                                >
+                                                    The default currency used
+                                                    for organization monetary
+                                                    values.
+                                                </p>
+                                            </div>
+
+                                            <div className="grid gap-2">
+                                                <Input
+                                                    id="currency"
+                                                    name="currency"
+                                                    defaultValue={
+                                                        organization.currency
+                                                    }
+                                                    required
+                                                    maxLength={3}
+                                                    placeholder="PHP"
+                                                    autoComplete="off"
+                                                    aria-describedby="currency-help currency-format-help"
+                                                    aria-invalid={Boolean(
+                                                        errors.currency,
+                                                    )}
+                                                />
+                                                <p
+                                                    id="currency-format-help"
+                                                    className="text-xs text-muted-foreground"
+                                                >
+                                                    Use a 3-letter ISO currency
+                                                    code, for example PHP.
+                                                </p>
+                                                <InputError
+                                                    message={errors.currency}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="border-t" />
+
+                                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] md:gap-8">
+                                            <div>
+                                                <p className="text-sm font-medium">
+                                                    Status
+                                                </p>
+                                                <p
+                                                    id="status-help"
+                                                    className="mt-1 text-xs leading-relaxed text-muted-foreground"
+                                                >
+                                                    Controls whether this
+                                                    organization is active.
+                                                </p>
+                                            </div>
+
+                                            <div className="grid gap-2">
+                                                <fieldset
+                                                    aria-describedby="status-help"
+                                                    aria-invalid={Boolean(
+                                                        errors.active,
+                                                    )}
+                                                >
+                                                    <legend className="sr-only">
+                                                        Organization status
+                                                    </legend>
+
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <label className="cursor-pointer">
+                                                            <input
+                                                                type="radio"
+                                                                name="active"
+                                                                value="1"
+                                                                defaultChecked={
+                                                                    organization.active
+                                                                }
+                                                                className="peer sr-only"
+                                                                aria-invalid={Boolean(
+                                                                    errors.active,
+                                                                )}
+                                                            />
+                                                            <span className="flex h-9 items-center justify-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium transition-[color,background-color,border-color,box-shadow] peer-checked:border-primary peer-checked:bg-accent peer-checked:text-accent-foreground peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50">
+                                                                <span
+                                                                    className="size-2 rounded-full bg-emerald-500"
+                                                                    aria-hidden="true"
+                                                                />
+                                                                Active
+                                                            </span>
+                                                        </label>
+
+                                                        <label className="cursor-pointer">
+                                                            <input
+                                                                type="radio"
+                                                                name="active"
+                                                                value="0"
+                                                                defaultChecked={
+                                                                    !organization.active
+                                                                }
+                                                                className="peer sr-only"
+                                                                aria-invalid={Boolean(
+                                                                    errors.active,
+                                                                )}
+                                                            />
+                                                            <span className="flex h-9 items-center justify-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium transition-[color,background-color,border-color,box-shadow] peer-checked:border-primary peer-checked:bg-accent peer-checked:text-accent-foreground peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50">
+                                                                <span
+                                                                    className="size-2 rounded-full bg-muted-foreground"
+                                                                    aria-hidden="true"
+                                                                />
+                                                                Inactive
+                                                            </span>
+                                                        </label>
+                                                    </div>
+                                                </fieldset>
+
+                                                <InputError
+                                                    message={errors.active}
+                                                />
+                                            </div>
+                                        </div>
+                                    </CardContent>
+
+                                    <CardFooter className="flex-wrap justify-end gap-2 border-t pt-6">
+                                        <PreviousPageButton
+                                            fallback={dashboard.url()}
+                                            variant="outline"
+                                            disabled={processing}
+                                        >
+                                            Cancel
+                                        </PreviousPageButton>
+
+                                        <Button
+                                            type="submit"
+                                            disabled={processing}
+                                        >
+                                            <Save
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            {processing
+                                                ? 'Saving...'
+                                                : 'Save changes'}
+                                        </Button>
+                                    </CardFooter>
+                                </>
+                            )}
+                        </Form>
+                    </Card>
                 </div>
             </div>
         </>

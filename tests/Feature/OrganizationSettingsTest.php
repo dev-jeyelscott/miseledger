@@ -11,6 +11,9 @@ test('an owner can view and update organization settings', function () {
     $organization = Organization::factory()->create([
         'name' => 'Original Name',
         'slug' => 'original-name',
+        'timezone' => 'Asia/Manila',
+        'currency' => 'PHP',
+        'active' => true,
     ]);
 
     OrganizationMembership::factory()->for($organization)->for($owner)->create([
@@ -23,7 +26,11 @@ test('an owner can view and update organization settings', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->component('organizations/settings')
             ->where('organization.id', $organization->id)
-            ->where('organization.currency', 'PHP'));
+            ->where('organization.name', 'Original Name')
+            ->where('organization.slug', 'original-name')
+            ->where('organization.timezone', 'Asia/Manila')
+            ->where('organization.currency', 'PHP')
+            ->where('organization.active', true));
 
     $this->actingAs($owner)
         ->put(route('organizations.settings.update', $organization), [
@@ -115,6 +122,10 @@ test('non-owner members cannot manage organization settings', function () {
     OrganizationMembership::factory()->for($organization)->for($manager)->create([
         'role' => OrganizationRole::Manager,
     ]);
+
+    $this->actingAs($manager)
+        ->get(route('organizations.settings.edit', $organization))
+        ->assertForbidden();
 
     $this->actingAs($manager)
         ->put(route('organizations.settings.update', $organization), [
