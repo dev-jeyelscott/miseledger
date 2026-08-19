@@ -1,6 +1,7 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import OrganizationLocationController from '@/actions/App/Http/Controllers/OrganizationLocationController';
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -97,19 +98,14 @@ export default function EditOrganizationLocation({
                                         Save location
                                     </Button>
 
-                                    <Button
-                                        type="button"
+                                    <PreviousPageButton
+                                        fallback={OrganizationLocationController.index.url(
+                                            organization.id,
+                                        )}
                                         variant="outline"
-                                        asChild
                                     >
-                                        <Link
-                                            href={OrganizationLocationController.index(
-                                                organization.id,
-                                            )}
-                                        >
-                                            Cancel
-                                        </Link>
-                                    </Button>
+                                        Cancel
+                                    </PreviousPageButton>
                                 </div>
                             </>
                         )}

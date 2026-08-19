@@ -3,8 +3,17 @@ import OrganizationLocationController from '@/actions/App/Http/Controllers/Organ
 import OrganizationStorageLocationController from '@/actions/App/Http/Controllers/OrganizationStorageLocationController';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type { LocationSummary, OrganizationSummary } from '@/types';
 
@@ -12,6 +21,121 @@ type Props = {
     organization: OrganizationSummary;
     locations: LocationSummary[];
 };
+
+type EditLocationDialogProps = {
+    organization: OrganizationSummary;
+    location: LocationSummary;
+};
+
+/** Edit one location in-place while retaining the management workspace context. */
+function EditLocationDialog({
+    organization,
+    location,
+}: EditLocationDialogProps) {
+    const dialog = useGuardedDialog(
+        'Discard the location changes you entered?',
+    );
+    const fieldPrefix = `edit-location-${location.id}`;
+
+    return (
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                    Edit
+                </Button>
+            </DialogTrigger>
+
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>Edit location</DialogTitle>
+                    <DialogDescription>{organization.name}</DialogDescription>
+                </DialogHeader>
+
+                <div onChange={dialog.markDirty}>
+                    <Form
+                        {...OrganizationLocationController.update.form([
+                            organization.id,
+                            location.id,
+                        ])}
+                        errorBag={`editLocation${location.id}`}
+                        className="space-y-5"
+                        onSuccess={dialog.closeAfterSuccess}
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <div className="grid gap-2">
+                                    <Label htmlFor={`${fieldPrefix}-name`}>
+                                        Location name
+                                    </Label>
+                                    <Input
+                                        id={`${fieldPrefix}-name`}
+                                        name="name"
+                                        required
+                                        defaultValue={location.name}
+                                        autoComplete="off"
+                                    />
+                                    <InputError message={errors.name} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor={`${fieldPrefix}-code`}>
+                                        Location code
+                                    </Label>
+                                    <Input
+                                        id={`${fieldPrefix}-code`}
+                                        name="code"
+                                        required
+                                        defaultValue={location.code}
+                                        autoComplete="off"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Letters, numbers, hyphens, and
+                                        underscores only.
+                                    </p>
+                                    <InputError message={errors.code} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor={`${fieldPrefix}-active`}>
+                                        Status
+                                    </Label>
+                                    <select
+                                        id={`${fieldPrefix}-active`}
+                                        name="active"
+                                        defaultValue={
+                                            location.active ? '1' : '0'
+                                        }
+                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    >
+                                        <option value="1">Active</option>
+                                        <option value="0">Inactive</option>
+                                    </select>
+                                    <InputError message={errors.active} />
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                    <Button type="submit" disabled={processing}>
+                                        Save location
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={processing}
+                                        onClick={() =>
+                                            dialog.onOpenChange(false)
+                                        }
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function OrganizationLocations({
     organization,
@@ -88,22 +212,10 @@ export default function OrganizationLocations({
                                                 </Link>
                                             </Button>
 
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                asChild
-                                            >
-                                                <Link
-                                                    href={OrganizationLocationController.edit(
-                                                        [
-                                                            organization.id,
-                                                            location.id,
-                                                        ],
-                                                    )}
-                                                >
-                                                    Edit
-                                                </Link>
-                                            </Button>
+                                            <EditLocationDialog
+                                                organization={organization}
+                                                location={location}
+                                            />
                                         </div>
                                     </div>
                                 ))}
@@ -125,6 +237,7 @@ export default function OrganizationLocations({
                             {...OrganizationLocationController.store.form(
                                 organization.id,
                             )}
+                            errorBag="createLocation"
                             className="space-y-5"
                             resetOnSuccess
                         >

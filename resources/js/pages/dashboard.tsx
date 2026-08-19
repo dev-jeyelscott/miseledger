@@ -29,8 +29,20 @@ import OrganizationMemberController from '@/actions/App/Http/Controllers/Organiz
 import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/GoodsReceiptController';
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
+import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type { OrganizationContext } from '@/types';
 
@@ -64,9 +76,19 @@ type DashboardActivity = {
     occurredAt: string;
 };
 
+type OrganizationSettingsData = {
+    id: number;
+    name: string;
+    slug: string;
+    timezone: string;
+    currency: string;
+    active: boolean;
+};
+
 type DashboardData = {
     currency: string;
     timezone: string;
+    organizationSettings: OrganizationSettingsData | null;
     metrics: {
         inventoryValue: string | null;
         lowStockItems: number | null;
@@ -108,6 +130,14 @@ type QuickActionProps = {
     icon: LucideIcon;
     label: string;
     description: string;
+};
+
+type DialogTriggerProps = {
+    trigger: ReactNode;
+};
+
+type OrganizationSettingsDialogProps = DialogTriggerProps & {
+    organization: OrganizationSettingsData;
 };
 
 const movementLabels: Record<string, string> = {
@@ -209,6 +239,204 @@ function QuickAction({
     );
 }
 
+/** Create a new organization without navigating away from the dashboard context. */
+function CreateOrganizationDialog({ trigger }: DialogTriggerProps) {
+    const dialog = useGuardedDialog(
+        'Discard the organization details you entered?',
+    );
+
+    return (
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>Create organization</DialogTitle>
+                    <DialogDescription>
+                        Create the tenant boundary for your restaurant inventory
+                        data.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div onChange={dialog.markDirty}>
+                    <Form
+                        {...OrganizationController.store.form()}
+                        errorBag="createOrganization"
+                        className="space-y-6"
+                        onSuccess={dialog.closeAfterSuccess}
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="dashboard-organization-name">
+                                        Organization name
+                                    </Label>
+                                    <Input
+                                        id="dashboard-organization-name"
+                                        name="name"
+                                        required
+                                        maxLength={160}
+                                        autoFocus
+                                        autoComplete="organization"
+                                        placeholder="Example Restaurant Group"
+                                    />
+                                    <InputError message={errors.name} />
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                    <Button type="submit" disabled={processing}>
+                                        Create organization
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={processing}
+                                        onClick={() =>
+                                            dialog.onOpenChange(false)
+                                        }
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/** Edit the compact active-organization configuration inside a dashboard dialog. */
+function OrganizationSettingsDialog({
+    organization,
+    trigger,
+}: OrganizationSettingsDialogProps) {
+    const dialog = useGuardedDialog(
+        'Discard the organization setting changes you entered?',
+    );
+
+    return (
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>Organization settings</DialogTitle>
+                    <DialogDescription>
+                        Manage the configuration for {organization.name}.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div onChange={dialog.markDirty}>
+                    <Form
+                        {...OrganizationController.update.form(organization.id)}
+                        errorBag="organizationSettings"
+                        className="space-y-5"
+                        onSuccess={dialog.closeAfterSuccess}
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="dashboard-settings-name">
+                                        Name
+                                    </Label>
+                                    <Input
+                                        id="dashboard-settings-name"
+                                        name="name"
+                                        defaultValue={organization.name}
+                                        required
+                                        maxLength={160}
+                                    />
+                                    <InputError message={errors.name} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="dashboard-settings-slug">
+                                        Slug
+                                    </Label>
+                                    <Input
+                                        id="dashboard-settings-slug"
+                                        name="slug"
+                                        defaultValue={organization.slug}
+                                        required
+                                        maxLength={160}
+                                    />
+                                    <InputError message={errors.slug} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="dashboard-settings-timezone">
+                                        Timezone
+                                    </Label>
+                                    <Input
+                                        id="dashboard-settings-timezone"
+                                        name="timezone"
+                                        defaultValue={organization.timezone}
+                                        required
+                                        maxLength={64}
+                                        placeholder="Asia/Manila"
+                                    />
+                                    <InputError message={errors.timezone} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="dashboard-settings-currency">
+                                        Currency
+                                    </Label>
+                                    <Input
+                                        id="dashboard-settings-currency"
+                                        name="currency"
+                                        defaultValue={organization.currency}
+                                        required
+                                        maxLength={3}
+                                        placeholder="PHP"
+                                    />
+                                    <InputError message={errors.currency} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="dashboard-settings-active">
+                                        Status
+                                    </Label>
+                                    <select
+                                        id="dashboard-settings-active"
+                                        name="active"
+                                        defaultValue={
+                                            organization.active ? '1' : '0'
+                                        }
+                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    >
+                                        <option value="1">Active</option>
+                                        <option value="0">Inactive</option>
+                                    </select>
+                                    <InputError message={errors.active} />
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                    <Button type="submit" disabled={processing}>
+                                        Save settings
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={processing}
+                                        onClick={() =>
+                                            dialog.onOpenChange(false)
+                                        }
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function Dashboard() {
     const { organizationContext, dashboard: dashboardData } =
         usePage<PageProps>().props;
@@ -243,12 +471,17 @@ export default function Dashboard() {
                             organization-scoped inventory data can be created.
                         </p>
 
-                        <Button className="mt-6" asChild>
-                            <Link href={OrganizationController.create()}>
-                                <Plus className="size-4" aria-hidden="true" />
-                                Create organization
-                            </Link>
-                        </Button>
+                        <CreateOrganizationDialog
+                            trigger={
+                                <Button className="mt-6">
+                                    <Plus
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    Create organization
+                                </Button>
+                            }
+                        />
                     </div>
                 </div>
             </>
@@ -336,28 +569,35 @@ export default function Dashboard() {
                             </Button>
                         )}
 
-                        {permissions.has('organization.manage') && (
-                            <Button variant="outline" asChild>
-                                <Link
-                                    href={OrganizationController.edit(
-                                        organizationContext.active.id,
-                                    )}
-                                >
-                                    <Settings
+                        {permissions.has('organization.manage') &&
+                            dashboardData.organizationSettings !== null && (
+                                <OrganizationSettingsDialog
+                                    organization={
+                                        dashboardData.organizationSettings
+                                    }
+                                    trigger={
+                                        <Button variant="outline">
+                                            <Settings
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            Organization settings
+                                        </Button>
+                                    }
+                                />
+                            )}
+
+                        <CreateOrganizationDialog
+                            trigger={
+                                <Button>
+                                    <Plus
                                         className="size-4"
                                         aria-hidden="true"
                                     />
-                                    Organization settings
-                                </Link>
-                            </Button>
-                        )}
-
-                        <Button asChild>
-                            <Link href={OrganizationController.create()}>
-                                <Plus className="size-4" aria-hidden="true" />
-                                New organization
-                            </Link>
-                        </Button>
+                                    New organization
+                                </Button>
+                            }
+                        />
                     </div>
                 </section>
 

@@ -1,6 +1,7 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import OrganizationStorageLocationController from '@/actions/App/Http/Controllers/OrganizationStorageLocationController';
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -93,15 +94,14 @@ export default function EditStorageLocation({
                                         Save storage location
                                     </Button>
 
-                                    <Button variant="outline" asChild>
-                                        <Link
-                                            href={OrganizationStorageLocationController.index(
-                                                [organization.id, location.id],
-                                            )}
-                                        >
-                                            Cancel
-                                        </Link>
-                                    </Button>
+                                    <PreviousPageButton
+                                        fallback={OrganizationStorageLocationController.index.url(
+                                            [organization.id, location.id],
+                                        )}
+                                        variant="outline"
+                                    >
+                                        Cancel
+                                    </PreviousPageButton>
                                 </div>
                             </>
                         )}

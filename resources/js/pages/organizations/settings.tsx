@@ -1,6 +1,7 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import OrganizationController from '@/actions/App/Http/Controllers/OrganizationController';
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -109,9 +110,12 @@ export default function OrganizationSettings({ organization }: Props) {
                                     <Button type="submit" disabled={processing}>
                                         Save settings
                                     </Button>
-                                    <Button variant="outline" asChild>
-                                        <Link href={dashboard()}>Cancel</Link>
-                                    </Button>
+                                    <PreviousPageButton
+                                        fallback={dashboard.url()}
+                                        variant="outline"
+                                    >
+                                        Cancel
+                                    </PreviousPageButton>
                                 </div>
                             </>
                         )}

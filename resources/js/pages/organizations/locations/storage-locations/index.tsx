@@ -1,10 +1,20 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import OrganizationLocationController from '@/actions/App/Http/Controllers/OrganizationLocationController';
 import OrganizationStorageLocationController from '@/actions/App/Http/Controllers/OrganizationStorageLocationController';
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type {
     LocationSummary,
@@ -17,6 +27,120 @@ type Props = {
     location: LocationSummary;
     storageLocations: StorageLocationSummary[];
 };
+
+type EditStorageLocationDialogProps = {
+    organization: OrganizationSummary;
+    location: LocationSummary;
+    storageLocation: StorageLocationSummary;
+};
+
+/** Edit one storage location without leaving its parent management workspace. */
+function EditStorageLocationDialog({
+    organization,
+    location,
+    storageLocation,
+}: EditStorageLocationDialogProps) {
+    const dialog = useGuardedDialog(
+        'Discard the storage-location changes you entered?',
+    );
+    const fieldPrefix = `edit-storage-location-${storageLocation.id}`;
+
+    return (
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                    Edit
+                </Button>
+            </DialogTrigger>
+
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>Edit storage location</DialogTitle>
+                    <DialogDescription>
+                        {organization.name} · {location.name}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div onChange={dialog.markDirty}>
+                    <Form
+                        {...OrganizationStorageLocationController.update.form([
+                            organization.id,
+                            location.id,
+                            storageLocation.id,
+                        ])}
+                        errorBag={`editStorageLocation${storageLocation.id}`}
+                        className="space-y-5"
+                        onSuccess={dialog.closeAfterSuccess}
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <div className="grid gap-2">
+                                    <Label htmlFor={`${fieldPrefix}-name`}>
+                                        Name
+                                    </Label>
+                                    <Input
+                                        id={`${fieldPrefix}-name`}
+                                        name="name"
+                                        required
+                                        defaultValue={storageLocation.name}
+                                    />
+                                    <InputError message={errors.name} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor={`${fieldPrefix}-code`}>
+                                        Code
+                                    </Label>
+                                    <Input
+                                        id={`${fieldPrefix}-code`}
+                                        name="code"
+                                        required
+                                        defaultValue={storageLocation.code}
+                                    />
+                                    <InputError message={errors.code} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor={`${fieldPrefix}-active`}>
+                                        Status
+                                    </Label>
+                                    <select
+                                        id={`${fieldPrefix}-active`}
+                                        name="active"
+                                        defaultValue={
+                                            storageLocation.active ? '1' : '0'
+                                        }
+                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    >
+                                        <option value="1">Active</option>
+                                        <option value="0">Inactive</option>
+                                    </select>
+                                    <InputError message={errors.active} />
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                    <Button type="submit" disabled={processing}>
+                                        Save storage location
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={processing}
+                                        onClick={() =>
+                                            dialog.onOpenChange(false)
+                                        }
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function StorageLocationsIndex({
     organization,
@@ -68,23 +192,11 @@ export default function StorageLocationsIndex({
                                             </p>
                                         </div>
 
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            asChild
-                                        >
-                                            <Link
-                                                href={OrganizationStorageLocationController.edit(
-                                                    [
-                                                        organization.id,
-                                                        location.id,
-                                                        storageLocation.id,
-                                                    ],
-                                                )}
-                                            >
-                                                Edit
-                                            </Link>
-                                        </Button>
+                                        <EditStorageLocationDialog
+                                            organization={organization}
+                                            location={location}
+                                            storageLocation={storageLocation}
+                                        />
                                     </div>
                                 ))}
                             </div>
@@ -106,6 +218,7 @@ export default function StorageLocationsIndex({
                             {...OrganizationStorageLocationController.store.form(
                                 [organization.id, location.id],
                             )}
+                            errorBag="createStorageLocation"
                             className="space-y-5"
                             resetOnSuccess
                         >
@@ -149,15 +262,14 @@ export default function StorageLocationsIndex({
                 </div>
 
                 <div>
-                    <Button variant="outline" asChild>
-                        <Link
-                            href={OrganizationLocationController.index(
-                                organization.id,
-                            )}
-                        >
-                            Back to locations
-                        </Link>
-                    </Button>
+                    <PreviousPageButton
+                        fallback={OrganizationLocationController.index.url(
+                            organization.id,
+                        )}
+                        variant="outline"
+                    >
+                        Back to locations
+                    </PreviousPageButton>
                 </div>
             </div>
         </>

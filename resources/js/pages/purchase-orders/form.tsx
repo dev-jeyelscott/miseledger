@@ -3,6 +3,7 @@ import { useState } from 'react';
 import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/GoodsReceiptController';
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -522,13 +523,10 @@ export default function PurchaseOrderForm({
                                             : 'Save draft'}
                                     </Button>
 
-                                    <Button variant="outline" asChild>
-                                        <Link
-                                            href={PurchaseOrderController.index()}
-                                        >
-                                            Back
-                                        </Link>
-                                    </Button>
+                                    <PreviousPageButton
+                                        fallback={PurchaseOrderController.index.url()}
+                                        variant="outline"
+                                    />
                                 </div>
                             </>
                         )}

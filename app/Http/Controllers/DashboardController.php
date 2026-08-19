@@ -76,6 +76,10 @@ class DashboardController extends Controller
             $organization,
             OrganizationPermission::CountsFinalize,
         );
+        $canManageOrganization = $this->allows(
+            $organization,
+            OrganizationPermission::OrganizationManage,
+        );
         $canReadCounts = $canViewReports || $canCreateCounts || $canFinalizeCounts;
 
         $purchaseOrderStats = ($canViewPurchasing || $canManagePurchasing)
@@ -89,6 +93,16 @@ class DashboardController extends Controller
         return [
             'currency' => $organization->currency,
             'timezone' => $organization->timezone,
+            'organizationSettings' => $canManageOrganization
+                ? [
+                    'id' => $organization->id,
+                    'name' => $organization->name,
+                    'slug' => $organization->slug,
+                    'timezone' => $organization->timezone,
+                    'currency' => $organization->currency,
+                    'active' => $organization->active,
+                ]
+                : null,
             'metrics' => [
                 'inventoryValue' => $canViewReports && $canViewCosts
                     ? $this->inventoryValue($organization)
