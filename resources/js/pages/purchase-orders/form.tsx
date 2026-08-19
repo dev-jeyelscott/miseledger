@@ -1,12 +1,22 @@
-import { Form, Head, Link } from '@inertiajs/react';
-import { useState } from 'react';
+import { Form, Head, Link, router } from '@inertiajs/react';
+import { useEffect, useRef, useState } from 'react';
 import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/GoodsReceiptController';
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
 import InputError from '@/components/input-error';
-import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { navigateToPreviousPage } from '@/lib/navigation-history';
 import { dashboard } from '@/routes';
 
 type SupplierItemOption = {
@@ -78,6 +88,11 @@ type Props = {
     canReceive: boolean;
 };
 
+type DirtyStateTrackerProps = {
+    dirty: boolean;
+    onChange: (dirty: boolean) => void;
+};
+
 /**
  * Format fixed-precision decimal strings for display without JavaScript floats.
  */
@@ -114,6 +129,20 @@ const formatMoney = (value: string): string => {
     return `${negative ? '-' : ''}${groupedInteger}.${decimal}`;
 };
 
+/** Keep navigation guards synchronized with the Inertia Form dirty state. */
+function DirtyStateTracker({ dirty, onChange }: DirtyStateTrackerProps) {
+    useEffect(() => {
+        onChange(dirty);
+    }, [dirty, onChange]);
+
+    return null;
+}
+
+/** Return the first server-side lifecycle error for a compact dialog alert. */
+function firstActionError(errors: Record<string, string>): string | null {
+    return Object.values(errors)[0] ?? null;
+}
+
 export default function PurchaseOrderForm({
     purchaseOrder,
     supplierOptions,
@@ -125,6 +154,63 @@ export default function PurchaseOrderForm({
     const editable =
         purchaseOrder === null ||
         (purchaseOrder.status === 'draft' && canManage);
+
+    const [draftDirty, setDraftDirty] = useState(false);
+    const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+    const [approveDialogOpen, setApproveDialogOpen] = useState(false);
+    const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+    const allowNextNavigation = useRef(false);
+
+    useEffect(() => {
+        if (!draftDirty) {
+            return;
+        }
+
+        const removeBeforeListener = router.on('before', (event) => {
+            if (event.detail.visit.method !== 'get') {
+                return;
+            }
+
+            if (allowNextNavigation.current) {
+                allowNextNavigation.current = false;
+
+                return;
+            }
+
+            return window.confirm(
+                'You have unsaved purchase order changes. Leave without saving them?',
+            );
+        });
+
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            removeBeforeListener();
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [draftDirty]);
+
+    const requestBackNavigation = () => {
+        if (draftDirty) {
+            setLeaveDialogOpen(true);
+
+            return;
+        }
+
+        navigateToPreviousPage(PurchaseOrderController.index().url);
+    };
+
+    const discardChangesAndNavigateBack = () => {
+        allowNextNavigation.current = true;
+        setDraftDirty(false);
+        setLeaveDialogOpen(false);
+        navigateToPreviousPage(PurchaseOrderController.index().url);
+    };
 
     const [supplierId, setSupplierId] = useState(
         purchaseOrder?.supplierId.toString() ?? '',
@@ -204,11 +290,20 @@ export default function PurchaseOrderForm({
                 {editable ? (
                     <Form
                         {...formAttributes}
-                        options={{ preserveState: 'errors' }}
+                        setDefaultsOnSuccess
+                        options={{
+                            preserveState: 'errors',
+                            replace: purchaseOrder === null,
+                        }}
                         className="space-y-6"
                     >
-                        {({ processing, errors }) => (
+                        {({ processing, errors, isDirty }) => (
                             <>
+                                <DirtyStateTracker
+                                    dirty={isDirty}
+                                    onChange={setDraftDirty}
+                                />
+
                                 <div className="grid gap-5 rounded-xl border border-sidebar-border/70 p-5 md:grid-cols-2 dark:border-sidebar-border">
                                     <div className="grid gap-2">
                                         <Label htmlFor="number">
@@ -518,15 +613,21 @@ export default function PurchaseOrderForm({
 
                                 <div className="flex flex-wrap gap-2">
                                     <Button type="submit" disabled={processing}>
-                                        {purchaseOrder === null
-                                            ? 'Create purchase order'
-                                            : 'Save draft'}
+                                        {processing
+                                            ? 'Saving…'
+                                            : purchaseOrder === null
+                                              ? 'Create purchase order'
+                                              : 'Save draft'}
                                     </Button>
 
-                                    <PreviousPageButton
-                                        fallback={PurchaseOrderController.index.url()}
+                                    <Button
+                                        type="button"
                                         variant="outline"
-                                    />
+                                        disabled={processing}
+                                        onClick={requestBackNavigation}
+                                    >
+                                        Back
+                                    </Button>
                                 </div>
                             </>
                         )}
@@ -650,36 +751,205 @@ export default function PurchaseOrderForm({
                 {purchaseOrder &&
                     canManage &&
                     purchaseOrder.status === 'draft' && (
-                        <div className="flex gap-2">
-                            <Form
-                                {...PurchaseOrderController.approve.form(
-                                    purchaseOrder.id,
-                                )}
-                                options={{ preserveState: 'errors' }}
-                            >
-                                {({ processing }) => (
-                                    <Button type="submit" disabled={processing}>
-                                        Approve purchase order
-                                    </Button>
-                                )}
-                            </Form>
+                        <div className="space-y-2">
+                            <div className="flex flex-wrap gap-2">
+                                <Dialog
+                                    open={approveDialogOpen}
+                                    onOpenChange={setApproveDialogOpen}
+                                >
+                                    <DialogTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            disabled={draftDirty}
+                                        >
+                                            Approve purchase order
+                                        </Button>
+                                    </DialogTrigger>
 
-                            <Form
-                                {...PurchaseOrderController.cancel.form(
-                                    purchaseOrder.id,
-                                )}
-                                options={{ preserveState: 'errors' }}
-                            >
-                                {({ processing }) => (
-                                    <Button
-                                        type="submit"
-                                        variant="outline"
-                                        disabled={processing}
-                                    >
-                                        Cancel purchase order
-                                    </Button>
-                                )}
-                            </Form>
+                                    <DialogContent>
+                                        <Form
+                                            {...PurchaseOrderController.approve.form(
+                                                purchaseOrder.id,
+                                            )}
+                                            options={{
+                                                preserveState: 'errors',
+                                            }}
+                                            onSuccess={() =>
+                                                setApproveDialogOpen(false)
+                                            }
+                                        >
+                                            {({ processing, errors }) => {
+                                                const actionError =
+                                                    firstActionError(errors);
+
+                                                return (
+                                                    <div className="space-y-4">
+                                                        <DialogHeader>
+                                                            <DialogTitle>
+                                                                Approve purchase
+                                                                order?
+                                                            </DialogTitle>
+                                                            <DialogDescription>
+                                                                Approval locks
+                                                                this draft from
+                                                                further editing
+                                                                and makes it
+                                                                available for
+                                                                receiving. It
+                                                                does not change
+                                                                inventory; stock
+                                                                changes only
+                                                                when a goods
+                                                                receipt is
+                                                                finalized.
+                                                            </DialogDescription>
+                                                        </DialogHeader>
+
+                                                        {actionError !==
+                                                            null && (
+                                                            <p
+                                                                role="alert"
+                                                                className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                                                            >
+                                                                {actionError}
+                                                            </p>
+                                                        )}
+
+                                                        <DialogFooter>
+                                                            <DialogClose
+                                                                asChild
+                                                            >
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="outline"
+                                                                    disabled={
+                                                                        processing
+                                                                    }
+                                                                >
+                                                                    Keep draft
+                                                                </Button>
+                                                            </DialogClose>
+
+                                                            <Button
+                                                                type="submit"
+                                                                disabled={
+                                                                    processing
+                                                                }
+                                                            >
+                                                                {processing
+                                                                    ? 'Approving…'
+                                                                    : 'Approve purchase order'}
+                                                            </Button>
+                                                        </DialogFooter>
+                                                    </div>
+                                                );
+                                            }}
+                                        </Form>
+                                    </DialogContent>
+                                </Dialog>
+
+                                <Dialog
+                                    open={cancelDialogOpen}
+                                    onOpenChange={setCancelDialogOpen}
+                                >
+                                    <DialogTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            disabled={draftDirty}
+                                        >
+                                            Cancel purchase order
+                                        </Button>
+                                    </DialogTrigger>
+
+                                    <DialogContent>
+                                        <Form
+                                            {...PurchaseOrderController.cancel.form(
+                                                purchaseOrder.id,
+                                            )}
+                                            options={{
+                                                preserveState: 'errors',
+                                            }}
+                                            onSuccess={() =>
+                                                setCancelDialogOpen(false)
+                                            }
+                                        >
+                                            {({ processing, errors }) => {
+                                                const actionError =
+                                                    firstActionError(errors);
+
+                                                return (
+                                                    <div className="space-y-4">
+                                                        <DialogHeader>
+                                                            <DialogTitle>
+                                                                Cancel purchase
+                                                                order?
+                                                            </DialogTitle>
+                                                            <DialogDescription>
+                                                                Cancelling this
+                                                                draft stops it
+                                                                from being
+                                                                approved or
+                                                                received. The
+                                                                purchase order
+                                                                remains in
+                                                                history and no
+                                                                inventory is
+                                                                changed.
+                                                            </DialogDescription>
+                                                        </DialogHeader>
+
+                                                        {actionError !==
+                                                            null && (
+                                                            <p
+                                                                role="alert"
+                                                                className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                                                            >
+                                                                {actionError}
+                                                            </p>
+                                                        )}
+
+                                                        <DialogFooter>
+                                                            <DialogClose
+                                                                asChild
+                                                            >
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="outline"
+                                                                    disabled={
+                                                                        processing
+                                                                    }
+                                                                >
+                                                                    Keep draft
+                                                                </Button>
+                                                            </DialogClose>
+
+                                                            <Button
+                                                                type="submit"
+                                                                variant="destructive"
+                                                                disabled={
+                                                                    processing
+                                                                }
+                                                            >
+                                                                {processing
+                                                                    ? 'Cancelling…'
+                                                                    : 'Cancel purchase order'}
+                                                            </Button>
+                                                        </DialogFooter>
+                                                    </div>
+                                                );
+                                            }}
+                                        </Form>
+                                    </DialogContent>
+                                </Dialog>
+                            </div>
+
+                            {draftDirty && (
+                                <p className="text-sm text-muted-foreground">
+                                    Save or discard your draft changes before
+                                    approving or cancelling this purchase order.
+                                </p>
+                            )}
                         </div>
                     )}
 
@@ -698,7 +968,47 @@ export default function PurchaseOrderForm({
                             </Link>
                         </Button>
                     )}
+
+                {!editable && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="w-fit"
+                        onClick={requestBackNavigation}
+                    >
+                        Back
+                    </Button>
+                )}
             </div>
+
+            <Dialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Discard unsaved changes?</DialogTitle>
+                        <DialogDescription>
+                            Your unsaved purchase order changes will be lost.
+                            This does not undo any purchase order state already
+                            saved on the server.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button type="button" variant="outline">
+                                Stay on page
+                            </Button>
+                        </DialogClose>
+
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={discardChangesAndNavigateBack}
+                        >
+                            Discard and leave
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }
