@@ -197,6 +197,57 @@ test('an auditor cannot adjust inventory', function () {
     )->toBeFalse();
 });
 
+test('organization active remains an administrative toggle independent of any commercial state', function () {
+    $owner = User::factory()->create();
+    $organization = Organization::factory()->create([
+        'active' => true,
+    ]);
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($owner)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    $this->actingAs($owner)
+        ->put(
+            route('organizations.settings.update', $organization),
+            [
+                'name' => $organization->name,
+                'slug' => $organization->slug,
+                'timezone' => $organization->timezone,
+                'currency' => $organization->currency,
+                'active' => false,
+            ],
+        )
+        ->assertRedirect(route('dashboard'));
+
+    $organization->refresh();
+
+    expect($organization->active)->toBeFalse();
+
+    expect(
+        Gate::forUser($owner)->allows('view', $organization),
+    )->toBeFalse();
+
+    expect(
+        $owner->hasOrganizationPermission(
+            $organization,
+            OrganizationPermission::OrganizationManage,
+        ),
+    )->toBeFalse();
+
+    $organization->update(['active' => true]);
+    $organization->refresh();
+
+    expect($organization->active)->toBeTrue();
+
+    expect(
+        Gate::forUser($owner)->allows('view', $organization),
+    )->toBeTrue();
+});
+
 test('cross organization user management is denied', function () {
     $user = User::factory()->create();
 

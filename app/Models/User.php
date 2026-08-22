@@ -64,6 +64,9 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 
     /**
      * Determine whether this user has an organization-scoped permission.
+     *
+     * `organization->active` is an administrative enable/disable flag only;
+     * subscription/billing state must never substitute for it here.
      */
     public function hasOrganizationPermission(
         Organization $organization,

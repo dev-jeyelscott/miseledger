@@ -11,6 +11,11 @@ class ResolveActiveOrganization
 {
     /**
      * Resolve the active organization only from valid user memberships.
+     *
+     * The `active` filter below is an administrative gate only. Future
+     * commercial (subscription) read-only access must not be enforced by
+     * excluding organizations here; it must be derived separately so
+     * members can still resolve and read a commercially read-only tenant.
      */
     public function handle(Request $request, Closure $next): Response
     {

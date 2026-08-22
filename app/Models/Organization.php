@@ -19,6 +19,12 @@ use Illuminate\Support\Carbon;
  * @property bool $active
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ *
+ * `active` is exclusively an administrative enable/disable flag, toggled by
+ * an organization manager or platform operator. Subscription/billing state
+ * must never read or write this column; commercial access must be derived
+ * separately so organizations remain resolvable to members for historical
+ * reads and billing recovery even when commercially read-only.
  */
 #[Fillable(['name', 'slug', 'timezone', 'currency', 'active'])]
 class Organization extends Model

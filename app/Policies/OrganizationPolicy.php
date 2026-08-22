@@ -10,6 +10,9 @@ class OrganizationPolicy
 {
     /**
      * Allow access only to active organizations the user belongs to.
+     *
+     * `active` is an administrative enable/disable flag only; it must not
+     * be repurposed for subscription/billing state.
      */
     public function view(User $user, Organization $organization): bool
     {
