@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\OrganizationPermission;
 use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
@@ -201,6 +202,67 @@ test('an invalid active tenant session falls back to a valid membership', functi
             fn (Assert $page) => $page->where(
                 'organizationContext.active.id',
                 $ownOrganization->id,
+            ),
+        );
+});
+
+test('a users organizations retain independent commercial state', function () {
+    $user = User::factory()->create();
+
+    $suspendedOrganization = Organization::factory()->create([
+        'active' => false,
+    ]);
+    $activeOrganization = Organization::factory()->create([
+        'active' => true,
+    ]);
+
+    OrganizationMembership::factory()
+        ->for($suspendedOrganization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    OrganizationMembership::factory()
+        ->for($activeOrganization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    expect($suspendedOrganization->fresh()->active)
+        ->toBeFalse()
+        ->and($activeOrganization->fresh()->active)
+        ->toBeTrue()
+        ->and(
+            $user->hasOrganizationPermission(
+                $suspendedOrganization,
+                OrganizationPermission::OrganizationManage,
+            ),
+        )
+        ->toBeFalse()
+        ->and(
+            $user->hasOrganizationPermission(
+                $activeOrganization,
+                OrganizationPermission::OrganizationManage,
+            ),
+        )
+        ->toBeTrue();
+
+    $this->withSession([
+        'active_organization_id' => $suspendedOrganization->id,
+    ])
+        ->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSessionHas(
+            'active_organization_id',
+            $activeOrganization->id,
+        )
+        ->assertInertia(
+            fn (Assert $page) => $page->where(
+                'organizationContext.active.id',
+                $activeOrganization->id,
             ),
         );
 });
