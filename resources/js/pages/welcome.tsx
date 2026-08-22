@@ -193,243 +193,27 @@ function MarketingHeader({ isAuthenticated }: { isAuthenticated: boolean }) {
     );
 }
 
-/** Render the layered operational paper composition shown beside the hero copy. */
-function HeroProductComposition() {
-    const stockRows = [
-        ['Roma Tomatoes', 'Main Kitchen', '18.6', 'kg', 'Low'],
-        ['Extra Virgin Olive Oil', 'Main Kitchen', '12', 'L', 'OK'],
-        ['Chicken Breast', 'Main Kitchen', '5.2', 'kg', 'Low'],
-        ['House Syrup', 'Cafe Counter', '2.1', 'L', 'Low'],
-        ['Parmesan Grated', 'Stock Room', '4.5', 'kg', 'OK'],
-    ];
-
+/** Render the real MiseLedger dashboard as the primary hero product visual. */
+function HeroDashboardPreview() {
     return (
-        <div
-            aria-hidden="true"
-            className="landing-ledger-grid relative mx-auto min-h-[560px] w-full max-w-[720px] overflow-hidden border border-[#173247]/15 bg-[#eee8dc] shadow-[0_24px_65px_rgba(16,40,58,0.12)] sm:min-h-[620px] lg:min-h-[660px]"
-        >
-            <div className="absolute inset-x-[8%] top-[5%] h-[82%] rotate-[0.8deg] border border-[#a8b5ae]/35 bg-[#efe8d8]/75" />
+        <div className="landing-enter relative mx-auto w-full max-w-[920px] lg:w-[112%] lg:max-w-none xl:w-[118%]">
+            <div
+                className="absolute -inset-3 translate-x-3 translate-y-3 border border-[#b87949]/20 bg-[#ece5d8]"
+                aria-hidden="true"
+            />
 
-            <div className="absolute inset-y-[9%] right-[3%] w-8 border border-[#9a704d]/45 bg-[#6d5b3f] text-center text-[10px] font-semibold tracking-[0.18em] text-[#f6efdf] [writing-mode:vertical-rl]">
-                MAIN KITCHEN
-            </div>
-
-            <section className="landing-enter absolute top-[8%] left-[7%] w-[71%] border border-[#173247]/18 bg-[#fffdf8] p-4 shadow-[0_16px_38px_rgba(16,40,58,0.14)] sm:p-5">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                        <p className="text-xs font-semibold tracking-[0.14em] text-[#61717c] uppercase">
-                            Stock overview
-                        </p>
-                        <p className="mt-1 font-serif text-xl text-[#10283a]">
-                            Main Kitchen
-                        </p>
-                    </div>
-
-                    <span className="border border-[#0f5a43]/25 bg-[#edf4ef] px-2 py-1 text-[10px] font-semibold text-[#0f5a43]">
-                        Illustrative
-                    </span>
-                </div>
-
-                <div className="mb-3 flex flex-wrap gap-1.5 text-[9px] text-[#576a77]">
-                    {[
-                        'All locations',
-                        'Main Kitchen',
-                        'Branch A',
-                        'Cafe Counter',
-                    ].map((label, index) => (
-                        <span
-                            key={label}
-                            className={`border px-2 py-1 ${
-                                index === 1
-                                    ? 'border-[#0f5a43]/25 bg-[#eaf2ed] text-[#0f5a43]'
-                                    : 'border-[#173247]/12 bg-[#faf7f0]'
-                            }`}
-                        >
-                            {label}
-                        </span>
-                    ))}
-                </div>
-
-                <div className="overflow-hidden border-t border-[#173247]/12 text-[9px] text-[#415565] sm:text-[10px]">
-                    <div className="grid grid-cols-[1.5fr_1.15fr_.55fr_.45fr_.55fr] gap-2 py-2 font-semibold tracking-[0.08em] text-[#74818a] uppercase">
-                        <span>Item</span>
-                        <span>Location</span>
-                        <span>On hand</span>
-                        <span>Unit</span>
-                        <span>Status</span>
-                    </div>
-
-                    {stockRows.map(([item, location, onHand, unit, status]) => (
-                        <div
-                            key={item}
-                            className="grid grid-cols-[1.5fr_1.15fr_.55fr_.45fr_.55fr] gap-2 border-t border-[#173247]/8 py-2"
-                        >
-                            <span className="truncate font-medium text-[#10283a]">
-                                {item}
-                            </span>
-                            <span className="truncate">{location}</span>
-                            <span>{onHand}</span>
-                            <span>{unit}</span>
-                            <span
-                                className={
-                                    status === 'Low'
-                                        ? 'text-[#a64d2e]'
-                                        : 'text-[#0f5a43]'
-                                }
-                            >
-                                {status}
-                            </span>
-                        </div>
-                    ))}
-                </div>
-            </section>
-
-            <aside className="landing-enter landing-enter-delay-1 absolute top-[5%] right-[5%] z-20 w-[27%] min-w-[132px] border border-[#b87949]/25 bg-[#fffaf2] p-3 shadow-[0_15px_35px_rgba(16,40,58,0.16)] sm:p-4">
-                <div className="flex items-center gap-2 text-[#a64d2e]">
-                    <AlertTriangle className="size-4" aria-hidden="true" />
-                    <span className="text-[10px] font-semibold tracking-[0.1em] uppercase">
-                        Low stock
-                    </span>
-                </div>
-
-                <p className="mt-3 text-sm font-semibold text-[#10283a]">
-                    Chicken Breast
-                </p>
-                <p className="mt-1 text-xs text-[#5d6a73]">5.2 kg on hand</p>
-                <p className="mt-2 border-t border-[#173247]/10 pt-2 text-[10px] text-[#7d5f49]">
-                    Review low-stock report
-                </p>
-            </aside>
-
-            <aside className="landing-enter landing-enter-delay-2 absolute top-[32%] right-[5%] z-20 w-[28%] min-w-[140px] border border-[#173247]/18 bg-[#fffdf8] p-3 shadow-[0_15px_35px_rgba(16,40,58,0.14)] sm:p-4">
-                <p className="text-[10px] font-semibold tracking-[0.1em] text-[#63727d] uppercase">
-                    Recipe cost
-                </p>
-
-                <p className="mt-1 font-serif text-base text-[#10283a] sm:text-lg">
-                    Margherita Pizza
-                </p>
-
-                <div className="mt-3 space-y-1.5 text-[9px] text-[#52636e] sm:text-[10px]">
-                    {[
-                        ['Flour', '$0.13'],
-                        ['Tomato Sauce', '$0.28'],
-                        ['Mozzarella', '$0.47'],
-                        ['Olive Oil', '$0.07'],
-                        ['Basil', '$0.03'],
-                    ].map(([label, value]) => (
-                        <div key={label} className="flex justify-between gap-3">
-                            <span>{label}</span>
-                            <span>{value}</span>
-                        </div>
-                    ))}
-                </div>
-
-                <div className="mt-3 flex items-end justify-between border-t border-[#173247]/12 pt-3">
-                    <span className="text-[10px] font-semibold text-[#63727d]">
-                        Total cost
-                    </span>
-                    <span className="font-serif text-xl font-semibold text-[#10283a]">
-                        $0.98
-                    </span>
-                </div>
-            </aside>
-
-            <section className="landing-enter landing-enter-delay-2 absolute bottom-[6%] left-[4%] z-10 w-[48%] -rotate-[1.4deg] border border-[#917d66]/30 bg-[#f7f0e3] p-4 shadow-[0_14px_28px_rgba(16,40,58,0.12)] sm:p-5">
-                <div className="flex items-start justify-between gap-3 border-b border-[#6e6559]/20 pb-3">
-                    <div>
-                        <p className="font-serif text-lg text-[#10283a]">
-                            Purchase Order
-                        </p>
-                        <p className="mt-1 text-[9px] tracking-[0.12em] text-[#697680] uppercase">
-                            Green Valley Produce
-                        </p>
-                    </div>
-
-                    <div className="text-right text-[9px] text-[#5d6a73]">
-                        <p>PO-0524</p>
-                        <p>May 20, 2026</p>
-                    </div>
-                </div>
-
-                <div className="mt-3 text-[9px] text-[#52636e] sm:text-[10px]">
-                    <div className="grid grid-cols-[1.5fr_.45fr_.55fr_.7fr] gap-2 pb-2 font-semibold tracking-[0.07em] text-[#7b858b] uppercase">
-                        <span>Item</span>
-                        <span>Qty</span>
-                        <span>Unit</span>
-                        <span>Total</span>
-                    </div>
-
-                    {[
-                        ['Roma Tomatoes', '25', 'kg', '$52.50'],
-                        ['Chicken Breast', '20', 'kg', '$108.00'],
-                        ['Olive Oil', '4', 'L', '$51.60'],
-                    ].map(([item, qty, unit, total]) => (
-                        <div
-                            key={item}
-                            className="grid grid-cols-[1.5fr_.45fr_.55fr_.7fr] gap-2 border-t border-[#6e6559]/15 py-2"
-                        >
-                            <span className="truncate text-[#10283a]">
-                                {item}
-                            </span>
-                            <span>{qty}</span>
-                            <span>{unit}</span>
-                            <span>{total}</span>
-                        </div>
-                    ))}
-                </div>
-
-                <div className="mt-3 flex items-center justify-between border-t border-[#6e6559]/20 pt-3">
-                    <span className="border border-[#0f5a43]/45 px-2 py-1 text-[9px] font-bold tracking-[0.12em] text-[#0f5a43] uppercase">
-                        Approved
-                    </span>
-                    <span className="font-serif text-base font-semibold text-[#10283a]">
-                        $212.10
-                    </span>
-                </div>
-            </section>
-
-            <section className="landing-enter landing-enter-delay-3 absolute right-[18%] bottom-[5%] z-20 w-[34%] rotate-[0.7deg] border border-[#917d66]/30 bg-[#fffdf8] p-4 shadow-[0_16px_32px_rgba(16,40,58,0.16)] sm:p-5">
-                <div className="flex items-start justify-between gap-2 border-b border-[#6e6559]/18 pb-3">
-                    <div>
-                        <p className="font-serif text-base text-[#10283a] sm:text-lg">
-                            Receiving Note
-                        </p>
-                        <p className="text-[9px] tracking-[0.12em] text-[#697680] uppercase">
-                            RN-0524
-                        </p>
-                    </div>
-                    <span className="text-[9px] text-[#697680]">
-                        May 20, 2026
-                    </span>
-                </div>
-
-                <p className="mt-3 text-[9px] text-[#697680]">From</p>
-                <p className="text-xs font-semibold text-[#10283a]">
-                    Green Valley Produce
-                </p>
-
-                <div className="mt-3 space-y-2 text-[9px] text-[#52636e] sm:text-[10px]">
-                    {[
-                        ['Roma Tomatoes', '25 kg'],
-                        ['Chicken Breast', '20 kg'],
-                        ['Olive Oil', '4 L'],
-                    ].map(([item, quantity]) => (
-                        <div
-                            key={item}
-                            className="flex justify-between gap-3 border-t border-[#6e6559]/12 pt-2"
-                        >
-                            <span>{item}</span>
-                            <span>{quantity}</span>
-                        </div>
-                    ))}
-                </div>
-
-                <div className="mt-4 flex items-center gap-2 text-[#0f5a43]">
-                    <PackageCheck className="size-4" aria-hidden="true" />
-                    <span className="text-[10px] font-semibold">Received</span>
-                </div>
-            </section>
+            <figure className="relative overflow-hidden border border-[#173247]/18 bg-[#fffdf8] p-1.5 shadow-[0_24px_65px_rgba(16,40,58,0.16)] sm:p-2">
+                <img
+                    src="/images/hero-image.png"
+                    alt="MiseLedger dashboard showing inventory value, low-stock alerts, purchase orders, receiving, stock counts, and recent inventory activity."
+                    width={1894}
+                    height={941}
+                    loading="eager"
+                    fetchPriority="high"
+                    decoding="async"
+                    className="block h-auto w-full border border-[#173247]/10 bg-white"
+                />
+            </figure>
         </div>
     );
 }
@@ -696,20 +480,6 @@ export default function Welcome() {
                     scroll-behavior: smooth;
                 }
 
-                .landing-ledger-grid {
-                    background-image:
-                        linear-gradient(
-                            rgba(51, 86, 76, 0.09) 1px,
-                            transparent 1px
-                        ),
-                        linear-gradient(
-                            90deg,
-                            rgba(51, 86, 76, 0.09) 1px,
-                            transparent 1px
-                        );
-                    background-size: 26px 26px;
-                }
-
                 @keyframes landing-rise {
                     from {
                         opacity: 0;
@@ -726,27 +496,12 @@ export default function Welcome() {
                     animation: landing-rise 650ms ease-out both;
                 }
 
-                .landing-enter-delay-1 {
-                    animation-delay: 90ms;
-                }
-
-                .landing-enter-delay-2 {
-                    animation-delay: 180ms;
-                }
-
-                .landing-enter-delay-3 {
-                    animation-delay: 270ms;
-                }
-
                 @media (prefers-reduced-motion: reduce) {
                     html {
                         scroll-behavior: auto;
                     }
 
-                    .landing-enter,
-                    .landing-enter-delay-1,
-                    .landing-enter-delay-2,
-                    .landing-enter-delay-3 {
+                    .landing-enter {
                         animation: none;
                     }
                 }
@@ -760,7 +515,7 @@ export default function Welcome() {
 
                 <main>
                     <section className="border-b border-[#173247]/15">
-                        <div className="mx-auto grid max-w-[1440px] gap-12 px-5 py-14 sm:px-8 sm:py-20 lg:grid-cols-[0.82fr_1.18fr] lg:items-center lg:px-12 lg:py-24">
+                        <div className="mx-auto grid max-w-[1440px] gap-12 px-5 py-14 sm:px-8 sm:py-20 lg:grid-cols-[0.72fr_1.28fr] lg:items-center lg:gap-10 lg:px-12 lg:py-24 xl:gap-14">
                             <div className="landing-enter max-w-xl">
                                 <p className="inline-flex items-center gap-2 border border-[#0f5a43]/25 bg-[#eef3ec] px-3 py-2 text-xs font-semibold text-[#315846]">
                                     <ChefHat
@@ -789,7 +544,7 @@ export default function Welcome() {
                                 </div>
                             </div>
 
-                            <HeroProductComposition />
+                            <HeroDashboardPreview />
                         </div>
                     </section>
 

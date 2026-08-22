@@ -33,3 +33,18 @@ test('landing page keeps customer-facing copy and authentication-aware routes', 
         ->not->toContain('Expiry tracking')
         ->not->toContain('real-time updates');
 });
+
+test('landing page uses the real dashboard screenshot in the hero', function () {
+    $source = File::get(resource_path('js/pages/welcome.tsx'));
+    $normalizedSource = Str::squish($source);
+
+    expect(File::exists(public_path('images/hero-image.png')))
+        ->toBeTrue()
+        ->and($normalizedSource)
+        ->toContain('src="/images/hero-image.png"')
+        ->toContain('width={1894}')
+        ->toContain('height={941}')
+        ->toContain('fetchPriority="high"')
+        ->toContain('MiseLedger dashboard showing inventory value')
+        ->not->toContain('function HeroProductComposition()');
+});
