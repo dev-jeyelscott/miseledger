@@ -512,13 +512,6 @@ export default function LowStockReport({
                                         >
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-3">
-                                                    <div
-                                                        className="flex size-8 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive"
-                                                        aria-hidden="true"
-                                                    >
-                                                        <Package className="size-4" />
-                                                    </div>
-
                                                     <div className="min-w-0">
                                                         {canManage ? (
                                                             <Link

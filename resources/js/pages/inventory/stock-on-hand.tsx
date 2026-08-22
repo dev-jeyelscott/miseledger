@@ -413,13 +413,6 @@ export default function StockOnHandReport({
                                         >
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-3">
-                                                    <div
-                                                        className="flex size-8 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
-                                                        aria-hidden="true"
-                                                    >
-                                                        <Package className="size-4" />
-                                                    </div>
-
                                                     <div className="min-w-0">
                                                         <div className="truncate font-medium">
                                                             {row.itemName}
