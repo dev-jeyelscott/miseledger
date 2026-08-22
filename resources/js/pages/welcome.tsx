@@ -217,7 +217,7 @@ function HeroProductComposition() {
             <section className="landing-enter absolute top-[8%] left-[7%] w-[71%] border border-[#173247]/18 bg-[#fffdf8] p-4 shadow-[0_16px_38px_rgba(16,40,58,0.14)] sm:p-5">
                 <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#61717c]">
+                        <p className="text-xs font-semibold tracking-[0.14em] text-[#61717c] uppercase">
                             Stock overview
                         </p>
                         <p className="mt-1 font-serif text-xl text-[#10283a]">
@@ -251,7 +251,7 @@ function HeroProductComposition() {
                 </div>
 
                 <div className="overflow-hidden border-t border-[#173247]/12 text-[9px] text-[#415565] sm:text-[10px]">
-                    <div className="grid grid-cols-[1.5fr_1.15fr_.55fr_.45fr_.55fr] gap-2 py-2 font-semibold uppercase tracking-[0.08em] text-[#74818a]">
+                    <div className="grid grid-cols-[1.5fr_1.15fr_.55fr_.45fr_.55fr] gap-2 py-2 font-semibold tracking-[0.08em] text-[#74818a] uppercase">
                         <span>Item</span>
                         <span>Location</span>
                         <span>On hand</span>
@@ -259,37 +259,35 @@ function HeroProductComposition() {
                         <span>Status</span>
                     </div>
 
-                    {stockRows.map(
-                        ([item, location, onHand, unit, status]) => (
-                            <div
-                                key={item}
-                                className="grid grid-cols-[1.5fr_1.15fr_.55fr_.45fr_.55fr] gap-2 border-t border-[#173247]/8 py-2"
+                    {stockRows.map(([item, location, onHand, unit, status]) => (
+                        <div
+                            key={item}
+                            className="grid grid-cols-[1.5fr_1.15fr_.55fr_.45fr_.55fr] gap-2 border-t border-[#173247]/8 py-2"
+                        >
+                            <span className="truncate font-medium text-[#10283a]">
+                                {item}
+                            </span>
+                            <span className="truncate">{location}</span>
+                            <span>{onHand}</span>
+                            <span>{unit}</span>
+                            <span
+                                className={
+                                    status === 'Low'
+                                        ? 'text-[#a64d2e]'
+                                        : 'text-[#0f5a43]'
+                                }
                             >
-                                <span className="truncate font-medium text-[#10283a]">
-                                    {item}
-                                </span>
-                                <span className="truncate">{location}</span>
-                                <span>{onHand}</span>
-                                <span>{unit}</span>
-                                <span
-                                    className={
-                                        status === 'Low'
-                                            ? 'text-[#a64d2e]'
-                                            : 'text-[#0f5a43]'
-                                    }
-                                >
-                                    {status}
-                                </span>
-                            </div>
-                        ),
-                    )}
+                                {status}
+                            </span>
+                        </div>
+                    ))}
                 </div>
             </section>
 
             <aside className="landing-enter landing-enter-delay-1 absolute top-[5%] right-[5%] z-20 w-[27%] min-w-[132px] border border-[#b87949]/25 bg-[#fffaf2] p-3 shadow-[0_15px_35px_rgba(16,40,58,0.16)] sm:p-4">
                 <div className="flex items-center gap-2 text-[#a64d2e]">
                     <AlertTriangle className="size-4" aria-hidden="true" />
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.1em]">
+                    <span className="text-[10px] font-semibold tracking-[0.1em] uppercase">
                         Low stock
                     </span>
                 </div>
@@ -304,7 +302,7 @@ function HeroProductComposition() {
             </aside>
 
             <aside className="landing-enter landing-enter-delay-2 absolute top-[32%] right-[5%] z-20 w-[28%] min-w-[140px] border border-[#173247]/18 bg-[#fffdf8] p-3 shadow-[0_15px_35px_rgba(16,40,58,0.14)] sm:p-4">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#63727d]">
+                <p className="text-[10px] font-semibold tracking-[0.1em] text-[#63727d] uppercase">
                     Recipe cost
                 </p>
 
@@ -343,7 +341,7 @@ function HeroProductComposition() {
                         <p className="font-serif text-lg text-[#10283a]">
                             Purchase Order
                         </p>
-                        <p className="mt-1 text-[9px] uppercase tracking-[0.12em] text-[#697680]">
+                        <p className="mt-1 text-[9px] tracking-[0.12em] text-[#697680] uppercase">
                             Green Valley Produce
                         </p>
                     </div>
@@ -355,7 +353,7 @@ function HeroProductComposition() {
                 </div>
 
                 <div className="mt-3 text-[9px] text-[#52636e] sm:text-[10px]">
-                    <div className="grid grid-cols-[1.5fr_.45fr_.55fr_.7fr] gap-2 pb-2 font-semibold uppercase tracking-[0.07em] text-[#7b858b]">
+                    <div className="grid grid-cols-[1.5fr_.45fr_.55fr_.7fr] gap-2 pb-2 font-semibold tracking-[0.07em] text-[#7b858b] uppercase">
                         <span>Item</span>
                         <span>Qty</span>
                         <span>Unit</span>
@@ -382,7 +380,7 @@ function HeroProductComposition() {
                 </div>
 
                 <div className="mt-3 flex items-center justify-between border-t border-[#6e6559]/20 pt-3">
-                    <span className="border border-[#0f5a43]/45 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-[#0f5a43]">
+                    <span className="border border-[#0f5a43]/45 px-2 py-1 text-[9px] font-bold tracking-[0.12em] text-[#0f5a43] uppercase">
                         Approved
                     </span>
                     <span className="font-serif text-base font-semibold text-[#10283a]">
@@ -397,7 +395,7 @@ function HeroProductComposition() {
                         <p className="font-serif text-base text-[#10283a] sm:text-lg">
                             Receiving Note
                         </p>
-                        <p className="text-[9px] uppercase tracking-[0.12em] text-[#697680]">
+                        <p className="text-[9px] tracking-[0.12em] text-[#697680] uppercase">
                             RN-0524
                         </p>
                     </div>
@@ -510,7 +508,7 @@ function FeatureStory({
     return (
         <article className="grid gap-7 border border-[#173247]/14 bg-[#f8f3e9] p-6 sm:p-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
             <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#6d7b73]">
+                <p className="text-xs font-bold tracking-[0.16em] text-[#6d7b73] uppercase">
                     {eyebrow}
                 </p>
                 <h3 className="mt-3 font-serif text-2xl leading-tight text-[#10283a] sm:text-[1.8rem]">
@@ -570,10 +568,7 @@ function LocationsPreview() {
                                 index === 0 ? 'bg-white/10 text-white' : ''
                             }`}
                         >
-                            <MenuIcon
-                                className="size-3.5"
-                                aria-hidden="true"
-                            />
+                            <MenuIcon className="size-3.5" aria-hidden="true" />
                             <span>{label}</span>
                         </div>
                     ))}
@@ -583,7 +578,7 @@ function LocationsPreview() {
             <div className="min-w-0 p-4 sm:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#75818a]">
+                        <p className="text-[10px] font-bold tracking-[0.14em] text-[#75818a] uppercase">
                             Illustrative workspace
                         </p>
                         <h3 className="mt-1 font-serif text-2xl text-[#10283a]">
@@ -598,7 +593,7 @@ function LocationsPreview() {
 
                 <div className="mt-5 overflow-x-auto">
                     <div className="min-w-[560px] text-[10px] text-[#596b76]">
-                        <div className="grid grid-cols-[1.15fr_.8fr_1.45fr_.55fr] gap-3 border-y border-[#173247]/12 py-2 font-bold uppercase tracking-[0.08em] text-[#75818a]">
+                        <div className="grid grid-cols-[1.15fr_.8fr_1.45fr_.55fr] gap-3 border-y border-[#173247]/12 py-2 font-bold tracking-[0.08em] text-[#75818a] uppercase">
                             <span>Location</span>
                             <span>Type</span>
                             <span>Storage areas</span>
@@ -615,9 +610,7 @@ function LocationsPreview() {
                                 </span>
                                 <span>{type}</span>
                                 <span>{storage}</span>
-                                <span className="text-[#0f5a43]">
-                                    {status}
-                                </span>
+                                <span className="text-[#0f5a43]">{status}</span>
                             </div>
                         ))}
                     </div>
@@ -778,7 +771,7 @@ export default function Welcome() {
                                     food teams
                                 </p>
 
-                                <h1 className="mt-7 max-w-[10ch] text-balance font-serif text-5xl leading-[0.96] font-semibold tracking-[-0.045em] text-[#10283a] sm:text-6xl lg:text-[4.6rem]">
+                                <h1 className="mt-7 max-w-[10ch] font-serif text-5xl leading-[0.96] font-semibold tracking-[-0.045em] text-balance text-[#10283a] sm:text-6xl lg:text-[4.6rem]">
                                     Know what you have before you buy more.
                                 </h1>
 
@@ -821,7 +814,7 @@ export default function Welcome() {
                         <div className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 sm:py-20 lg:px-12">
                             <div className="flex flex-col gap-4 border-b border-dashed border-[#a87a55]/55 pb-6 sm:flex-row sm:items-end sm:justify-between">
                                 <div>
-                                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#6c7a72]">
+                                    <p className="text-xs font-bold tracking-[0.16em] text-[#6c7a72] uppercase">
                                         A connected operating story
                                     </p>
                                     <h2 className="mt-2 font-serif text-4xl tracking-[-0.035em] text-[#10283a] sm:text-5xl">
@@ -843,7 +836,7 @@ export default function Welcome() {
                                     icon={PackageCheck}
                                     title="Receive what arrives"
                                 >
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#71808a]">
+                                    <p className="text-[10px] font-bold tracking-[0.12em] text-[#71808a] uppercase">
                                         Receiving Note · RN-0524
                                     </p>
                                     <div className="mt-3 space-y-2 text-xs text-[#566975]">
@@ -874,7 +867,7 @@ export default function Welcome() {
                                     icon={Boxes}
                                     title="Keep stock quantities current"
                                 >
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#71808a]">
+                                    <p className="text-[10px] font-bold tracking-[0.12em] text-[#71808a] uppercase">
                                         Stock on hand
                                     </p>
                                     <div className="mt-3 space-y-2 text-xs text-[#566975]">
@@ -901,7 +894,7 @@ export default function Welcome() {
                                     icon={Truck}
                                     title="Move stock between locations"
                                 >
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#71808a]">
+                                    <p className="text-[10px] font-bold tracking-[0.12em] text-[#71808a] uppercase">
                                         Transfer · TR-0148
                                     </p>
                                     <p className="mt-2 text-xs font-semibold text-[#10283a]">
@@ -927,7 +920,7 @@ export default function Welcome() {
                                     icon={ClipboardCheck}
                                     title="Count what is really on hand"
                                 >
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#71808a]">
+                                    <p className="text-[10px] font-bold tracking-[0.12em] text-[#71808a] uppercase">
                                         Stock Count · May 26
                                     </p>
                                     <div className="mt-3 space-y-2 text-xs text-[#566975]">
@@ -950,7 +943,7 @@ export default function Welcome() {
                                     icon={Trash2}
                                     title="Track what is wasted"
                                 >
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#71808a]">
+                                    <p className="text-[10px] font-bold tracking-[0.12em] text-[#71808a] uppercase">
                                         Waste Record · WR-0303
                                     </p>
                                     <div className="mt-3 space-y-2 text-xs text-[#566975]">
@@ -974,13 +967,13 @@ export default function Welcome() {
                                     title="See recipe cost clearly"
                                     showConnector={false}
                                 >
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#71808a]">
+                                    <p className="text-[10px] font-bold tracking-[0.12em] text-[#71808a] uppercase">
                                         Recipe Cost
                                     </p>
                                     <p className="mt-2 font-serif text-lg text-[#10283a]">
                                         Margherita Pizza
                                     </p>
-                                    <p className="mt-5 text-[10px] uppercase tracking-[0.1em] text-[#71808a]">
+                                    <p className="mt-5 text-[10px] tracking-[0.1em] text-[#71808a] uppercase">
                                         Total cost
                                     </p>
                                     <p className="mt-1 font-serif text-3xl font-semibold text-[#10283a]">
@@ -997,7 +990,7 @@ export default function Welcome() {
                     >
                         <div className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 sm:py-20 lg:px-12">
                             <div className="max-w-2xl">
-                                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#6d7b73]">
+                                <p className="text-xs font-bold tracking-[0.16em] text-[#6d7b73] uppercase">
                                     What you can see
                                 </p>
                                 <h2 className="mt-3 font-serif text-4xl tracking-[-0.035em] text-[#10283a] sm:text-5xl">
@@ -1038,16 +1031,8 @@ export default function Welcome() {
 
                                     <div className="mt-4 text-[10px] text-[#5b6c77]">
                                         {[
-                                            [
-                                                'Milk',
-                                                '6 L',
-                                                'Main Kitchen',
-                                            ],
-                                            [
-                                                'Basil',
-                                                '0.3 kg',
-                                                'Main Kitchen',
-                                            ],
+                                            ['Milk', '6 L', 'Main Kitchen'],
+                                            ['Basil', '0.3 kg', 'Main Kitchen'],
                                             [
                                                 'Parmesan',
                                                 '4.5 kg',
@@ -1093,7 +1078,7 @@ export default function Welcome() {
 
                                     <div className="mt-4 flex items-end justify-between gap-4">
                                         <div>
-                                            <p className="text-[10px] uppercase tracking-[0.1em] text-[#71808a]">
+                                            <p className="text-[10px] tracking-[0.1em] text-[#71808a] uppercase">
                                                 Total
                                             </p>
                                             <p className="mt-1 font-serif text-2xl text-[#10283a]">
@@ -1234,7 +1219,7 @@ export default function Welcome() {
                     >
                         <div className="mx-auto grid max-w-[1440px] gap-10 px-5 py-16 sm:px-8 sm:py-20 lg:grid-cols-[0.34fr_0.66fr] lg:items-center lg:px-12">
                             <div>
-                                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#6d7b73]">
+                                <p className="text-xs font-bold tracking-[0.16em] text-[#6d7b73] uppercase">
                                     For your team
                                 </p>
 
@@ -1250,10 +1235,7 @@ export default function Welcome() {
 
                                 <div className="mt-7 grid gap-4 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
                                     {teamHighlights.map(
-                                        ({
-                                            label,
-                                            icon: BenefitIcon,
-                                        }) => (
+                                        ({ label, icon: BenefitIcon }) => (
                                             <div
                                                 key={label}
                                                 className="border-t border-[#173247]/15 pt-4"
@@ -1262,7 +1244,7 @@ export default function Welcome() {
                                                     className="size-5 text-[#526a5f]"
                                                     aria-hidden="true"
                                                 />
-                                                <p className="mt-2 text-xs font-semibold leading-5 text-[#405666]">
+                                                <p className="mt-2 text-xs leading-5 font-semibold text-[#405666]">
                                                     {label}
                                                 </p>
                                             </div>
@@ -1285,7 +1267,7 @@ export default function Welcome() {
                                     <ChefHat className="size-16 stroke-[1] text-[#d6a06e]" />
                                 </div>
 
-                                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#d6a06e]">
+                                <p className="text-xs font-bold tracking-[0.16em] text-[#d6a06e] uppercase">
                                     MiseLedger
                                 </p>
 
@@ -1296,8 +1278,8 @@ export default function Welcome() {
 
                                 <p className="mt-4 max-w-xl text-sm leading-6 text-white/70 sm:text-base">
                                     Keep stock, purchasing, receiving, waste,
-                                    recipe costs, and locations easier to
-                                    review from one place.
+                                    recipe costs, and locations easier to review
+                                    from one place.
                                 </p>
                             </div>
 
