@@ -206,7 +206,7 @@ test('an invalid active tenant session falls back to a valid membership', functi
         );
 });
 
-test('a users organizations retain independent commercial state', function () {
+test('a users organizations retain independent administrative active state', function () {
     $user = User::factory()->create();
 
     $suspendedOrganization = Organization::factory()->create([
