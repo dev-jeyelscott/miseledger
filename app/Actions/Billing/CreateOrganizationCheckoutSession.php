@@ -41,8 +41,8 @@ final class CreateOrganizationCheckoutSession
         $organizationId = (string) $organization->getKey();
 
         return $organization->newSubscription($type, $priceId)->checkout([
-            'success_url' => route('organizations.settings.edit', $organization).'?checkout=success',
-            'cancel_url' => route('organizations.settings.edit', $organization).'?checkout=cancelled',
+            'success_url' => route('organizations.billing.checkout.success', $organization),
+            'cancel_url' => route('organizations.billing.checkout.cancel', $organization),
             'metadata' => [
                 'organization_id' => $organizationId,
             ],
