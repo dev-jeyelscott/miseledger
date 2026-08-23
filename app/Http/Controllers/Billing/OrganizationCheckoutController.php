@@ -20,12 +20,12 @@ class OrganizationCheckoutController extends Controller
         CreateOrganizationCheckoutSession $createCheckoutSession,
         Organization $organization,
     ): Response {
-        $checkout = $createCheckoutSession->handle(
+        $checkoutUrl = $createCheckoutSession->handle(
             $organization,
             $request->planCode(),
             (string) $request->validated('interval'),
         );
 
-        return Inertia::location($checkout->redirect());
+        return Inertia::location($checkoutUrl);
     }
 }

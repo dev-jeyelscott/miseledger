@@ -15,7 +15,7 @@ use Stripe\HttpClient\ClientInterface;
  */
 final class FakeStripeHttpClient implements ClientInterface
 {
-    /** @var list<array{method: string, url: string}> */
+    /** @var list<array{method: string, url: string, params: array<string, mixed>}> */
     public array $requests = [];
 
     /**
@@ -25,7 +25,7 @@ final class FakeStripeHttpClient implements ClientInterface
      */
     public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null)
     {
-        $this->requests[] = ['method' => $method, 'url' => $absUrl];
+        $this->requests[] = ['method' => $method, 'url' => $absUrl, 'params' => $params];
 
         if (str_contains($absUrl, '/v1/customers/')) {
             return [json_encode(['id' => 'cus_test_123', 'object' => 'customer']), 200, []];
@@ -236,9 +236,16 @@ test('the resolved Checkout session uses the trusted configured price id, never 
         ['plan' => 'growth', 'interval' => 'yearly', 'price_id' => 'price_attacker_supplied'],
     )->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_123');
 
-    $checkoutRequest = collect($client->requests)->last();
+    $checkoutRequest = collect($client->requests)
+        ->last(fn (array $request): bool => str_contains($request['url'], '/v1/checkout/sessions'));
 
-    expect($checkoutRequest['url'])->toContain('/v1/checkout/sessions');
+    $lineItemPrices = collect($checkoutRequest['params']['line_items'] ?? [])
+        ->pluck('price')
+        ->all();
+
+    expect($lineItemPrices)
+        ->toContain('price_growth_yearly')
+        ->not->toContain('price_attacker_supplied');
 });
 
 test('a repeated Checkout request for an already subscribed organization is rejected', function () {
@@ -266,4 +273,36 @@ test('a repeated Checkout request for an already subscribed organization is reje
         route('organizations.billing.checkout', $organization),
         ['plan' => 'starter', 'interval' => 'monthly'],
     )->assertInvalid(['organization']);
+});
+
+test('a repeated Checkout request before the subscription webhook syncs reuses the pending session', function () {
+    organizationCheckoutFixturePlans();
+
+    $client = fakeStripeHttpClient();
+
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create(['stripe_id' => 'cus_test_123']);
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create(['role' => OrganizationRole::Owner]);
+
+    $first = $this->actingAs($user)->post(
+        route('organizations.billing.checkout', $organization),
+        ['plan' => 'starter', 'interval' => 'monthly'],
+    );
+
+    $second = $this->actingAs($user)->post(
+        route('organizations.billing.checkout', $organization),
+        ['plan' => 'starter', 'interval' => 'monthly'],
+    );
+
+    $first->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_123');
+    $second->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_123');
+
+    $checkoutSessionRequests = collect($client->requests)
+        ->filter(fn (array $request): bool => str_contains($request['url'], '/v1/checkout/sessions'));
+
+    expect($checkoutSessionRequests)->toHaveCount(1);
 });
