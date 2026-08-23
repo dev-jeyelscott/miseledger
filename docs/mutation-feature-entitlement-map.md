@@ -214,7 +214,7 @@ Reports and exports above (feature-entitlement candidates).
 
 | Route | Method | Domain | Commercial write policy | Read availability | Feature entitlement candidate |
 |---|---|---|---|---|---|
-| `recipes`, `recipes/{recipe}/edit` | GET | — | — | `available_read_only` | — |
+| `recipes`, `recipes/{recipe}/edit` | GET | — | — | `available_read_only` | core / no feature gate |
 | `recipes` | POST | recipes | `blocked_when_read_only` | — | recipe costing may be a plan-gated feature (unresolved, P0-004) |
 | `recipes/{recipe}` | PUT | recipes | `blocked_when_read_only` | — | same |
 | `recipes/{recipe}/cost` | GET | recipes | — | `available_read_only` | yes — candidate for a `features` gate once a plan approves it |
