@@ -44,11 +44,24 @@ variables resolved inside `config/subscription.php`
 
 ## Feature entitlements and limits
 
-Each plan entry also carries `features` (a list of entitlement keys) and
-optional `limits` (quantitative caps, e.g. seat or location counts). No
-`plans`, `features`, or `plan_features` database tables are required for the
-MVP: the configuration array is the single source of truth consumed by the
-future entitlement/access-resolution work (P2).
+Each plan entry also carries a `name` (display name), `features` (a list of
+entitlement keys), and optional `limits` (quantitative caps, e.g. seat or
+location counts). A limit set to `null` is an explicit "unlimited"; there is
+no implicit unlimited from an omitted key. No `plans`, `features`, or
+`plan_features` database tables are required for the MVP: the configuration
+array is the single source of truth consumed by the future
+entitlement/access-resolution work (P2).
+
+## Resolving Price IDs (P2-001)
+
+`App\Support\Billing\PlanCatalog` is the only supported way to resolve a
+Stripe Price ID into a plan definition (display name, feature codes, and
+limits), keyed by the stable internal `App\Enums\PlanCode` identifier. It
+fails closed: an unknown, missing, malformed, or duplicate-configured Price
+ID never resolves to a plan, so misconfiguration cannot grant paid
+functionality. No controller, React page, inventory action, or entitlement
+consumer may interpret a raw Stripe Price ID directly; they must go through
+`PlanCatalog`.
 
 ## Unresolved business decisions
 

@@ -61,10 +61,12 @@ return [
     | hardcoded or passed to the frontend directly.
     |
     | Each plan maps its billing interval(s) to a Stripe Price ID via env,
-    | plus the feature entitlements and optional quantitative limits granted
-    | by that plan. No `plans`, `features`, or `plan_features` database
-    | tables exist for the MVP: this array is the single source of truth
-    | consumed by future entitlement/access-resolution work (P1-004, P2).
+    | plus a display name, feature entitlements, and optional quantitative
+    | limits granted by that plan. No `plans`, `features`, or
+    | `plan_features` database tables exist for the MVP: this array is the
+    | single source of truth consumed by `App\Support\Billing\PlanCatalog`
+    | (P2-001), which is the only supported way to resolve a Stripe Price
+    | ID into a plan definition.
     |
     | UNRESOLVED BUSINESS DECISIONS, none of which are guessed here:
     |   - Which plan codes are sold at MVP launch, and their names.
@@ -77,10 +79,14 @@ return [
     |   - The initial plan exposure policy (e.g. whether every plan is
     |     purchasable at launch or only a subset is publicly offered).
     |
-    | Example shape (left empty until the above is approved):
+    | Example shape (left empty until the above is approved). A limit set
+    | to `null` is an explicit, deliberate "unlimited"; PlanCatalog treats
+    | an undeclared limit key as a configuration error rather than
+    | inferring unlimited from its absence:
     |
     | 'plans' => [
     |     'plan_code' => [
+    |         'name' => 'Plan Display Name',
     |         'prices' => [
     |             'monthly' => env('SUBSCRIPTION_PRICE_PLAN_CODE_MONTHLY'),
     |             'yearly' => env('SUBSCRIPTION_PRICE_PLAN_CODE_YEARLY'),

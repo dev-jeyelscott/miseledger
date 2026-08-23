@@ -1,0 +1,161 @@
+<?php
+
+use App\Enums\PlanCode;
+use App\Support\Billing\PlanCatalog;
+use Illuminate\Support\Facades\Config;
+
+function planCatalogFixturePlans(): array
+{
+    return [
+        'starter' => [
+            'name' => 'Starter',
+            'prices' => [
+                'monthly' => 'price_starter_monthly',
+                'yearly' => 'price_starter_yearly',
+            ],
+            'features' => ['inventory.view', 'inventory.adjust'],
+            'limits' => ['locations' => 1, 'seats' => null],
+        ],
+        'pro' => [
+            'name' => 'Pro',
+            'prices' => [
+                'monthly' => 'price_pro_monthly',
+                'yearly' => 'price_pro_yearly',
+            ],
+            'features' => ['inventory.view', 'inventory.adjust', 'reports.view'],
+            'limits' => ['locations' => null, 'seats' => null],
+        ],
+    ];
+}
+
+test('a configured monthly price id resolves to exactly one plan definition', function () {
+    $catalog = new PlanCatalog(planCatalogFixturePlans());
+
+    $definition = $catalog->resolveByPriceId('price_starter_monthly');
+
+    expect($definition)->not->toBeNull()
+        ->and($definition->code->equals(PlanCode::from('starter')))->toBeTrue()
+        ->and($definition->name)->toBe('Starter')
+        ->and($definition->features)->toBe(['inventory.view', 'inventory.adjust'])
+        ->and($definition->limit('locations'))->toBe(1)
+        ->and($definition->limit('seats'))->toBeNull();
+});
+
+test('a configured yearly price id resolves to the same plan as its monthly counterpart', function () {
+    $catalog = new PlanCatalog(planCatalogFixturePlans());
+
+    $monthly = $catalog->resolveByPriceId('price_pro_monthly');
+    $yearly = $catalog->resolveByPriceId('price_pro_yearly');
+
+    expect($monthly)->not->toBeNull()
+        ->and($yearly)->not->toBeNull()
+        ->and($monthly->code->equals($yearly->code))->toBeTrue()
+        ->and($catalog->resolveIntervalByPriceId('price_pro_monthly'))->toBe('monthly')
+        ->and($catalog->resolveIntervalByPriceId('price_pro_yearly'))->toBe('yearly');
+});
+
+test('an unknown price id fails to resolve and grants no plan', function () {
+    $catalog = new PlanCatalog(planCatalogFixturePlans());
+
+    expect($catalog->resolveByPriceId('price_does_not_exist'))->toBeNull()
+        ->and($catalog->resolveIntervalByPriceId('price_does_not_exist'))->toBeNull();
+});
+
+test('a missing price id for an interval never resolves', function () {
+    $catalog = new PlanCatalog([
+        'starter' => [
+            'name' => 'Starter',
+            'prices' => ['monthly' => 'price_starter_monthly', 'yearly' => null],
+            'features' => [],
+            'limits' => [],
+        ],
+    ]);
+
+    $definition = $catalog->get(PlanCode::from('starter'));
+
+    expect($definition->priceId('yearly'))->toBeNull()
+        ->and($catalog->resolveByPriceId(''))->toBeNull();
+});
+
+test('a duplicate price id across plans fails safely and resolves to no plan', function () {
+    $catalog = new PlanCatalog([
+        'starter' => [
+            'name' => 'Starter',
+            'prices' => ['monthly' => 'price_shared', 'yearly' => null],
+            'features' => [],
+            'limits' => [],
+        ],
+        'pro' => [
+            'name' => 'Pro',
+            'prices' => ['monthly' => 'price_shared', 'yearly' => null],
+            'features' => [],
+            'limits' => [],
+        ],
+    ]);
+
+    expect($catalog->resolveByPriceId('price_shared'))->toBeNull();
+});
+
+test('an invalid plan code entry is excluded from the catalog rather than crashing resolution', function () {
+    $catalog = new PlanCatalog([
+        'Invalid Code!' => [
+            'name' => 'Broken',
+            'prices' => ['monthly' => 'price_broken', 'yearly' => null],
+            'features' => [],
+            'limits' => [],
+        ],
+        'starter' => [
+            'name' => 'Starter',
+            'prices' => ['monthly' => 'price_starter_monthly', 'yearly' => null],
+            'features' => [],
+            'limits' => [],
+        ],
+    ]);
+
+    expect($catalog->resolveByPriceId('price_broken'))->toBeNull()
+        ->and($catalog->resolveByPriceId('price_starter_monthly'))->not->toBeNull();
+});
+
+test('a plan missing a display name is excluded from the catalog', function () {
+    $catalog = new PlanCatalog([
+        'starter' => [
+            'prices' => ['monthly' => 'price_starter_monthly', 'yearly' => null],
+            'features' => [],
+            'limits' => [],
+        ],
+    ]);
+
+    expect($catalog->resolveByPriceId('price_starter_monthly'))->toBeNull()
+        ->and($catalog->get(PlanCode::from('starter')))->toBeNull();
+});
+
+test('requesting an undeclared limit fails rather than inferring unlimited', function () {
+    $catalog = new PlanCatalog(planCatalogFixturePlans());
+
+    $definition = $catalog->get(PlanCode::from('starter'));
+
+    $definition->limit('seats_undeclared');
+})->throws(OutOfBoundsException::class);
+
+test('an empty plan configuration resolves nothing', function () {
+    $catalog = new PlanCatalog([]);
+
+    expect($catalog->all())->toBe([])
+        ->and($catalog->resolveByPriceId('price_starter_monthly'))->toBeNull();
+});
+
+test('the plan catalog is built from the billing configuration contract by default', function () {
+    Config::set('billing.plans', planCatalogFixturePlans());
+
+    $catalog = new PlanCatalog;
+
+    expect($catalog->resolveByPriceId('price_pro_yearly')?->name)->toBe('Pro');
+});
+
+test('the subscription type is a single stable configured value independent of any plan or price id', function () {
+    expect(config('billing.subscription_type'))
+        ->toBe(config('subscription.type'))
+        ->toBeString()
+        ->and(config('billing.subscription_type'))
+        ->not->toContain('price_');
+});
