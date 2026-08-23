@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Billing\OrganizationCheckoutController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Inventory\InventoryAdjustmentController;
 use App\Http\Controllers\Inventory\InventoryCategoryController;
@@ -73,6 +74,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         'organizations/{organization}/members',
         [OrganizationMemberController::class, 'store'],
     )->name('organizations.members.store');
+
+    Route::post(
+        'organizations/{organization}/billing/checkout',
+        [OrganizationCheckoutController::class, 'store'],
+    )->name('organizations.billing.checkout');
 
     Route::scopeBindings()->group(function (): void {
         Route::get(
