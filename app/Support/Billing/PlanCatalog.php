@@ -107,7 +107,7 @@ final readonly class PlanCatalog
 
             foreach (self::INTERVALS as $interval) {
                 $priceId = $plan['prices'][$interval] ?? null;
-                $prices[$interval] = (is_string($priceId) && $priceId !== '') ? $priceId : null;
+                $prices[$interval] = (is_string($priceId) && self::isValidPriceId($priceId)) ? $priceId : null;
 
                 if ($prices[$interval] !== null) {
                     $occurrences[$prices[$interval]] = ($occurrences[$prices[$interval]] ?? 0) + 1;
@@ -128,5 +128,16 @@ final readonly class PlanCatalog
         }
 
         return [$definitions, $priceIndex];
+    }
+
+    /**
+     * A configured value is only trusted as a Stripe Price ID when it has
+     * the `price_` prefix Stripe assigns, followed by a non-empty
+     * identifier. Anything else is excluded from resolution rather than
+     * trusted as configuration.
+     */
+    private static function isValidPriceId(string $priceId): bool
+    {
+        return preg_match('/^price_[A-Za-z0-9_]+$/', $priceId) === 1;
     }
 }

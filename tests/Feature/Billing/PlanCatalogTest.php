@@ -116,6 +116,30 @@ test('an invalid plan code entry is excluded from the catalog rather than crashi
         ->and($catalog->resolveByPriceId('price_starter_monthly'))->not->toBeNull();
 });
 
+test('a malformed configured price id is excluded from resolution', function () {
+    $catalog = new PlanCatalog([
+        'starter' => [
+            'name' => 'Starter',
+            'prices' => ['monthly' => 'not-a-stripe-price', 'yearly' => null],
+            'features' => [],
+            'limits' => [],
+        ],
+    ]);
+
+    $definition = $catalog->get(PlanCode::from('starter'));
+
+    expect($definition->priceId('monthly'))->toBeNull()
+        ->and($catalog->resolveByPriceId('not-a-stripe-price'))->toBeNull();
+});
+
+test('a lookup value matching a malformed price id never resolves to a plan', function () {
+    $catalog = new PlanCatalog(planCatalogFixturePlans());
+
+    expect($catalog->resolveByPriceId('price_'))->toBeNull()
+        ->and($catalog->resolveByPriceId('price_ with space'))->toBeNull()
+        ->and($catalog->resolveByPriceId('PRICE_STARTER_MONTHLY'))->toBeNull();
+});
+
 test('a plan missing a display name is excluded from the catalog', function () {
     $catalog = new PlanCatalog([
         'starter' => [
