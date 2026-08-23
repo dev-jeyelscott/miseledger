@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Cashier\Cashier;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -29,6 +30,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureAuthorization();
+        $this->configureBilling();
     }
 
     /**
@@ -70,5 +72,13 @@ class AppServiceProvider extends ServiceProvider
                 ),
             );
         }
+    }
+
+    /**
+     * Configure Organization as the sole Cashier billable customer model.
+     */
+    protected function configureBilling(): void
+    {
+        Cashier::useCustomerModel(Organization::class);
     }
 }
