@@ -101,7 +101,7 @@ test('a subscription scheduled to cancel remains writable during its paid grace 
 
     expect($access->accessMode)->toBe(OrganizationAccessMode::Writable)
         ->and($access->onGracePeriod)->toBeTrue()
-        ->and($access->billingWarning)->toBeFalse();
+        ->and($access->billingWarning)->toBeTrue();
 });
 
 test('a canceled subscription past its grace period is read-only', function () {
@@ -124,6 +124,21 @@ test('an unpaid subscription is read-only', function () {
 
     createOrganizationSubscription($organization, [
         'stripe_status' => 'unpaid',
+    ]);
+
+    $access = OrganizationSubscriptionAccessResolver::resolve($organization->fresh());
+
+    expect($access->accessMode)->toBe(OrganizationAccessMode::ReadOnly)
+        ->and($access->isReadOnly())->toBeTrue()
+        ->and($access->billingWarning)->toBeFalse();
+});
+
+test('an unpaid subscription with a future ends_at remains read-only', function () {
+    $organization = Organization::factory()->create();
+
+    createOrganizationSubscription($organization, [
+        'stripe_status' => 'unpaid',
+        'ends_at' => Carbon::now()->addDays(10),
     ]);
 
     $access = OrganizationSubscriptionAccessResolver::resolve($organization->fresh());

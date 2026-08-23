@@ -57,33 +57,42 @@ final class OrganizationSubscriptionAccessResolver
             ? $planCatalog->resolveByPriceId($subscription->stripe_price)?->code
             : null;
 
+        [$accessMode, $billingWarning] = self::resolveAccessModeAndWarning($subscription, $onGracePeriod, $status);
+
         return new OrganizationSubscriptionAccess(
-            accessMode: self::resolveAccessMode($subscription, $onGracePeriod, $status),
+            accessMode: $accessMode,
             subscriptionStatus: $status,
             plan: $plan,
             onTrial: $onTrial,
             onGracePeriod: $onGracePeriod,
-            billingWarning: $status === StripeSubscription::STATUS_PAST_DUE,
+            billingWarning: $billingWarning,
             trialEndsAt: $onTrial ? $subscription->trial_ends_at : null,
             endsAt: $subscription->ends_at,
         );
     }
 
-    private static function resolveAccessMode(Subscription $subscription, bool $onGracePeriod, string $status): OrganizationAccessMode
+    /**
+     * @return array{0: OrganizationAccessMode, 1: bool}
+     */
+    private static function resolveAccessModeAndWarning(Subscription $subscription, bool $onGracePeriod, string $status): array
     {
+        if ($status === StripeSubscription::STATUS_UNPAID) {
+            return [OrganizationAccessMode::ReadOnly, false];
+        }
+
         if ($onGracePeriod) {
-            return OrganizationAccessMode::Writable;
+            return [OrganizationAccessMode::Writable, true];
         }
 
         if ($subscription->ended()) {
-            return OrganizationAccessMode::ReadOnly;
+            return [OrganizationAccessMode::ReadOnly, false];
         }
 
         return match ($status) {
             StripeSubscription::STATUS_TRIALING,
-            StripeSubscription::STATUS_ACTIVE,
-            StripeSubscription::STATUS_PAST_DUE => OrganizationAccessMode::Writable,
-            default => OrganizationAccessMode::ReadOnly,
+            StripeSubscription::STATUS_ACTIVE => [OrganizationAccessMode::Writable, false],
+            StripeSubscription::STATUS_PAST_DUE => [OrganizationAccessMode::Writable, true],
+            default => [OrganizationAccessMode::ReadOnly, false],
         };
     }
 }
