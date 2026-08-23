@@ -6,12 +6,14 @@ use App\Enums\OrganizationPermission;
 use App\Models\Organization;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Laravel\Cashier\Cashier;
+use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -80,5 +82,31 @@ class AppServiceProvider extends ServiceProvider
     protected function configureBilling(): void
     {
         Cashier::useCustomerModel(Organization::class);
+
+        $this->validateBillingConfiguration();
+    }
+
+    /**
+     * Fail safely, rather than at first Stripe API call, when required
+     * billing configuration is missing outside local/testing environments.
+     */
+    protected function validateBillingConfiguration(): void
+    {
+        if (app()->isLocal() || app()->runningUnitTests()) {
+            return;
+        }
+
+        /** @var list<string> $requiredKeys */
+        $requiredKeys = config('billing.required_in_production', []);
+
+        $missing = collect($requiredKeys)
+            ->reject(fn (string $key): bool => filled(Arr::get(config('billing'), $key)))
+            ->values();
+
+        if ($missing->isNotEmpty()) {
+            throw new RuntimeException(
+                'Missing required billing configuration: '.$missing->implode(', '),
+            );
+        }
     }
 }
