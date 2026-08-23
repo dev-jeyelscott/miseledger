@@ -1,6 +1,6 @@
 import { Head, Link, router, usePoll } from '@inertiajs/react';
 import { CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +24,8 @@ type Props = {
 };
 
 const POLL_INTERVAL_MS = 4000;
+/** Stop automatic polling after this many attempts (~1 minute) and fall back to manual refresh. */
+const MAX_POLL_ATTEMPTS = 15;
 
 /** Format a plan or status code as a readable label. */
 function formatLabel(value: string | null): string {
@@ -49,17 +51,23 @@ export default function OrganizationCheckoutSuccess({
     subscription,
     synchronized: isSynchronized,
 }: Props) {
+    const [pollAttempts, setPollAttempts] = useState(0);
+    const pollExhausted = pollAttempts >= MAX_POLL_ATTEMPTS;
+
     const poll = usePoll(
         POLL_INTERVAL_MS,
-        { only: ['subscription', 'synchronized'] },
+        {
+            only: ['subscription', 'synchronized'],
+            onFinish: () => setPollAttempts((attempts) => attempts + 1),
+        },
         { autoStart: !isSynchronized },
     );
 
     useEffect(() => {
-        if (isSynchronized) {
+        if (isSynchronized || pollExhausted) {
             poll.stop();
         }
-    }, [isSynchronized, poll]);
+    }, [isSynchronized, pollExhausted, poll]);
 
     return (
         <>
@@ -126,9 +134,9 @@ export default function OrganizationCheckoutSuccess({
                                 className="text-sm text-muted-foreground"
                                 aria-live="polite"
                             >
-                                This page checks for updates automatically. It
-                                can take a few seconds for Stripe to notify
-                                MiseLedger once your payment is processed.
+                                {pollExhausted
+                                    ? "We're still waiting on Stripe to notify MiseLedger. Automatic checking has stopped; use the refresh button below when you're ready to check again."
+                                    : "This page checks for updates automatically. It can take a few seconds for Stripe to notify MiseLedger once your payment is processed."}
                             </p>
                         )}
                     </CardContent>
