@@ -50,8 +50,9 @@ status.
 
 | Route(s) | Source | Commercial write policy |
 |---|---|---|
+| `GET /` (`home`) | closure in `routes/web.php` | `always_allowed` — public marketing/welcome page, reachable pre-authentication and independent of any organization's commercial state |
 | `GET/POST login`, `POST logout`, `GET/POST register`, `GET/POST forgot-password`, `GET/POST reset-password/{token}`, `GET email/verify*`, `GET/POST two-factor-challenge`, `GET/POST user/confirm-password`, `user/two-factor-*`, `user/passkeys*`, `passkeys/*`, `.well-known/passkey-endpoints` | Laravel Fortify / Passkeys (vendor) | `always_allowed` |
-| `settings/profile` (GET/PATCH/DELETE), `settings/security` (GET/PUT `settings/password`), `settings/appearance` | `Settings\ProfileController`, `Settings\SecurityController` | `always_allowed` — user-account state, not organization-scoped commercial state |
+| `GET settings` (redirect to `settings/profile`), `settings/profile` (GET/PATCH/DELETE), `settings/security` (GET/PUT `settings/password`), `settings/appearance` | `Route::redirect`, `Settings\ProfileController`, `Settings\SecurityController` | `always_allowed` — user-account navigation/state, not organization-scoped commercial state |
 | `GET organizations/create`, `POST organizations` (`organizations.store`) | `OrganizationController::create/store` | `always_allowed` — creating a new organization cannot depend on a subscription that does not exist yet; trial/subscription bootstrap happens *after* creation |
 
 `PUT organizations/{organization}/activate` (`OrganizationController::activate`)
@@ -239,10 +240,13 @@ inside the actions themselves.
 
 ## Coverage confirmation
 
-This map covers every acceptance-criteria domain: organization
-settings/members/locations, inventory (catalog + ledger-write + reports),
-purchasing (suppliers/purchase-orders/goods-receipts), counts, waste,
-transfers, recipes, reports/exports, and master-import entry points.
+This map covers every registered route in `routes/web.php` and
+`routes/settings.php` (confirmed against `php artisan route:list
+--except-vendor`) and every acceptance-criteria domain: the public home
+route, authentication, organization settings/members/locations, inventory
+(catalog + ledger-write + reports), purchasing
+(suppliers/purchase-orders/goods-receipts), counts, waste, transfers,
+recipes, reports/exports, and master-import entry points.
 Authentication/organization-creation and future billing-recovery routes are
 explicitly marked `always_allowed`, independent of any existing
 organization's `AccessMode`.
