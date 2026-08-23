@@ -28,7 +28,7 @@ use Laravel\Cashier\Billable;
  * separately so organizations remain resolvable to members for historical
  * reads and billing recovery even when commercially read-only.
  */
-#[Fillable(['name', 'slug', 'timezone', 'currency', 'active'])]
+#[Fillable(['name', 'slug', 'timezone', 'currency', 'active', 'trial_ends_at'])]
 class Organization extends Model
 {
     /** @use HasFactory<OrganizationFactory> */

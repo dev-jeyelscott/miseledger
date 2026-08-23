@@ -6,6 +6,8 @@ use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\User;
 use App\Support\Inventory\StandardUnits;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -27,6 +29,7 @@ final class CreateOrganization
                 'timezone' => 'Asia/Manila',
                 'currency' => 'PHP',
                 'active' => true,
+                'trial_ends_at' => $this->genericTrialEndsAt(),
             ]);
 
             $organization->memberships()->create([
@@ -47,6 +50,21 @@ final class CreateOrganization
 
             return $organization;
         });
+    }
+
+    /**
+     * Resolve the Cashier generic trial end timestamp from the configured
+     * billing trial duration, without contacting Stripe.
+     */
+    private function genericTrialEndsAt(): ?Carbon
+    {
+        $trialDays = Config::get('billing.trial_days');
+
+        if ($trialDays === null) {
+            return null;
+        }
+
+        return Carbon::now()->addDays((int) $trialDays);
     }
 
     /**
