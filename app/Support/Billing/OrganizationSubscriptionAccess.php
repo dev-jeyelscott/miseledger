@@ -4,6 +4,7 @@ namespace App\Support\Billing;
 
 use App\Enums\OrganizationAccessMode;
 use App\Enums\PlanCode;
+use Carbon\CarbonInterface;
 
 /**
  * The resolved commercial access state for an organization at the moment
@@ -20,6 +21,8 @@ final readonly class OrganizationSubscriptionAccess
         public bool $onTrial,
         public bool $onGracePeriod,
         public bool $billingWarning,
+        public ?CarbonInterface $trialEndsAt = null,
+        public ?CarbonInterface $endsAt = null,
     ) {}
 
     public function isReadOnly(): bool

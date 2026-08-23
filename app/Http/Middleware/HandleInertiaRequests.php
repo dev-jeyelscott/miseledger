@@ -5,6 +5,9 @@ namespace App\Http\Middleware;
 use App\Enums\OrganizationPermission;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
+use App\Support\Billing\OrganizationSubscriptionAccess;
+use App\Support\Billing\OrganizationSubscriptionAccessResolver;
+use App\Support\Billing\PlanCatalog;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -59,7 +62,20 @@ class HandleInertiaRequests extends Middleware
      *         organization: array{id: int, name: string, slug: string},
      *         role: string,
      *         permissions: list<string>
-     *     }>
+     *     }>,
+     *     subscription: array{
+     *         plan: string|null,
+     *         status: string|null,
+     *         accessMode: string,
+     *         onTrial: bool,
+     *         trialEndsAt: string|null,
+     *         endsAt: string|null,
+     *         billingWarning: bool
+     *     }|null,
+     *     entitlements: array{
+     *         features: list<string>,
+     *         limits: array<string, int|null>
+     *     }|null
      * }
      */
     private function organizationContext(Request $request): array
@@ -95,11 +111,17 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
+        $access = $activeOrganization instanceof Organization
+            ? OrganizationSubscriptionAccessResolver::resolve($activeOrganization)
+            : null;
+
         return [
             'active' => $activeOrganization instanceof Organization
                 ? $this->organizationData($activeOrganization)
                 : null,
             'memberships' => $membershipData,
+            'subscription' => $access !== null ? $this->subscriptionData($access) : null,
+            'entitlements' => $access !== null ? $this->entitlementData($access) : null,
         ];
     }
 
@@ -114,6 +136,57 @@ class HandleInertiaRequests extends Middleware
             'id' => $organization->id,
             'name' => $organization->name,
             'slug' => $organization->slug,
+        ];
+    }
+
+    /**
+     * Serialize only safe commercial state for the active organization.
+     * Never exposes Stripe secrets, customer identifiers, payment-method
+     * tokens, or raw Cashier/Stripe objects.
+     *
+     * @return array{
+     *     plan: string|null,
+     *     status: string|null,
+     *     accessMode: string,
+     *     onTrial: bool,
+     *     trialEndsAt: string|null,
+     *     endsAt: string|null,
+     *     billingWarning: bool
+     * }
+     */
+    private function subscriptionData(OrganizationSubscriptionAccess $access): array
+    {
+        return [
+            'plan' => $access->plan?->value,
+            'status' => $access->subscriptionStatus,
+            'accessMode' => $access->accessMode->value,
+            'onTrial' => $access->onTrial,
+            'trialEndsAt' => $access->trialEndsAt?->toISOString(),
+            'endsAt' => $access->endsAt?->toISOString(),
+            'billingWarning' => $access->billingWarning,
+        ];
+    }
+
+    /**
+     * Serialize only the plan's declared feature codes and quantitative
+     * limits for the active organization, using the configuration-owned
+     * plan catalog rather than any Stripe usage/metering data.
+     *
+     * @return array{features: list<string>, limits: array<string, int|null>}
+     */
+    private function entitlementData(OrganizationSubscriptionAccess $access): array
+    {
+        $definition = $access->plan !== null
+            ? (new PlanCatalog)->get($access->plan)
+            : null;
+
+        if ($definition === null) {
+            return ['features' => [], 'limits' => []];
+        }
+
+        return [
+            'features' => $definition->features,
+            'limits' => $definition->limits,
         ];
     }
 }

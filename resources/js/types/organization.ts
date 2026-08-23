@@ -47,7 +47,24 @@ export type OrganizationMembership = {
     permissions: OrganizationPermission[];
 };
 
+export type OrganizationSubscriptionContext = {
+    plan: string | null;
+    status: string | null;
+    accessMode: 'writable' | 'read_only';
+    onTrial: boolean;
+    trialEndsAt: string | null;
+    endsAt: string | null;
+    billingWarning: boolean;
+};
+
+export type OrganizationEntitlementContext = {
+    features: string[];
+    limits: Record<string, number | null>;
+};
+
 export type OrganizationContext = {
     active: OrganizationSummary | null;
     memberships: OrganizationMembership[];
+    subscription: OrganizationSubscriptionContext | null;
+    entitlements: OrganizationEntitlementContext | null;
 };

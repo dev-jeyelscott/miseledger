@@ -18,6 +18,7 @@ use Laravel\Cashier\Billable;
  * @property string $timezone
  * @property string $currency
  * @property bool $active
+ * @property Carbon|null $trial_ends_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  *
@@ -137,6 +138,7 @@ class Organization extends Model
     {
         return [
             'active' => 'boolean',
+            'trial_ends_at' => 'datetime',
         ];
     }
 }

@@ -42,6 +42,8 @@ final class OrganizationSubscriptionAccessResolver
             onTrial: $onGenericTrial,
             onGracePeriod: false,
             billingWarning: false,
+            trialEndsAt: $onGenericTrial ? $organization->trial_ends_at : null,
+            endsAt: null,
         );
     }
 
@@ -49,6 +51,7 @@ final class OrganizationSubscriptionAccessResolver
     {
         $onGracePeriod = $subscription->onGracePeriod();
         $status = $subscription->stripe_status;
+        $onTrial = $subscription->onTrial();
 
         $plan = $subscription->stripe_price !== null
             ? $planCatalog->resolveByPriceId($subscription->stripe_price)?->code
@@ -58,9 +61,11 @@ final class OrganizationSubscriptionAccessResolver
             accessMode: self::resolveAccessMode($subscription, $onGracePeriod, $status),
             subscriptionStatus: $status,
             plan: $plan,
-            onTrial: $subscription->onTrial(),
+            onTrial: $onTrial,
             onGracePeriod: $onGracePeriod,
             billingWarning: $status === StripeSubscription::STATUS_PAST_DUE,
+            trialEndsAt: $onTrial ? $subscription->trial_ends_at : null,
+            endsAt: $subscription->ends_at,
         );
     }
 
