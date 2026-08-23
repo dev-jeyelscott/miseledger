@@ -83,8 +83,6 @@ policy they must follow once added:
 
 ## Organization settings, members, and locations
 
-| Route                                                    | Method | Controller@action                              | Mutation domain    | Commercial write policy                                          | Read availability     |
-| -------------------------------------------------------- | ------ | ---------------------------------------------- | ------------------ | ---------------------------------------------------------------- | --------------------- |
 | Route                                                    | Method | Controller@action                              | Mutation domain    | Commercial write policy                                          | Read availability     | Feature entitlement    |
 | ---                                                      | ---    | ---                                            | ---                | ---                                                              | ---                   | ---                    |
 | `organizations/{organization}/settings`                  | GET    | `OrganizationController@edit`                  | —                  | —                                                                | `available_read_only` | core / no feature gate |
