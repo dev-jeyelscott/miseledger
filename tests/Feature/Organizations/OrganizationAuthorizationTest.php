@@ -248,6 +248,55 @@ test('organization active remains an administrative toggle independent of any co
     )->toBeTrue();
 });
 
+test('only owner receives billing manage across every MVP role', function (
+    OrganizationRole $role,
+    bool $expected,
+) {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create([
+            'role' => $role,
+        ]);
+
+    expect(
+        Gate::forUser($user)->allows(
+            OrganizationPermission::BillingManage->value,
+            $organization,
+        ),
+    )->toBe($expected);
+})->with([
+    'owner' => [OrganizationRole::Owner, true],
+    'manager' => [OrganizationRole::Manager, false],
+    'inventory staff' => [OrganizationRole::InventoryStaff, false],
+    'kitchen staff' => [OrganizationRole::KitchenStaff, false],
+    'auditor' => [OrganizationRole::Auditor, false],
+]);
+
+test('cross organization billing authorization is denied', function () {
+    $owner = User::factory()->create();
+
+    $ownOrganization = Organization::factory()->create();
+    $otherOrganization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($ownOrganization)
+        ->for($owner)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    expect(
+        Gate::forUser($owner)->allows(
+            OrganizationPermission::BillingManage->value,
+            $otherOrganization,
+        ),
+    )->toBeFalse();
+});
+
 test('cross organization user management is denied', function () {
     $user = User::factory()->create();
 
