@@ -65,6 +65,33 @@ test('switching the active organization changes the exposed notice state and nev
         );
 });
 
+test('a past due organization retains its billing warning even when also scheduled to end', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create(['role' => OrganizationRole::Owner]);
+
+    createSubscriptionNoticeOrganizationSubscription($organization, [
+        'stripe_status' => 'past_due',
+        'ends_at' => Carbon::now()->addDays(5),
+    ]);
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page) => $page
+                ->where('organizationContext.subscription.status', 'past_due')
+                ->where('organizationContext.subscription.accessMode', 'writable')
+                ->where('organizationContext.subscription.billingWarning', true)
+                ->has('organizationContext.subscription.endsAt')
+        );
+});
+
 test('an unpaid organization is exposed as read-only for the persistent read-only notice', function () {
     $user = User::factory()->create();
     $organization = Organization::factory()->create();

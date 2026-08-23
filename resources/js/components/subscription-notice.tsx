@@ -32,6 +32,9 @@ type NoticeContent = {
  * Choose the single highest-priority notice for the active organization's
  * safe, server-derived subscription state. Order matters: an `unpaid`
  * organization is read-only and takes priority over any other framing.
+ * Severity for the past-due warning is taken from the server-authoritative
+ * `billingWarning` flag rather than re-derived from `status`/`endsAt`, so it
+ * cannot be silently suppressed by an unrelated scheduled-cancellation date.
  */
 function resolveNotice(
     subscription: NonNullable<OrganizationContext['subscription']>,
@@ -57,7 +60,7 @@ function resolveNotice(
         };
     }
 
-    if (subscription.status === 'past_due' && endsAt === null) {
+    if (subscription.status === 'past_due' && subscription.billingWarning) {
         return {
             variant: 'destructive',
             title: 'Payment past due',
