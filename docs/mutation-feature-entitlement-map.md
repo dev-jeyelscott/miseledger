@@ -52,7 +52,7 @@ status.
 |---|---|---|
 | `GET /` (`home`) | closure in `routes/web.php` | `always_allowed` — public marketing/welcome page, reachable pre-authentication and independent of any organization's commercial state |
 | `GET/POST login`, `POST logout`, `GET/POST register`, `GET/POST forgot-password`, `GET/POST reset-password/{token}`, `GET email/verify*`, `GET/POST two-factor-challenge`, `GET/POST user/confirm-password`, `user/two-factor-*`, `user/passkeys*`, `passkeys/*`, `.well-known/passkey-endpoints` | Laravel Fortify / Passkeys (vendor) | `always_allowed` |
-| `GET settings` (redirect to `settings/profile`), `settings/profile` (GET/PATCH/DELETE), `settings/security` (GET/PUT `settings/password`), `settings/appearance` | `Route::redirect`, `Settings\ProfileController`, `Settings\SecurityController` | `always_allowed` — user-account navigation/state, not organization-scoped commercial state |
+| `ANY settings` (redirect to `settings/profile`), `settings/profile` (GET/PATCH/DELETE), `settings/security` (GET/PUT `settings/password`), `settings/appearance` | `Route::redirect`, `Settings\ProfileController`, `Settings\SecurityController` | `always_allowed` — user-account navigation/state, not organization-scoped commercial state |
 | `GET organizations/create`, `POST organizations` (`organizations.store`) | `OrganizationController::create/store` | `always_allowed` — creating a new organization cannot depend on a subscription that does not exist yet; trial/subscription bootstrap happens *after* creation |
 
 `PUT organizations/{organization}/activate` (`OrganizationController::activate`)
