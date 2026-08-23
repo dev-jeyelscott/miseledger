@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnforceOrganizationCommercialWriteAccess;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\ResolveActiveOrganization;
@@ -23,6 +24,10 @@ return Application::configure(basePath: dirname(__DIR__))
             ResolveActiveOrganization::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+        ]);
+
+        $middleware->alias([
+            'organization.write-access' => EnforceOrganizationCommercialWriteAccess::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [

@@ -7,7 +7,10 @@ use App\Models\User;
 
 test('an owner sees a pending processing state when webhook synchronization has not landed yet', function () {
     $user = User::factory()->create();
-    $organization = Organization::factory()->create(['stripe_id' => 'cus_test_123']);
+    $organization = Organization::factory()->create([
+        'stripe_id' => 'cus_test_123',
+        'trial_ends_at' => null,
+    ]);
 
     OrganizationMembership::factory()
         ->for($organization)
