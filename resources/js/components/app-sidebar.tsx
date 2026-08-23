@@ -6,6 +6,7 @@ import {
     ClipboardCheck,
     ClipboardList,
     Coins,
+    CreditCard,
     History,
     LayoutGrid,
     MapPin,
@@ -19,6 +20,7 @@ import {
     Truck,
     Users,
 } from 'lucide-react';
+import OrganizationBillingController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingController';
 import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InventoryValuationReportController from '@/actions/App/Http/Controllers/Inventory/InventoryValuationReportController';
@@ -225,6 +227,14 @@ export function AppSidebar() {
                 title: 'Settings',
                 href: OrganizationController.edit(activeOrganization.id),
                 icon: Settings,
+            });
+        }
+
+        if (permissions.has('billing.manage')) {
+            organizationNavItems.push({
+                title: 'Billing',
+                href: OrganizationBillingController.show(activeOrganization.id),
+                icon: CreditCard,
             });
         }
     }

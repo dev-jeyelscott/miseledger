@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Billing\OrganizationBillingController;
+use App\Http\Controllers\Billing\OrganizationBillingPortalController;
 use App\Http\Controllers\Billing\OrganizationCheckoutController;
 use App\Http\Controllers\Billing\OrganizationCheckoutStatusController;
 use App\Http\Controllers\DashboardController;
@@ -76,10 +78,20 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         [OrganizationMemberController::class, 'store'],
     )->name('organizations.members.store');
 
+    Route::get(
+        'organizations/{organization}/billing',
+        [OrganizationBillingController::class, 'show'],
+    )->name('organizations.billing.show');
+
     Route::post(
         'organizations/{organization}/billing/checkout',
         [OrganizationCheckoutController::class, 'store'],
     )->name('organizations.billing.checkout');
+
+    Route::post(
+        'organizations/{organization}/billing/portal',
+        [OrganizationBillingPortalController::class, 'store'],
+    )->name('organizations.billing.portal');
 
     Route::get(
         'organizations/{organization}/billing/checkout/success',

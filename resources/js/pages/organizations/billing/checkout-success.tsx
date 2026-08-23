@@ -136,7 +136,7 @@ export default function OrganizationCheckoutSuccess({
                             >
                                 {pollExhausted
                                     ? "We're still waiting on Stripe to notify MiseLedger. Automatic checking has stopped; use the refresh button below when you're ready to check again."
-                                    : "This page checks for updates automatically. It can take a few seconds for Stripe to notify MiseLedger once your payment is processed."}
+                                    : 'This page checks for updates automatically. It can take a few seconds for Stripe to notify MiseLedger once your payment is processed.'}
                             </p>
                         )}
                     </CardContent>

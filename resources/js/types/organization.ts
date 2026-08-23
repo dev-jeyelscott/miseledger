@@ -16,7 +16,8 @@ export type OrganizationPermission =
     | 'costs.view'
     | 'locations.manage'
     | 'users.manage'
-    | 'organization.manage';
+    | 'organization.manage'
+    | 'billing.manage';
 
 export type OrganizationRole =
     'owner' | 'manager' | 'inventory_staff' | 'kitchen_staff' | 'auditor';
@@ -60,6 +61,13 @@ export type OrganizationSubscriptionContext = {
 export type OrganizationEntitlementContext = {
     features: string[];
     limits: Record<string, number | null>;
+};
+
+export type OrganizationAvailablePlan = {
+    code: string;
+    name: string;
+    monthly: boolean;
+    yearly: boolean;
 };
 
 export type OrganizationContext = {
