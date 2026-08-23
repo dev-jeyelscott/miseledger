@@ -29,7 +29,7 @@ export function DashboardMetricCard({
     tone = 'emerald',
 }: DashboardMetricCardProps) {
     return (
-        <section className="rounded-xl border border-sidebar-border/70 bg-card p-4 shadow-sm dark:border-sidebar-border">
+        <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
             <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                     <p className="text-sm font-medium text-muted-foreground">
