@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Actions\MasterImport\ImportOpeningBalances;
 use App\Models\Organization;
 use App\Models\User;
+use App\Support\Billing\OrganizationSubscriptionAccessResolver;
 use Illuminate\Console\Command;
 
 class InventoryImportOpeningBalances extends Command
@@ -27,6 +28,12 @@ class InventoryImportOpeningBalances extends Command
 
         if ($organization === null) {
             $this->error('No organization exists with that ID.');
+
+            return self::FAILURE;
+        }
+
+        if (OrganizationSubscriptionAccessResolver::resolve($organization)->isReadOnly()) {
+            $this->error('This organization is read-only until its subscription is resolved.');
 
             return self::FAILURE;
         }

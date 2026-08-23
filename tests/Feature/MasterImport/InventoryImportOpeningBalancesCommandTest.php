@@ -99,3 +99,64 @@ test('the import-opening-balances command fails for an unknown actor', function 
 
     unlink($path);
 });
+
+test('the import-opening-balances command refuses to import into a commercially read-only organization', function () {
+    $organization = Organization::factory()->create([
+        'trial_ends_at' => now()->subDay(),
+    ]);
+
+    $location = Location::factory()->create([
+        'organization_id' => $organization->id,
+        'code' => 'MAIN',
+        'active' => true,
+    ]);
+
+    $storageLocation = new StorageLocation;
+    $storageLocation->organization_id = $organization->id;
+    $storageLocation->location_id = $location->id;
+    $storageLocation->name = 'Storage MAIN';
+    $storageLocation->code = 'MAIN';
+    $storageLocation->active = true;
+    $storageLocation->save();
+
+    $unit = UnitOfMeasure::factory()->create([
+        'organization_id' => $organization->id,
+        'symbol' => 'kg',
+        'dimension' => 'weight',
+        'active' => true,
+    ]);
+
+    InventoryItem::factory()->create([
+        'organization_id' => $organization->id,
+        'base_unit_of_measure_id' => $unit->id,
+        'sku' => 'FLOUR-001',
+        'active' => true,
+    ]);
+
+    $actor = User::factory()->create();
+
+    OrganizationMembership::factory()->create([
+        'organization_id' => $organization->id,
+        'user_id' => $actor->id,
+        'role' => OrganizationRole::InventoryStaff,
+    ]);
+
+    $path = tempnam(sys_get_temp_dir(), 'opening-balances-');
+    file_put_contents(
+        $path,
+        "location_code,storage_location_code,item_sku,quantity,unit_symbol,unit_cost\nMAIN,MAIN,FLOUR-001,1,kg,1.00\n",
+    );
+
+    $this->artisan('inventory:import-opening-balances', [
+        'organization' => $organization->id,
+        'actor' => $actor->id,
+        'batch' => 'cli-batch',
+        'file' => $path,
+    ])
+        ->assertExitCode(1)
+        ->expectsOutputToContain('read-only');
+
+    unlink($path);
+
+    expect(StockMovement::query()->count())->toBe(0);
+});
