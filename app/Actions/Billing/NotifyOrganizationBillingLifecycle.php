@@ -6,16 +6,13 @@ use App\Enums\BillingLifecycleEvent;
 use App\Enums\OrganizationPermission;
 use App\Models\Organization;
 use App\Notifications\BillingLifecycleNotification;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
-use Throwable;
 
 class NotifyOrganizationBillingLifecycle
 {
     /**
      * Notify billing-authorized members of the organization identified by its
-     * Stripe customer ID. Notification dispatch is intentionally best-effort:
-     * Cashier remains the authority for lifecycle synchronization.
+     * Stripe customer ID.
      */
     public function handle(string $stripeCustomerId, BillingLifecycleEvent $event): void
     {
@@ -39,17 +36,9 @@ class NotifyOrganizationBillingLifecycle
             return;
         }
 
-        try {
-            Notification::send(
-                $recipients,
-                (new BillingLifecycleNotification($organization, $event))->afterCommit(),
-            );
-        } catch (Throwable) {
-            Log::channel((string) config('billing.logger'))
-                ->warning('Billing lifecycle notification dispatch failed.', [
-                    'organization_id' => $organization->getKey(),
-                    'event' => $event->value,
-                ]);
-        }
+        Notification::send(
+            $recipients,
+            (new BillingLifecycleNotification($organization, $event))->afterCommit(),
+        );
     }
 }

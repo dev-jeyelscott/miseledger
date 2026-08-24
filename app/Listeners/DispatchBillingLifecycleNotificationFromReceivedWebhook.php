@@ -2,13 +2,13 @@
 
 namespace App\Listeners;
 
-use App\Actions\Billing\NotifyOrganizationBillingLifecycle;
+use App\Actions\Billing\ProcessOrganizationBillingWebhookEffect;
 use App\Enums\BillingLifecycleEvent;
 use Laravel\Cashier\Events\WebhookReceived;
 
 class DispatchBillingLifecycleNotificationFromReceivedWebhook
 {
-    public function __construct(private NotifyOrganizationBillingLifecycle $notify) {}
+    public function __construct(private ProcessOrganizationBillingWebhookEffect $process) {}
 
     /**
      * Dispatch notifications for lifecycle events Cashier does not itself
@@ -19,7 +19,11 @@ class DispatchBillingLifecycleNotificationFromReceivedWebhook
         $payload = $event->payload;
         $object = $payload['data']['object'] ?? null;
 
-        if (! is_array($object) || ! is_string($customerId = $object['customer'] ?? null)) {
+        if (
+            ! is_array($object)
+            || ! is_string($stripeEventId = $payload['id'] ?? null)
+            || ! is_string($customerId = $object['customer'] ?? null)
+        ) {
             return;
         }
 
@@ -30,7 +34,7 @@ class DispatchBillingLifecycleNotificationFromReceivedWebhook
         };
 
         if ($lifecycleEvent !== null) {
-            $this->notify->handle($customerId, $lifecycleEvent);
+            $this->process->handle($stripeEventId, $customerId, $lifecycleEvent);
         }
     }
 }
