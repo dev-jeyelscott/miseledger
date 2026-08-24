@@ -1,5 +1,7 @@
 <?php
 
+$billing = require __DIR__.'/billing.php';
+
 return [
 
     /*
@@ -36,9 +38,9 @@ return [
     ],
 
     'stripe' => [
-        'key' => env('STRIPE_KEY'),
-        'secret' => env('STRIPE_SECRET'),
-        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'key' => $billing['stripe']['key'],
+        'secret' => $billing['stripe']['secret'],
+        'webhook_secret' => $billing['stripe']['webhook_secret'],
     ],
 
 ];

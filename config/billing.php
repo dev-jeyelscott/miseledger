@@ -15,6 +15,10 @@
 */
 
 $subscription = require __DIR__.'/subscription.php';
+$stripeKey = env('STRIPE_KEY');
+$stripeMode = is_string($stripeKey) && str_starts_with($stripeKey, 'pk_live_')
+    ? 'live'
+    : (is_string($stripeKey) && str_starts_with($stripeKey, 'pk_test_') ? 'test' : null);
 
 return [
 
@@ -29,9 +33,14 @@ return [
     */
 
     'stripe' => [
-        'key' => env('STRIPE_KEY'),
+        'key' => $stripeKey,
         'secret' => env('STRIPE_SECRET'),
-        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'mode' => $stripeMode,
+        'webhook_secret' => match ($stripeMode) {
+            'live' => env('STRIPE_LIVE_WEBHOOK_SECRET'),
+            'test' => env('STRIPE_TEST_WEBHOOK_SECRET'),
+            default => null,
+        },
     ],
 
     /*
@@ -81,6 +90,7 @@ return [
         'stripe.key',
         'stripe.secret',
         'stripe.webhook_secret',
+        'stripe.mode',
         'currency',
         'trial_days',
         'subscription_type',

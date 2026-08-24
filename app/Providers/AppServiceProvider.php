@@ -5,16 +5,15 @@ namespace App\Providers;
 use App\Enums\OrganizationPermission;
 use App\Models\Organization;
 use App\Models\User;
+use App\Support\Billing\BillingConfigurationValidator;
 use App\Support\Billing\OrganizationCommercialWriteGate;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Laravel\Cashier\Cashier;
-use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -96,21 +95,10 @@ class AppServiceProvider extends ServiceProvider
      */
     protected function validateBillingConfiguration(): void
     {
-        if (app()->isLocal() || app()->runningUnitTests()) {
+        if (! app()->isProduction()) {
             return;
         }
 
-        /** @var list<string> $requiredKeys */
-        $requiredKeys = config('billing.required_in_production', []);
-
-        $missing = collect($requiredKeys)
-            ->reject(fn (string $key): bool => filled(Arr::get(config('billing'), $key)))
-            ->values();
-
-        if ($missing->isNotEmpty()) {
-            throw new RuntimeException(
-                'Missing required billing configuration: '.$missing->implode(', '),
-            );
-        }
+        BillingConfigurationValidator::validateProduction((array) config('billing'));
     }
 }
