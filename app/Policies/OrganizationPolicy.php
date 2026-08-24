@@ -5,6 +5,7 @@ namespace App\Policies;
 use App\Enums\OrganizationPermission;
 use App\Models\Organization;
 use App\Models\User;
+use App\Support\Billing\OrganizationCommercialWriteGate;
 
 class OrganizationPolicy
 {
@@ -46,6 +47,6 @@ class OrganizationPolicy
         return $user->hasOrganizationPermission(
             $organization,
             OrganizationPermission::OrganizationManage,
-        );
+        ) && OrganizationCommercialWriteGate::permits($organization);
     }
 }

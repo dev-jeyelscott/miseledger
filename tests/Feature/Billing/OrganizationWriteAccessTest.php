@@ -234,6 +234,38 @@ test('an inactive organization remains blocked by existing administrative author
         ->assertForbidden();
 });
 
+test('an unauthorized user targeting a read-only organization receives the same denial as targeting a writable one', function () {
+    $user = User::factory()->create();
+
+    $writableOrganization = Organization::factory()->create();
+    $readOnlyOrganization = Organization::factory()->create([
+        'trial_ends_at' => now()->subDay(),
+    ]);
+
+    $writableResponse = $this->actingAs($user)
+        ->put(route('organizations.settings.update', $writableOrganization), [
+            'name' => $writableOrganization->name,
+            'slug' => $writableOrganization->slug,
+            'timezone' => $writableOrganization->timezone,
+            'currency' => $writableOrganization->currency,
+            'active' => true,
+        ]);
+
+    $readOnlyResponse = $this->actingAs($user)
+        ->put(route('organizations.settings.update', $readOnlyOrganization), [
+            'name' => $readOnlyOrganization->name,
+            'slug' => $readOnlyOrganization->slug,
+            'timezone' => $readOnlyOrganization->timezone,
+            'currency' => $readOnlyOrganization->currency,
+            'active' => true,
+        ]);
+
+    $writableResponse->assertForbidden();
+    $readOnlyResponse->assertForbidden();
+
+    expect($readOnlyResponse->getContent())->toBe($writableResponse->getContent());
+});
+
 test('cross organization write access is denied regardless of the target organizations commercial state', function () {
     $owner = User::factory()->create();
 

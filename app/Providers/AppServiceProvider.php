@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Enums\OrganizationPermission;
 use App\Models\Organization;
 use App\Models\User;
+use App\Support\Billing\OrganizationCommercialWriteGate;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Date;
@@ -69,6 +70,9 @@ class AppServiceProvider extends ServiceProvider
                     User $user,
                     Organization $organization,
                 ): bool => $user->hasOrganizationPermission(
+                    $organization,
+                    $permission,
+                ) && OrganizationCommercialWriteGate::permits(
                     $organization,
                     $permission,
                 ),
