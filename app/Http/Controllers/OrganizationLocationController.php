@@ -9,6 +9,8 @@ use App\Http\Requests\Organizations\UpdateOrganizationLocationRequest;
 use App\Models\Location;
 use App\Models\Organization;
 use App\Models\StorageLocation;
+use App\Support\Billing\OrganizationUsageLimitEnforcer;
+use App\Support\Billing\UsageLimitKey;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -65,7 +67,20 @@ class OrganizationLocationController extends Controller
             $request,
             $organization,
         ): void {
-            $location = $organization
+            $lockedOrganization = Organization::query()
+                ->whereKey($organization->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            OrganizationUsageLimitEnforcer::assertCanAdd(
+                lockedOrganization: $lockedOrganization,
+                limitKey: UsageLimitKey::Locations,
+                currentUsage: $lockedOrganization->locations()->count(),
+                errorField: 'name',
+                errorMessage: __('This organization has reached its location limit for the current plan.'),
+            );
+
+            $location = $lockedOrganization
                 ->locations()
                 ->create($request->validated());
 

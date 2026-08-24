@@ -7,6 +7,8 @@ use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
+use App\Support\Billing\OrganizationUsageLimitEnforcer;
+use App\Support\Billing\UsageLimitKey;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -45,6 +47,14 @@ final class AddOrganizationMember
                     'email' => __('This user already belongs to the organization.'),
                 ]);
             }
+
+            OrganizationUsageLimitEnforcer::assertCanAdd(
+                lockedOrganization: $lockedOrganization,
+                limitKey: UsageLimitKey::Seats,
+                currentUsage: $lockedOrganization->memberships()->count(),
+                errorField: 'email',
+                errorMessage: __('This organization has reached its member limit for the current plan.'),
+            );
 
             $membership = $lockedOrganization->memberships()->create([
                 'user_id' => $user->getKey(),

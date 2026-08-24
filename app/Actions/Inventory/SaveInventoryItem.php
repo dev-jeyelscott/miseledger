@@ -7,6 +7,8 @@ use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
 use App\Models\Organization;
 use App\Models\UnitOfMeasure;
+use App\Support\Billing\OrganizationUsageLimitEnforcer;
+use App\Support\Billing\UsageLimitKey;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -100,7 +102,20 @@ final class SaveInventoryItem
             }
 
             if ($lockedItem === null) {
-                return $organization->inventoryItems()->create($attributes);
+                $lockedOrganization = Organization::query()
+                    ->whereKey($organization->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                OrganizationUsageLimitEnforcer::assertCanAdd(
+                    lockedOrganization: $lockedOrganization,
+                    limitKey: UsageLimitKey::InventoryItems,
+                    currentUsage: $lockedOrganization->inventoryItems()->count(),
+                    errorField: 'name',
+                    errorMessage: __('This organization has reached its inventory item limit for the current plan.'),
+                );
+
+                return $lockedOrganization->inventoryItems()->create($attributes);
             }
 
             $baseUnitChanged = (
