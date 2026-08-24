@@ -313,3 +313,59 @@ test('report pages expose the reports.export grant used to conditionally render 
             ->toBeTrue();
     }
 });
+
+test('report pages only render the export control when the reports.export grant is true', function () {
+    $reportPageFiles = [
+        'js/pages/inventory/stock-movement-ledger.tsx',
+        'js/pages/inventory/valuation.tsx',
+        'js/pages/inventory/purchasing-history.tsx',
+        'js/pages/waste/index.tsx',
+    ];
+
+    foreach ($reportPageFiles as $reportPageFile) {
+        $source = (string) file_get_contents(resource_path($reportPageFile));
+
+        expect($source)
+            ->toContain("grants['reports.export'] ?? false")
+            ->toContain('{canExportReports && (');
+    }
+});
+
+test('a plan lacking the recipes feature is rejected on a direct recipe creation mutation', function () {
+    featureEntitlementFixturePlans();
+
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create(['role' => OrganizationRole::Owner]);
+
+    featureEntitlementSubscription($organization);
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->post(route('recipes.store'), [])
+        ->assertForbidden();
+});
+
+test('a plan granting the recipes feature does not block a direct recipe creation mutation with the feature gate', function () {
+    featureEntitlementFixturePlans();
+
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create(['role' => OrganizationRole::Owner]);
+
+    featureEntitlementSubscription($organization, ['stripe_price' => 'price_growth_monthly']);
+
+    $response = $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->post(route('recipes.store'), []);
+
+    expect($response->status())->not->toBe(403);
+});

@@ -33,6 +33,11 @@ test('sidebar keeps grouped permission aware navigation and the authorized organ
         ->toContain('<OrganizationSwitcher');
 
     expect($sidebar)
+        ->toContain("permissions.has('purchasing.view') && grants?.purchasing")
+        ->toContain("permissions.has('recipes.view') && grants?.recipes")
+        ->toContain("permissions.has('locations.manage') &&\n            grants?.['locations.multi']");
+
+    expect($sidebar)
         ->not->toContain('laravel/react-starter-kit')
         ->not->toContain('laravel.com/docs/starter-kits');
 
