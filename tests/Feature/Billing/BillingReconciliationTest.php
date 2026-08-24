@@ -120,9 +120,10 @@ test('it logs missing customers, missing local subscriptions, unexpected local a
         [$missingCustomer->id, 'missing_stripe_customer'], [$missingLocal->id, 'missing_local_subscription'],
         [$unexpectedLocal->id, 'unexpected_local_active_state'], [$mismatched->id, 'subscription_mismatch'],
     ] as [$organizationId, $discrepancy]) {
-        Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context): bool => $message === 'Billing reconciliation discrepancy detected.'
+        Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context): bool => $message === 'Billing operational signal emitted.'
             && $context['organization_id'] === $organizationId
-            && $context['discrepancy'] === $discrepancy,
+            && $context['event'] === 'billing.reconciliation.mismatch'
+            && $context['mismatch'] === $discrepancy,
         )->once();
     }
 });
@@ -138,8 +139,10 @@ test('it logs provider failures without leaking provider messages', function () 
         ->expectsOutputToContain('1 organization inspected, 0 discrepancies, 1 provider failure')
         ->assertExitCode(1);
 
-    Log::shouldHaveReceived('error')->withArgs(fn (string $message, array $context): bool => $message === 'Billing reconciliation provider request failed.'
+    Log::shouldHaveReceived('error')->withArgs(fn (string $message, array $context): bool => $message === 'Billing operational signal emitted.'
         && $context['organization_id'] === $organization->id
+        && $context['event'] === 'billing.reconciliation.provider_failure'
+        && $context['failure_source'] === 'provider'
         && $context['http_status'] === 500
         && ! array_key_exists('message', $context),
     )->once();

@@ -4,6 +4,7 @@ use App\Http\Controllers\Billing\OrganizationBillingController;
 use App\Http\Controllers\Billing\OrganizationBillingPortalController;
 use App\Http\Controllers\Billing\OrganizationCheckoutController;
 use App\Http\Controllers\Billing\OrganizationCheckoutStatusController;
+use App\Http\Controllers\Billing\StripeWebhookController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Inventory\InventoryAdjustmentController;
 use App\Http\Controllers\Inventory\InventoryCategoryController;
@@ -33,10 +34,17 @@ use App\Http\Controllers\Suppliers\SupplierItemController;
 use App\Support\Billing\FeatureCode;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use Laravel\Cashier\Http\Controllers\PaymentController;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
 })->name('home');
+
+Route::get('stripe/payment/{id}', [PaymentController::class, 'show'])
+    ->name('cashier.payment');
+
+Route::post('stripe/webhook', [StripeWebhookController::class, 'handleWebhook'])
+    ->name('cashier.webhook');
 
 Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::get(

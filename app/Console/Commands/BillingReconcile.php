@@ -3,11 +3,11 @@
 namespace App\Console\Commands;
 
 use App\Models\Organization;
+use App\Support\Billing\BillingObservability;
 use App\Support\Billing\OrganizationSubscriptionAccessResolver;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Log;
 use Laravel\Cashier\Cashier;
 use Laravel\Cashier\Subscription as CashierSubscription;
 use Laravel\Cashier\SubscriptionItem as CashierSubscriptionItem;
@@ -17,6 +17,11 @@ use Throwable;
 
 final class BillingReconcile extends Command
 {
+    public function __construct(private readonly BillingObservability $observability)
+    {
+        parent::__construct();
+    }
+
     protected $signature = 'billing:reconcile
         {--chunk=100 : Number of organizations to process per database batch}';
 
@@ -39,6 +44,11 @@ final class BillingReconcile extends Command
                     $providerFailures += $organizationProviderFailures;
                 }
             },
+        );
+
+        $this->observability->subscriptionStatusCounts(
+            Organization::query()->whereHas('subscriptions', fn ($query) => $query->where('stripe_status', 'past_due'))->count(),
+            Organization::query()->whereHas('subscriptions', fn ($query) => $query->where('stripe_status', 'unpaid'))->count(),
         );
 
         $this->line(sprintf(
@@ -196,17 +206,12 @@ final class BillingReconcile extends Command
     /** @param array<string, string> $context */
     private function logDiscrepancy(Organization $organization, string $discrepancy, array $context = []): void
     {
-        Log::channel((string) config('billing.logger'))->warning('Billing reconciliation discrepancy detected.', [
-            'organization_id' => $organization->getKey(), 'discrepancy' => $discrepancy, ...$context,
-        ]);
+        $this->observability->reconciliationMismatch($organization, $discrepancy, $context);
     }
 
     private function logProviderFailure(Organization $organization, Throwable $exception): void
     {
-        Log::channel((string) config('billing.logger'))->error('Billing reconciliation provider request failed.', [
-            'organization_id' => $organization->getKey(), 'exception' => $exception::class,
-            'http_status' => method_exists($exception, 'getHttpStatus') ? $exception->getHttpStatus() : null,
-        ]);
+        $this->observability->reconciliationProviderFailure($organization, $exception);
     }
 
     private function chunkSize(): int

@@ -6,6 +6,7 @@ use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\PlanCode;
 use App\Models\Organization;
 use App\Models\User;
+use App\Support\Billing\BillingObservability;
 use App\Support\Billing\PlanCatalog;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
@@ -30,6 +31,7 @@ final class CreateOrganizationCheckoutSession
     public function __construct(
         private readonly PlanCatalog $planCatalog,
         private readonly RecordAuditEntry $recordAuditEntry,
+        private readonly BillingObservability $observability,
     ) {}
 
     public function handle(Organization $organization, User $actor, PlanCode $plan, string $interval): string
@@ -62,18 +64,24 @@ final class CreateOrganizationCheckoutSession
                     return $pendingUrl;
                 }
 
-                $checkout = $organization->newSubscription($type, $priceId)->checkout([
-                    'success_url' => route('organizations.billing.checkout.success', $organization),
-                    'cancel_url' => route('organizations.billing.checkout.cancel', $organization),
-                    'metadata' => [
-                        'organization_id' => $organizationId,
-                    ],
-                    'subscription_data' => [
+                try {
+                    $checkout = $organization->newSubscription($type, $priceId)->checkout([
+                        'success_url' => route('organizations.billing.checkout.success', $organization),
+                        'cancel_url' => route('organizations.billing.checkout.cancel', $organization),
                         'metadata' => [
                             'organization_id' => $organizationId,
                         ],
-                    ],
-                ]);
+                        'subscription_data' => [
+                            'metadata' => [
+                                'organization_id' => $organizationId,
+                            ],
+                        ],
+                    ]);
+                } catch (\Throwable $exception) {
+                    $this->observability->checkoutFailure($organization, $exception);
+
+                    throw $exception;
+                }
 
                 $url = $checkout->redirect()->getTargetUrl();
 
