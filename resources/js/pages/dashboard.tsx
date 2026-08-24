@@ -1,4 +1,4 @@
-import { Form, Head, Link, router, usePage } from '@inertiajs/react';
+import { Form, Head, Link, usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
     ArrowDownRight,
@@ -43,6 +43,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
+import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import type { OrganizationContext } from '@/types';
 
@@ -150,7 +151,7 @@ const movementLabels: Record<string, string> = {
     manual_adjustment: 'Manual adjustment',
 };
 
-/** Group integer digits without converting fixed-precision values to floats. */
+/** Group integer digits without converting persisted fixed-precision values to floats. */
 function groupInteger(value: string): string {
     const isNegative = value.startsWith('-');
     const digits = isNegative ? value.slice(1) : value;
@@ -159,7 +160,7 @@ function groupInteger(value: string): string {
     return isNegative ? `-${grouped}` : grouped;
 }
 
-/** Format a decimal money string while preserving persisted precision. */
+/** Format a decimal money string while preserving authoritative persisted precision. */
 function formatCurrency(value: string, currency: string): string {
     const [integerPart, fractionPart = ''] = value.split('.');
     const trimmedFraction = fractionPart.replace(/0+$/, '');
@@ -168,7 +169,7 @@ function formatCurrency(value: string, currency: string): string {
     return `${currency} ${groupInteger(integerPart)}.${displayFraction}`;
 }
 
-/** Format a six-decimal inventory quantity without floating-point conversion. */
+/** Format a six-decimal inventory quantity without JavaScript floating-point conversion. */
 function formatQuantity(value: string): string {
     const [integerPart, fractionPart = ''] = value.split('.');
     const trimmedFraction = fractionPart.replace(/0+$/, '');
@@ -178,7 +179,7 @@ function formatQuantity(value: string): string {
         : `${groupInteger(integerPart)}.${trimmedFraction}`;
 }
 
-/** Render ledger timestamps in the active organization's configured timezone. */
+/** Render immutable ledger timestamps in the active organization's configured timezone. */
 function formatDateTime(value: string, timeZone: string): string {
     return new Intl.DateTimeFormat(undefined, {
         dateStyle: 'medium',
@@ -187,26 +188,34 @@ function formatDateTime(value: string, timeZone: string): string {
     }).format(new Date(value));
 }
 
-/** Keep dashboard panel headings and secondary actions visually consistent. */
+/** Convert persisted enum-like strings into compact human-readable labels. */
+function humanize(value: string): string {
+    return value.replaceAll('_', ' ');
+}
+
+/** Keep dense dashboard panel headings and secondary actions visually consistent. */
 function PanelHeader({ title, action }: PanelHeaderProps) {
     return (
-        <div className="flex min-h-12 items-center justify-between gap-3 border-b border-sidebar-border/70 px-4 dark:border-sidebar-border">
+        <div className="flex min-h-12 items-center justify-between gap-3 border-b border-border px-4">
             <h2 className="text-sm font-semibold">{title}</h2>
             {action}
         </div>
     );
 }
 
-/** Render one keyboard-accessible operational task shortcut. */
+/** Render one permission-gated operational task with a secondary numeric count. */
 function PendingTask({ href, icon: Icon, label, count }: PendingTaskProps) {
     return (
         <Link
             href={href}
-            className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="flex min-h-10 items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/60 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
         >
-            <Icon className="size-4 shrink-0 text-muted-foreground" />
+            <Icon
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+            />
 
-            <span className="min-w-0 flex-1 truncate">{label}</span>
+            <span className="min-w-0 flex-1">{label}</span>
 
             <Badge variant="secondary" className="tabular-nums">
                 {count}
@@ -215,7 +224,7 @@ function PendingTask({ href, icon: Icon, label, count }: PendingTaskProps) {
     );
 }
 
-/** Render a permission-gated link into an existing inventory workflow. */
+/** Render a compact workflow shortcut using existing routes and permission boundaries. */
 function QuickAction({
     href,
     icon: Icon,
@@ -225,12 +234,14 @@ function QuickAction({
     return (
         <Link
             href={href}
-            className="group flex min-h-24 flex-col justify-between rounded-lg border border-sidebar-border/70 p-3 transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:border-sidebar-border"
+            className="group flex min-h-20 items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
         >
-            <Icon className="size-5 text-muted-foreground transition-colors group-hover:text-foreground" />
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors group-hover:text-foreground">
+                <Icon className="size-4" aria-hidden="true" />
+            </div>
 
-            <div>
-                <p className="mt-3 text-sm font-medium">{label}</p>
+            <div className="min-w-0">
+                <p className="text-sm font-medium">{label}</p>
                 <p className="mt-1 text-xs leading-4 text-muted-foreground">
                     {description}
                 </p>
@@ -239,7 +250,7 @@ function QuickAction({
     );
 }
 
-/** Create a new organization without navigating away from the dashboard context. */
+/** Create a new organization without navigating away from the Dashboard context. */
 function CreateOrganizationDialog({ trigger }: DialogTriggerProps) {
     const dialog = useGuardedDialog(
         'Discard the organization details you entered?',
@@ -279,8 +290,17 @@ function CreateOrganizationDialog({ trigger }: DialogTriggerProps) {
                                         autoFocus
                                         autoComplete="organization"
                                         placeholder="Example Restaurant Group"
+                                        aria-invalid={Boolean(errors.name)}
+                                        aria-describedby={
+                                            errors.name
+                                                ? 'dashboard-organization-name-error'
+                                                : undefined
+                                        }
                                     />
-                                    <InputError message={errors.name} />
+                                    <InputError
+                                        id="dashboard-organization-name-error"
+                                        message={errors.name}
+                                    />
                                 </div>
 
                                 <div className="flex flex-wrap gap-2">
@@ -307,7 +327,7 @@ function CreateOrganizationDialog({ trigger }: DialogTriggerProps) {
     );
 }
 
-/** Edit the compact active-organization configuration inside a dashboard dialog. */
+/** Edit the existing active-organization configuration inside its guarded dialog. */
 function OrganizationSettingsDialog({
     organization,
     trigger,
@@ -347,8 +367,17 @@ function OrganizationSettingsDialog({
                                         defaultValue={organization.name}
                                         required
                                         maxLength={160}
+                                        aria-invalid={Boolean(errors.name)}
+                                        aria-describedby={
+                                            errors.name
+                                                ? 'dashboard-settings-name-error'
+                                                : undefined
+                                        }
                                     />
-                                    <InputError message={errors.name} />
+                                    <InputError
+                                        id="dashboard-settings-name-error"
+                                        message={errors.name}
+                                    />
                                 </div>
 
                                 <div className="grid gap-2">
@@ -361,8 +390,17 @@ function OrganizationSettingsDialog({
                                         defaultValue={organization.slug}
                                         required
                                         maxLength={160}
+                                        aria-invalid={Boolean(errors.slug)}
+                                        aria-describedby={
+                                            errors.slug
+                                                ? 'dashboard-settings-slug-error'
+                                                : undefined
+                                        }
                                     />
-                                    <InputError message={errors.slug} />
+                                    <InputError
+                                        id="dashboard-settings-slug-error"
+                                        message={errors.slug}
+                                    />
                                 </div>
 
                                 <div className="grid gap-2">
@@ -376,8 +414,17 @@ function OrganizationSettingsDialog({
                                         required
                                         maxLength={64}
                                         placeholder="Asia/Manila"
+                                        aria-invalid={Boolean(errors.timezone)}
+                                        aria-describedby={
+                                            errors.timezone
+                                                ? 'dashboard-settings-timezone-error'
+                                                : undefined
+                                        }
                                     />
-                                    <InputError message={errors.timezone} />
+                                    <InputError
+                                        id="dashboard-settings-timezone-error"
+                                        message={errors.timezone}
+                                    />
                                 </div>
 
                                 <div className="grid gap-2">
@@ -391,8 +438,17 @@ function OrganizationSettingsDialog({
                                         required
                                         maxLength={3}
                                         placeholder="PHP"
+                                        aria-invalid={Boolean(errors.currency)}
+                                        aria-describedby={
+                                            errors.currency
+                                                ? 'dashboard-settings-currency-error'
+                                                : undefined
+                                        }
                                     />
-                                    <InputError message={errors.currency} />
+                                    <InputError
+                                        id="dashboard-settings-currency-error"
+                                        message={errors.currency}
+                                    />
                                 </div>
 
                                 <div className="grid gap-2">
@@ -405,12 +461,21 @@ function OrganizationSettingsDialog({
                                         defaultValue={
                                             organization.active ? '1' : '0'
                                         }
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        aria-invalid={Boolean(errors.active)}
+                                        aria-describedby={
+                                            errors.active
+                                                ? 'dashboard-settings-active-error'
+                                                : undefined
+                                        }
+                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive"
                                     >
                                         <option value="1">Active</option>
                                         <option value="0">Inactive</option>
                                     </select>
-                                    <InputError message={errors.active} />
+                                    <InputError
+                                        id="dashboard-settings-active-error"
+                                        message={errors.active}
+                                    />
                                 </div>
 
                                 <div className="flex flex-wrap gap-2">
@@ -437,6 +502,7 @@ function OrganizationSettingsDialog({
     );
 }
 
+/** Render the permission-aware operational command center for the active organization. */
 export default function Dashboard() {
     const { organizationContext, dashboard: dashboardData } =
         usePage<PageProps>().props;
@@ -453,8 +519,18 @@ export default function Dashboard() {
             <>
                 <Head title="Dashboard" />
 
-                <div className="flex flex-1 items-start justify-center p-4 sm:p-6">
-                    <div className="w-full max-w-xl rounded-xl border border-sidebar-border/70 bg-card p-6 shadow-sm dark:border-sidebar-border">
+                <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+                    <header>
+                        <h1 className="text-2xl font-semibold tracking-tight">
+                            Dashboard
+                        </h1>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Set up an organization to start managing inventory
+                            operations.
+                        </p>
+                    </header>
+
+                    <section className="w-full max-w-xl rounded-xl border border-border bg-card p-6 shadow-sm">
                         <div className="flex size-11 items-center justify-center rounded-full bg-muted">
                             <Building2
                                 className="size-5 text-muted-foreground"
@@ -462,9 +538,9 @@ export default function Dashboard() {
                             />
                         </div>
 
-                        <h1 className="mt-4 text-2xl font-semibold">
+                        <h2 className="mt-4 text-xl font-semibold tracking-tight">
                             Create your organization
-                        </h1>
+                        </h2>
 
                         <p className="mt-2 text-sm leading-6 text-muted-foreground">
                             An organization is required before
@@ -482,11 +558,13 @@ export default function Dashboard() {
                                 </Button>
                             }
                         />
-                    </div>
+                    </section>
                 </div>
             </>
         );
     }
+
+    const activeOrganization = organizationContext.active;
 
     const organizationStats = new Map(
         dashboardData.organizationStats.map((stat) => [
@@ -495,113 +573,109 @@ export default function Dashboard() {
         ]),
     );
 
+    const activeOrganizationStats = organizationStats.get(
+        activeOrganization.id,
+    );
+
     const canViewReports = permissions.has('reports.view');
     const canViewCosts = permissions.has('costs.view');
+    const canManagePurchasing = permissions.has('purchasing.manage');
+    const canFinalizeReceiving = permissions.has('receiving.finalize');
 
-    const hasPendingTasks = [
+    const pendingTaskCounts = [
         dashboardData.pendingTasks.purchaseOrdersAwaitingApproval,
         dashboardData.pendingTasks.receiptsAwaitingFinalization,
         dashboardData.pendingTasks.stockCountsAwaitingFinalization,
-    ].some((count) => count !== null);
+    ].filter((count): count is number => count !== null);
+
+    const hasPendingTasks = pendingTaskCounts.length > 0;
+    const hasPendingAttention = pendingTaskCounts.some((count) => count > 0);
 
     const hasQuickActions =
-        permissions.has('purchasing.manage') ||
-        permissions.has('receiving.finalize') ||
+        canManagePurchasing ||
+        canFinalizeReceiving ||
         permissions.has('counts.create') ||
         permissions.has('waste.record');
+
+    const hasPendingWork = hasPendingTasks || hasQuickActions;
+
+    const splitOperationalPanels = canViewReports && hasPendingWork;
+
+    const subscription = organizationContext.subscription;
 
     return (
         <>
             <Head title="Dashboard" />
 
-            <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
-                <section className="flex flex-col justify-between gap-4 rounded-xl border border-sidebar-border/70 bg-card p-5 shadow-sm lg:flex-row lg:items-center dark:border-sidebar-border">
+            <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+                <header className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
                     <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm text-muted-foreground">
-                                Active organization
-                            </p>
-
-                            <Badge variant="secondary">Active</Badge>
-                        </div>
-
-                        <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight">
-                            {organizationContext.active.name}
+                        <h1 className="text-2xl font-semibold tracking-tight">
+                            Dashboard
                         </h1>
 
-                        <p className="mt-1 text-sm text-muted-foreground capitalize">
-                            Role:{' '}
-                            {activeMembership?.role.replaceAll('_', ' ') ??
-                                'Unknown'}
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Operational overview for{' '}
+                            <span className="font-medium text-foreground">
+                                {activeOrganization.name}
+                            </span>
+                            .
                         </p>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                            <Badge
+                                variant="outline"
+                                className="border-success-border bg-success-subtle text-success-foreground"
+                            >
+                                Active
+                            </Badge>
+
+                            <span className="capitalize">
+                                {activeMembership
+                                    ? humanize(activeMembership.role)
+                                    : 'Unknown role'}
+                            </span>
+
+                            <span aria-hidden="true">·</span>
+
+                            <span>{dashboardData.timezone}</span>
+                        </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                        {permissions.has('locations.manage') && (
-                            <Button variant="outline" asChild>
-                                <Link
-                                    href={OrganizationLocationController.index(
-                                        organizationContext.active.id,
-                                    )}
-                                >
-                                    <MapPin
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    Manage locations
-                                </Link>
-                            </Button>
-                        )}
-
-                        {permissions.has('users.manage') && (
-                            <Button variant="outline" asChild>
-                                <Link
-                                    href={OrganizationMemberController.index(
-                                        organizationContext.active.id,
-                                    )}
-                                >
-                                    <Users
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    Manage members
-                                </Link>
-                            </Button>
-                        )}
-
-                        {permissions.has('organization.manage') &&
-                            dashboardData.organizationSettings !== null && (
-                                <OrganizationSettingsDialog
-                                    organization={
-                                        dashboardData.organizationSettings
-                                    }
-                                    trigger={
-                                        <Button variant="outline">
-                                            <Settings
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                            Organization settings
-                                        </Button>
-                                    }
-                                />
+                    {(canFinalizeReceiving || canManagePurchasing) && (
+                        <div className="flex flex-wrap gap-2">
+                            {canFinalizeReceiving && (
+                                <Button variant="outline" asChild>
+                                    <Link
+                                        href={PurchaseOrderController.index()}
+                                    >
+                                        <Truck
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        Receive stock
+                                    </Link>
+                                </Button>
                             )}
 
-                        <CreateOrganizationDialog
-                            trigger={
-                                <Button>
-                                    <Plus
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    New organization
+                            {canManagePurchasing && (
+                                <Button asChild>
+                                    <Link
+                                        href={PurchaseOrderController.create()}
+                                    >
+                                        <Plus
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        Create purchase order
+                                    </Link>
                                 </Button>
-                            }
-                        />
-                    </div>
-                </section>
+                            )}
+                        </div>
+                    )}
+                </header>
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
                     {dashboardData.metrics.inventoryValue !== null && (
                         <DashboardMetricCard
                             title="Inventory value"
@@ -656,315 +730,18 @@ export default function Dashboard() {
                     )}
                 </div>
 
-                <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-                    <div className="grid min-w-0 gap-4">
-                        <section className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
-                            <PanelHeader title="Your organizations" />
-
-                            <div className="overflow-x-auto">
-                                <table className="w-full min-w-[720px] text-sm">
-                                    <thead className="border-b border-sidebar-border/70 bg-muted/30 text-left text-xs text-muted-foreground dark:border-sidebar-border">
-                                        <tr>
-                                            <th className="px-4 py-3 font-medium">
-                                                Organization
-                                            </th>
-                                            <th className="px-4 py-3 font-medium">
-                                                Role
-                                            </th>
-                                            <th className="px-4 py-3 font-medium">
-                                                Status
-                                            </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Locations
-                                            </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Members
-                                            </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Action
-                                            </th>
-                                        </tr>
-                                    </thead>
-
-                                    <tbody className="divide-y divide-sidebar-border/70 dark:divide-sidebar-border">
-                                        {organizationContext.memberships.map(
-                                            (membership) => {
-                                                const isActive =
-                                                    membership.organization
-                                                        .id ===
-                                                    organizationContext.active
-                                                        ?.id;
-
-                                                const stats =
-                                                    organizationStats.get(
-                                                        membership.organization
-                                                            .id,
-                                                    );
-
-                                                return (
-                                                    <tr
-                                                        key={
-                                                            membership
-                                                                .organization.id
-                                                        }
-                                                        className="hover:bg-muted/20"
-                                                    >
-                                                        <td className="px-4 py-3">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-                                                                    <Building2
-                                                                        className="size-4 text-muted-foreground"
-                                                                        aria-hidden="true"
-                                                                    />
-                                                                </div>
-
-                                                                <p className="font-medium">
-                                                                    {
-                                                                        membership
-                                                                            .organization
-                                                                            .name
-                                                                    }
-                                                                </p>
-                                                            </div>
-                                                        </td>
-
-                                                        <td className="px-4 py-3 text-muted-foreground capitalize">
-                                                            {membership.role.replaceAll(
-                                                                '_',
-                                                                ' ',
-                                                            )}
-                                                        </td>
-
-                                                        <td className="px-4 py-3">
-                                                            {isActive ? (
-                                                                <Badge variant="secondary">
-                                                                    Active
-                                                                </Badge>
-                                                            ) : (
-                                                                <span className="text-muted-foreground">
-                                                                    Available
-                                                                </span>
-                                                            )}
-                                                        </td>
-
-                                                        <td className="px-4 py-3 text-right tabular-nums">
-                                                            {stats?.locationCount ??
-                                                                0}
-                                                        </td>
-
-                                                        <td className="px-4 py-3 text-right tabular-nums">
-                                                            {stats?.memberCount ??
-                                                                0}
-                                                        </td>
-
-                                                        <td className="px-4 py-3 text-right">
-                                                            <Form
-                                                                {...OrganizationController.activate.form(
-                                                                    membership
-                                                                        .organization
-                                                                        .id,
-                                                                )}
-                                                                onSuccess={() => {
-                                                                    router.flushAll();
-                                                                }}
-                                                            >
-                                                                {({
-                                                                    processing,
-                                                                }) => (
-                                                                    <Button
-                                                                        type="submit"
-                                                                        size="sm"
-                                                                        variant={
-                                                                            isActive
-                                                                                ? 'secondary'
-                                                                                : 'outline'
-                                                                        }
-                                                                        disabled={
-                                                                            processing ||
-                                                                            isActive
-                                                                        }
-                                                                    >
-                                                                        {isActive
-                                                                            ? 'Current'
-                                                                            : 'Switch'}
-                                                                    </Button>
-                                                                )}
-                                                            </Form>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            },
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </section>
-
-                        {canViewReports && (
-                            <section className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
-                                <PanelHeader
-                                    title="Recent inventory activity"
-                                    action={
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            asChild
-                                        >
-                                            <Link
-                                                href={StockMovementLedgerReportController.index()}
-                                            >
-                                                View all
-                                            </Link>
-                                        </Button>
-                                    }
-                                />
-
-                                {dashboardData.recentActivity.length === 0 ? (
-                                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                                        No stock movements have been recorded
-                                        yet.
-                                    </p>
-                                ) : (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full min-w-[760px] text-sm">
-                                            <thead className="border-b border-sidebar-border/70 bg-muted/30 text-left text-xs text-muted-foreground dark:border-sidebar-border">
-                                                <tr>
-                                                    <th className="px-4 py-3 font-medium">
-                                                        Date & time
-                                                    </th>
-                                                    <th className="px-4 py-3 font-medium">
-                                                        Movement
-                                                    </th>
-                                                    <th className="px-4 py-3 font-medium">
-                                                        Item
-                                                    </th>
-                                                    <th className="px-4 py-3 font-medium">
-                                                        Location
-                                                    </th>
-                                                    <th className="px-4 py-3 font-medium">
-                                                        Actor
-                                                    </th>
-                                                    <th className="px-4 py-3 text-right font-medium">
-                                                        Quantity
-                                                    </th>
-
-                                                    {canViewCosts && (
-                                                        <th className="px-4 py-3 text-right font-medium">
-                                                            Value
-                                                        </th>
-                                                    )}
-                                                </tr>
-                                            </thead>
-
-                                            <tbody className="divide-y divide-sidebar-border/70 dark:divide-sidebar-border">
-                                                {dashboardData.recentActivity.map(
-                                                    (activity) => {
-                                                        const isOutbound =
-                                                            activity.quantity.startsWith(
-                                                                '-',
-                                                            );
-
-                                                        const DirectionIcon =
-                                                            isOutbound
-                                                                ? ArrowDownRight
-                                                                : ArrowUpRight;
-
-                                                        return (
-                                                            <tr
-                                                                key={
-                                                                    activity.id
-                                                                }
-                                                                className="hover:bg-muted/20"
-                                                            >
-                                                                <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                                                                    {formatDateTime(
-                                                                        activity.occurredAt,
-                                                                        dashboardData.timezone,
-                                                                    )}
-                                                                </td>
-
-                                                                <td className="px-4 py-3">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <DirectionIcon
-                                                                            className="size-4 shrink-0 text-muted-foreground"
-                                                                            aria-hidden="true"
-                                                                        />
-
-                                                                        <span>
-                                                                            {movementLabels[
-                                                                                activity
-                                                                                    .type
-                                                                            ] ??
-                                                                                activity.type.replaceAll(
-                                                                                    '_',
-                                                                                    ' ',
-                                                                                )}
-                                                                        </span>
-                                                                    </div>
-                                                                </td>
-
-                                                                <td className="px-4 py-3">
-                                                                    <p className="font-medium">
-                                                                        {
-                                                                            activity.itemName
-                                                                        }
-                                                                    </p>
-
-                                                                    <p className="text-xs text-muted-foreground">
-                                                                        {
-                                                                            activity.sku
-                                                                        }
-                                                                    </p>
-                                                                </td>
-
-                                                                <td className="px-4 py-3 text-muted-foreground">
-                                                                    {
-                                                                        activity.locationName
-                                                                    }
-                                                                </td>
-
-                                                                <td className="px-4 py-3 text-muted-foreground">
-                                                                    {activity.actorName ??
-                                                                        'System'}
-                                                                </td>
-
-                                                                <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
-                                                                    {formatQuantity(
-                                                                        activity.quantity,
-                                                                    )}{' '}
-                                                                    {
-                                                                        activity.unitSymbol
-                                                                    }
-                                                                </td>
-
-                                                                {canViewCosts && (
-                                                                    <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
-                                                                        {activity.totalCost ===
-                                                                        null
-                                                                            ? '—'
-                                                                            : formatCurrency(
-                                                                                  activity.totalCost,
-                                                                                  dashboardData.currency,
-                                                                              )}
-                                                                    </td>
-                                                                )}
-                                                            </tr>
-                                                        );
-                                                    },
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </section>
+                {(canViewReports || hasPendingWork) && (
+                    <div
+                        className={cn(
+                            'grid items-start gap-4',
+                            splitOperationalPanels &&
+                                'xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]',
                         )}
-                    </div>
-
-                    <aside className="grid gap-4">
+                    >
                         {canViewReports && (
-                            <section className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
+                            <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                                 <PanelHeader
-                                    title="Low stock alerts"
+                                    title="Low-stock alerts"
                                     action={
                                         <Button
                                             variant="ghost"
@@ -974,51 +751,92 @@ export default function Dashboard() {
                                             <Link
                                                 href={LowStockReportController.index()}
                                             >
-                                                View all
+                                                View low-stock report
                                             </Link>
                                         </Button>
                                     }
                                 />
 
                                 {dashboardData.lowStockAlerts.length === 0 ? (
-                                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                                        No zero or negative stock balances.
-                                    </p>
+                                    <div className="px-4 py-8 text-center">
+                                        <p className="text-sm font-medium">
+                                            Stock levels look clear
+                                        </p>
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            No zero or negative stock balances
+                                            need attention.
+                                        </p>
+                                    </div>
                                 ) : (
-                                    <div className="divide-y divide-sidebar-border/70 px-4 dark:divide-sidebar-border">
-                                        {dashboardData.lowStockAlerts.map(
-                                            (alert) => (
-                                                <div
-                                                    key={alert.id}
-                                                    className="flex gap-3 py-3"
-                                                >
-                                                    <AlertTriangle
-                                                        className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400"
-                                                        aria-hidden="true"
-                                                    />
+                                    <>
+                                        <div className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto_auto] gap-4 border-b border-border bg-muted/30 px-4 py-2.5 text-xs font-medium text-muted-foreground md:grid">
+                                            <span>Item</span>
+                                            <span>Location</span>
+                                            <span className="text-right">
+                                                On hand
+                                            </span>
+                                            <span>Status</span>
+                                        </div>
 
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex items-start justify-between gap-3">
+                                        <div className="divide-y divide-border">
+                                            {dashboardData.lowStockAlerts.map(
+                                                (alert) => {
+                                                    const isCritical =
+                                                        alert.quantityOnHand.startsWith(
+                                                            '-',
+                                                        );
+
+                                                    return (
+                                                        <div
+                                                            key={alert.id}
+                                                            className="grid gap-3 px-4 py-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto_auto] md:items-center md:gap-4"
+                                                        >
+                                                            <div className="flex min-w-0 items-start gap-2.5">
+                                                                <AlertTriangle
+                                                                    className={cn(
+                                                                        'mt-0.5 size-4 shrink-0',
+                                                                        isCritical
+                                                                            ? 'text-destructive'
+                                                                            : 'text-warning-foreground',
+                                                                    )}
+                                                                    aria-hidden="true"
+                                                                />
+
+                                                                <div className="min-w-0">
+                                                                    <p className="truncate text-sm font-medium">
+                                                                        {
+                                                                            alert.itemName
+                                                                        }
+                                                                    </p>
+                                                                    <p className="truncate text-xs text-muted-foreground">
+                                                                        {
+                                                                            alert.sku
+                                                                        }
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+
                                                             <div className="min-w-0">
-                                                                <p className="truncate text-sm font-medium">
-                                                                    {
-                                                                        alert.itemName
-                                                                    }
+                                                                <p className="text-xs text-muted-foreground md:hidden">
+                                                                    Location
                                                                 </p>
-
-                                                                <p className="truncate text-xs text-muted-foreground">
+                                                                <p className="truncate text-sm">
                                                                     {
                                                                         alert.locationName
-                                                                    }{' '}
-                                                                    ·{' '}
+                                                                    }
+                                                                </p>
+                                                                <p className="truncate text-xs text-muted-foreground">
                                                                     {
                                                                         alert.storageLocationName
                                                                     }
                                                                 </p>
                                                             </div>
 
-                                                            <div className="shrink-0 text-right">
-                                                                <p className="text-sm font-semibold tabular-nums">
+                                                            <div className="md:text-right">
+                                                                <p className="text-xs text-muted-foreground md:hidden">
+                                                                    On hand
+                                                                </p>
+                                                                <p className="text-sm font-semibold whitespace-nowrap tabular-nums">
                                                                     {formatQuantity(
                                                                         alert.quantityOnHand,
                                                                     )}{' '}
@@ -1026,123 +844,488 @@ export default function Dashboard() {
                                                                         alert.unitSymbol
                                                                     }
                                                                 </p>
+                                                            </div>
 
+                                                            <div>
+                                                                <p className="mb-1 text-xs text-muted-foreground md:hidden">
+                                                                    Status
+                                                                </p>
                                                                 <Badge
                                                                     variant="outline"
-                                                                    className="mt-1"
+                                                                    className={
+                                                                        isCritical
+                                                                            ? 'border-destructive/30 bg-destructive/10 text-destructive'
+                                                                            : 'border-warning-border bg-warning-subtle text-warning-foreground'
+                                                                    }
                                                                 >
-                                                                    Low
+                                                                    {isCritical
+                                                                        ? 'Critical'
+                                                                        : 'Low'}
                                                                 </Badge>
                                                             </div>
                                                         </div>
-
-                                                        <p className="mt-1 text-xs text-muted-foreground">
-                                                            SKU: {alert.sku}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            ),
-                                        )}
-                                    </div>
+                                                    );
+                                                },
+                                            )}
+                                        </div>
+                                    </>
                                 )}
                             </section>
                         )}
 
-                        {hasPendingTasks && (
-                            <section className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
-                                <PanelHeader title="Pending tasks" />
+                        {hasPendingWork && (
+                            <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                                <PanelHeader title="Pending work" />
 
-                                <div className="space-y-1 p-2">
-                                    {dashboardData.pendingTasks
-                                        .purchaseOrdersAwaitingApproval !==
-                                        null && (
-                                        <PendingTask
-                                            href={PurchaseOrderController.index()}
-                                            icon={ShoppingCart}
-                                            label="Purchase orders awaiting approval"
-                                            count={
-                                                dashboardData.pendingTasks
-                                                    .purchaseOrdersAwaitingApproval
-                                            }
-                                        />
-                                    )}
+                                {hasPendingTasks && (
+                                    <div className="p-3">
+                                        <h3 className="px-2 text-xs font-semibold text-muted-foreground">
+                                            Needs attention
+                                        </h3>
 
-                                    {dashboardData.pendingTasks
-                                        .receiptsAwaitingFinalization !==
-                                        null && (
-                                        <PendingTask
-                                            href={GoodsReceiptController.index()}
-                                            icon={ReceiptText}
-                                            label="Receipts awaiting finalization"
-                                            count={
-                                                dashboardData.pendingTasks
-                                                    .receiptsAwaitingFinalization
-                                            }
-                                        />
-                                    )}
+                                        {hasPendingAttention ? (
+                                            <div className="mt-1 space-y-1">
+                                                {dashboardData.pendingTasks
+                                                    .purchaseOrdersAwaitingApproval !==
+                                                    null &&
+                                                    dashboardData.pendingTasks
+                                                        .purchaseOrdersAwaitingApproval >
+                                                        0 && (
+                                                        <PendingTask
+                                                            href={PurchaseOrderController.index()}
+                                                            icon={ShoppingCart}
+                                                            label="Purchase orders awaiting approval"
+                                                            count={
+                                                                dashboardData
+                                                                    .pendingTasks
+                                                                    .purchaseOrdersAwaitingApproval
+                                                            }
+                                                        />
+                                                    )}
 
-                                    {dashboardData.pendingTasks
-                                        .stockCountsAwaitingFinalization !==
-                                        null && (
-                                        <PendingTask
-                                            href={StockCountController.index()}
-                                            icon={ClipboardCheck}
-                                            label="Stock counts awaiting finalization"
-                                            count={
-                                                dashboardData.pendingTasks
-                                                    .stockCountsAwaitingFinalization
-                                            }
-                                        />
-                                    )}
-                                </div>
+                                                {dashboardData.pendingTasks
+                                                    .receiptsAwaitingFinalization !==
+                                                    null &&
+                                                    dashboardData.pendingTasks
+                                                        .receiptsAwaitingFinalization >
+                                                        0 && (
+                                                        <PendingTask
+                                                            href={GoodsReceiptController.index()}
+                                                            icon={ReceiptText}
+                                                            label="Receipts awaiting finalization"
+                                                            count={
+                                                                dashboardData
+                                                                    .pendingTasks
+                                                                    .receiptsAwaitingFinalization
+                                                            }
+                                                        />
+                                                    )}
+
+                                                {dashboardData.pendingTasks
+                                                    .stockCountsAwaitingFinalization !==
+                                                    null &&
+                                                    dashboardData.pendingTasks
+                                                        .stockCountsAwaitingFinalization >
+                                                        0 && (
+                                                        <PendingTask
+                                                            href={StockCountController.index()}
+                                                            icon={
+                                                                ClipboardCheck
+                                                            }
+                                                            label="Stock counts awaiting finalization"
+                                                            count={
+                                                                dashboardData
+                                                                    .pendingTasks
+                                                                    .stockCountsAwaitingFinalization
+                                                            }
+                                                        />
+                                                    )}
+                                            </div>
+                                        ) : (
+                                            <p className="px-2 pt-3 pb-1 text-sm text-muted-foreground">
+                                                No pending approvals or
+                                                finalizations.
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {hasQuickActions && (
+                                    <div
+                                        className={cn(
+                                            'p-3',
+                                            hasPendingTasks &&
+                                                'border-t border-border',
+                                        )}
+                                    >
+                                        <h3 className="px-1 text-xs font-semibold text-muted-foreground">
+                                            Quick actions
+                                        </h3>
+
+                                        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                                            {canManagePurchasing && (
+                                                <QuickAction
+                                                    href={PurchaseOrderController.create()}
+                                                    icon={ShoppingCart}
+                                                    label="New purchase order"
+                                                    description="Start a draft order"
+                                                />
+                                            )}
+
+                                            {canFinalizeReceiving && (
+                                                <QuickAction
+                                                    href={GoodsReceiptController.index()}
+                                                    icon={ReceiptText}
+                                                    label="Finalize receipt"
+                                                    description="Commit received stock"
+                                                />
+                                            )}
+
+                                            {permissions.has(
+                                                'counts.create',
+                                            ) && (
+                                                <QuickAction
+                                                    href={StockCountController.create()}
+                                                    icon={ClipboardCheck}
+                                                    label="Start stock count"
+                                                    description="Capture a physical count"
+                                                />
+                                            )}
+
+                                            {permissions.has(
+                                                'waste.record',
+                                            ) && (
+                                                <QuickAction
+                                                    href={WasteController.index()}
+                                                    icon={Trash2}
+                                                    label="Record waste"
+                                                    description="Record controlled stock out"
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </section>
                         )}
+                    </div>
+                )}
 
-                        {hasQuickActions && (
-                            <section className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
-                                <PanelHeader title="Quick actions" />
+                {canViewReports && (
+                    <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                        <PanelHeader
+                            title="Recent inventory activity"
+                            action={
+                                <Button variant="ghost" size="sm" asChild>
+                                    <Link
+                                        href={StockMovementLedgerReportController.index()}
+                                    >
+                                        View ledger
+                                    </Link>
+                                </Button>
+                            }
+                        />
 
-                                <div className="grid grid-cols-2 gap-2 p-3">
-                                    {permissions.has('purchasing.manage') && (
-                                        <QuickAction
-                                            href={PurchaseOrderController.create()}
-                                            icon={ShoppingCart}
-                                            label="New purchase order"
-                                            description="Start a draft order"
-                                        />
-                                    )}
+                        {dashboardData.recentActivity.length === 0 ? (
+                            <div className="px-4 py-8 text-center">
+                                <p className="text-sm font-medium">
+                                    No inventory activity yet
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    Stock movements will appear here after
+                                    inventory operations are recorded.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full min-w-[840px] text-sm">
+                                    <thead className="border-b border-border bg-muted/30 text-left text-xs text-muted-foreground">
+                                        <tr>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium"
+                                            >
+                                                Date & time
+                                            </th>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium"
+                                            >
+                                                Movement
+                                            </th>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium"
+                                            >
+                                                Item / SKU
+                                            </th>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium"
+                                            >
+                                                Location
+                                            </th>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium"
+                                            >
+                                                Actor
+                                            </th>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 text-right font-medium"
+                                            >
+                                                Quantity
+                                            </th>
 
-                                    {permissions.has('receiving.finalize') && (
-                                        <QuickAction
-                                            href={PurchaseOrderController.index()}
-                                            icon={Truck}
-                                            label="Record receiving"
-                                            description="Choose an approved order"
-                                        />
-                                    )}
+                                            {canViewCosts && (
+                                                <th
+                                                    scope="col"
+                                                    className="px-4 py-3 text-right font-medium"
+                                                >
+                                                    Value
+                                                </th>
+                                            )}
+                                        </tr>
+                                    </thead>
 
-                                    {permissions.has('counts.create') && (
-                                        <QuickAction
-                                            href={StockCountController.create()}
-                                            icon={ClipboardCheck}
-                                            label="Start stock count"
-                                            description="Create a physical count"
-                                        />
-                                    )}
+                                    <tbody className="divide-y divide-border">
+                                        {dashboardData.recentActivity.map(
+                                            (activity) => {
+                                                const isOutbound =
+                                                    activity.quantity.startsWith(
+                                                        '-',
+                                                    );
 
-                                    {permissions.has('waste.record') && (
-                                        <QuickAction
-                                            href={WasteController.index()}
-                                            icon={Trash2}
-                                            label="Log waste"
-                                            description="Record approved waste"
-                                        />
-                                    )}
-                                </div>
-                            </section>
+                                                const DirectionIcon = isOutbound
+                                                    ? ArrowDownRight
+                                                    : ArrowUpRight;
+
+                                                return (
+                                                    <tr
+                                                        key={activity.id}
+                                                        className="hover:bg-muted/20"
+                                                    >
+                                                        <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                                                            {formatDateTime(
+                                                                activity.occurredAt,
+                                                                dashboardData.timezone,
+                                                            )}
+                                                        </td>
+
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <DirectionIcon
+                                                                    className="size-4 shrink-0 text-muted-foreground"
+                                                                    aria-hidden="true"
+                                                                />
+                                                                <span>
+                                                                    {movementLabels[
+                                                                        activity
+                                                                            .type
+                                                                    ] ??
+                                                                        humanize(
+                                                                            activity.type,
+                                                                        )}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+
+                                                        <td className="px-4 py-3">
+                                                            <p className="font-medium">
+                                                                {
+                                                                    activity.itemName
+                                                                }
+                                                            </p>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {activity.sku}
+                                                            </p>
+                                                        </td>
+
+                                                        <td className="px-4 py-3 text-muted-foreground">
+                                                            {
+                                                                activity.locationName
+                                                            }
+                                                        </td>
+
+                                                        <td className="px-4 py-3 text-muted-foreground">
+                                                            {activity.actorName ??
+                                                                'System'}
+                                                        </td>
+
+                                                        <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
+                                                            {formatQuantity(
+                                                                activity.quantity,
+                                                            )}{' '}
+                                                            {
+                                                                activity.unitSymbol
+                                                            }
+                                                        </td>
+
+                                                        {canViewCosts && (
+                                                            <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+                                                                {activity.totalCost ===
+                                                                null
+                                                                    ? 'N/A'
+                                                                    : formatCurrency(
+                                                                          activity.totalCost,
+                                                                          dashboardData.currency,
+                                                                      )}
+                                                            </td>
+                                                        )}
+                                                    </tr>
+                                                );
+                                            },
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
-                    </aside>
-                </div>
+                    </section>
+                )}
+
+                <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                    <PanelHeader title="Organization summary" />
+
+                    <dl className="grid sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="p-4">
+                            <dt className="text-xs font-medium text-muted-foreground">
+                                Locations
+                            </dt>
+                            <dd className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">
+                                {activeOrganizationStats?.locationCount ?? 0}
+                            </dd>
+                        </div>
+
+                        <div className="p-4">
+                            <dt className="text-xs font-medium text-muted-foreground">
+                                Members
+                            </dt>
+                            <dd className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">
+                                {activeOrganizationStats?.memberCount ?? 0}
+                            </dd>
+                        </div>
+
+                        <div className="p-4">
+                            <dt className="text-xs font-medium text-muted-foreground">
+                                Your role
+                            </dt>
+                            <dd className="mt-2 text-sm font-medium capitalize">
+                                {activeMembership
+                                    ? humanize(activeMembership.role)
+                                    : 'Unknown'}
+                            </dd>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                {dashboardData.currency} ·{' '}
+                                {dashboardData.timezone}
+                            </p>
+                        </div>
+
+                        <div className="p-4">
+                            <dt className="text-xs font-medium text-muted-foreground">
+                                Subscription
+                            </dt>
+
+                            {subscription === null ? (
+                                <dd className="mt-2 text-sm text-muted-foreground">
+                                    Not available
+                                </dd>
+                            ) : (
+                                <dd className="mt-2">
+                                    <p className="text-sm font-medium capitalize">
+                                        {subscription.plan
+                                            ? humanize(subscription.plan)
+                                            : 'Plan unavailable'}
+                                    </p>
+
+                                    {subscription.status && (
+                                        <p className="mt-1 text-xs text-muted-foreground capitalize">
+                                            {humanize(subscription.status)}
+                                        </p>
+                                    )}
+
+                                    <Badge
+                                        variant="outline"
+                                        className={cn(
+                                            'mt-2',
+                                            subscription.accessMode ===
+                                                'writable'
+                                                ? 'border-success-border bg-success-subtle text-success-foreground'
+                                                : 'border-warning-border bg-warning-subtle text-warning-foreground',
+                                        )}
+                                    >
+                                        {subscription.accessMode === 'writable'
+                                            ? 'Writable'
+                                            : 'Read only'}
+                                    </Badge>
+                                </dd>
+                            )}
+                        </div>
+                    </dl>
+
+                    <div className="flex flex-wrap gap-2 border-t border-border p-3">
+                        {permissions.has('locations.manage') && (
+                            <Button variant="outline" size="sm" asChild>
+                                <Link
+                                    href={OrganizationLocationController.index(
+                                        activeOrganization.id,
+                                    )}
+                                >
+                                    <MapPin
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    Manage locations
+                                </Link>
+                            </Button>
+                        )}
+
+                        {permissions.has('users.manage') && (
+                            <Button variant="outline" size="sm" asChild>
+                                <Link
+                                    href={OrganizationMemberController.index(
+                                        activeOrganization.id,
+                                    )}
+                                >
+                                    <Users
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    Manage members
+                                </Link>
+                            </Button>
+                        )}
+
+                        {permissions.has('organization.manage') &&
+                            dashboardData.organizationSettings !== null && (
+                                <OrganizationSettingsDialog
+                                    organization={
+                                        dashboardData.organizationSettings
+                                    }
+                                    trigger={
+                                        <Button variant="outline" size="sm">
+                                            <Settings
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            Organization settings
+                                        </Button>
+                                    }
+                                />
+                            )}
+
+                        <CreateOrganizationDialog
+                            trigger={
+                                <Button variant="outline" size="sm">
+                                    <Plus
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    New organization
+                                </Button>
+                            }
+                        />
+                    </div>
+                </section>
             </div>
         </>
     );

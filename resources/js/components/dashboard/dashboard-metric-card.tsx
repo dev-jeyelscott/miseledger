@@ -20,7 +20,7 @@ const toneClasses = {
     violet: 'bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300',
 } satisfies Record<NonNullable<DashboardMetricCardProps['tone']>, string>;
 
-/** Render one compact operational metric with a consistent semantic accent. */
+/** Render one aligned operational metric using the canonical categorical accent system. */
 export function DashboardMetricCard({
     title,
     value,
@@ -29,7 +29,7 @@ export function DashboardMetricCard({
     tone = 'emerald',
 }: DashboardMetricCardProps) {
     return (
-        <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <section className="flex h-full min-h-32 flex-col rounded-xl border border-border bg-card p-4 shadow-sm">
             <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                     <p className="text-sm font-medium text-muted-foreground">
@@ -52,7 +52,7 @@ export function DashboardMetricCard({
                 </div>
             </div>
 
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            <p className="mt-auto pt-3 text-xs leading-5 text-muted-foreground">
                 {description}
             </p>
         </section>

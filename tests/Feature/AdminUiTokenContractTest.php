@@ -45,3 +45,48 @@ test('admin theme keeps generic content tokens separate from sidebar tokens', fu
         ->toContain('border-sidebar-border')
         ->toContain('ring-sidebar-ring');
 });
+
+test('admin theme exposes the canonical operational status semantics', function () {
+    $theme = File::get(resource_path('css/app.css'));
+
+    expect($theme)
+        ->toContain('--color-success-subtle: var(--success-subtle);')
+        ->toContain('--color-success-foreground: var(--success-foreground);')
+        ->toContain('--color-success-border: var(--success-border);')
+        ->toContain('--color-warning-subtle: var(--warning-subtle);')
+        ->toContain('--color-warning-foreground: var(--warning-foreground);')
+        ->toContain('--color-warning-border: var(--warning-border);')
+        ->toContain('--color-info-subtle: var(--info-subtle);')
+        ->toContain('--color-info-foreground: var(--info-foreground);')
+        ->toContain('--color-info-border: var(--info-border);')
+        ->toContain('--success-subtle: oklch(0.979 0.021 166.113);')
+        ->toContain('--warning-subtle: oklch(0.987 0.022 95.277);')
+        ->toContain('--info-subtle: oklch(0.97 0.014 254.604);')
+        ->toContain('--success-subtle: oklch(0.262 0.051 172.552 / 0.4);')
+        ->toContain('--warning-subtle: oklch(0.279 0.077 45.635 / 0.4);')
+        ->toContain('--info-subtle: oklch(0.282 0.091 267.935 / 0.4);');
+});
+
+test('dashboard follows the canonical operational UI contract', function () {
+    $dashboard = File::get(resource_path('js/pages/dashboard.tsx'));
+
+    expect($dashboard)
+        ->toContain('Receive stock')
+        ->toContain('Create purchase order')
+        ->toContain('Low-stock alerts')
+        ->toContain('Pending work')
+        ->toContain('Finalize receipt')
+        ->toContain('Record waste')
+        ->toContain('Recent inventory activity')
+        ->toContain('Organization summary')
+        ->toContain('scope="col"')
+        ->toContain('border-warning-border')
+        ->toContain('bg-warning-subtle')
+        ->toContain('text-warning-foreground')
+        ->toContain('bg-destructive/10')
+        ->toContain('text-destructive')
+        ->toContain('focus-visible:ring-[3px]')
+        ->not->toContain('border-sidebar-border')
+        ->not->toContain('text-amber-600')
+        ->not->toContain('dark:text-amber-400');
+});
