@@ -5,6 +5,8 @@ namespace App\Http\Middleware;
 use App\Enums\OrganizationPermission;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
+use App\Support\Billing\FeatureCode;
+use App\Support\Billing\OrganizationFeatureEntitlement;
 use App\Support\Billing\OrganizationSubscriptionAccess;
 use App\Support\Billing\OrganizationSubscriptionAccessResolver;
 use App\Support\Billing\PlanCatalog;
@@ -74,7 +76,8 @@ class HandleInertiaRequests extends Middleware
      *     }|null,
      *     entitlements: array{
      *         features: list<string>,
-     *         limits: array<string, int|null>
+     *         limits: array<string, int|null>,
+     *         grants: array<string, bool>
      *     }|null
      * }
      */
@@ -168,25 +171,35 @@ class HandleInertiaRequests extends Middleware
     }
 
     /**
-     * Serialize only the plan's declared feature codes and quantitative
-     * limits for the active organization, using the configuration-owned
-     * plan catalog rather than any Stripe usage/metering data.
+     * Serialize the plan's declared feature codes and quantitative limits
+     * for the active organization, using the configuration-owned plan
+     * catalog rather than any Stripe usage/metering data, plus a resolved
+     * `grants` map for the gated feature codes (`FeatureCode::all()`)
+     * derived from the same `OrganizationFeatureEntitlement` gate the
+     * server enforces at route/action boundaries, so navigation visibility
+     * never drifts from what a direct route access would allow.
      *
-     * @return array{features: list<string>, limits: array<string, int|null>}
+     * @return array{features: list<string>, limits: array<string, int|null>, grants: array<string, bool>}
      */
     private function entitlementData(OrganizationSubscriptionAccess $access): array
     {
-        $definition = $access->plan !== null
-            ? (new PlanCatalog)->get($access->plan)
-            : null;
+        $catalog = new PlanCatalog;
+        $definition = $access->plan !== null ? $catalog->get($access->plan) : null;
+
+        $grants = [];
+
+        foreach (FeatureCode::all() as $feature) {
+            $grants[$feature] = OrganizationFeatureEntitlement::isGrantedForAccess($access, $feature, $catalog);
+        }
 
         if ($definition === null) {
-            return ['features' => [], 'limits' => []];
+            return ['features' => [], 'limits' => [], 'grants' => $grants];
         }
 
         return [
             'features' => $definition->features,
             'limits' => $definition->limits,
+            'grants' => $grants,
         ];
     }
 }

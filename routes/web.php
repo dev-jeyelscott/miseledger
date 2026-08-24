@@ -30,6 +30,7 @@ use App\Http\Controllers\Recipes\RecipeController;
 use App\Http\Controllers\Recipes\RecipeCostController;
 use App\Http\Controllers\Suppliers\SupplierController;
 use App\Http\Controllers\Suppliers\SupplierItemController;
+use App\Support\Billing\FeatureCode;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -104,7 +105,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             [OrganizationBillingController::class, 'show'],
         )->name('organizations.billing.show');
 
-        Route::scopeBindings()->group(function (): void {
+        Route::scopeBindings()->middleware('feature:'.FeatureCode::MultiLocation)->group(function (): void {
             Route::get(
                 'organizations/{organization}/locations',
                 [OrganizationLocationController::class, 'index'],
@@ -177,7 +178,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 Route::get(
                     'stock-on-hand/export',
                     [StockOnHandReportController::class, 'export'],
-                )->name('stock-on-hand.export');
+                )->name('stock-on-hand.export')->middleware('feature:'.FeatureCode::ReportsExport);
 
                 Route::get(
                     'low-stock',
@@ -192,7 +193,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 Route::get(
                     'stock-movements/export',
                     [StockMovementLedgerReportController::class, 'export'],
-                )->name('stock-movements.export');
+                )->name('stock-movements.export')->middleware('feature:'.FeatureCode::ReportsExport);
 
                 Route::get(
                     'valuation',
@@ -202,7 +203,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 Route::get(
                     'valuation/export',
                     [InventoryValuationReportController::class, 'export'],
-                )->name('valuation.export');
+                )->name('valuation.export')->middleware('feature:'.FeatureCode::ReportsExport);
 
                 Route::get(
                     'purchasing-history',
@@ -212,7 +213,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 Route::get(
                     'purchasing-history/export',
                     [PurchasingHistoryReportController::class, 'export'],
-                )->name('purchasing-history.export');
+                )->name('purchasing-history.export')->middleware('feature:'.FeatureCode::ReportsExport);
 
                 Route::get(
                     'items',
@@ -297,6 +298,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
 
         Route::prefix('recipes')
             ->name('recipes.')
+            ->middleware('feature:'.FeatureCode::Recipes)
             ->group(function (): void {
                 Route::get(
                     '/',
@@ -324,132 +326,134 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 )->name('cost');
             });
 
-        Route::prefix('suppliers')
-            ->name('suppliers.')
-            ->group(function (): void {
-                Route::get(
-                    '/',
-                    [SupplierController::class, 'index'],
-                )->name('index');
+        Route::middleware('feature:'.FeatureCode::Purchasing)->group(function (): void {
+            Route::prefix('suppliers')
+                ->name('suppliers.')
+                ->group(function (): void {
+                    Route::get(
+                        '/',
+                        [SupplierController::class, 'index'],
+                    )->name('index');
 
-                Route::get(
-                    'create',
-                    [SupplierController::class, 'create'],
-                )->name('create');
+                    Route::get(
+                        'create',
+                        [SupplierController::class, 'create'],
+                    )->name('create');
 
-                Route::post(
-                    '/',
-                    [SupplierController::class, 'store'],
-                )->name('store');
+                    Route::post(
+                        '/',
+                        [SupplierController::class, 'store'],
+                    )->name('store');
 
-                Route::get(
-                    '{supplier}/edit',
-                    [SupplierController::class, 'edit'],
-                )->name('edit');
+                    Route::get(
+                        '{supplier}/edit',
+                        [SupplierController::class, 'edit'],
+                    )->name('edit');
 
-                Route::put(
-                    '{supplier}',
-                    [SupplierController::class, 'update'],
-                )->name('update');
+                    Route::put(
+                        '{supplier}',
+                        [SupplierController::class, 'update'],
+                    )->name('update');
 
-                Route::post(
-                    '{supplier}/items',
-                    [SupplierItemController::class, 'store'],
-                )->name('items.store');
+                    Route::post(
+                        '{supplier}/items',
+                        [SupplierItemController::class, 'store'],
+                    )->name('items.store');
 
-                Route::get(
-                    '{supplier}/items/{supplierItem}/edit',
-                    [SupplierItemController::class, 'edit'],
-                )->name('items.edit');
+                    Route::get(
+                        '{supplier}/items/{supplierItem}/edit',
+                        [SupplierItemController::class, 'edit'],
+                    )->name('items.edit');
 
-                Route::put(
-                    '{supplier}/items/{supplierItem}',
-                    [SupplierItemController::class, 'update'],
-                )->name('items.update');
+                    Route::put(
+                        '{supplier}/items/{supplierItem}',
+                        [SupplierItemController::class, 'update'],
+                    )->name('items.update');
 
-                Route::post(
-                    '{supplier}/items/{supplierItem}/prices',
-                    [SupplierItemController::class, 'storePrice'],
-                )->name('items.prices.store');
-            });
+                    Route::post(
+                        '{supplier}/items/{supplierItem}/prices',
+                        [SupplierItemController::class, 'storePrice'],
+                    )->name('items.prices.store');
+                });
 
-        Route::prefix('purchase-orders')
-            ->name('purchase-orders.')
-            ->group(function (): void {
-                Route::get(
-                    '/',
-                    [PurchaseOrderController::class, 'index'],
-                )->name('index');
+            Route::prefix('purchase-orders')
+                ->name('purchase-orders.')
+                ->group(function (): void {
+                    Route::get(
+                        '/',
+                        [PurchaseOrderController::class, 'index'],
+                    )->name('index');
 
-                Route::get(
-                    'create',
-                    [PurchaseOrderController::class, 'create'],
-                )->name('create');
+                    Route::get(
+                        'create',
+                        [PurchaseOrderController::class, 'create'],
+                    )->name('create');
 
-                Route::post(
-                    '/',
-                    [PurchaseOrderController::class, 'store'],
-                )->name('store');
+                    Route::post(
+                        '/',
+                        [PurchaseOrderController::class, 'store'],
+                    )->name('store');
 
-                Route::get(
-                    '{purchaseOrder}/edit',
-                    [PurchaseOrderController::class, 'edit'],
-                )->name('edit');
+                    Route::get(
+                        '{purchaseOrder}/edit',
+                        [PurchaseOrderController::class, 'edit'],
+                    )->name('edit');
 
-                Route::put(
-                    '{purchaseOrder}',
-                    [PurchaseOrderController::class, 'update'],
-                )->name('update');
+                    Route::put(
+                        '{purchaseOrder}',
+                        [PurchaseOrderController::class, 'update'],
+                    )->name('update');
 
-                Route::post(
-                    '{purchaseOrder}/approve',
-                    [PurchaseOrderController::class, 'approve'],
-                )->name('approve');
+                    Route::post(
+                        '{purchaseOrder}/approve',
+                        [PurchaseOrderController::class, 'approve'],
+                    )->name('approve');
 
-                Route::post(
-                    '{purchaseOrder}/cancel',
-                    [PurchaseOrderController::class, 'cancel'],
-                )->name('cancel');
+                    Route::post(
+                        '{purchaseOrder}/cancel',
+                        [PurchaseOrderController::class, 'cancel'],
+                    )->name('cancel');
 
-                Route::get(
-                    '{purchaseOrder}/receipts/create',
-                    [GoodsReceiptController::class, 'create'],
-                )->name('receipts.create');
+                    Route::get(
+                        '{purchaseOrder}/receipts/create',
+                        [GoodsReceiptController::class, 'create'],
+                    )->name('receipts.create');
 
-                Route::post(
-                    '{purchaseOrder}/receipts',
-                    [GoodsReceiptController::class, 'store'],
-                )->name('receipts.store');
-            });
+                    Route::post(
+                        '{purchaseOrder}/receipts',
+                        [GoodsReceiptController::class, 'store'],
+                    )->name('receipts.store');
+                });
 
-        Route::prefix('goods-receipts')
-            ->name('goods-receipts.')
-            ->group(function (): void {
-                Route::get(
-                    '/',
-                    [GoodsReceiptController::class, 'index'],
-                )->name('index');
+            Route::prefix('goods-receipts')
+                ->name('goods-receipts.')
+                ->group(function (): void {
+                    Route::get(
+                        '/',
+                        [GoodsReceiptController::class, 'index'],
+                    )->name('index');
 
-                Route::get(
-                    '{goodsReceipt}/edit',
-                    [GoodsReceiptController::class, 'edit'],
-                )->name('edit');
+                    Route::get(
+                        '{goodsReceipt}/edit',
+                        [GoodsReceiptController::class, 'edit'],
+                    )->name('edit');
 
-                Route::put(
-                    '{goodsReceipt}',
-                    [GoodsReceiptController::class, 'update'],
-                )->name('update');
+                    Route::put(
+                        '{goodsReceipt}',
+                        [GoodsReceiptController::class, 'update'],
+                    )->name('update');
 
-                Route::post(
-                    '{goodsReceipt}/finalize',
-                    [GoodsReceiptController::class, 'finalize'],
-                )->name('finalize');
+                    Route::post(
+                        '{goodsReceipt}/finalize',
+                        [GoodsReceiptController::class, 'finalize'],
+                    )->name('finalize');
 
-                Route::post(
-                    '{goodsReceipt}/cancel',
-                    [GoodsReceiptController::class, 'cancel'],
-                )->name('cancel');
-            });
+                    Route::post(
+                        '{goodsReceipt}/cancel',
+                        [GoodsReceiptController::class, 'cancel'],
+                    )->name('cancel');
+                });
+        });
 
         Route::prefix('stock-counts')
             ->name('stock-counts.')
@@ -467,7 +471,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 Route::get(
                     'variance/export',
                     [StockCountController::class, 'exportVariance'],
-                )->name('variance.export');
+                )->name('variance.export')->middleware('feature:'.FeatureCode::ReportsExport);
 
                 Route::get(
                     'create',
@@ -521,7 +525,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 Route::get(
                     'export',
                     [WasteController::class, 'export'],
-                )->name('export');
+                )->name('export')->middleware('feature:'.FeatureCode::ReportsExport);
             });
 
         Route::prefix('waste-reasons')

@@ -58,9 +58,16 @@ export type OrganizationSubscriptionContext = {
     billingWarning: boolean;
 };
 
+export type FeatureCode =
+    | 'purchasing'
+    | 'recipes'
+    | 'reports.export'
+    | 'locations.multi';
+
 export type OrganizationEntitlementContext = {
     features: string[];
     limits: Record<string, number | null>;
+    grants: Record<FeatureCode, boolean>;
 };
 
 export type OrganizationAvailablePlan = {

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnforceFeatureEntitlement;
 use App\Http\Middleware\EnforceOrganizationCommercialWriteAccess;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -28,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'organization.write-access' => EnforceOrganizationCommercialWriteAccess::class,
+            'feature' => EnforceFeatureEntitlement::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [

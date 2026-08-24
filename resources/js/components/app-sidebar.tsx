@@ -72,6 +72,7 @@ export function AppSidebar() {
     );
 
     const permissions = new Set(activeMembership?.permissions ?? []);
+    const grants = organizationContext.entitlements?.grants;
 
     const overviewNavItems: NavItem[] = [
         {
@@ -138,7 +139,7 @@ export function AppSidebar() {
 
     const purchasingNavItems: NavItem[] = [];
 
-    if (permissions.has('purchasing.view')) {
+    if (permissions.has('purchasing.view') && grants?.purchasing) {
         purchasingNavItems.push(
             {
                 title: 'Suppliers',
@@ -160,7 +161,7 @@ export function AppSidebar() {
 
     const recipeNavItems: NavItem[] = [];
 
-    if (permissions.has('recipes.view')) {
+    if (permissions.has('recipes.view') && grants?.recipes) {
         recipeNavItems.push({
             title: 'Recipes',
             href: RecipeController.index(),
@@ -204,7 +205,7 @@ export function AppSidebar() {
     const activeOrganization = organizationContext.active;
 
     if (activeOrganization !== null) {
-        if (permissions.has('locations.manage')) {
+        if (permissions.has('locations.manage') && grants?.['locations.multi']) {
             organizationNavItems.push({
                 title: 'Locations',
                 href: OrganizationLocationController.index(
