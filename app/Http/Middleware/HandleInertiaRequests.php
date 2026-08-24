@@ -9,6 +9,8 @@ use App\Support\Billing\FeatureCode;
 use App\Support\Billing\OrganizationFeatureEntitlement;
 use App\Support\Billing\OrganizationSubscriptionAccess;
 use App\Support\Billing\OrganizationSubscriptionAccessResolver;
+use App\Support\Billing\OrganizationUsageOverview;
+use App\Support\Billing\OrganizationUsageOverviewResolver;
 use App\Support\Billing\PlanCatalog;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
@@ -124,7 +126,9 @@ class HandleInertiaRequests extends Middleware
                 : null,
             'memberships' => $membershipData,
             'subscription' => $access !== null ? $this->subscriptionData($access) : null,
-            'entitlements' => $access !== null ? $this->entitlementData($access) : null,
+            'entitlements' => $access !== null
+                ? $this->entitlementData($access, $activeOrganization)
+                : null,
         ];
     }
 
@@ -179,9 +183,9 @@ class HandleInertiaRequests extends Middleware
      * server enforces at route/action boundaries, so navigation visibility
      * never drifts from what a direct route access would allow.
      *
-     * @return array{features: list<string>, limits: array<string, int|null>, grants: array<string, bool>}
+     * @return array{features: list<string>, limits: array<string, int|null>, grants: array<string, bool>, usage: array<string, array{current: int, limit: int|null, isUnlimited: bool, atLimit: bool}>}
      */
-    private function entitlementData(OrganizationSubscriptionAccess $access): array
+    private function entitlementData(OrganizationSubscriptionAccess $access, Organization $organization): array
     {
         $catalog = new PlanCatalog;
         $definition = $access->plan !== null ? $catalog->get($access->plan) : null;
@@ -192,14 +196,39 @@ class HandleInertiaRequests extends Middleware
             $grants[$feature] = OrganizationFeatureEntitlement::isGrantedForAccess($access, $feature, $catalog);
         }
 
+        $usage = $this->usageData(
+            OrganizationUsageOverviewResolver::forOrganization($organization, $access, $catalog),
+        );
+
         if ($definition === null) {
-            return ['features' => [], 'limits' => [], 'grants' => $grants];
+            return ['features' => [], 'limits' => [], 'grants' => $grants, 'usage' => $usage];
         }
 
         return [
             'features' => $definition->features,
             'limits' => $definition->limits,
             'grants' => $grants,
+            'usage' => $usage,
         ];
+    }
+
+    /**
+     * Serialize current-usage-versus-limit guidance for display only. The
+     * server remains the sole enforcement boundary for creation requests.
+     *
+     * @param  array<string, OrganizationUsageOverview>  $overview
+     * @return array<string, array{current: int, limit: int|null, isUnlimited: bool, atLimit: bool}>
+     */
+    private function usageData(array $overview): array
+    {
+        return array_map(
+            static fn (OrganizationUsageOverview $item): array => [
+                'current' => $item->current,
+                'limit' => $item->limit,
+                'isUnlimited' => $item->isUnlimited,
+                'atLimit' => $item->atLimit,
+            ],
+            $overview,
+        );
     }
 }

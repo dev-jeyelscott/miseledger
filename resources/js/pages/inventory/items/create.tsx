@@ -6,6 +6,7 @@ import { PreviousPageButton } from '@/components/navigation/previous-page-button
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { UsageLimitNotice } from '@/components/usage-limit-notice';
 import { dashboard } from '@/routes';
 import type { InventoryCategoryData, UnitOfMeasureData } from '@/types';
 
@@ -28,6 +29,11 @@ export default function CreateInventoryItem({ units, categories }: Props) {
                         Select the unit in which stock will be stored.
                     </p>
                 </div>
+
+                <UsageLimitNotice
+                    limitKey="inventory_items"
+                    resourceLabel="inventory items"
+                />
 
                 {units.length === 0 ? (
                     <div className="max-w-xl rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">

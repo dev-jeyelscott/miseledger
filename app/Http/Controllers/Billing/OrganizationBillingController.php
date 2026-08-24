@@ -7,6 +7,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Organization;
 use App\Support\Billing\OrganizationSubscriptionAccess;
 use App\Support\Billing\OrganizationSubscriptionAccessResolver;
+use App\Support\Billing\OrganizationUsageOverview;
+use App\Support\Billing\OrganizationUsageOverviewResolver;
 use App\Support\Billing\PlanCatalog;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -33,7 +35,7 @@ class OrganizationBillingController extends Controller
         return Inertia::render('organizations/billing/index', [
             'organization' => $this->organizationData($organization),
             'subscription' => $this->subscriptionData($access),
-            'entitlements' => $this->entitlementData($access, $planCatalog),
+            'entitlements' => $this->entitlementData($access, $organization, $planCatalog),
             'availablePlans' => $this->availablePlansData($planCatalog),
         ]);
     }
@@ -83,20 +85,45 @@ class OrganizationBillingController extends Controller
      * quantitative limits, using the configuration-owned plan catalog
      * rather than any Stripe usage/metering data.
      *
-     * @return array{features: list<string>, limits: array<string, int|null>}
+     * @return array{features: list<string>, limits: array<string, int|null>, usage: array<string, array{current: int, limit: int|null, isUnlimited: bool, atLimit: bool}>}
      */
-    private function entitlementData(OrganizationSubscriptionAccess $access, PlanCatalog $planCatalog): array
+    private function entitlementData(OrganizationSubscriptionAccess $access, Organization $organization, PlanCatalog $planCatalog): array
     {
         $definition = $access->plan !== null ? $planCatalog->get($access->plan) : null;
 
+        $usage = $this->usageData(
+            OrganizationUsageOverviewResolver::forOrganization($organization, $access, $planCatalog),
+        );
+
         if ($definition === null) {
-            return ['features' => [], 'limits' => []];
+            return ['features' => [], 'limits' => [], 'usage' => $usage];
         }
 
         return [
             'features' => $definition->features,
             'limits' => $definition->limits,
+            'usage' => $usage,
         ];
+    }
+
+    /**
+     * Serialize current-usage-versus-limit guidance for display only. The
+     * server remains the sole enforcement boundary for creation requests.
+     *
+     * @param  array<string, OrganizationUsageOverview>  $overview
+     * @return array<string, array{current: int, limit: int|null, isUnlimited: bool, atLimit: bool}>
+     */
+    private function usageData(array $overview): array
+    {
+        return array_map(
+            static fn (OrganizationUsageOverview $item): array => [
+                'current' => $item->current,
+                'limit' => $item->limit,
+                'isUnlimited' => $item->isUnlimited,
+                'atLimit' => $item->atLimit,
+            ],
+            $overview,
+        );
     }
 
     /**

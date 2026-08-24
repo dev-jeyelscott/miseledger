@@ -64,10 +64,18 @@ export type FeatureCode =
     | 'reports.export'
     | 'locations.multi';
 
+export type OrganizationUsageOverview = {
+    current: number;
+    limit: number | null;
+    isUnlimited: boolean;
+    atLimit: boolean;
+};
+
 export type OrganizationEntitlementContext = {
     features: string[];
     limits: Record<string, number | null>;
     grants: Record<FeatureCode, boolean>;
+    usage: Record<string, OrganizationUsageOverview>;
 };
 
 export type OrganizationAvailablePlan = {

@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { UsageLimitNotice } from '@/components/usage-limit-notice';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type { LocationSummary, OrganizationSummary } from '@/types';
@@ -340,15 +341,25 @@ export default function OrganizationLocations({
                         </p>
                     </div>
 
-                    <CreateLocationDialog
-                        organization={organization}
-                        trigger={
-                            <Button>
-                                <Plus className="size-4" aria-hidden="true" />
-                                Add location
-                            </Button>
-                        }
-                    />
+                    <div className="flex flex-col items-end gap-2">
+                        <CreateLocationDialog
+                            organization={organization}
+                            trigger={
+                                <Button>
+                                    <Plus
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    Add location
+                                </Button>
+                            }
+                        />
+
+                        <UsageLimitNotice
+                            limitKey="locations"
+                            resourceLabel="locations"
+                        />
+                    </div>
                 </div>
 
                 <section

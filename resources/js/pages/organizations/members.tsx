@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { UsageLimitNotice } from '@/components/usage-limit-notice';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type { OrganizationRole, OrganizationSummary } from '@/types';
@@ -236,19 +237,26 @@ export default function OrganizationMembers({
                         </p>
                     </div>
 
-                    <AddRegisteredUserDialog
-                        organization={organization}
-                        roles={roles}
-                        trigger={
-                            <Button className="w-full sm:w-auto">
-                                <UserPlus
-                                    className="size-4"
-                                    aria-hidden="true"
-                                />
-                                Add member
-                            </Button>
-                        }
-                    />
+                    <div className="flex flex-col items-end gap-2">
+                        <AddRegisteredUserDialog
+                            organization={organization}
+                            roles={roles}
+                            trigger={
+                                <Button className="w-full sm:w-auto">
+                                    <UserPlus
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    Add member
+                                </Button>
+                            }
+                        />
+
+                        <UsageLimitNotice
+                            limitKey="seats"
+                            resourceLabel="members"
+                        />
+                    </div>
                 </div>
 
                 <section

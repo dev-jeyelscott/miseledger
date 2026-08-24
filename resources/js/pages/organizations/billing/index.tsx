@@ -66,6 +66,9 @@ export default function OrganizationBilling({
     const hasActiveSubscription = subscription.status !== null;
     const trialEndsAt = formatDate(subscription.trialEndsAt);
     const endsAt = formatDate(subscription.endsAt);
+    const overLimitKeys = Object.entries(entitlements.usage)
+        .filter(([, usage]) => usage.atLimit)
+        .map(([key]) => formatLabel(key));
 
     function subscribe(planCode: string, interval: 'monthly' | 'yearly') {
         router.post(OrganizationCheckoutController.store.url(organization.id), {
@@ -112,6 +115,20 @@ export default function OrganizationBilling({
                         >
                             This organization is commercially read-only.
                             Subscribe below to restore write access.
+                        </div>
+                    )}
+
+                    {overLimitKeys.length > 0 && (
+                        <div
+                            role="alert"
+                            className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400"
+                        >
+                            This organization is at or over its current plan
+                            limit for {overLimitKeys.join(', ')}. All existing
+                            data remains available, but creating new{' '}
+                            {overLimitKeys.join(', ').toLowerCase()} is
+                            blocked until you upgrade to a plan with enough
+                            capacity.
                         </div>
                     )}
 
@@ -262,22 +279,39 @@ export default function OrganizationBilling({
                                 </p>
 
                                 {Object.keys(entitlements.limits).length > 0 ? (
-                                    <dl className="mt-2 space-y-1">
+                                    <dl className="mt-2 space-y-2">
                                         {Object.entries(
                                             entitlements.limits,
-                                        ).map(([key, limit]) => (
-                                            <div
-                                                key={key}
-                                                className="flex justify-between gap-4 text-sm"
-                                            >
-                                                <dt>{formatLabel(key)}</dt>
-                                                <dd className="font-medium">
-                                                    {limit === null
-                                                        ? 'Unlimited'
-                                                        : limit}
-                                                </dd>
-                                            </div>
-                                        ))}
+                                        ).map(([key, limit]) => {
+                                            const usage =
+                                                entitlements.usage[key];
+
+                                            return (
+                                                <div
+                                                    key={key}
+                                                    className="flex justify-between gap-4 text-sm"
+                                                >
+                                                    <dt>{formatLabel(key)}</dt>
+                                                    <dd className="text-right font-medium">
+                                                        {limit === null ? (
+                                                            'Unlimited'
+                                                        ) : (
+                                                            <>
+                                                                {usage?.current ??
+                                                                    0}{' '}
+                                                                of {limit} used
+                                                                {usage?.atLimit && (
+                                                                    <span className="ml-2 inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                                                                        Limit
+                                                                        reached
+                                                                    </span>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </dd>
+                                                </div>
+                                            );
+                                        })}
                                     </dl>
                                 ) : (
                                     <p className="mt-2 text-sm text-muted-foreground">
