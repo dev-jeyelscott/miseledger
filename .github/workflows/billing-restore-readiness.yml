@@ -1,0 +1,99 @@
+name: billing restore readiness
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 1 * *'
+
+permissions:
+  contents: read
+
+jobs:
+  restore-readiness:
+    runs-on: ubuntu-latest
+
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: miseledger_restore_source
+      DB_USERNAME: miseledger
+      DB_PASSWORD: miseledger
+      REDIS_CLIENT: phpredis
+      REDIS_HOST: 127.0.0.1
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      CACHE_STORE: redis
+      PGPASSWORD: miseledger
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: miseledger_restore_source
+          POSTGRES_USER: miseledger
+          POSTGRES_PASSWORD: miseledger
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U miseledger -d miseledger_restore_source"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.5'
+          extensions: pdo_pgsql, redis
+          tools: composer:v2
+          coverage: none
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Install application dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader
+          cp .env.example .env
+          php artisan key:generate
+          npm ci
+          npm run build
+
+      - name: Create isolated restore fixture
+        run: |
+          php artisan migrate --force
+          php artisan tinker --execute '
+            $organization = App\Models\Organization::factory()->create(["stripe_id" => "cus_restore_readiness"]);
+            $organization->subscriptions()->create(["type" => config("billing.subscription_type"), "stripe_id" => "sub_restore_readiness", "stripe_status" => "active", "stripe_price" => "price_restore_readiness", "quantity" => 1]);
+            $location = App\Models\Location::factory()->create(["organization_id" => $organization->id]);
+            $unit = App\Models\UnitOfMeasure::factory()->create(["organization_id" => $organization->id]);
+            $item = App\Models\InventoryItem::factory()->create(["organization_id" => $organization->id, "base_unit_of_measure_id" => $unit->id]);
+            $storageLocation = App\Models\StorageLocation::create(["organization_id" => $organization->id, "location_id" => $location->id, "name" => "Restore readiness storage", "code" => "RESTORE", "active" => true]);
+            app(App\Actions\Inventory\RecordStockMovement::class)->handle($organization, $location, $storageLocation, $item, App\Enums\StockMovementType::OpeningBalance, "10", $unit, "restore_readiness", $item->id, now(), null, "restore-readiness:opening", null, "4.0000");
+          '
+
+      - name: Restore PostgreSQL backup into a separate database
+        run: |
+          pg_dump --format=custom --no-owner --no-privileges --file=/tmp/miseledger-restore-readiness.dump --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" "$DB_DATABASE"
+          createdb --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" miseledger_restore_target
+          pg_restore --clean --if-exists --no-owner --no-privileges --dbname="postgresql://$DB_USERNAME:$DB_PASSWORD@$DB_HOST:$DB_PORT/miseledger_restore_target" /tmp/miseledger-restore-readiness.dump
+
+      - name: Verify restored billing and ledger records
+        run: |
+          psql --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" --dbname=miseledger_restore_target --tuples-only --no-align --command="SELECT (SELECT count(*) FROM organizations WHERE stripe_id = 'cus_restore_readiness'), (SELECT count(*) FROM subscriptions WHERE stripe_id = 'sub_restore_readiness'), (SELECT count(*) FROM stock_movements WHERE idempotency_key = 'restore-readiness:opening');" | grep -Fx '1|1|1'
