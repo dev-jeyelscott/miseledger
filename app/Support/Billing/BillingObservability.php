@@ -53,6 +53,15 @@ final class BillingObservability
         ]);
     }
 
+    public function queueFailure(int $organizationId, string $job, Throwable $exception): void
+    {
+        $this->record('error', 'billing.queue.failure', 'application', null, [
+            'organization_id' => $organizationId,
+            'job' => $job,
+            'exception' => $exception::class,
+        ]);
+    }
+
     private function failure(string $event, ?Organization $organization, Throwable $exception, ?string $failureSource = null): void
     {
         $this->record('error', $event, $failureSource ?? ($exception instanceof ApiErrorException ? 'provider' : 'application'), $organization, [

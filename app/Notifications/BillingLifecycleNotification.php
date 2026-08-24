@@ -4,14 +4,25 @@ namespace App\Notifications;
 
 use App\Enums\BillingLifecycleEvent;
 use App\Models\Organization;
+use App\Support\Billing\BillingObservability;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Throwable;
 
 class BillingLifecycleNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+
+    public int $tries = 3;
+
+    /** @var list<int> */
+    public array $backoff = [60, 300, 900];
+
+    public int $timeout = 60;
+
+    public bool $failOnTimeout = true;
 
     /**
      * Create a notification from an organization-scoped billing lifecycle event.
@@ -52,5 +63,14 @@ class BillingLifecycleNotification extends Notification implements ShouldQueue
             'organization_id' => $this->organization->getKey(),
             'event' => $this->event->value,
         ];
+    }
+
+    public function failed(Throwable $exception): void
+    {
+        app(BillingObservability::class)->queueFailure(
+            $this->organization->getKey(),
+            self::class,
+            $exception,
+        );
     }
 }

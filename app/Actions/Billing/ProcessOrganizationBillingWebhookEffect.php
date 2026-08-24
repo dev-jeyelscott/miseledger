@@ -4,6 +4,7 @@ namespace App\Actions\Billing;
 
 use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\BillingLifecycleEvent;
+use App\Jobs\SendOrganizationBillingLifecycleNotification;
 use App\Models\BillingWebhookEffect;
 use App\Models\Organization;
 use Illuminate\Support\Facades\DB;
@@ -12,10 +13,7 @@ use Throwable;
 
 final class ProcessOrganizationBillingWebhookEffect
 {
-    public function __construct(
-        private readonly NotifyOrganizationBillingLifecycle $notify,
-        private readonly RecordAuditEntry $recordAuditEntry,
-    ) {}
+    public function __construct(private readonly RecordAuditEntry $recordAuditEntry) {}
 
     /**
      * Persist and dispatch the custom effects for one Stripe event without
@@ -65,11 +63,9 @@ final class ProcessOrganizationBillingWebhookEffect
                 );
             }
 
-            if ($effect->notification_dispatched_at !== null || $effect->notification_claimed_at !== null) {
+            if ($effect->notification_dispatched_at !== null) {
                 return null;
             }
-
-            $effect->update(['notification_claimed_at' => now()]);
 
             return $effect;
         });
@@ -79,15 +75,13 @@ final class ProcessOrganizationBillingWebhookEffect
         }
 
         try {
-            $this->notify->handle($stripeCustomerId, $lifecycleEvent);
-
-            $effect->update([
-                'notification_claimed_at' => null,
-                'notification_dispatched_at' => now(),
-            ]);
+            SendOrganizationBillingLifecycleNotification::dispatch(
+                $effect->getKey(),
+                $organization->getKey(),
+                $stripeEventId,
+                $stripeCustomerId,
+            );
         } catch (Throwable) {
-            $effect->update(['notification_claimed_at' => null]);
-
             Log::channel((string) config('billing.logger'))
                 ->warning('Billing lifecycle notification dispatch failed.', [
                     'organization_id' => $organization->getKey(),
