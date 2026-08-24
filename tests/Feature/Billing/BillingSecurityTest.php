@@ -4,6 +4,10 @@ use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
+use Symfony\Component\HttpFoundation\Response;
 
 test('a member without billing access is denied every organization billing action', function () {
     $user = User::factory()->create();
@@ -50,15 +54,40 @@ test('an owner cannot access billing actions for another organization', function
         ->assertForbidden();
 });
 
-test('browser billing mutations retain CSRF protection while Stripe webhooks are the sole exclusion', function () {
-    $bootstrap = file_get_contents(base_path('bootstrap/app.php'));
+test('browser billing mutations reject requests without a CSRF token', function () {
+    $csrf = new class($this->app, $this->app['encrypter']) extends PreventRequestForgery
+    {
+        protected function runningUnitTests(): bool
+        {
+            return false;
+        }
+    };
 
-    expect($bootstrap)
-        ->toContain("->validateCsrfTokens(except: [\n            'stripe/*',\n        ])")
-        ->and(file_get_contents(base_path('routes/web.php')))
-        ->toContain("Route::middleware(['auth', 'verified'])->group(function (): void {")
-        ->toContain("Route::post(\n        'organizations/{organization}/billing/checkout',")
-        ->toContain("Route::post(\n        'organizations/{organization}/billing/portal',");
+    $session = $this->app['session.store'];
+    $session->start();
+
+    $billingRequest = Request::create('/organizations/1/billing/checkout', 'POST');
+    $billingRequest->setLaravelSession($session);
+
+    expect(fn () => $csrf->handle($billingRequest, fn () => response('')))
+        ->toThrow(TokenMismatchException::class);
+
+    $portalRequest = Request::create('/organizations/1/billing/portal', 'POST');
+    $portalRequest->setLaravelSession($session);
+
+    expect(fn () => $csrf->handle($portalRequest, fn () => response('')))
+        ->toThrow(TokenMismatchException::class);
+
+    $webhookRequest = Request::create('/stripe/webhook', 'POST');
+    $webhookRequest->setLaravelSession($session);
+
+    expect($csrf->handle($webhookRequest, fn () => response('')))
+        ->toBeInstanceOf(Response::class);
+});
+
+test('Stripe webhooks are the sole billing CSRF exclusion', function () {
+    expect(file_get_contents(base_path('bootstrap/app.php')))
+        ->toContain("->validateCsrfTokens(except: [\n            'stripe/*',\n        ])");
 });
 
 test('billing code remains isolated from stock balance projections and stock movement recording', function () {

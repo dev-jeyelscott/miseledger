@@ -233,7 +233,13 @@ test('the resolved Checkout session uses the trusted configured price id, never 
 
     $this->actingAs($user)->post(
         route('organizations.billing.checkout', $organization),
-        ['plan' => 'growth', 'interval' => 'yearly', 'price_id' => 'price_attacker_supplied'],
+        [
+            'plan' => 'growth',
+            'interval' => 'yearly',
+            'price_id' => 'price_attacker_supplied',
+            'success_url' => 'https://attacker.example/success',
+            'cancel_url' => 'https://attacker.example/cancel',
+        ],
     )->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_123');
 
     $checkoutRequest = collect($client->requests)
@@ -246,6 +252,14 @@ test('the resolved Checkout session uses the trusted configured price id, never 
     expect($lineItemPrices)
         ->toContain('price_growth_yearly')
         ->not->toContain('price_attacker_supplied');
+
+    expect($checkoutRequest['params'])
+        ->toMatchArray([
+            'success_url' => route('organizations.billing.checkout.success', $organization),
+            'cancel_url' => route('organizations.billing.checkout.cancel', $organization),
+        ])
+        ->not->toContain('https://attacker.example/success')
+        ->not->toContain('https://attacker.example/cancel');
 });
 
 test('a repeated Checkout request for an already subscribed organization is rejected', function () {
