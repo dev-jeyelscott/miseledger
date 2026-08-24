@@ -27,6 +27,7 @@ class DispatchBillingLifecycleNotification
         }
 
         $lifecycleEvent = match ($payload['type'] ?? null) {
+            'customer.subscription.created' => BillingLifecycleEvent::SubscriptionStarted,
             'customer.subscription.deleted' => BillingLifecycleEvent::SubscriptionEnded,
             'customer.subscription.updated' => $this->updatedSubscriptionEvent(
                 $object,
@@ -36,7 +37,12 @@ class DispatchBillingLifecycleNotification
         };
 
         if ($lifecycleEvent !== null) {
-            $this->process->handle($stripeEventId, $customerId, $lifecycleEvent);
+            $this->process->handle(
+                $stripeEventId,
+                $customerId,
+                $lifecycleEvent,
+                $this->auditAction($lifecycleEvent),
+            );
         }
     }
 
@@ -61,13 +67,38 @@ class DispatchBillingLifecycleNotification
 
         $previousStatus = $previousAttributes['status'] ?? null;
 
+        if (($previousAttributes['cancel_at_period_end'] ?? false) === true) {
+            return BillingLifecycleEvent::SubscriptionResumed;
+        }
+
         if (
             ($subscription['status'] ?? null) === 'active'
-            && in_array($previousStatus, ['past_due', 'unpaid', 'canceled'], true)
+            && in_array($previousStatus, ['past_due', 'unpaid'], true)
         ) {
             return BillingLifecycleEvent::Recovered;
         }
 
+        if (array_key_exists('items', $previousAttributes)) {
+            return BillingLifecycleEvent::PlanChanged;
+        }
+
         return null;
+    }
+
+    /**
+     * Return the stable audit action for a provider-synchronized event.
+     */
+    private function auditAction(BillingLifecycleEvent $lifecycleEvent): string
+    {
+        return match ($lifecycleEvent) {
+            BillingLifecycleEvent::SubscriptionStarted => 'billing.subscription.started',
+            BillingLifecycleEvent::PlanChanged => 'billing.subscription.plan_changed',
+            BillingLifecycleEvent::ScheduledCancellation => 'billing.subscription.cancellation_scheduled',
+            BillingLifecycleEvent::SubscriptionResumed => 'billing.subscription.resumed',
+            BillingLifecycleEvent::SubscriptionEnded => 'billing.subscription.ended',
+            BillingLifecycleEvent::PaymentFailed => 'billing.subscription.past_due',
+            BillingLifecycleEvent::Recovered => 'billing.payment.recovered',
+            BillingLifecycleEvent::TrialEnding => 'billing.subscription.trial_ending',
+        };
     }
 }

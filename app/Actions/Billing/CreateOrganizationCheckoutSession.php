@@ -2,8 +2,10 @@
 
 namespace App\Actions\Billing;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\PlanCode;
 use App\Models\Organization;
+use App\Models\User;
 use App\Support\Billing\PlanCatalog;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
@@ -27,9 +29,10 @@ final class CreateOrganizationCheckoutSession
 
     public function __construct(
         private readonly PlanCatalog $planCatalog,
+        private readonly RecordAuditEntry $recordAuditEntry,
     ) {}
 
-    public function handle(Organization $organization, PlanCode $plan, string $interval): string
+    public function handle(Organization $organization, User $actor, PlanCode $plan, string $interval): string
     {
         $priceId = $this->planCatalog->get($plan)?->priceId($interval);
 
@@ -52,7 +55,7 @@ final class CreateOrganizationCheckoutSession
 
         return Cache::lock('billing:checkout:lock:'.$organizationId, 10)->block(
             5,
-            function () use ($organization, $priceId, $organizationId, $type, $pendingCacheKey): string {
+            function () use ($organization, $actor, $plan, $interval, $priceId, $organizationId, $type, $pendingCacheKey): string {
                 $pendingUrl = Cache::get($pendingCacheKey);
 
                 if (is_string($pendingUrl)) {
@@ -73,6 +76,19 @@ final class CreateOrganizationCheckoutSession
                 ]);
 
                 $url = $checkout->redirect()->getTargetUrl();
+
+                $this->recordAuditEntry->handle(
+                    $organization,
+                    $actor,
+                    'billing.checkout.started',
+                    Organization::class,
+                    $organization->getKey(),
+                    null,
+                    [
+                        'plan' => $plan->value,
+                        'interval' => $interval,
+                    ],
+                );
 
                 Cache::put($pendingCacheKey, $url, now()->addMinutes(self::PENDING_CHECKOUT_TTL_MINUTES));
 

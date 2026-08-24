@@ -25,6 +25,7 @@ final class ProcessOrganizationBillingWebhookEffect
         string $stripeEventId,
         string $stripeCustomerId,
         BillingLifecycleEvent $lifecycleEvent,
+        string $auditAction,
     ): void {
         $organization = Organization::query()
             ->where('stripe_id', $stripeCustomerId)
@@ -34,7 +35,7 @@ final class ProcessOrganizationBillingWebhookEffect
             return;
         }
 
-        $effect = DB::transaction(function () use ($organization, $stripeEventId, $lifecycleEvent): ?BillingWebhookEffect {
+        $effect = DB::transaction(function () use ($organization, $stripeEventId, $lifecycleEvent, $auditAction): ?BillingWebhookEffect {
             $wasCreated = BillingWebhookEffect::query()->insertOrIgnore([
                 'organization_id' => $organization->getKey(),
                 'stripe_event_id' => $stripeEventId,
@@ -52,11 +53,14 @@ final class ProcessOrganizationBillingWebhookEffect
                 $this->recordAuditEntry->handle(
                     $organization,
                     null,
-                    'billing.lifecycle.'.$lifecycleEvent->value,
+                    $auditAction,
                     BillingWebhookEffect::class,
                     $effect->getKey(),
                     null,
-                    ['stripe_event_id' => $stripeEventId],
+                    [
+                        'origin' => 'stripe_webhook',
+                        'lifecycle_event' => $lifecycleEvent->value,
+                    ],
                     $stripeEventId,
                 );
             }

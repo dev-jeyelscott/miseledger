@@ -22,6 +22,7 @@ class OrganizationCheckoutController extends Controller
     ): Response {
         $checkoutUrl = $createCheckoutSession->handle(
             $organization,
+            $request->user(),
             $request->planCode(),
             (string) $request->validated('interval'),
         );

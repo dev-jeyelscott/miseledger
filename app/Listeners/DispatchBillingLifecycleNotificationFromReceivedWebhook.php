@@ -34,7 +34,12 @@ class DispatchBillingLifecycleNotificationFromReceivedWebhook
         };
 
         if ($lifecycleEvent !== null) {
-            $this->process->handle($stripeEventId, $customerId, $lifecycleEvent);
+            $this->process->handle(
+                $stripeEventId,
+                $customerId,
+                $lifecycleEvent,
+                'billing.subscription.past_due',
+            );
         }
     }
 }
