@@ -205,7 +205,10 @@ export function AppSidebar() {
     const activeOrganization = organizationContext.active;
 
     if (activeOrganization !== null) {
-        if (permissions.has('locations.manage') && grants?.['locations.multi']) {
+        if (
+            permissions.has('locations.manage') &&
+            grants?.['locations.multi']
+        ) {
             organizationNavItems.push({
                 title: 'Locations',
                 href: OrganizationLocationController.index(

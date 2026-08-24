@@ -53,10 +53,10 @@ export function UsageLimitNotice({ limitKey, resourceLabel }: Props) {
             <AlertTitle>Plan limit reached</AlertTitle>
             <AlertDescription>
                 <p>
-                    This organization has used {usage.current} of{' '}
-                    {usage.limit} {resourceLabel} allowed on the current plan.
-                    Existing {resourceLabel} remain available, but creating
-                    another is blocked until you upgrade.
+                    This organization has used {usage.current} of {usage.limit}{' '}
+                    {resourceLabel} allowed on the current plan. Existing{' '}
+                    {resourceLabel} remain available, but creating another is
+                    blocked until you upgrade.
                 </p>
 
                 <Link

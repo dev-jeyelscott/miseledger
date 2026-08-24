@@ -126,9 +126,8 @@ export default function OrganizationBilling({
                             This organization is at or over its current plan
                             limit for {overLimitKeys.join(', ')}. All existing
                             data remains available, but creating new{' '}
-                            {overLimitKeys.join(', ').toLowerCase()} is
-                            blocked until you upgrade to a plan with enough
-                            capacity.
+                            {overLimitKeys.join(', ').toLowerCase()} is blocked
+                            until you upgrade to a plan with enough capacity.
                         </div>
                     )}
 

@@ -59,10 +59,7 @@ export type OrganizationSubscriptionContext = {
 };
 
 export type FeatureCode =
-    | 'purchasing'
-    | 'recipes'
-    | 'reports.export'
-    | 'locations.multi';
+    'purchasing' | 'recipes' | 'reports.export' | 'locations.multi';
 
 export type OrganizationUsageOverview = {
     current: number;
