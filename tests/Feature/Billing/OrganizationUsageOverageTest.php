@@ -1,10 +1,15 @@
 <?php
 
+use App\Actions\Inventory\RecordStockMovement;
 use App\Enums\OrganizationRole;
+use App\Enums\StockMovementType;
 use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
+use App\Models\StockBalance;
+use App\Models\StockMovement;
+use App\Models\StorageLocation;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
 use Illuminate\Support\Facades\Config;
@@ -94,6 +99,63 @@ test('downgrading below current usage preserves memberships, locations, and inve
 
     $organization->refresh();
     expect($organization->active)->toBeTrue();
+});
+
+test('downgrading below current usage preserves stock ledger history and balances', function () {
+    overagePlansConfig();
+
+    $owner = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($owner)
+        ->create(['role' => OrganizationRole::Owner]);
+
+    $location = Location::factory()->for($organization)->create();
+
+    $storageLocation = new StorageLocation([
+        'name' => 'Main Storage',
+        'code' => 'MAIN',
+        'active' => true,
+    ]);
+    $storageLocation->organization()->associate($organization);
+    $storageLocation->location()->associate($location);
+    $storageLocation->save();
+
+    $unit = UnitOfMeasure::factory()->for($organization)->create(['dimension' => 'weight']);
+    $item = InventoryItem::factory()->for($organization)->create(['base_unit_of_measure_id' => $unit->id]);
+
+    app(RecordStockMovement::class)->handle(
+        organization: $organization,
+        location: $location,
+        storageLocation: $storageLocation,
+        inventoryItem: $item,
+        type: StockMovementType::OpeningBalance,
+        baseQuantity: '4',
+        baseUnitOfMeasure: $unit,
+        referenceType: 'opening_balance',
+        referenceId: 1,
+        occurredAt: now(),
+        idempotencyKey: 'opening:overage-preservation',
+        inboundUnitCost: '2.5',
+    );
+
+    $movementBefore = StockMovement::query()->sole()->only(['id', 'type', 'quantity', 'occurred_at']);
+    $balanceBefore = StockBalance::query()->sole()->only(['quantity_on_hand', 'inventory_item_id', 'storage_location_id']);
+
+    overageSubscribe($organization, 'price_growth_monthly');
+
+    // Downgrade to a plan below current usage; ledger history and balances must be untouched.
+    overageSubscribe($organization, 'price_starter_monthly');
+
+    $this->assertDatabaseCount('stock_movements', 1);
+    $this->assertDatabaseCount('stock_balances', 1);
+
+    expect(StockMovement::query()->sole()->only(['id', 'type', 'quantity', 'occurred_at']))
+        ->toEqual($movementBefore);
+    expect(StockBalance::query()->sole()->only(['quantity_on_hand', 'inventory_item_id', 'storage_location_id']))
+        ->toEqual($balanceBefore);
 });
 
 test('a downgraded organization can still read existing over-limit data', function () {
