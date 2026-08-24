@@ -1,4 +1,4 @@
-import { Form, Head, Link, router } from '@inertiajs/react';
+import { Form, Head, Link, router, usePage } from '@inertiajs/react';
 import {
     CheckCircle2,
     ChevronLeft,
@@ -35,6 +35,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
+import type { OrganizationContext } from '@/types';
 
 type Option = {
     id: number;
@@ -928,6 +929,12 @@ export default function WasteIndex({
     recordForm,
     reportOptions,
 }: Props) {
+    const { organizationContext } = usePage<{
+        organizationContext: OrganizationContext;
+    }>().props;
+    const canExportReports =
+        organizationContext.entitlements?.grants['reports.export'] ?? false;
+
     const reportRows = rows?.data ?? [];
     const showRecordForm = canRecord && recordForm !== null;
     const exportUrl = buildExportUrl(filters);
@@ -1090,19 +1097,21 @@ export default function WasteIndex({
                                             </span>
                                         </div>
 
-                                        <Button
-                                            variant="outline"
-                                            className="flex-1 xl:flex-none"
-                                            asChild
-                                        >
-                                            <a href={exportUrl}>
-                                                <Download
-                                                    className="size-4"
-                                                    aria-hidden="true"
-                                                />
-                                                Export CSV
-                                            </a>
-                                        </Button>
+                                        {canExportReports && (
+                                            <Button
+                                                variant="outline"
+                                                className="flex-1 xl:flex-none"
+                                                asChild
+                                            >
+                                                <a href={exportUrl}>
+                                                    <Download
+                                                        className="size-4"
+                                                        aria-hidden="true"
+                                                    />
+                                                    Export CSV
+                                                </a>
+                                            </Button>
+                                        )}
                                     </div>
 
                                     <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-7">

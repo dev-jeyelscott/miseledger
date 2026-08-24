@@ -1,4 +1,4 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head, Link, usePage } from '@inertiajs/react';
 import {
     CircleMinus,
     ClipboardList,
@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
+import type { OrganizationContext } from '@/types';
 
 type ReceiptState = 'received' | 'partial' | 'not_received' | 'over_received';
 
@@ -260,6 +261,12 @@ export default function PurchasingHistoryReport({
 
     const hasFilters = activeFilterCount > 0;
     const exportUrl = buildExportUrl(filters);
+
+    const { organizationContext } = usePage<{
+        organizationContext: OrganizationContext;
+    }>().props;
+    const canExportReports =
+        organizationContext.entitlements?.grants['reports.export'] ?? false;
 
     return (
         <>
@@ -583,15 +590,17 @@ export default function PurchasingHistoryReport({
                             </p>
                         </div>
 
-                        <Button variant="outline" size="sm" asChild>
-                            <a href={exportUrl}>
-                                <Download
-                                    className="size-4"
-                                    aria-hidden="true"
-                                />
-                                Export CSV
-                            </a>
-                        </Button>
+                        {canExportReports && (
+                            <Button variant="outline" size="sm" asChild>
+                                <a href={exportUrl}>
+                                    <Download
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    Export CSV
+                                </a>
+                            </Button>
+                        )}
                     </div>
 
                     <div className="overflow-x-auto">

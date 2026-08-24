@@ -1,4 +1,4 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head, Link, usePage } from '@inertiajs/react';
 import {
     ArrowDownToLine,
     ArrowLeftRight,
@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
+import type { OrganizationContext } from '@/types';
 
 type StockMovementRow = {
     id: number;
@@ -226,6 +227,12 @@ export default function StockMovementLedgerReport({
     const hasFilters = activeFilterLabels.length > 0;
     const exportUrl = buildExportUrl(filters);
 
+    const { organizationContext } = usePage<{
+        organizationContext: OrganizationContext;
+    }>().props;
+    const canExportReports =
+        organizationContext.entitlements?.grants['reports.export'] ?? false;
+
     return (
         <>
             <Head title="Stock movement ledger" />
@@ -254,15 +261,17 @@ export default function StockMovementLedgerReport({
                             </Link>
                         </Button>
 
-                        <Button variant="outline" asChild>
-                            <a href={exportUrl}>
-                                <Download
-                                    className="size-4"
-                                    aria-hidden="true"
-                                />
-                                Export CSV
-                            </a>
-                        </Button>
+                        {canExportReports && (
+                            <Button variant="outline" asChild>
+                                <a href={exportUrl}>
+                                    <Download
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    Export CSV
+                                </a>
+                            </Button>
+                        )}
                     </div>
                 </div>
 

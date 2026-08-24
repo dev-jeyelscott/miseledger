@@ -1,4 +1,4 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head, Link, usePage } from '@inertiajs/react';
 import {
     Building2,
     CircleDollarSign,
@@ -17,6 +17,7 @@ import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-car
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
+import type { OrganizationContext } from '@/types';
 
 type ValuationRow = {
     id: number;
@@ -125,6 +126,12 @@ export default function InventoryValuationReport({
     canViewCosts,
 }: Props) {
     const exportUrl = buildExportUrl(filters);
+
+    const { organizationContext } = usePage<{
+        organizationContext: OrganizationContext;
+    }>().props;
+    const canExportReports =
+        organizationContext.entitlements?.grants['reports.export'] ?? false;
 
     const itemCount = new Set(rows.map((row) => row.itemId)).size;
     const locationCount = new Set(rows.map((row) => row.locationId)).size;
@@ -594,15 +601,17 @@ export default function InventoryValuationReport({
                             </p>
                         </div>
 
-                        <Button variant="outline" size="sm" asChild>
-                            <a href={exportUrl}>
-                                <Download
-                                    className="size-4"
-                                    aria-hidden="true"
-                                />
-                                Export CSV
-                            </a>
-                        </Button>
+                        {canExportReports && (
+                            <Button variant="outline" size="sm" asChild>
+                                <a href={exportUrl}>
+                                    <Download
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    Export CSV
+                                </a>
+                            </Button>
+                        )}
                     </div>
 
                     <div className="overflow-x-auto">

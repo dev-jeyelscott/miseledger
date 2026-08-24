@@ -268,3 +268,48 @@ test('the shared entitlement context resolves the same feature grants used to en
             'locations.multi' => true,
         ]);
 });
+
+test('report pages expose the reports.export grant used to conditionally render the export control', function () {
+    featureEntitlementFixturePlans();
+
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create(['role' => OrganizationRole::Owner]);
+
+    featureEntitlementSubscription($organization);
+
+    $reportRoutes = [
+        'inventory.stock-movements.index',
+        'inventory.valuation.index',
+        'inventory.purchasing-history.index',
+        'waste.index',
+    ];
+
+    foreach ($reportRoutes as $reportRoute) {
+        $deniedResponse = $this->withSession(['active_organization_id' => $organization->id])
+            ->actingAs($user)
+            ->get(route($reportRoute))
+            ->assertOk();
+
+        expect($deniedResponse->viewData('page')['props']['organizationContext']['entitlements']['grants']['reports.export'])
+            ->toBeFalse();
+    }
+
+    $organization->subscription(config('billing.subscription_type'))->update([
+        'stripe_price' => 'price_growth_monthly',
+    ]);
+
+    foreach ($reportRoutes as $reportRoute) {
+        $grantedResponse = $this->withSession(['active_organization_id' => $organization->id])
+            ->actingAs($user)
+            ->get(route($reportRoute))
+            ->assertOk();
+
+        expect($grantedResponse->viewData('page')['props']['organizationContext']['entitlements']['grants']['reports.export'])
+            ->toBeTrue();
+    }
+});
