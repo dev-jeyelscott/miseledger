@@ -105,6 +105,74 @@ return [
     |
     */
 
-    'plans' => [],
+    'plans' => [
+        'starter' => [
+            'name' => 'Starter Plan',
+            'providers' => [
+                'stripe' => [
+                    'monthly' => env('STRIPE_PRICE_STARTER_MONTHLY'),
+                    'yearly' => env('STRIPE_PRICE_STARTER_YEARLY'),
+                ],
+                'paymongo' => [
+                    'monthly' => env('PAYMONGO_PLAN_STARTER_MONTHLY'),
+                    'yearly' => env('PAYMONGO_PLAN_STARTER_YEARLY'),
+                ],
+            ],
+            'features' => [],
+            'limits' => [
+                'seats' => 3,
+                'locations' => 1,
+                'inventory_items' => 500,
+            ],
+        ],
+        'growth' => [
+            'name' => 'Growth Plan',
+            'providers' => [
+                'stripe' => [
+                    'monthly' => env('STRIPE_PRICE_GROWTH_MONTHLY'),
+                    'yearly' => env('STRIPE_PRICE_GROWTH_YEARLY'),
+                ],
+                'paymongo' => [
+                    'monthly' => env('PAYMONGO_PLAN_GROWTH_MONTHLY'),
+                    'yearly' => env('PAYMONGO_PLAN_GROWTH_YEARLY'),
+                ],
+            ],
+            'features' => [
+                'purchasing',
+                'recipes',
+                'reports.export',
+                'locations.multi',
+            ],
+            'limits' => [
+                'seats' => 10,
+                'locations' => 5,
+                'inventory_items' => 5000,
+            ],
+        ],
+        'business' => [
+            'name' => 'Business Plan',
+            'providers' => [
+                'stripe' => [
+                    'monthly' => env('STRIPE_PRICE_BUSINESS_MONTHLY'),
+                    'yearly' => env('STRIPE_PRICE_BUSINESS_YEARLY'),
+                ],
+                'paymongo' => [
+                    'monthly' => env('PAYMONGO_PLAN_BUSINESS_MONTHLY'),
+                    'yearly' => env('PAYMONGO_PLAN_BUSINESS_YEARLY'),
+                ],
+            ],
+            'features' => [
+                'purchasing',
+                'recipes',
+                'reports.export',
+                'locations.multi',
+            ],
+            'limits' => [
+                'seats' => null,
+                'locations' => null,
+                'inventory_items' => null,
+            ],
+        ],
+    ],
 
 ];

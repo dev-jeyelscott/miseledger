@@ -28,6 +28,41 @@ function planCatalogFixturePlans(): array
     ];
 }
 
+test('the configured plans provide the intended features and limits', function () {
+    $catalog = new PlanCatalog(config('subscription.plans'));
+
+    $starter = $catalog->get(PlanCode::from('starter'));
+    $growth = $catalog->get(PlanCode::from('growth'));
+    $business = $catalog->get(PlanCode::from('business'));
+
+    expect($starter?->name)->toBe('Starter Plan')
+        ->and($starter?->features)->toBe([])
+        ->and($starter?->limits)->toBe([
+            'seats' => 3,
+            'locations' => 1,
+            'inventory_items' => 500,
+        ])
+        ->and($growth?->name)->toBe('Growth Plan')
+        ->and($growth?->features)->toBe([
+            'purchasing',
+            'recipes',
+            'reports.export',
+            'locations.multi',
+        ])
+        ->and($growth?->limits)->toBe([
+            'seats' => 10,
+            'locations' => 5,
+            'inventory_items' => 5000,
+        ])
+        ->and($business?->name)->toBe('Business Plan')
+        ->and($business?->features)->toBe($growth?->features)
+        ->and($business?->limits)->toBe([
+            'seats' => null,
+            'locations' => null,
+            'inventory_items' => null,
+        ]);
+});
+
 test('a configured monthly price id resolves to exactly one plan definition', function () {
     $catalog = new PlanCatalog(planCatalogFixturePlans());
 
