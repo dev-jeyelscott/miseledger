@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Actions\Billing\NotifyOrganizationBillingLifecycle;
+use App\Exceptions\AmbiguousBillingNotificationDeliveryException;
 use App\Models\BillingWebhookEffect;
 use App\Support\Billing\BillingObservability;
 use Illuminate\Bus\Queueable;
@@ -59,13 +60,16 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
                 return null;
             }
 
-            // The claim marker only records intent; it is not proof of delivery, so a
-            // worker crash between this commit and the send below leaves the effect in
-            // a recoverable "in-progress" state instead of a permanently lost one. Only
-            // the dispatch marker, stamped after delivery succeeds, proves delivery.
-            if ($effect->notification_claimed_at === null) {
-                $effect->update(['notification_claimed_at' => now()]);
+            // A claim already recorded by a prior attempt, with no dispatch marker, is
+            // ambiguous: that attempt may have terminated before or after delivery
+            // actually occurred, and there is no local or provider-side signal capable
+            // of resolving that. Resending here risks a duplicate externally visible
+            // notification, so the claim is left untouched and delivery is refused.
+            if ($effect->notification_claimed_at !== null) {
+                throw new AmbiguousBillingNotificationDeliveryException($this->stripeEventId);
             }
+
+            $effect->update(['notification_claimed_at' => now()]);
 
             return $effect;
         });
@@ -74,7 +78,16 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
             return;
         }
 
-        $notify->handle($this->stripeCustomerId, $effect->lifecycle_event, $this->stripeEventId);
+        try {
+            $notify->handle($this->stripeCustomerId, $effect->lifecycle_event, $this->stripeEventId);
+        } catch (Throwable $exception) {
+            // The send call threw before returning, so delivery is provably known to
+            // have not occurred within this attempt. Clearing the claim lets a retry
+            // proceed as a fresh, unambiguous attempt instead of being refused.
+            $effect->forceFill(['notification_claimed_at' => null])->save();
+
+            throw $exception;
+        }
 
         $effect->update(['notification_dispatched_at' => now()]);
     }

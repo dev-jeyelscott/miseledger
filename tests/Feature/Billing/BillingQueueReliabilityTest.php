@@ -4,6 +4,7 @@ use App\Actions\Billing\NotifyOrganizationBillingLifecycle;
 use App\Actions\Billing\ProcessOrganizationBillingWebhookEffect;
 use App\Enums\BillingLifecycleEvent;
 use App\Enums\OrganizationRole;
+use App\Exceptions\AmbiguousBillingNotificationDeliveryException;
 use App\Jobs\SendOrganizationBillingLifecycleNotification;
 use App\Models\BillingWebhookEffect;
 use App\Models\Organization;
@@ -137,8 +138,11 @@ test('a caught delivery failure leaves the dispatch marker unset so a retry deli
     expect(fn (): mixed => $job->handle(app(NotifyOrganizationBillingLifecycle::class)))
         ->toThrow(RuntimeException::class);
 
+    // The send call threw before returning, so delivery is provably known not to have
+    // occurred; the claim is cleared so the retry below is treated as a fresh,
+    // unambiguous attempt rather than being refused as a possible duplicate.
     expect($effect->fresh()->notification_dispatched_at)->toBeNull()
-        ->and($effect->fresh()->notification_claimed_at)->not->toBeNull();
+        ->and($effect->fresh()->notification_claimed_at)->toBeNull();
 
     Notification::fake();
 
@@ -149,7 +153,7 @@ test('a caught delivery failure leaves the dispatch marker unset so a retry deli
     expect($effect->fresh()->notification_dispatched_at)->not->toBeNull();
 });
 
-test('a worker crash after intent is claimed but before delivery completes is recoverable without duplicate delivery', function () {
+test('a claim left by a defunct prior attempt with no dispatch marker is refused rather than redelivered', function () {
     $recipient = billingQueueRecipient('cus_queue_worker_crash');
     $effect = BillingWebhookEffect::query()->create([
         'organization_id' => $recipient['organization']->getKey(),
@@ -157,8 +161,10 @@ test('a worker crash after intent is claimed but before delivery completes is re
         'lifecycle_event' => BillingLifecycleEvent::PaymentFailed,
     ]);
 
-    // Simulates a worker that crashed uncaught after the durable claim was committed but
-    // before delivery was attempted or the completion marker was stamped.
+    // Simulates a worker that crashed after the durable claim was committed but before
+    // it could be determined, or recorded, whether delivery itself occurred. Locally
+    // there is no way to distinguish this from a crash that occurred after a successful
+    // send, so redelivery must be refused rather than assumed safe.
     $effect->update(['notification_claimed_at' => now()]);
 
     Notification::fake();
@@ -170,14 +176,23 @@ test('a worker crash after intent is claimed but before delivery completes is re
         $recipient['organization']->stripe_id,
     );
 
-    $job->handle(app(NotifyOrganizationBillingLifecycle::class));
-    $job->handle(app(NotifyOrganizationBillingLifecycle::class));
+    expect(fn (): mixed => $job->handle(app(NotifyOrganizationBillingLifecycle::class)))
+        ->toThrow(AmbiguousBillingNotificationDeliveryException::class);
 
-    Notification::assertSentTo($recipient['user'], BillingLifecycleNotification::class, 1);
-    expect($effect->fresh()->notification_dispatched_at)->not->toBeNull();
+    Notification::assertNothingSent();
+    expect($effect->fresh()->notification_dispatched_at)->toBeNull()
+        ->and($effect->fresh()->notification_claimed_at)->not->toBeNull();
+
+    Log::shouldReceive('channel')->once()->andReturnSelf();
+    Log::shouldReceive('error')->once()->withArgs(
+        fn (string $message, array $context): bool => $context['event'] === 'billing.queue.failure'
+            && $context['organization_id'] === $recipient['organization']->getKey(),
+    );
+
+    $job->failed(new AmbiguousBillingNotificationDeliveryException('evt_queue_worker_crash'));
 });
 
-test('a worker interruption after delivery succeeds but before the marker commits redelivers under an identical idempotency key', function () {
+test('a worker interruption after delivery succeeds but before the marker commits does not cause a duplicate externally visible send on retry', function () {
     $recipient = billingQueueRecipient('cus_queue_post_delivery_crash');
     $effect = BillingWebhookEffect::query()->create([
         'organization_id' => $recipient['organization']->getKey(),
@@ -206,16 +221,14 @@ test('a worker interruption after delivery succeeds but before the marker commit
         $recipient['organization']->stripe_id,
     );
 
-    $job->handle(app(NotifyOrganizationBillingLifecycle::class));
+    // The retry finds the claim already recorded with no dispatch marker and, unable to
+    // determine locally whether the prior attempt already delivered, refuses to
+    // redeliver rather than risking a second externally visible notification.
+    expect(fn (): mixed => $job->handle(app(NotifyOrganizationBillingLifecycle::class)))
+        ->toThrow(AmbiguousBillingNotificationDeliveryException::class);
 
-    Notification::assertSentTo($recipient['user'], BillingLifecycleNotification::class, 2);
-    expect($effect->fresh()->notification_dispatched_at)->not->toBeNull();
-
-    $idempotencyKeys = Notification::sent($recipient['user'], BillingLifecycleNotification::class)
-        ->map(fn (BillingLifecycleNotification $notification): string => $notification->idempotencyKey())
-        ->unique();
-
-    expect($idempotencyKeys)->toHaveCount(1);
+    Notification::assertSentTo($recipient['user'], BillingLifecycleNotification::class, 1);
+    expect($effect->fresh()->notification_dispatched_at)->toBeNull();
 });
 
 test('local subscription authorization succeeds without resolving a queue connection', function () {

@@ -37,10 +37,8 @@ class NotifyOrganizationBillingLifecycle
         }
 
         // Sent synchronously (no ShouldQueue) so this call is delivery, not enqueueing:
-        // the caller can atomically tie a completion marker to an actual send attempt.
-        // The notification carries a deterministic idempotency key derived from the
-        // Stripe event, so a redelivered attempt after a post-send, pre-marker crash is
-        // safe to dedupe at the mail transport rather than relying solely on the marker.
+        // the caller can tie a completion marker directly to an actual send attempt
+        // instead of to enqueue-time intent.
         Notification::sendNow(
             $recipients,
             new BillingLifecycleNotification($organization, $event, $stripeEventId),
