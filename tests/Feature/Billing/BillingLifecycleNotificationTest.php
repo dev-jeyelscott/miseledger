@@ -155,7 +155,7 @@ test('billing-authorized members receive each lifecycle notification without not
 
 test('billing lifecycle notification content excludes payment secrets', function () {
     $organization = Organization::factory()->create(['name' => 'Example Organization']);
-    $notification = new BillingLifecycleNotification($organization, BillingLifecycleEvent::PaymentFailed);
+    $notification = new BillingLifecycleNotification($organization, BillingLifecycleEvent::PaymentFailed, 'evt_billing_lifecycle_notification_content');
 
     $message = $notification->toMail(User::factory()->make());
     $content = $message->subject.' '.implode(' ', $message->introLines);

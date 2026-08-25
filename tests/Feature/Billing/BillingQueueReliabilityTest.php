@@ -177,23 +177,27 @@ test('a worker crash after intent is claimed but before delivery completes is re
     expect($effect->fresh()->notification_dispatched_at)->not->toBeNull();
 });
 
-test('a worker interruption after delivery succeeds but before the job returns does not resend on retry', function () {
+test('a worker interruption after delivery succeeds but before the marker commits redelivers under an identical idempotency key', function () {
     $recipient = billingQueueRecipient('cus_queue_post_delivery_crash');
     $effect = BillingWebhookEffect::query()->create([
         'organization_id' => $recipient['organization']->getKey(),
         'stripe_event_id' => 'evt_queue_post_delivery_crash',
         'lifecycle_event' => BillingLifecycleEvent::PaymentFailed,
     ]);
-
-    // The dispatch marker is only committed after delivery succeeds, so pre-seeding it
-    // simulates a job that already completed delivery on a prior attempt. A retry must
-    // treat this as "already delivered" and must not trigger a resend.
-    $effect->update([
-        'notification_claimed_at' => now(),
-        'notification_dispatched_at' => now(),
-    ]);
+    $effect->update(['notification_claimed_at' => now()]);
 
     Notification::fake();
+
+    // Simulates the notification succeeding but the worker crashing before the
+    // "notification_dispatched_at" marker is persisted, by invoking the same delivery
+    // call the job performs without running its own marker write afterwards.
+    app(NotifyOrganizationBillingLifecycle::class)->handle(
+        $recipient['organization']->stripe_id,
+        $effect->lifecycle_event,
+        $effect->stripe_event_id,
+    );
+
+    expect($effect->fresh()->notification_dispatched_at)->toBeNull();
 
     $job = new SendOrganizationBillingLifecycleNotification(
         $effect->getKey(),
@@ -204,8 +208,14 @@ test('a worker interruption after delivery succeeds but before the job returns d
 
     $job->handle(app(NotifyOrganizationBillingLifecycle::class));
 
-    Notification::assertNothingSent();
-    expect(BillingWebhookEffect::query()->count())->toBe(1);
+    Notification::assertSentTo($recipient['user'], BillingLifecycleNotification::class, 2);
+    expect($effect->fresh()->notification_dispatched_at)->not->toBeNull();
+
+    $idempotencyKeys = Notification::sent($recipient['user'], BillingLifecycleNotification::class)
+        ->map(fn (BillingLifecycleNotification $notification): string => $notification->idempotencyKey())
+        ->unique();
+
+    expect($idempotencyKeys)->toHaveCount(1);
 });
 
 test('local subscription authorization succeeds without resolving a queue connection', function () {

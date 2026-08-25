@@ -14,7 +14,7 @@ class NotifyOrganizationBillingLifecycle
      * Notify billing-authorized members of the organization identified by its
      * Stripe customer ID.
      */
-    public function handle(string $stripeCustomerId, BillingLifecycleEvent $event): void
+    public function handle(string $stripeCustomerId, BillingLifecycleEvent $event, string $stripeEventId): void
     {
         $organization = Organization::query()
             ->where('stripe_id', $stripeCustomerId)
@@ -38,9 +38,12 @@ class NotifyOrganizationBillingLifecycle
 
         // Sent synchronously (no ShouldQueue) so this call is delivery, not enqueueing:
         // the caller can atomically tie a completion marker to an actual send attempt.
+        // The notification carries a deterministic idempotency key derived from the
+        // Stripe event, so a redelivered attempt after a post-send, pre-marker crash is
+        // safe to dedupe at the mail transport rather than relying solely on the marker.
         Notification::sendNow(
             $recipients,
-            new BillingLifecycleNotification($organization, $event),
+            new BillingLifecycleNotification($organization, $event, $stripeEventId),
         );
     }
 }

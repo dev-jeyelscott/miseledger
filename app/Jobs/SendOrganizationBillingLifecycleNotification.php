@@ -74,7 +74,7 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
             return;
         }
 
-        $notify->handle($this->stripeCustomerId, $effect->lifecycle_event);
+        $notify->handle($this->stripeCustomerId, $effect->lifecycle_event, $this->stripeEventId);
 
         $effect->update(['notification_dispatched_at' => now()]);
     }
