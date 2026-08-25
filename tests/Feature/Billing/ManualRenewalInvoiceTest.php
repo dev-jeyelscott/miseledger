@@ -56,6 +56,15 @@ test('it creates one invoice for the next entitlement period using the catalog a
         ->and($invoice->period_ends_at->toISOString())->toBe('2026-10-26T00:00:00.000000Z');
 });
 
+test('it normalizes a lowercase configured currency to ISO uppercase', function (): void {
+    Config::set('billing.currency', 'php');
+    $subscription = manualRenewalSubscription();
+
+    $invoice = app(CreateRenewalInvoice::class)->handle($subscription);
+
+    expect($invoice->currency)->toBe('PHP');
+});
+
 test('repeated renewal requests reuse the invoice for the same period', function (): void {
     $subscription = manualRenewalSubscription();
     $activationPoint = Carbon::parse('2026-09-20 00:00:00', 'UTC');

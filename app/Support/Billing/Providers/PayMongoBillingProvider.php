@@ -138,11 +138,7 @@ final class PayMongoBillingProvider implements BillingProvider
         }
 
         [$firstName, $lastName] = $this->customerName($actor);
-        $phone = config('billing.providers.paymongo.customer_phone');
-
-        if (! is_string($phone) || preg_match('/^\+?\d{11,15}$/', $phone) !== 1) {
-            throw new RuntimeException('PayMongo billing contact phone configuration is unavailable.');
-        }
+        $phone = $this->customerPhone();
 
         $response = $this->client->post(
             'create_customer',
@@ -152,9 +148,10 @@ final class PayMongoBillingProvider implements BillingProvider
                 'last_name' => $lastName,
                 'email' => $actor->email,
                 'phone' => $phone,
+                'default_device' => 'email',
             ]]],
             (string) $organization->getKey(),
-            "miseledger:paymongo:customer:{$organization->getKey()}",
+            $this->customerIdempotencyKey($organization, $firstName, $lastName, $actor->email, $phone),
         );
 
         $data = $this->resource($response, 'customer');
@@ -204,6 +201,49 @@ final class PayMongoBillingProvider implements BillingProvider
         }
 
         return [$firstName, $lastName];
+    }
+
+    private function customerPhone(): string
+    {
+        $phone = config('billing.providers.paymongo.customer_phone');
+
+        if (! is_string($phone)) {
+            throw new RuntimeException('PayMongo billing contact phone configuration is unavailable.');
+        }
+
+        $phone = trim($phone);
+
+        if (preg_match('/^09\d{9}$/', $phone) === 1) {
+            return '+63'.substr($phone, 1);
+        }
+
+        if (preg_match('/^639\d{9}$/', $phone) === 1) {
+            return '+'.$phone;
+        }
+
+        if (preg_match('/^\+639\d{9}$/', $phone) === 1) {
+            return $phone;
+        }
+
+        throw new RuntimeException('PayMongo billing contact phone configuration is unavailable.');
+    }
+
+    private function customerIdempotencyKey(
+        Organization $organization,
+        string $firstName,
+        string $lastName,
+        string $email,
+        string $phone,
+    ): string {
+        $fingerprint = hash('sha256', implode('|', [
+            $organization->getKey(),
+            $firstName,
+            $lastName,
+            mb_strtolower($email),
+            $phone,
+        ]));
+
+        return "miseledger:paymongo:customer:{$organization->getKey()}:v3:".substr($fingerprint, 0, 16);
     }
 
     /** @return array<string, mixed> */

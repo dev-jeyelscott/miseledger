@@ -36,8 +36,9 @@ final class CreateRenewalInvoice
             $plan = $this->planCatalog->get(PlanCode::from($subscription->plan_code));
             $amount = $plan?->manualAmount($subscription->interval);
             $currency = config('billing.currency');
+            $currency = is_string($currency) ? mb_strtoupper($currency) : null;
 
-            if ($plan === null || $amount === null || ! is_string($currency) || preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
+            if ($plan === null || $amount === null || $currency === null || preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
                 throw new RuntimeException('Manual renewal pricing is unavailable.');
             }
 

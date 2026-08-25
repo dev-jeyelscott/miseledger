@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
 use App\Support\Billing\OrganizationSubscriptionAccessResolver;
+use App\Support\Billing\Providers\PayMongoBillingProvider;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
@@ -52,6 +53,22 @@ function payMongoBillingOwner(): array
     return [$user, $organization];
 }
 
+test('it creates a PayMongo customer with a normalized Philippine contact number', function (): void {
+    fakePayMongoCheckout();
+    [$user, $organization] = payMongoBillingOwner();
+
+    $customer = app(PayMongoBillingProvider::class)->ensureCustomer($organization, $user);
+
+    expect($customer->provider)->toBe(BillingProvider::PayMongo)
+        ->and($customer->external_customer_id)->toBe('cus_paymongo_123');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && str_ends_with($request->url(), '/customers')
+        && data_get($request->data(), 'data.attributes.phone') === '+639171234567'
+        && data_get($request->data(), 'data.attributes.default_device') === 'email'
+        && str_starts_with((string) ($request->header('Idempotency-Key')[0] ?? ''), "miseledger:paymongo:customer:{$organization->getKey()}:v3:"));
+});
+
 test('creates a pending PayMongo projection without granting access or leaking private provider identities', function () {
     fakePayMongoCheckout();
     [$user, $organization] = payMongoBillingOwner();
@@ -76,7 +93,9 @@ test('creates a pending PayMongo projection without granting access or leaking p
 
     Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
         && str_ends_with($request->url(), '/customers')
-        && data_get($request->data(), 'data.attributes.phone') === '09171234567');
+        && data_get($request->data(), 'data.attributes.phone') === '+639171234567'
+        && data_get($request->data(), 'data.attributes.default_device') === 'email'
+        && $request->hasHeader('Idempotency-Key', "miseledger:paymongo:customer:{$organization->getKey()}:v2"));
 });
 
 test('reuses the organization customer and pending checkout outcome without duplicate PayMongo customer creation', function () {

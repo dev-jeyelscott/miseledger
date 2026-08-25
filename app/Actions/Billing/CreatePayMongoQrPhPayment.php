@@ -11,8 +11,9 @@ use App\Models\BillingInvoice;
 use App\Models\BillingPayment;
 use App\Support\Billing\ManualRenewalCheckout;
 use App\Support\Billing\Providers\PayMongoClient;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -75,8 +76,8 @@ final class CreatePayMongoQrPhPayment
             $invoice->amount,
             $invoice->currency,
             [
-                'organization_id' => $invoice->organization_id,
-                'billing_invoice_id' => $invoice->getKey(),
+                'organization_id' => (string) $invoice->organization_id,
+                'billing_invoice_id' => (string) $invoice->getKey(),
             ],
             (string) $invoice->organization_id,
             $payment->provider_request_key,
@@ -165,7 +166,7 @@ final class CreatePayMongoQrPhPayment
         return $attributes;
     }
 
-    private function expiresAt(mixed $value): Carbon
+    private function expiresAt(mixed $value): CarbonInterface
     {
         return (is_int($value) || (is_string($value) && ctype_digit($value)))
             ? Carbon::createFromTimestampUTC((int) $value)

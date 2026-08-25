@@ -83,6 +83,10 @@ test('it creates and reuses a safe awaiting QR Ph checkout attempt', function ()
         ->and($second->payment->is($first->payment))->toBeTrue()
         ->and($invoice->payments()->count())->toBe(1)
         ->and($invoice->fresh()->status)->toBe(BillingInvoiceStatus::PaymentPending);
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && $request->url() === 'https://api.paymongo.test/v1/payment_intents'
+        && data_get($request->data(), 'data.attributes.metadata.organization_id') === (string) $invoice->organization_id
+        && data_get($request->data(), 'data.attributes.metadata.billing_invoice_id') === (string) $invoice->getKey());
     Http::assertSentCount(3);
 });
 
