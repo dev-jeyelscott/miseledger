@@ -10,6 +10,7 @@ use App\Support\Billing\OrganizationSubscriptionAccessResolver;
 use App\Support\Billing\OrganizationUsageOverview;
 use App\Support\Billing\OrganizationUsageOverviewResolver;
 use App\Support\Billing\PlanCatalog;
+use App\Support\Billing\Providers\BillingProviderManager;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -23,8 +24,11 @@ class OrganizationBillingController extends Controller
      * organization is commercially read-only, so the billing administrator
      * can always reach the applicable subscription-recovery action.
      */
-    public function show(Organization $organization, PlanCatalog $planCatalog): Response
-    {
+    public function show(
+        Organization $organization,
+        PlanCatalog $planCatalog,
+        BillingProviderManager $providerManager,
+    ): Response {
         Gate::authorize(
             OrganizationPermission::BillingManage->value,
             $organization,
@@ -36,7 +40,7 @@ class OrganizationBillingController extends Controller
             'organization' => $this->organizationData($organization),
             'subscription' => $this->subscriptionData($access),
             'entitlements' => $this->entitlementData($access, $organization, $planCatalog),
-            'availablePlans' => $this->availablePlansData($planCatalog),
+            'availablePlans' => $this->availablePlansData($planCatalog, $providerManager),
         ]);
     }
 
@@ -127,20 +131,23 @@ class OrganizationBillingController extends Controller
     }
 
     /**
-     * Serialize only the internal plan code, display name, and which
-     * billing intervals are purchasable, so the frontend can offer
-     * Checkout without ever seeing a Stripe Price ID.
+     * Serialize only internal plan metadata and availability for the
+     * effective acquisition provider, never its external plan identifiers.
      *
-     * @return list<array{code: string, name: string, monthly: bool, yearly: bool}>
+     * @return list<array{code: string, name: string, monthly: bool, yearly: bool, features: list<string>, limits: array<string, int|null>}>
      */
-    private function availablePlansData(PlanCatalog $planCatalog): array
+    private function availablePlansData(PlanCatalog $planCatalog, BillingProviderManager $providerManager): array
     {
+        $provider = $providerManager->defaultProvider();
+
         return array_values(array_map(
-            static fn ($definition): array => [
+            static fn ($definition) => [
                 'code' => $definition->code->value,
                 'name' => $definition->name,
-                'monthly' => $definition->priceId('monthly') !== null,
-                'yearly' => $definition->priceId('yearly') !== null,
+                'monthly' => $definition->externalPlanId($provider, 'monthly') !== null,
+                'yearly' => $definition->externalPlanId($provider, 'yearly') !== null,
+                'features' => $definition->features,
+                'limits' => $definition->limits,
             ],
             $planCatalog->all(),
         ));

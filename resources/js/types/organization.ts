@@ -80,6 +80,8 @@ export type OrganizationAvailablePlan = {
     name: string;
     monthly: boolean;
     yearly: boolean;
+    features: string[];
+    limits: Record<string, number | null>;
 };
 
 export type OrganizationContext = {

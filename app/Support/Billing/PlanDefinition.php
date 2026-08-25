@@ -2,26 +2,29 @@
 
 namespace App\Support\Billing;
 
+use App\Enums\BillingProvider;
 use App\Enums\PlanCode;
 use OutOfBoundsException;
 
 /**
  * One resolved plan from the billing configuration catalog: a stable plan
  * code, its display name, granted feature codes, quantitative limits, and
- * the Stripe Price ID configured per billing interval.
+ * provider-specific external plan IDs configured per billing interval.
  */
 final readonly class PlanDefinition
 {
     /**
      * @param  list<string>  $features
      * @param  array<string, int|null>  $limits  Null means explicitly unlimited.
-     * @param  array<string, string|null>  $prices  Keyed by interval ("monthly", "yearly").
+     * @param  array<string, array<string, string|null>>  $providers  Keyed by provider then interval.
+     * @param  array<string, string|null>  $prices  Transitional Stripe compatibility view.
      */
     public function __construct(
         public PlanCode $code,
         public string $name,
         public array $features,
         public array $limits,
+        public array $providers,
         public array $prices,
     ) {}
 
@@ -46,6 +49,17 @@ final readonly class PlanDefinition
 
     public function priceId(string $interval): ?string
     {
-        return $this->prices[$interval] ?? null;
+        return $this->externalPlanId(BillingProvider::Stripe, $interval);
+    }
+
+    public function externalPlanId(BillingProvider|string $provider, string $interval): ?string
+    {
+        $provider = is_string($provider) ? BillingIdentity::provider($provider) : $provider;
+
+        if ($provider === null || ! in_array($interval, ['monthly', 'yearly'], true)) {
+            return null;
+        }
+
+        return $this->providers[$provider->value][$interval] ?? null;
     }
 }

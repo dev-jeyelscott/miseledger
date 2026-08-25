@@ -13,10 +13,10 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Starts an organization-scoped Stripe Checkout session for a subscription.
- * The Stripe Price ID is always resolved from `PlanCatalog`: this is the
+ * Starts an organization-scoped provider Checkout session for a subscription.
+ * The provider plan ID is always resolved from `PlanCatalog`: this is the
  * only path through which a Checkout session may be created, so no caller
- * can pass a raw Stripe Price ID through this boundary.
+ * can pass a raw provider plan ID through this boundary.
  *
  * Creating a Stripe Checkout Session does not create a local Cashier
  * subscription record, so `$organization->subscribed()` stays false until
@@ -38,9 +38,10 @@ final class CreateOrganizationCheckoutSession
 
     public function handle(Organization $organization, User $actor, PlanCode $plan, string $interval): string
     {
-        $priceId = $this->planCatalog->get($plan)?->priceId($interval);
+        $provider = $this->providerManager->defaultProvider();
+        $externalPlanId = $this->planCatalog->externalPlanId($plan, $provider, $interval);
 
-        if ($priceId === null) {
+        if ($externalPlanId === null) {
             throw ValidationException::withMessages([
                 'plan' => __('The selected plan is not available for the chosen billing interval.'),
             ]);
@@ -59,7 +60,7 @@ final class CreateOrganizationCheckoutSession
 
         return Cache::lock('billing:checkout:lock:'.$organizationId, 10)->block(
             5,
-            function () use ($organization, $actor, $plan, $interval, $priceId, $organizationId, $pendingCacheKey): string {
+            function () use ($organization, $actor, $plan, $interval, $provider, $externalPlanId, $organizationId, $pendingCacheKey): string {
                 $pendingUrl = Cache::get($pendingCacheKey);
 
                 if (is_string($pendingUrl)) {
@@ -67,11 +68,11 @@ final class CreateOrganizationCheckoutSession
                 }
 
                 try {
-                    $provider = $this->providerManager->provider($this->providerManager->defaultProvider());
+                    $billingProvider = $this->providerManager->provider($provider);
 
-                    $url = $provider->startCheckout(
+                    $url = $billingProvider->startCheckout(
                         $organization,
-                        $priceId,
+                        $externalPlanId,
                         route('organizations.billing.checkout.success', $organization),
                         route('organizations.billing.checkout.cancel', $organization),
                         ['organization_id' => $organizationId],

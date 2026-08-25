@@ -2,19 +2,14 @@
 
 namespace App\Support\Billing;
 
+use App\Enums\BillingProvider;
 use App\Enums\PlanCode;
 use InvalidArgumentException;
 
 /**
- * Resolves trusted, configured Stripe Price IDs into plan definitions.
- * Built entirely from `config('billing.plans')` (see
- * `config/subscription.php`): no plan, feature, or Price ID is hardcoded
- * here, and nothing outside billing infrastructure should read Stripe
- * Price IDs directly.
- *
- * Unknown, malformed, or duplicate Price IDs are excluded from resolution
- * rather than raising an error, so misconfiguration fails closed instead
- * of granting paid functionality.
+ * Resolves configuration-owned external provider plan identifiers into
+ * MiseLedger's stable, internal plan definitions. Reverse lookup is always
+ * provider-scoped, so two providers may never resolve each other's IDs.
  */
 final readonly class PlanCatalog
 {
@@ -23,20 +18,16 @@ final readonly class PlanCatalog
     /** @var array<string, PlanDefinition> */
     private array $definitions;
 
-    /** @var array<string, string> Stripe Price ID => plan code value. */
-    private array $priceIndex;
+    /** @var array<string, array<string, string>> Provider => external ID => plan code. */
+    private array $externalPlanIndexes;
 
-    /**
-     * @param  array<string, mixed>|null  $config  Defaults to config('billing.plans').
-     */
+    /** @param array<string, mixed>|null $config Defaults to config('billing.plans'). */
     public function __construct(?array $config = null)
     {
-        [$this->definitions, $this->priceIndex] = self::build($config ?? (array) config('billing.plans', []));
+        [$this->definitions, $this->externalPlanIndexes] = self::build($config ?? (array) config('billing.plans', []));
     }
 
-    /**
-     * @return PlanDefinition[]
-     */
+    /** @return PlanDefinition[] */
     public function all(): array
     {
         return array_values($this->definitions);
@@ -47,23 +38,35 @@ final readonly class PlanCatalog
         return $this->definitions[$code->value] ?? null;
     }
 
-    public function resolveByPriceId(string $priceId): ?PlanDefinition
+    public function externalPlanId(PlanCode $code, BillingProvider|string $provider, string $interval): ?string
     {
-        $code = $this->priceIndex[$priceId] ?? null;
+        return $this->get($code)?->externalPlanId($provider, $interval);
+    }
+
+    public function resolveExternalPlan(BillingProvider|string $provider, string $externalPlanId): ?PlanDefinition
+    {
+        $provider = self::provider($provider);
+
+        if ($provider === null || ! self::isValidExternalPlanId($externalPlanId, $provider)) {
+            return null;
+        }
+
+        $code = $this->externalPlanIndexes[$provider->value][$externalPlanId] ?? null;
 
         return $code !== null ? $this->definitions[$code] : null;
     }
 
-    public function resolveIntervalByPriceId(string $priceId): ?string
+    public function resolveExternalPlanInterval(BillingProvider|string $provider, string $externalPlanId): ?string
     {
-        $definition = $this->resolveByPriceId($priceId);
+        $provider = self::provider($provider);
+        $definition = $provider !== null ? $this->resolveExternalPlan($provider, $externalPlanId) : null;
 
         if ($definition === null) {
             return null;
         }
 
-        foreach ($definition->prices as $interval => $configuredPriceId) {
-            if ($configuredPriceId === $priceId) {
+        foreach (self::INTERVALS as $interval) {
+            if ($definition->externalPlanId($provider, $interval) === $externalPlanId) {
                 return $interval;
             }
         }
@@ -71,9 +74,20 @@ final readonly class PlanCatalog
         return null;
     }
 
+    /** Transitional Stripe compatibility aliases for existing Cashier flows. */
+    public function resolveByPriceId(string $priceId): ?PlanDefinition
+    {
+        return $this->resolveExternalPlan(BillingProvider::Stripe, $priceId);
+    }
+
+    public function resolveIntervalByPriceId(string $priceId): ?string
+    {
+        return $this->resolveExternalPlanInterval(BillingProvider::Stripe, $priceId);
+    }
+
     /**
      * @param  array<int|string, mixed>  $config
-     * @return array{0: array<string, PlanDefinition>, 1: array<string, string>}
+     * @return array{0: array<string, PlanDefinition>, 1: array<string, array<string, string>>}
      */
     private static function build(array $config): array
     {
@@ -98,46 +112,80 @@ final readonly class PlanCatalog
             }
 
             $features = array_values(array_filter((array) ($plan['features'] ?? []), 'is_string'));
-            $limits = array_filter(
-                (array) ($plan['limits'] ?? []),
-                static fn (mixed $value): bool => $value === null || is_int($value),
-            );
+            $limits = array_filter((array) ($plan['limits'] ?? []), static fn (mixed $value): bool => $value === null || is_int($value));
+            $providers = self::providerPlans($plan);
 
-            $prices = [];
-
-            foreach (self::INTERVALS as $interval) {
-                $priceId = $plan['prices'][$interval] ?? null;
-                $prices[$interval] = (is_string($priceId) && self::isValidPriceId($priceId)) ? $priceId : null;
-
-                if ($prices[$interval] !== null) {
-                    $occurrences[$prices[$interval]] = ($occurrences[$prices[$interval]] ?? 0) + 1;
+            foreach ($providers as $provider => $intervals) {
+                foreach ($intervals as $externalPlanId) {
+                    if ($externalPlanId !== null) {
+                        $occurrences[$provider][$externalPlanId] = ($occurrences[$provider][$externalPlanId] ?? 0) + 1;
+                    }
                 }
             }
 
-            $definitions[$code] = new PlanDefinition($planCode, $name, $features, $limits, $prices);
+            $definitions[$code] = new PlanDefinition(
+                $planCode,
+                $name,
+                $features,
+                $limits,
+                $providers,
+                $providers[BillingProvider::Stripe->value],
+            );
         }
 
-        $priceIndex = [];
+        $indexes = [];
 
         foreach ($definitions as $code => $definition) {
-            foreach ($definition->prices as $priceId) {
-                if ($priceId !== null && ($occurrences[$priceId] ?? 0) === 1) {
-                    $priceIndex[$priceId] = $code;
+            foreach ($definition->providers as $provider => $intervals) {
+                foreach ($intervals as $externalPlanId) {
+                    if ($externalPlanId !== null && ($occurrences[$provider][$externalPlanId] ?? 0) === 1) {
+                        $indexes[$provider][$externalPlanId] = $code;
+                    }
                 }
             }
         }
 
-        return [$definitions, $priceIndex];
+        return [$definitions, $indexes];
     }
 
-    /**
-     * A configured value is only trusted as a Stripe Price ID when it has
-     * the `price_` prefix Stripe assigns, followed by a non-empty
-     * identifier. Anything else is excluded from resolution rather than
-     * trusted as configuration.
-     */
-    private static function isValidPriceId(string $priceId): bool
+    /** @param array<string, mixed> $plan @return array<string, array<string, string|null>> */
+    private static function providerPlans(array $plan): array
     {
-        return preg_match('/^price_[A-Za-z0-9_]+$/', $priceId) === 1;
+        $providers = [];
+
+        foreach (BillingProvider::cases() as $provider) {
+            $configured = $plan['providers'][$provider->value] ?? null;
+
+            // `prices` remains a deliberately narrow read compatibility path
+            // while existing Stripe configuration is migrated to `providers`.
+            if ($provider === BillingProvider::Stripe && ! is_array($configured)) {
+                $configured = $plan['prices'] ?? [];
+            }
+
+            $providers[$provider->value] = [];
+
+            foreach (self::INTERVALS as $interval) {
+                $externalPlanId = is_array($configured) ? ($configured[$interval] ?? null) : null;
+                $providers[$provider->value][$interval] = is_string($externalPlanId) && self::isValidExternalPlanId($externalPlanId, $provider)
+                    ? $externalPlanId
+                    : null;
+            }
+        }
+
+        return $providers;
+    }
+
+    private static function provider(BillingProvider|string $provider): ?BillingProvider
+    {
+        return is_string($provider) ? BillingIdentity::provider($provider) : $provider;
+    }
+
+    private static function isValidExternalPlanId(string $externalPlanId, BillingProvider $provider): bool
+    {
+        if (trim($externalPlanId) === '' || preg_match('/^\S+$/', $externalPlanId) !== 1) {
+            return false;
+        }
+
+        return $provider !== BillingProvider::Stripe || preg_match('/^price_[A-Za-z0-9_]+$/', $externalPlanId) === 1;
     }
 }

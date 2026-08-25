@@ -159,7 +159,7 @@ final class BillingConfigurationValidator
         self::validateRequiredProviderConfiguration(
             'PayMongo',
             $configuration,
-            ['public_key', 'secret_key', 'webhook_secret'],
+            ['public_key', 'secret_key', 'webhook_secret', 'mode', 'api_base_url'],
         );
 
         $publicKey = Arr::get($configuration, 'public_key');
@@ -171,6 +171,7 @@ final class BillingConfigurationValidator
             || preg_match('/^pk_live_[^\s]+$/', $publicKey) !== 1
             || ! is_string($secretKey)
             || preg_match('/^sk_live_[^\s]+$/', $secretKey) !== 1
+            || Arr::get($configuration, 'mode') !== 'live'
         ) {
             throw new RuntimeException(
                 'Production PayMongo billing configuration requires matching live PayMongo API keys.',

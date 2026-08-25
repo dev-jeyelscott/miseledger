@@ -7,14 +7,15 @@ use App\Enums\PlanCode;
 use App\Models\Organization;
 use App\Models\User;
 use App\Support\Billing\PlanCatalog;
+use App\Support\Billing\Providers\BillingProviderManager;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Validator;
 use InvalidArgumentException;
 
 /**
- * Accepts only an internal plan code and billing interval. The Stripe
- * Price ID is never read from the request: it is resolved exclusively
+ * Accepts only an internal plan code and billing interval. The external
+ * provider plan ID is never read from the request: it is resolved exclusively
  * through `PlanCatalog` once the plan/interval combination validates.
  */
 class CreateOrganizationCheckoutSessionRequest extends FormRequest
@@ -49,7 +50,7 @@ class CreateOrganizationCheckoutSessionRequest extends FormRequest
 
     /**
      * Reject plan/interval combinations that do not resolve to a
-     * configured Stripe Price ID.
+     * configured provider plan ID for the selected acquisition provider.
      */
     public function withValidator(Validator $validator): void
     {
@@ -76,7 +77,7 @@ class CreateOrganizationCheckoutSessionRequest extends FormRequest
     }
 
     /**
-     * Resolve the trusted, configured Stripe Price ID for the submitted
+     * Resolve the trusted, configured provider plan ID for the submitted
      * plan/interval, or null when unresolvable.
      */
     private function resolvedPriceId(): ?string
@@ -94,6 +95,8 @@ class CreateOrganizationCheckoutSessionRequest extends FormRequest
             return null;
         }
 
-        return app(PlanCatalog::class)->get($planCode)?->priceId($interval);
+        $provider = app(BillingProviderManager::class)->defaultProvider();
+
+        return app(PlanCatalog::class)->externalPlanId($planCode, $provider, $interval);
     }
 }

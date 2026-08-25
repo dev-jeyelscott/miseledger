@@ -4,10 +4,10 @@ This is the authoritative contract for how subscription plans, pricing,
 provider selection, provider ownership, and entitlements are represented.
 
 The current executable subscription runtime remains Laravel Cashier with
-Stripe. PB-003 and PB-004 implement the provider-aware server configuration
-and production boot-validation portions of the provider-neutral commercial
-contract. PayMongo checkout, lifecycle adapters, generic provider ownership
-persistence, and other PayMongo runtime behavior are still not implemented.
+Stripe. PB-014 adds a small configuration-backed PayMongo HTTP boundary and
+PB-015 adds PayMongo's provider-scoped plan resolution; PayMongo checkout,
+lifecycle adapters, and webhook synchronization remain intentionally
+unimplemented.
 
 The current plan catalog lives in
 [`config/subscription.php`](../config/subscription.php) and is exposed to
@@ -145,10 +145,21 @@ capabilities without changing the commercial access semantics defined in
 
 Provider-specific pricing identifiers are infrastructure details.
 
-The current Stripe adapter maps plan intervals to Stripe Price IDs through
-`subscription.plans.<code>.prices.<interval>`.
-`App\Support\Billing\PlanCatalog` currently validates and resolves those
-Stripe Price IDs.
+Each plan uses a provider-neutral mapping in
+`subscription.plans.<code>.providers.<provider>.<interval>`, for example:
+
+```php
+'providers' => [
+    'stripe' => ['monthly' => env('STRIPE_PRICE_STARTER_MONTHLY')],
+    'paymongo' => ['monthly' => env('PAYMONGO_PLAN_STARTER_MONTHLY')],
+],
+```
+
+`PlanCatalog` is the sole resolver for these mappings. Its reverse lookup is
+provider-scoped: a Stripe Price ID cannot resolve as a PayMongo plan, and a
+PayMongo Plan ID cannot resolve as a Stripe plan. Missing, blank, unknown, or
+duplicate IDs fail closed. The legacy `prices` key remains a Stripe-only
+compatibility input for existing Cashier configuration during migration.
 
 Current Stripe Price IDs:
 
@@ -159,13 +170,14 @@ Current Stripe Price IDs:
 - Must fail closed when missing, malformed, unknown, or ambiguously
   configured.
 
-A future PayMongo implementation must keep its external identifiers behind a
-PayMongo-specific configuration or adapter boundary. It must not overload
-`PlanCode`, require frontend consumers to understand PayMongo identifiers, or
-reinterpret Stripe Price IDs as provider-neutral values.
+PayMongo plan IDs are configuration-only. They are provisioned outside
+individual checkout requests; checkout maps the internal plan code plus
+interval through `PlanCatalog` and never creates or recreates provider plans.
+They must not be persisted as MiseLedger's plan identity.
 
-The exact future provider-specific configuration shape is intentionally
-deferred until the provider runtime is implemented.
+Inertia and React receive only the internal plan code, display name, effective
+provider's monthly/yearly availability, features, and limits. They never
+receive provider mappings, external plan IDs, credentials, or provider config.
 
 ## Feature entitlements and limits
 
@@ -199,9 +211,9 @@ subscription runtime otherwise remains intentionally Stripe-specific:
   currently configured acquisition provider). Only `App\Support\Billing\Providers\StripeBillingProvider`
   is implemented; selecting `paymongo` reports the provider as unavailable
   rather than silently routing to Stripe.
-- `PlanCatalog` still resolves Stripe Price IDs; the provider boundary never
-  sees `PlanCode` or raw plan configuration, only an already-resolved
-  external price id.
+- `PlanCatalog` resolves provider-scoped external IDs. The provider boundary
+  never sees `PlanCode` or raw plan configuration, only an already-resolved
+  external plan ID. Existing Cashier flows continue using its Stripe aliases.
 - `OrganizationSubscriptionAccessResolver` still reads Cashier subscription
   state directly and is deliberately **not** refactored onto the
   `billing_subscriptions` projection in Phase 3: the resolver's grace-period/

@@ -183,3 +183,44 @@ test('the subscription type is a single stable configured value independent of a
         ->and(config('billing.subscription_type'))
         ->not->toContain('price_');
 });
+
+test('provider-neutral mappings resolve within their configured provider only', function () {
+    $catalog = new PlanCatalog([
+        'starter' => [
+            'name' => 'Starter',
+            'providers' => [
+                'stripe' => ['monthly' => 'price_starter_monthly', 'yearly' => null],
+                'paymongo' => ['monthly' => 'plan_starter_monthly', 'yearly' => 'plan_starter_yearly'],
+            ],
+            'features' => ['inventory.view'],
+            'limits' => ['locations' => 1],
+        ],
+    ]);
+
+    expect($catalog->externalPlanId(PlanCode::from('starter'), 'paymongo', 'yearly'))->toBe('plan_starter_yearly')
+        ->and($catalog->resolveExternalPlan('stripe', 'price_starter_monthly')?->code)->toBe(PlanCode::from('starter'))
+        ->and($catalog->resolveExternalPlan('paymongo', 'plan_starter_monthly')?->code)->toBe(PlanCode::from('starter'))
+        ->and($catalog->resolveExternalPlan('stripe', 'plan_starter_monthly'))->toBeNull()
+        ->and($catalog->resolveExternalPlan('paymongo', 'price_starter_monthly'))->toBeNull()
+        ->and($catalog->resolveExternalPlanInterval('paymongo', 'plan_starter_yearly'))->toBe('yearly');
+});
+
+test('provider-neutral mappings fail closed for blank IDs, unknown providers, and duplicate provider IDs', function () {
+    $catalog = new PlanCatalog([
+        'starter' => [
+            'name' => 'Starter',
+            'providers' => ['paymongo' => ['monthly' => 'plan_shared', 'yearly' => '']],
+            'features' => [], 'limits' => [],
+        ],
+        'pro' => [
+            'name' => 'Pro',
+            'providers' => ['paymongo' => ['monthly' => 'plan_shared', 'yearly' => null]],
+            'features' => [], 'limits' => [],
+        ],
+    ]);
+
+    expect($catalog->resolveExternalPlan('paymongo', 'plan_shared'))->toBeNull()
+        ->and($catalog->resolveExternalPlan('paymongo', ''))->toBeNull()
+        ->and($catalog->resolveExternalPlan('unknown', 'plan_shared'))->toBeNull()
+        ->and($catalog->externalPlanId(PlanCode::from('starter'), 'paymongo', 'yearly'))->toBeNull();
+});

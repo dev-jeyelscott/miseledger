@@ -40,9 +40,11 @@ $providers = [
 
     'paymongo' => [
         'enabled' => (bool) env('BILLING_PAYMONGO_ENABLED', false),
+        'mode' => env('PAYMONGO_MODE'),
         'public_key' => env('PAYMONGO_PUBLIC_KEY'),
         'secret_key' => env('PAYMONGO_SECRET_KEY'),
         'webhook_secret' => env('PAYMONGO_WEBHOOK_SECRET'),
+        'api_base_url' => env('PAYMONGO_API_BASE_URL', 'https://api.paymongo.com/v1'),
     ],
 ];
 
