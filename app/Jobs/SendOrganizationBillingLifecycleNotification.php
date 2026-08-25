@@ -59,10 +59,16 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
                 return null;
             }
 
-            // Records intent only; completion is stamped separately, after delivery
-            // succeeds, so a worker crash between this claim and delivery leaves the
-            // effect undispatched and safely retryable rather than stuck as "dispatched".
-            $effect->update(['notification_claimed_at' => now()]);
+            // The dispatch marker is committed before the delivery attempt, not after,
+            // so it is the durable outbox record for "a send was attempted". A worker
+            // crash mid-delivery leaves the marker set, so a retry never re-sends; the
+            // only compensating rollback happens below on a caught delivery failure,
+            // where we know for certain no delivery attempt is left in flight.
+            $now = now();
+            $effect->update([
+                'notification_claimed_at' => $effect->notification_claimed_at ?? $now,
+                'notification_dispatched_at' => $now,
+            ]);
 
             return $effect;
         });
@@ -71,9 +77,13 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
             return;
         }
 
-        $notify->handle($this->stripeCustomerId, $effect->lifecycle_event);
+        try {
+            $notify->handle($this->stripeCustomerId, $effect->lifecycle_event);
+        } catch (Throwable $exception) {
+            $effect->update(['notification_dispatched_at' => null]);
 
-        $effect->update(['notification_dispatched_at' => now()]);
+            throw $exception;
+        }
     }
 
     public function uniqueId(): string

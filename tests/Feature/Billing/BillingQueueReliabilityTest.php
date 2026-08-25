@@ -177,6 +177,39 @@ test('a worker crash after intent is claimed but before delivery completes is re
     expect($effect->fresh()->notification_dispatched_at)->not->toBeNull();
 });
 
+test('a worker interruption after delivery succeeds but before the job returns does not resend on retry', function () {
+    $recipient = billingQueueRecipient('cus_queue_post_delivery_crash');
+    $effect = BillingWebhookEffect::query()->create([
+        'organization_id' => $recipient['organization']->getKey(),
+        'stripe_event_id' => 'evt_queue_post_delivery_crash',
+        'lifecycle_event' => BillingLifecycleEvent::PaymentFailed,
+    ]);
+
+    // Simulates a worker that was killed after the notification was already accepted
+    // for delivery, but before the process returned control past the send call. The
+    // dispatch marker is committed as part of the outbox write, before delivery is
+    // attempted, so this state is indistinguishable from "already delivered" and must
+    // not trigger a resend.
+    $effect->update([
+        'notification_claimed_at' => now(),
+        'notification_dispatched_at' => now(),
+    ]);
+
+    Notification::fake();
+
+    $job = new SendOrganizationBillingLifecycleNotification(
+        $effect->getKey(),
+        $recipient['organization']->getKey(),
+        'evt_queue_post_delivery_crash',
+        $recipient['organization']->stripe_id,
+    );
+
+    $job->handle(app(NotifyOrganizationBillingLifecycle::class));
+
+    Notification::assertNothingSent();
+    expect(BillingWebhookEffect::query()->count())->toBe(1);
+});
+
 test('local subscription authorization succeeds without resolving a queue connection', function () {
     $recipient = billingQueueRecipient('cus_queue_independent_authorization');
 
