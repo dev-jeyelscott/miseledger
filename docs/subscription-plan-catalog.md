@@ -1,95 +1,268 @@
-# Subscription Plan Catalog Contract (P0-004)
+# Subscription Plan Catalog Contract (P0-004, PB-001)
 
-This is the authoritative contract for how launch plans, pricing, and
-entitlements are represented once billing is implemented. It defines the
-configuration shape only; it does not integrate Cashier/Stripe, create
-pricing database tables, or select any commercial values.
+This is the authoritative contract for how subscription plans, pricing,
+provider selection, provider ownership, and entitlements are represented.
 
-The contract lives in [`config/subscription.php`](../config/subscription.php)
-and is env-backed via `.env.example`.
+The current executable billing implementation is Laravel Cashier with Stripe.
+PB-001 defines the provider-neutral commercial contract that later billing
+implementation work must satisfy. It does not claim that PayMongo,
+provider adapters, generic provider ownership persistence, or the
+`BILLING_PROVIDER` configuration described below already exists.
 
-## Stable identifiers
+The current plan catalog lives in
+[`config/subscription.php`](../config/subscription.php) and is exposed to
+billing infrastructure through [`config/billing.php`](../config/billing.php).
 
-- **Subscription type** (`subscription.type`, default `default`): the
-  identifier passed to Cashier's subscription APIs (e.g.
-  `$organization->subscribed($type)`). An organization has exactly one
-  subscription of this type regardless of which plan it is on.
-- **Plan codes** (`subscription.plans.*` keys): stable internal identifiers
-  for each sellable plan. Plan codes, not Stripe Price IDs, are the only
-  plan identifier allowed in controllers, policies, or React pages.
+## Stable application identifiers
+
+### Subscription type
+
+`subscription.type`, currently defaulting to `default`, identifies the single
+commercial subscription slot owned by an organization.
+
+The current Stripe implementation passes this identifier to Cashier
+subscription APIs such as `$organization->subscribed($type)`. Future provider
+integrations must preserve the same application-level subscription meaning
+without requiring business code to depend on provider-specific APIs.
+
+### Plan codes
+
+`subscription.plans.*` keys and `App\Enums\PlanCode` are stable internal plan
+identifiers.
+
+Plan codes are the application-facing commercial identity. Provider-specific
+identifiers such as Stripe Price IDs or future PayMongo product, plan,
+payment-link, or subscription identifiers must never replace `PlanCode` in
+controllers, policies, entitlement checks, React pages, or other business
+logic.
+
+## Billing provider selection contract
+
+The future provider-neutral runtime must recognize exactly these provider
+identifiers:
+
+- `stripe`
+- `paymongo`
+
+The future environment contract is:
+
+```text
+BILLING_PROVIDER=
+BILLING_STRIPE_ENABLED=
+BILLING_PAYMONGO_ENABLED=
+```
+
+These values have the following semantics.
+
+`BILLING_PROVIDER` selects the provider used for **new paid-subscription**
+**acquisition only**.
+
+`BILLING_STRIPE_ENABLED` controls whether Stripe may accept new subscription
+acquisition.
+
+`BILLING_PAYMONGO_ENABLED` controls whether PayMongo may accept new
+subscription acquisition.
+
+Enabling a provider does not select it. A provider may be enabled while a
+different enabled provider is selected for new acquisitions.
+
+An unset, blank, malformed, or unsupported `BILLING_PROVIDER` must fail
+closed. The application must not silently choose Stripe, PayMongo, or any
+other provider.
+
+The selected provider must also be enabled. For example,
+`BILLING_PROVIDER=stripe` with `BILLING_STRIPE_ENABLED=false` must make new
+paid-subscription acquisition unavailable rather than falling back to
+PayMongo.
+
+These environment values are a PB-001 contract only. They are not present in
+the current `.env.example` or executable billing configuration and must not be
+documented as implemented until the corresponding runtime task adds and tests
+them.
+
+## Subscription provider ownership
+
+Every paid subscription has provider ownership.
+
+Provider ownership is immutable for that subscription lifecycle. Changing
+`BILLING_PROVIDER` must never migrate, relabel, cancel, recreate, or redirect
+an existing subscription to another provider.
+
+Provider selection therefore has two separate concerns:
+
+1. The selected application provider determines where a **new** subscription
+   is acquired.
+2. The subscription's own provider ownership determines where that existing
+   subscription is subsequently serviced.
+
+Cancellation, renewal, billing recovery, provider portal access, webhook
+processing, reconciliation, subscription synchronization, and other
+provider-specific lifecycle operations must use the existing subscription's
+provider ownership rather than the application's currently selected
+acquisition provider.
+
+The current database does not yet implement a generic provider-ownership
+field. Cashier's `subscriptions` table currently contains Stripe-specific
+fields including `stripe_id`, `stripe_status`, and `stripe_price`.
+Organization billing identity also currently uses Stripe-specific customer
+fields.
+
+A later implementation phase must introduce the minimum durable mechanism
+needed to record generic provider ownership before multiple providers can
+safely own subscriptions. PB-001 does not select that schema or add it.
+
+All subscriptions already created through the current implementation are
+Stripe-owned. Introducing or selecting PayMongo later must not alter their
+ownership.
 
 ## Billing currency is independent from `Organization.currency`
 
-`subscription.currency` is the currency Stripe charges the organization in.
-`Organization.currency` (see `app/Models/Organization.php`) governs the
-organization's operational/reporting currency for inventory costing. These
-are separate concerns and neither reads nor writes the other.
+`subscription.currency` represents the SaaS billing currency used when a
+provider charges an organization.
+
+`Organization.currency` governs the organization's operational and reporting
+currency for inventory costing.
+
+These concerns are independent. Billing code must never change inventory
+currency semantics, and inventory code must never derive operational currency
+from billing-provider configuration.
+
+The current Stripe implementation consumes `subscription.currency` through
+`config('billing.currency')`.
 
 ## Trial duration is configuration-owned
 
-`subscription.trial_days` is the only source for trial length. No code path
-may hardcode a trial day count; anything needing the trial window (P2 access
-resolver, onboarding flows, etc.) must read this configuration value.
+`subscription.trial_days` is the application source for configured trial
+duration.
 
-## Price IDs are configuration-only
+No code path may hardcode a trial day count. Provider integrations must map
+the approved MiseLedger trial contract into their provider-specific
+capabilities without changing the commercial access semantics defined in
+[`subscription-access-matrix.md`](subscription-access-matrix.md).
 
-Each plan maps billing interval(s) to a Stripe Price ID through env
-variables resolved inside `config/subscription.php`
-(`subscription.plans.<code>.prices.<interval>`). Price IDs:
+## Provider-specific external pricing identifiers
 
-- Must never be hardcoded in application code.
-- Must never appear in a controller, Inertia response, or React page.
-- Are only ever read from this configuration by the future checkout/billing
-  integration (P1-004).
+Provider-specific pricing identifiers are infrastructure details.
+
+The current Stripe adapter maps plan intervals to Stripe Price IDs through
+`subscription.plans.<code>.prices.<interval>`.
+`App\Support\Billing\PlanCatalog` currently validates and resolves those
+Stripe Price IDs.
+
+Current Stripe Price IDs:
+
+- Must never be hardcoded in controllers, policies, React pages, or inventory
+  code.
+- Must never be exposed to the browser as application plan identifiers.
+- Must be resolved through the billing plan catalog.
+- Must fail closed when missing, malformed, unknown, or ambiguously
+  configured.
+
+A future PayMongo implementation must keep its external identifiers behind a
+PayMongo-specific configuration or adapter boundary. It must not overload
+`PlanCode`, require frontend consumers to understand PayMongo identifiers, or
+reinterpret Stripe Price IDs as provider-neutral values.
+
+The exact future provider-specific configuration shape is intentionally
+deferred until the provider runtime is implemented.
 
 ## Feature entitlements and limits
 
-Each plan entry also carries a `name` (display name), `features` (a list of
-entitlement keys), and optional `limits` (quantitative caps, e.g. seat or
-location counts). A limit set to `null` is an explicit "unlimited"; there is
-no implicit unlimited from an omitted key. No `plans`, `features`, or
-`plan_features` database tables are required for the MVP: the configuration
-array is the single source of truth consumed by the future
-entitlement/access-resolution work (P2).
+Each plan definition carries a display name, feature entitlement keys, and
+optional quantitative limits.
 
-## Resolving Price IDs (P2-001)
+A limit set to `null` is explicitly unlimited. An omitted required limit must
+not be silently interpreted as unlimited.
 
-`App\Support\Billing\PlanCatalog` is the only supported way to resolve a
-Stripe Price ID into a plan definition (display name, feature codes, and
-limits), keyed by the stable internal `App\Enums\PlanCode` identifier. It
-fails closed: an unknown, missing, malformed, or duplicate-configured Price
-ID never resolves to a plan, so misconfiguration cannot grant paid
-functionality. No controller, React page, inventory action, or entitlement
-consumer may interpret a raw Stripe Price ID directly; they must go through
-`PlanCatalog`.
+Plan entitlements are application-owned commercial policy. They must remain
+independent from the payment provider selected for subscription acquisition.
 
-## Unresolved business decisions
+Changing an organization's payment provider must not change which application
+features a given internal `PlanCode` represents.
 
-The following values are intentionally left unresolved rather than guessed,
-and must be supplied before P1-004/P2 can build on this contract:
+## Current Stripe implementation boundary
 
-1. Which plan codes are sold at launch, and their names.
-2. Whether both monthly and yearly intervals are required at launch, or
-   monthly-only is sufficient for the MVP.
-3. The Stripe Price ID for each approved plan/interval combination.
-4. Which features and quantitative limits (if any) are enforced per plan.
-5. The initial plan exposure policy — whether every configured plan is
-   purchasable at launch or only a subset is publicly offered.
-6. The SaaS billing currency (`subscription.currency`).
-7. The trial duration in days (`subscription.trial_days`).
+The current runtime remains intentionally Stripe-specific:
 
-## Explicit non-goals of this task
+- Laravel Cashier owns Stripe subscription synchronization.
+- `PlanCatalog` resolves Stripe Price IDs.
+- `OrganizationSubscriptionAccessResolver` reads Cashier subscription state.
+- Stripe checkout and billing portal flows use Cashier.
+- Stripe webhook routes synchronize Cashier state and application billing
+  effects.
+- Existing Cashier subscription rows do not contain generic provider
+  ownership.
 
-- No Cashier/Stripe installation or integration.
-- No `plans`, `features`, or `plan_features` database tables.
-- No hardcoded Stripe Price IDs anywhere in the codebase.
-- No selection of plan codes, prices, limits, trial length, or billing
-  currency without business approval.
-- No payment-provider secrets exposed through Inertia.
+Those implementation details remain valid until later PB tasks replace or
+wrap them with a provider-neutral boundary.
 
-## Downstream consumers (future phases, not implemented here)
+PB-001 and PB-002 change documentation contracts only.
 
-- **P1-004** — Cashier/Stripe integration that resolves Price IDs from this
-  configuration for checkout and billing portal sessions.
-- **P2** — access resolver / entitlement checks that read `features` and
-  `limits` from this configuration per plan code.
+## Secret-management contract
+
+Payment-provider secrets are server-only.
+
+The following must never be included in Inertia props, API responses intended
+for browser consumption, React configuration, browser bundles, logs intended
+for customers, or other frontend-visible payloads:
+
+- Provider secret/API keys.
+- Webhook signing secrets.
+- Private authentication credentials.
+- Signing material.
+- Provider-internal tokens or sensitive identifiers that are not explicitly
+  approved for client use.
+
+Only deliberately safe presentation or capability metadata may cross the
+frontend boundary, such as an internal plan code, plan display name, supported
+billing interval, or a non-secret provider display capability when required by
+the UI.
+
+The current Stripe implementation already follows this rule by keeping raw
+Stripe Price IDs and secrets server-side.
+
+## Fail-closed rules
+
+The provider-neutral implementation must fail closed when:
+
+- `BILLING_PROVIDER` is missing, blank, malformed, or unsupported.
+- The selected provider is disabled.
+- The selected internal plan cannot be mapped to an external price or product
+  required by that provider.
+- A provider-specific external identifier is malformed or ambiguous.
+- Existing subscription provider ownership cannot be established safely.
+
+Failure must prevent new acquisition or unsafe provider operations. It must
+not grant paid entitlements, silently select another provider, or mutate an
+existing subscription's ownership.
+
+## Explicit non-goals of PB-001 and PB-002
+
+This contract does not:
+
+- Install or integrate PayMongo.
+- Add provider factories, interfaces, adapters, or service bindings.
+- Add environment variables to `.env.example`.
+- Modify `config/billing.php` or `config/subscription.php`.
+- Add or modify migrations.
+- Add generic provider ownership persistence.
+- Change existing Stripe or Cashier behavior.
+- Migrate existing Stripe subscriptions.
+- Change plan entitlements.
+- Change commercial access behavior.
+- Expose provider secrets to the frontend.
+
+## Future implementation requirements
+
+Later provider-runtime work must preserve all of the following:
+
+1. Stable internal `PlanCode` identity.
+2. Fail-closed provider selection.
+3. Explicit provider enablement.
+4. Immutable provider ownership for existing subscriptions.
+5. Provider-specific external identifiers behind provider infrastructure.
+6. Provider-neutral lifecycle normalization before commercial access
+   decisions.
+7. Server-only provider secrets.
+8. Existing organization isolation, commercial authorization, and ledger
+   integrity boundaries.

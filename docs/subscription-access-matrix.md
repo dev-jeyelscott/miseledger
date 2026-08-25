@@ -1,99 +1,192 @@
-# Subscription Access Matrix (P0-003)
+# Subscription Access Matrix (P0-003, PB-002)
 
-This is the single authoritative contract mapping trial and Cashier/Stripe
-subscription lifecycle state to application **commercial access**. It is the
-execution contract for the future access resolver (P2), middleware (P4),
-backend/policy checks (P5), and UI (P6). No provider integration, middleware,
-policy, or UI code is implemented in this phase.
+This is the single authoritative contract mapping MiseLedger's normalized
+subscription lifecycle to application **commercial access**.
+
+The commercial contract is provider-neutral. Provider integrations may use
+different raw statuses and lifecycle APIs, but those provider-specific values
+must be normalized before commercial access decisions are made.
+
+The current executable implementation is still Laravel Cashier with Stripe
+and directly interprets Cashier and Stripe state. PB-002 documents the future
+normalization boundary without claiming that a provider adapter already
+exists.
 
 ## Two independent axes
 
-Commercial access is layered **on top of**, and is fully independent from,
-administrative access (TASK-002):
+Commercial access is layered on top of, and is fully independent from,
+administrative access.
 
-1. **Administrative axis** — `Organization.active`. A manager/operator
-   enable-disable flag. If `false`, the organization is not resolvable at
-   all (see `ResolveActiveOrganization` / `OrganizationPolicy`), regardless
-   of commercial state. This document does not touch, encode, or override
-   that gate.
-2. **Commercial axis** — this document. Applies only to organizations that
-   already pass the administrative gate. It never sets or reads
-   `Organization.active`.
+1. **Administrative axis:** `Organization.active` is the manager/operator
+   enable-disable flag. If it is `false`, the organization is not resolvable
+   through the normal organization context regardless of commercial state.
+2. **Commercial axis:** this document applies only after the organization
+   passes the administrative gate. Commercial billing state never sets,
+   clears, or otherwise controls `Organization.active`.
 
-## Access modes
+## Commercial access modes
 
 | Mode | Write access | Notes |
 |---|---|---|
 | `full` | enabled | no billing warning |
 | `full_with_warning` | enabled | billing warning surfaced |
-| `read_only` | disabled | billing recovery routes remain reachable |
+| `read_only` | disabled | billing recovery remains reachable |
 
-`AccessMode` is derived at request time from Cashier/Stripe subscription
-state (and, pre-subscription, generic trial state). It is **not** a
-persisted column or a competing subscription state machine; Cashier/Stripe
-remains the sole source of truth for subscription status.
+Commercial access is derived at request time. It is not a persisted
+replacement subscription state machine.
 
-## Matrix
+The authoritative provider owns the raw subscription lifecycle. MiseLedger
+owns the normalization from that provider lifecycle into the commercial
+states defined below and then into `AccessMode`.
 
-| Lifecycle state | Source of truth | Access mode | Billing recovery reachable |
+## Provider-neutral lifecycle states
+
+MiseLedger recognizes exactly these commercial lifecycle states:
+
+| Lifecycle state | Commercial meaning | Access mode | Billing recovery reachable |
 |---|---|---|---|
-| Generic trial (no Cashier subscription yet, within trial window) | app-level trial fields | `full` | n/a |
-| Stripe trialing (`onTrial()`) | Cashier | `full` | n/a |
-| active (`valid()` / active subscription) | Cashier | `full` | n/a |
-| past_due (`pastDue()`) | Cashier | `full_with_warning` | yes |
-| scheduled cancellation / grace period (`onGracePeriod()`, canceled with `ends_at` in the future) | Cashier | `full_with_warning` | yes |
-| ended (trial expired with no subscription, or canceled subscription past `ends_at`) | app trial expiry / Cashier | `read_only` | yes |
-| unpaid (`stripe_status === 'unpaid'`) | Cashier | `read_only` | yes |
+| `generic trial` | Organization is inside an approved trial window, regardless of whether that trial is currently represented only by MiseLedger or by the owning provider | `full` | n/a |
+| `active` | Provider-owned paid subscription is active | `full` | n/a |
+| `past_due` | Payment collection has failed but the subscription remains recoverable and operational access should continue temporarily | `full_with_warning` | yes |
+| `grace period` | Subscription is scheduled to end but remains inside its already-authorized paid access period | `full_with_warning` | yes |
+| `unpaid` | Provider lifecycle indicates payment recovery is exhausted or the account must no longer receive commercial write access | `read_only` | yes |
+| `ended` | Trial or subscription entitlement has ended | `read_only` | yes |
+
+Provider-specific raw lifecycle names are not additional MiseLedger
+commercial states.
+
+## Provider normalization boundary
+
+Every provider integration must translate its provider-specific lifecycle
+into the commercial states above before application access is decided.
+
+Business authorization, commercial middleware, policies, entitlement
+presentation, and inventory workflows must not branch directly on Stripe,
+PayMongo, Cashier, or another provider's raw status vocabulary.
+
+A provider adapter must never treat an unknown raw provider status as
+`active`. Unknown or unsupported provider state must fail closed to a
+non-writable commercial result until it can be normalized safely.
+
+This requirement does not mean provider raw statuses must be discarded.
+Provider-specific infrastructure may retain them for synchronization,
+reconciliation, debugging, audit evidence, and provider API operations.
+
+## Current Stripe/Cashier mapping
+
+The current implementation does not yet contain a generic provider adapter.
+`OrganizationSubscriptionAccessResolver` reads Cashier's synchronized local
+subscription state directly.
+
+Its current Stripe-specific behavior corresponds to the provider-neutral
+contract as follows:
+
+| Current Stripe/Cashier input | Normalized commercial state | Current access result |
+|---|---|---|
+| Application `trial_ends_at` is in the future and there is no Cashier subscription | `generic trial` | `full` |
+| Stripe `trialing`, observed through Cashier `onTrial()` | `generic trial` | `full` |
+| Stripe `active` | `active` | `full` |
+| Stripe `past_due` | `past_due` | `full_with_warning` |
+| Cashier `onGracePeriod()`, with `ends_at` still in the future | `grace period` | `full_with_warning` |
+| Stripe `unpaid` | `unpaid` | `read_only` |
+| Trial expired with no subscription, or Cashier subscription `ended()` after its paid period | `ended` | `read_only` |
+
+The `trialing` value above is Stripe adapter input only. It is not a seventh
+MiseLedger lifecycle state.
+
+The current resolver also returns `read_only` for unsupported Stripe statuses
+rather than granting writable access. A future provider-neutral adapter must
+preserve that fail-closed property.
 
 ## Rules
 
-1. Cashier/Stripe subscription status is read-only input to this mapping;
-   nothing in this contract writes subscription state.
-2. `past_due` never drops to `read_only`: it stays `full_with_warning` so
-   day-to-day operations continue while billing is recovered.
-3. A canceled subscription stays `full_with_warning` for the remainder of
-   its paid term (`onGracePeriod()`), and only becomes `read_only` once
-   `ends_at` passes without reactivation.
-4. `ended` and `unpaid` are `read_only`, not inaccessible: billing recovery
-   routes (checkout / billing portal) must stay reachable so the
-   organization can restore `full` access without losing data.
-5. This matrix carries no inventory-specific exceptions. Ledger actions
-   (`RecordStockMovement`, `StockBalance`, and related actions) must never
-   branch on billing state directly; any `read_only` enforcement belongs in
-   the future access resolver/middleware/policy layer that consumes
-   `AccessMode`, not in ledger code.
-6. The administrative gate (`Organization.active`) and this commercial
-   matrix are evaluated independently. An inactive organization is
-   unresolvable regardless of `AccessMode`; an active organization in
-   `read_only` mode remains resolvable and readable.
+1. Provider subscription status is read-only input to this access model.
+   Commercial access resolution must not mutate provider subscription state.
+2. `past_due` remains `full_with_warning`. It does not immediately become
+   `read_only`, allowing day-to-day operations while billing is recovered.
+3. `grace period` remains `full_with_warning` until its paid entitlement
+   ends. Only after that entitlement ends does the organization become
+   `read_only`.
+4. `ended` and `unpaid` are `read_only`, not inaccessible. Authorized billing
+   recovery routes must remain reachable so the organization can restore
+   commercial access without losing historical data.
+5. This matrix carries no inventory-specific exceptions. `RecordStockMovement`,
+   `StockMovement`, `StockBalance`, replay logic, and related ledger actions
+   must never branch on billing state or provider identity.
+6. Commercial write enforcement belongs at the authorization,
+   middleware/policy, or application boundary that invokes business
+   operations, never inside the stock-ledger primitive.
+7. `Organization.active` remains an independent administrative gate.
+8. Changing the application's selected provider for new subscription
+   acquisition must not change the commercial state or provider ownership of
+   an existing subscription.
+9. Existing subscriptions must be normalized using the provider that owns
+   them, not the application's currently selected acquisition provider.
+10. Billing-provider credentials, signing secrets, and private provider
+    configuration remain server-only.
 
-## Downstream consumers (future phases, not implemented here)
+## Existing-organization rollout behavior
 
-- **P2** — access resolver that computes `AccessMode` from an
-  `Organization`'s Cashier subscription plus generic trial fields.
-- **P4** — HTTP middleware that blocks write requests when `AccessMode` is
-  `read_only`, while leaving billing-recovery routes unaffected.
-- **P5** — backend/policy checks gating specific write actions by
-  `AccessMode`.
-- **P6** — UI banners/read-only indicators reflecting `AccessMode`
-  (presentation only; server-side enforcement remains authoritative).
+Rollout classification remains independent from provider selection.
 
-## Future state-transition test matrix (to be implemented by later tasks)
+Organizations classified as permanently exempt retain their existing
+commercial behavior regardless of provider selection.
 
-- generic trial → Stripe trialing → active
-- generic trial expires with no subscription → `ended`
-- active → `past_due` (failed charge) → active (payment recovered)
-- active → `past_due` → `unpaid` (retries exhausted) → `read_only`
-- active → canceled (`onGracePeriod()`) → reactivated before `ends_at` → `full`
-- active → canceled (`onGracePeriod()`) → `ends_at` passes unresolved → `ended` / `read_only`
-- `unpaid` → payment resolved → `active` / `full`
-- `read_only`: billing-recovery route reachable, non-recovery write route blocked
-- administrative `active = false` combined with any commercial state →
-  organization unresolvable (confirms axis independence from TASK-002)
+Legacy-organization protections defined in
+[`existing-organization-rollout-plan.md`](existing-organization-rollout-plan.md)
+also remain in force. PB-002 does not reclassify any organization or move any
+tenant between access modes.
 
-## Explicit non-goals of this task
+## Commercial transition matrix
 
-- No Cashier/Stripe integration, webhook handling, or subscription code.
-- No middleware, policy, or UI changes.
-- No changes to `Organization.active` or ledger (`StockMovement` /
-  `StockBalance`) behavior.
+Provider-neutral behavior that later adapter tests must preserve includes:
+
+```text
+generic trial -> active
+generic trial -> ended
+active -> past_due -> active
+active -> past_due -> unpaid
+active -> grace period -> active
+active -> grace period -> ended
+unpaid -> active
+ended -> new valid subscription -> active
+```
+
+At every transition:
+
+- Commercial access is derived from normalized lifecycle state.
+- Authorized billing recovery remains reachable from `read_only`.
+- Normal business mutations remain blocked while `read_only`.
+- Administrative `Organization.active = false` remains independently
+  authoritative.
+- Stock-ledger state is never changed merely because billing state changed.
+
+## Current implementation boundary
+
+Today:
+
+- Laravel Cashier synchronizes Stripe subscriptions.
+- Cashier's `subscriptions` table stores Stripe-specific lifecycle fields.
+- `OrganizationSubscriptionAccessResolver` directly reads Cashier and Stripe
+  state.
+- Stripe checkout and webhook synchronization remain provider-specific.
+- No provider-neutral lifecycle adapter is implemented yet.
+- No generic provider-ownership column is implemented yet.
+
+These facts are implementation details, not the long-term business
+vocabulary.
+
+## Explicit non-goals of PB-002
+
+PB-002 does not:
+
+- Rewrite `OrganizationSubscriptionAccessResolver`.
+- Add a provider adapter.
+- Add PayMongo.
+- Change Cashier or Stripe synchronization.
+- Add migrations.
+- Change `AccessMode`.
+- Change rollout classifications.
+- Change entitlement enforcement.
+- Change `Organization.active`.
+- Change any stock-ledger behavior.
