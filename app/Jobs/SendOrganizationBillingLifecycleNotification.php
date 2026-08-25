@@ -59,11 +59,7 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
                 return null;
             }
 
-            if ($effect->notification_claimed_at?->isAfter(now()->subSeconds($this->timeout * 2))) {
-                return null;
-            }
-
-            $effect->update(['notification_claimed_at' => now()]);
+            $effect->update(['notification_dispatched_at' => now()]);
 
             return $effect;
         });
@@ -72,15 +68,13 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
             return;
         }
 
+        // The completion marker is committed before delivery is attempted, so retries after a
+        // caught delivery failure below are the only path that can resend: an uncaught worker
+        // crash mid-delivery leaves the marker set and is never retried, never duplicated.
         try {
             $notify->handle($this->stripeCustomerId, $effect->lifecycle_event);
-
-            $effect->update([
-                'notification_claimed_at' => null,
-                'notification_dispatched_at' => now(),
-            ]);
         } catch (Throwable $exception) {
-            $effect->update(['notification_claimed_at' => null]);
+            $effect->update(['notification_dispatched_at' => null]);
 
             throw $exception;
         }
@@ -93,10 +87,6 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
 
     public function failed(Throwable $exception): void
     {
-        BillingWebhookEffect::query()
-            ->whereKey($this->billingWebhookEffectId)
-            ->update(['notification_claimed_at' => null]);
-
         app(BillingObservability::class)->queueFailure(
             $this->organizationId,
             self::class,

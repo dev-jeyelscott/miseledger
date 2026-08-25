@@ -92,7 +92,7 @@ test('billing jobs have bounded retries and report terminal failures with organi
     );
     $exception = new RuntimeException('mail transport unavailable');
 
-    Notification::shouldReceive('send')->once()->andThrow($exception);
+    Notification::shouldReceive('sendNow')->once()->andThrow($exception);
 
     expect(fn (): mixed => $job->handle(app(NotifyOrganizationBillingLifecycle::class)))
         ->toThrow(RuntimeException::class);
@@ -115,7 +115,37 @@ test('billing jobs have bounded retries and report terminal failures with organi
         ->and(config('queue.connections.database.retry_after'))->toBeGreaterThan($job->timeout)
         ->and(config('queue.connections.redis.retry_after'))->toBeGreaterThan($job->timeout)
         ->and(config('queue.failed.driver'))->toBe('database-uuids')
-        ->and($effect->fresh()->notification_claimed_at)->toBeNull();
+        ->and($effect->fresh()->notification_dispatched_at)->toBeNull();
+});
+
+test('a caught delivery failure reverts the dispatch marker so a retry delivers exactly once', function () {
+    $recipient = billingQueueRecipient('cus_queue_crash_boundary');
+    $effect = BillingWebhookEffect::query()->create([
+        'organization_id' => $recipient['organization']->getKey(),
+        'stripe_event_id' => 'evt_queue_crash_boundary',
+        'lifecycle_event' => BillingLifecycleEvent::PaymentFailed,
+    ]);
+    $job = new SendOrganizationBillingLifecycleNotification(
+        $effect->getKey(),
+        $recipient['organization']->getKey(),
+        'evt_queue_crash_boundary',
+        $recipient['organization']->stripe_id,
+    );
+
+    Notification::shouldReceive('sendNow')->once()->andThrow(new RuntimeException('mail transport unavailable'));
+
+    expect(fn (): mixed => $job->handle(app(NotifyOrganizationBillingLifecycle::class)))
+        ->toThrow(RuntimeException::class);
+
+    expect($effect->fresh()->notification_dispatched_at)->toBeNull();
+
+    Notification::fake();
+
+    $job->handle(app(NotifyOrganizationBillingLifecycle::class));
+    $job->handle(app(NotifyOrganizationBillingLifecycle::class));
+
+    Notification::assertSentTo($recipient['user'], BillingLifecycleNotification::class, 1);
+    expect($effect->fresh()->notification_dispatched_at)->not->toBeNull();
 });
 
 test('local subscription authorization succeeds without resolving a queue connection', function () {

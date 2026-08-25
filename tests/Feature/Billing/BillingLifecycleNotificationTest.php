@@ -170,7 +170,7 @@ test('a notification dispatch failure does not change synchronized commercial ac
     $recipients = billingLifecycleRecipients('cus_notification_failure');
     $organization = $recipients['organization'];
 
-    Notification::shouldReceive('send')->once()->andThrow(new RuntimeException('mail transport unavailable'));
+    Notification::shouldReceive('sendNow')->once()->andThrow(new RuntimeException('mail transport unavailable'));
 
     postBillingLifecycleWebhook(billingLifecycleSubscriptionPayload(
         'cus_notification_failure',

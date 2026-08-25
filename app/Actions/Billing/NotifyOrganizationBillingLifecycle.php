@@ -36,9 +36,11 @@ class NotifyOrganizationBillingLifecycle
             return;
         }
 
-        Notification::send(
+        // Sent synchronously (no ShouldQueue) so this call is delivery, not enqueueing:
+        // the caller can atomically tie a completion marker to an actual send attempt.
+        Notification::sendNow(
             $recipients,
-            (new BillingLifecycleNotification($organization, $event))->afterCommit(),
+            new BillingLifecycleNotification($organization, $event),
         );
     }
 }

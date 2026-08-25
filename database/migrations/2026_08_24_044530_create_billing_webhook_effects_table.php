@@ -16,7 +16,6 @@ return new class extends Migration
             $table->foreignId('organization_id')->constrained()->restrictOnDelete();
             $table->string('stripe_event_id')->unique();
             $table->string('lifecycle_event', 80);
-            $table->timestampTz('notification_claimed_at')->nullable();
             $table->timestampTz('notification_dispatched_at')->nullable();
             $table->timestamps();
         });

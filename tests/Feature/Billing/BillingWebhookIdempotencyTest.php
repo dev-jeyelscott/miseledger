@@ -76,14 +76,13 @@ test('a failed notification dispatch is retried without duplicating its audit tr
     $recipient = billingWebhookRecipient('cus_retry_effect');
     $payload = paymentFailurePayload('cus_retry_effect', 'evt_retry_effect');
 
-    Notification::shouldReceive('send')->once()->andThrow(new RuntimeException('mail transport unavailable'));
+    Notification::shouldReceive('sendNow')->once()->andThrow(new RuntimeException('mail transport unavailable'));
 
     postIdempotencyWebhook($payload)->assertOk();
 
     $effect = BillingWebhookEffect::query()->where('stripe_event_id', 'evt_retry_effect')->firstOrFail();
 
     expect($effect->notification_dispatched_at)->toBeNull()
-        ->and($effect->notification_claimed_at)->toBeNull()
         ->and(AuditLog::query()->where('correlation_id', 'evt_retry_effect')->count())
         ->toBe(1);
 
