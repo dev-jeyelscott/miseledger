@@ -31,14 +31,12 @@ use App\Http\Controllers\Recipes\RecipeController;
 use App\Http\Controllers\Recipes\RecipeCostController;
 use App\Http\Controllers\Suppliers\SupplierController;
 use App\Http\Controllers\Suppliers\SupplierItemController;
+use App\Http\Controllers\WelcomeController;
 use App\Support\Billing\FeatureCode;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 use Laravel\Cashier\Http\Controllers\PaymentController;
 
-Route::get('/', function () {
-    return Inertia::render('welcome');
-})->name('home');
+Route::get('/', [WelcomeController::class, 'index'])->name('home');
 
 Route::get('stripe/payment/{id}', [PaymentController::class, 'show'])
     ->name('cashier.payment');

@@ -49,6 +49,16 @@ type FeatureStoryProps = {
     children: ReactNode;
 };
 
+type WelcomePlan = {
+    code: string;
+    name: string;
+};
+
+type WelcomeProps = {
+    trialDays: number | null;
+    plans: WelcomePlan[];
+};
+
 /** Render authentication-aware actions without duplicating route decisions. */
 function AuthActions({ isAuthenticated, inverse = false }: AuthActionsProps) {
     const secondaryClassName = inverse
@@ -130,6 +140,7 @@ function MarketingHeader({ isAuthenticated }: { isAuthenticated: boolean }) {
         ['How It Works', '#how-it-works'],
         ['What You Can See', '#what-you-can-see'],
         ['For Your Team', '#for-your-team'],
+        ['Pricing', '#pricing'],
     ] as const;
 
     return (
@@ -315,6 +326,63 @@ function FeatureStory({
     );
 }
 
+/** Render the auth-aware trial and subscription section using only approved billing configuration. */
+function PricingAndTrial({
+    trialDays,
+    plans,
+    isAuthenticated,
+}: {
+    trialDays: number | null;
+    plans: WelcomePlan[];
+    isAuthenticated: boolean;
+}) {
+    return (
+        <section
+            id="pricing"
+            className="scroll-mt-24 border-b border-[#173247]/15 bg-[#fbf8f1]"
+        >
+            <div className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 sm:py-20 lg:px-12">
+                <div className="max-w-2xl">
+                    <p className="text-xs font-bold tracking-[0.16em] text-[#6d7b73] uppercase">
+                        Trial and subscription
+                    </p>
+                    <h2 className="mt-3 font-serif text-4xl tracking-[-0.035em] text-[#10283a] sm:text-5xl">
+                        Try MiseLedger, then subscribe when you are ready
+                    </h2>
+                    <p className="mt-5 max-w-xl text-base leading-7 text-[#5b6c77]">
+                        {trialDays !== null
+                            ? `Every new organization starts with a ${trialDays}-day trial, no credit card required. Subscribe from your organization's billing settings whenever you are ready to continue.`
+                            : "Create an organization to start using MiseLedger. Subscription plans are managed from your organization's billing settings."}
+                    </p>
+                </div>
+
+                {plans.length > 0 && (
+                    <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {plans.map((plan) => (
+                            <div
+                                key={plan.code}
+                                className="border border-[#173247]/15 bg-[#fffdf8] p-5 shadow-[0_9px_24px_rgba(16,40,58,0.08)]"
+                            >
+                                <h3 className="font-serif text-xl text-[#10283a]">
+                                    {plan.name}
+                                </h3>
+                                <p className="mt-2 text-sm leading-6 text-[#5b6a74]">
+                                    Available from your organization's billing
+                                    settings once you are signed in.
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                <div className="mt-8">
+                    <HeroActions isAuthenticated={isAuthenticated} />
+                </div>
+            </div>
+        </section>
+    );
+}
+
 /** Render the multi-location product preview using repository-supported organization concepts. */
 function LocationsPreview() {
     const locations = [
@@ -426,7 +494,7 @@ function LocationsPreview() {
 }
 
 /** Render the complete public MiseLedger marketing landing page. */
-export default function Welcome() {
+export default function Welcome({ trialDays, plans }: WelcomeProps) {
     const { auth } = usePage().props;
     const isAuthenticated = Boolean(auth.user);
 
@@ -1012,6 +1080,12 @@ export default function Welcome() {
                         </div>
                     </section>
 
+                    <PricingAndTrial
+                        trialDays={trialDays}
+                        plans={plans}
+                        isAuthenticated={isAuthenticated}
+                    />
+
                     <section className="bg-[#0d2a3f] text-white">
                         <div className="mx-auto grid max-w-[1440px] gap-8 px-5 py-14 sm:px-8 sm:py-16 lg:grid-cols-[1fr_auto] lg:items-center lg:px-12">
                             <div className="relative border border-dashed border-[#bb7e51]/65 p-6 sm:p-8">
@@ -1087,6 +1161,9 @@ export default function Welcome() {
                                 className="hover:text-[#0f5a43]"
                             >
                                 For Your Team
+                            </a>
+                            <a href="#pricing" className="hover:text-[#0f5a43]">
+                                Pricing
                             </a>
                         </nav>
 
