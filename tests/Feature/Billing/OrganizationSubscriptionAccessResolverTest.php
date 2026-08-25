@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\OrganizationAccessMode;
+use App\Enums\OrganizationRolloutClassification;
 use App\Models\Organization;
 use App\Support\Billing\OrganizationSubscriptionAccessResolver;
 use Illuminate\Support\Carbon;
@@ -161,4 +162,55 @@ test('resolving the same organization state repeatedly yields identical results'
     $second = OrganizationSubscriptionAccessResolver::resolve($organization);
 
     expect($first)->toEqual($second);
+});
+
+test('an unclassified legacy organization with no trial and no stripe customer stays writable', function () {
+    $organization = Organization::factory()->create([
+        'trial_ends_at' => null,
+        'rollout_classification' => null,
+    ]);
+
+    $access = OrganizationSubscriptionAccessResolver::resolve($organization);
+
+    expect($access->accessMode)->toBe(OrganizationAccessMode::Writable)
+        ->and($access->isWritable())->toBeTrue()
+        ->and($access->onTrial)->toBeFalse();
+});
+
+test('a legacy organization already in checkout with no trial remains read-only pending webhook sync', function () {
+    $organization = Organization::factory()->create([
+        'trial_ends_at' => null,
+        'rollout_classification' => null,
+        'stripe_id' => 'cus_test_pending',
+    ]);
+
+    $access = OrganizationSubscriptionAccessResolver::resolve($organization);
+
+    expect($access->accessMode)->toBe(OrganizationAccessMode::ReadOnly);
+});
+
+test('development_test, internal_free, and grandfathered classifications are permanently writable', function (OrganizationRolloutClassification $classification) {
+    $organization = Organization::factory()->create([
+        'trial_ends_at' => Carbon::now()->subDay(),
+        'rollout_classification' => $classification,
+    ]);
+
+    $access = OrganizationSubscriptionAccessResolver::resolve($organization);
+
+    expect($access->accessMode)->toBe(OrganizationAccessMode::Writable);
+})->with([
+    OrganizationRolloutClassification::DevelopmentTest,
+    OrganizationRolloutClassification::InternalFree,
+    OrganizationRolloutClassification::Grandfathered,
+]);
+
+test('a trial_eligible classification is derived from trial/subscription state like a normal tenant', function () {
+    $organization = Organization::factory()->create([
+        'trial_ends_at' => Carbon::now()->subDay(),
+        'rollout_classification' => OrganizationRolloutClassification::TrialEligible,
+    ]);
+
+    $access = OrganizationSubscriptionAccessResolver::resolve($organization);
+
+    expect($access->accessMode)->toBe(OrganizationAccessMode::ReadOnly);
 });

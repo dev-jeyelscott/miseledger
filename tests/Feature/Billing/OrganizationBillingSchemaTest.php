@@ -18,6 +18,14 @@ test('organizations table carries the published cashier billing columns', functi
         ]))->toBeFalse();
 });
 
+test('organizations table carries a nullable, unbackfilled rollout classification column', function () {
+    expect(Schema::hasColumn('organizations', 'rollout_classification'))->toBeTrue();
+
+    $organization = Organization::factory()->create();
+
+    expect($organization->rollout_classification)->toBeNull();
+});
+
 test('subscriptions table owns subscriptions by organization, not user', function () {
     expect(Schema::hasColumn('subscriptions', 'organization_id'))->toBeTrue()
         ->and(Schema::hasColumn('subscriptions', 'user_id'))->toBeFalse();

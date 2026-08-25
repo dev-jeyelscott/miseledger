@@ -22,6 +22,10 @@ final class OrganizationSubscriptionAccessResolver
 {
     public static function resolve(Organization $organization, ?PlanCatalog $planCatalog = null): OrganizationSubscriptionAccess
     {
+        if ($organization->rollout_classification?->isPermanentlyExempt() === true) {
+            return self::resolveExempt();
+        }
+
         $subscription = $organization->subscription((string) config('billing.subscription_type'));
 
         if ($subscription === null) {
@@ -31,9 +35,32 @@ final class OrganizationSubscriptionAccessResolver
         return self::resolveWithSubscription($subscription, $planCatalog ?? new PlanCatalog);
     }
 
+    /**
+     * Writable regardless of trial/subscription state: covers organizations
+     * classified `development_test`, `internal_free`, or `grandfathered`
+     * (see `docs/existing-organization-rollout-plan.md`).
+     */
+    private static function resolveExempt(): OrganizationSubscriptionAccess
+    {
+        return new OrganizationSubscriptionAccess(
+            accessMode: OrganizationAccessMode::Writable,
+            subscriptionStatus: null,
+            plan: null,
+            onTrial: false,
+            onGracePeriod: false,
+            billingWarning: false,
+            trialEndsAt: null,
+            endsAt: null,
+        );
+    }
+
     private static function resolveWithoutSubscription(Organization $organization): OrganizationSubscriptionAccess
     {
         $onGenericTrial = $organization->onGenericTrial();
+
+        if (! $onGenericTrial && self::isUnclassifiedLegacyOrganization($organization)) {
+            return self::resolveExempt();
+        }
 
         return new OrganizationSubscriptionAccess(
             accessMode: $onGenericTrial ? OrganizationAccessMode::Writable : OrganizationAccessMode::ReadOnly,
@@ -45,6 +72,22 @@ final class OrganizationSubscriptionAccessResolver
             trialEndsAt: $onGenericTrial ? $organization->trial_ends_at : null,
             endsAt: null,
         );
+    }
+
+    /**
+     * A pre-billing organization never touched by the trial/checkout flow:
+     * no rollout classification has been assigned yet, it was never given a
+     * generic trial window, and it has never started Stripe checkout. Such
+     * an organization must stay writable rather than unexpectedly becoming
+     * read-only the moment commercial enforcement code runs; it only moves
+     * to trial/subscription-derived access once operations assigns an
+     * explicit rollout classification.
+     */
+    private static function isUnclassifiedLegacyOrganization(Organization $organization): bool
+    {
+        return $organization->rollout_classification === null
+            && $organization->trial_ends_at === null
+            && $organization->stripe_id === null;
     }
 
     private static function resolveWithSubscription(Subscription $subscription, PlanCatalog $planCatalog): OrganizationSubscriptionAccess

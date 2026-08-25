@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OrganizationRolloutClassification;
 use Database\Factories\OrganizationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -19,6 +20,7 @@ use Laravel\Cashier\Billable;
  * @property string $currency
  * @property bool $active
  * @property Carbon|null $trial_ends_at
+ * @property OrganizationRolloutClassification|null $rollout_classification
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  *
@@ -27,8 +29,12 @@ use Laravel\Cashier\Billable;
  * must never read or write this column; commercial access must be derived
  * separately so organizations remain resolvable to members for historical
  * reads and billing recovery even when commercially read-only.
+ *
+ * `rollout_classification` is an explicit, operator-assigned pre-enforcement
+ * classification (see `docs/existing-organization-rollout-plan.md`). It is
+ * never inferred from timestamps or backfilled automatically.
  */
-#[Fillable(['name', 'slug', 'timezone', 'currency', 'active', 'trial_ends_at'])]
+#[Fillable(['name', 'slug', 'timezone', 'currency', 'active', 'trial_ends_at', 'rollout_classification'])]
 class Organization extends Model
 {
     /** @use HasFactory<OrganizationFactory> */
@@ -139,6 +145,7 @@ class Organization extends Model
         return [
             'active' => 'boolean',
             'trial_ends_at' => 'datetime',
+            'rollout_classification' => OrganizationRolloutClassification::class,
         ];
     }
 }
