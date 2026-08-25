@@ -6,6 +6,7 @@ import {
     Building2,
     ClipboardCheck,
     ClipboardList,
+    CreditCard,
     MapPin,
     Plus,
     ReceiptText,
@@ -23,6 +24,7 @@ import LowStockReportController from '@/actions/App/Http/Controllers/Inventory/L
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
 import StockMovementLedgerReportController from '@/actions/App/Http/Controllers/Inventory/StockMovementLedgerReportController';
 import WasteController from '@/actions/App/Http/Controllers/Inventory/WasteController';
+import OrganizationBillingController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingController';
 import OrganizationController from '@/actions/App/Http/Controllers/OrganizationController';
 import OrganizationLocationController from '@/actions/App/Http/Controllers/OrganizationLocationController';
 import OrganizationMemberController from '@/actions/App/Http/Controllers/OrganizationMemberController';
@@ -184,6 +186,14 @@ function formatDateTime(value: string, timeZone: string): string {
     return new Intl.DateTimeFormat(undefined, {
         dateStyle: 'medium',
         timeStyle: 'short',
+        timeZone,
+    }).format(new Date(value));
+}
+
+/** Render a trial or subscription end date in the active organization's configured timezone. */
+function formatDate(value: string, timeZone: string): string {
+    return new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'medium',
         timeZone,
     }).format(new Date(value));
 }
@@ -1257,6 +1267,17 @@ export default function Dashboard() {
                                             ? 'Writable'
                                             : 'Read only'}
                                     </Badge>
+
+                                    {subscription.onTrial &&
+                                        subscription.trialEndsAt && (
+                                            <p className="mt-2 text-xs text-muted-foreground">
+                                                Trial ends{' '}
+                                                {formatDate(
+                                                    subscription.trialEndsAt,
+                                                    dashboardData.timezone,
+                                                )}
+                                            </p>
+                                        )}
                                 </dd>
                             )}
                         </div>
@@ -1291,6 +1312,22 @@ export default function Dashboard() {
                                         aria-hidden="true"
                                     />
                                     Manage members
+                                </Link>
+                            </Button>
+                        )}
+
+                        {permissions.has('billing.manage') && (
+                            <Button variant="outline" size="sm" asChild>
+                                <Link
+                                    href={OrganizationBillingController.show(
+                                        activeOrganization.id,
+                                    )}
+                                >
+                                    <CreditCard
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    Set up billing
                                 </Link>
                             </Button>
                         )}
