@@ -45,8 +45,8 @@ class BillingLifecycleNotification extends Notification
     public function toMail(User $notifiable): MailMessage
     {
         $messageId = sprintf(
-            '%s.%s@%s',
-            $this->idempotencyKey(),
+            'billing-lifecycle.%s.%s@%s',
+            $this->stripeEventId,
             $notifiable->getKey(),
             parse_url(config('app.url'), PHP_URL_HOST) ?: 'miseledger.app',
         );

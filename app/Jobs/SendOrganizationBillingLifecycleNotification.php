@@ -3,7 +3,6 @@
 namespace App\Jobs;
 
 use App\Actions\Billing\NotifyOrganizationBillingLifecycle;
-use App\Exceptions\AmbiguousBillingNotificationDeliveryException;
 use App\Models\BillingWebhookEffect;
 use App\Support\Billing\BillingObservability;
 use Illuminate\Bus\Queueable;
@@ -60,15 +59,12 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
                 return null;
             }
 
-            // A claim already recorded by a prior attempt, with no dispatch marker, is
-            // ambiguous: that attempt may have terminated before or after delivery
-            // actually occurred, and there is no local or provider-side signal capable
-            // of resolving that. Resending here risks a duplicate externally visible
-            // notification, so the claim is left untouched and delivery is refused.
-            if ($effect->notification_claimed_at !== null) {
-                throw new AmbiguousBillingNotificationDeliveryException($this->stripeEventId);
-            }
-
+            // Records the most recent delivery attempt for observability. This does not
+            // gate redelivery: whether a prior attempt terminated before or after the
+            // send call cannot be determined locally, but BillingLifecycleNotification
+            // carries a deterministic Message-Id derived from the Stripe event, so the
+            // mail transport deduplicates redelivery and a defunct claim is always
+            // safe, and necessary, to retry to completion.
             $effect->update(['notification_claimed_at' => now()]);
 
             return $effect;
@@ -78,16 +74,7 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
             return;
         }
 
-        try {
-            $notify->handle($this->stripeCustomerId, $effect->lifecycle_event, $this->stripeEventId);
-        } catch (Throwable $exception) {
-            // The send call threw before returning, so delivery is provably known to
-            // have not occurred within this attempt. Clearing the claim lets a retry
-            // proceed as a fresh, unambiguous attempt instead of being refused.
-            $effect->forceFill(['notification_claimed_at' => null])->save();
-
-            throw $exception;
-        }
+        $notify->handle($this->stripeCustomerId, $effect->lifecycle_event, $this->stripeEventId);
 
         $effect->update(['notification_dispatched_at' => now()]);
     }
