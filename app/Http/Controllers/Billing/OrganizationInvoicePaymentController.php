@@ -14,6 +14,8 @@ final class OrganizationInvoicePaymentController extends Controller
 {
     public function store(CreateOrganizationInvoicePaymentRequest $request, Organization $organization, BillingInvoice $invoice, CreatePayMongoQrPhPayment $createPayment): JsonResponse
     {
+        abort_unless(config('billing.providers.paymongo.manual_qrph') === true, 404);
+
         try {
             $checkout = $createPayment->handle($invoice);
         } catch (PayMongoRequestException) {

@@ -6,7 +6,7 @@ use App\Enums\BillingProvider;
 use App\Models\BillingSubscription;
 use App\Models\Organization;
 use App\Support\Billing\Providers\BillingProviderManager;
-use Illuminate\Support\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -38,7 +38,14 @@ final class CancelOrganizationSubscription
         $this->providerManager->provider($subscription->provider)->cancelSubscription($subscription);
 
         DB::transaction(function () use ($subscription): void {
-            $projection = BillingSubscription::query()->lockForUpdate()->findOrFail($subscription->getKey());
+            $projection = BillingSubscription::query()
+                ->lockForUpdate()
+                ->whereKey($subscription->getKey())
+                ->first();
+
+            if ($projection === null) {
+                throw new RuntimeException('Subscription management state could not be resolved safely.');
+            }
 
             if ($projection->cancelled_at !== null) {
                 return;
@@ -53,7 +60,7 @@ final class CancelOrganizationSubscription
         });
     }
 
-    private function paidAccessEndsAt(BillingSubscription $subscription): ?Carbon
+    private function paidAccessEndsAt(BillingSubscription $subscription): ?CarbonInterface
     {
         return $subscription->ends_at ?? $subscription->current_period_ends_at ?? $subscription->next_billing_at;
     }

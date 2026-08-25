@@ -27,6 +27,8 @@ return new class extends Migration
             $table->timestampTz('expires_at')->nullable();
             $table->string('qr_code_url')->nullable();
             $table->timestampTz('paid_at')->nullable();
+            $table->timestampTz('receipt_notification_claimed_at')->nullable();
+            $table->timestampTz('receipt_notification_dispatched_at')->nullable();
             $table->timestampTz('failed_at')->nullable();
             $table->string('provider_error_code')->nullable();
             $table->timestamps();

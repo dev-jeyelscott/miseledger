@@ -78,6 +78,39 @@ test('an owner can view the billing page for a subscribed organization', functio
     );
 });
 
+test('manual QR Ph plans are available from configured minor-unit amounts without recurring PayMongo plan IDs', function () {
+    $billingConfig = config('billing');
+    Config::set('billing.provider', 'paymongo');
+    Config::set('billing.providers.paymongo.manual_qrph', true);
+    Config::set('billing.plans', [
+        'starter' => [
+            'name' => 'Starter',
+            'manual_amounts' => ['monthly' => 49_900, 'yearly' => null],
+            'providers' => [
+                'stripe' => ['monthly' => null, 'yearly' => null],
+                'paymongo' => ['monthly' => null, 'yearly' => null],
+            ],
+            'features' => [],
+            'limits' => [],
+        ],
+    ]);
+
+    try {
+        $user = User::factory()->create();
+        $organization = Organization::factory()->create();
+        OrganizationMembership::factory()->for($organization)->for($user)->create(['role' => OrganizationRole::Owner]);
+
+        $this->actingAs($user)->get(route('organizations.billing.show', $organization))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('manualQrPhEnabled', true)
+                ->where('availablePlans.0.monthly', true)
+                ->where('availablePlans.0.yearly', false));
+    } finally {
+        Config::set('billing', $billingConfig);
+    }
+});
+
 test('a commercially read-only organization can still view the billing page', function () {
     organizationBillingPageFixturePlans();
 

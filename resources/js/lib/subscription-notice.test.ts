@@ -18,6 +18,7 @@ const baseSubscription: OrganizationSubscriptionContext = {
     interval: 'monthly',
     nextBillingAt: null,
     management: 'portal',
+    collectionMethod: 'automatic',
 };
 
 function membership(

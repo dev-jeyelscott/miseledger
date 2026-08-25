@@ -18,6 +18,7 @@ Manual QR Ph billing is a collection method, not a subscription type. The durabl
 - Configure PayMongo to deliver `payment.paid`, `payment.failed`, and `qrph.expired` to `/billing/webhooks/paymongo`.
 - QR attempts expire after the provider's normal 30-minute policy. Expired attempts are immutable history; generating a new QR creates a separate attempt.
 - Access ends at the paid period boundary when no confirmed renewal exists. QR-specific grace periods are not applied.
+- Billing administrators receive renewal reminders at 7, 3, 1, and 0 days before expiry. A settled payment queues one idempotent receipt containing the plan, PHP amount, and new access period.
 
 ## Security boundaries
 

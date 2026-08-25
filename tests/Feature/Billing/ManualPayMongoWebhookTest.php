@@ -5,13 +5,19 @@ use App\Enums\BillingInvoiceStatus;
 use App\Enums\BillingPaymentMethod;
 use App\Enums\BillingPaymentStatus;
 use App\Enums\BillingProvider;
+use App\Enums\OrganizationRole;
+use App\Jobs\SendManualRenewalPaymentReceipt;
 use App\Models\BillingCustomer;
 use App\Models\BillingInvoice;
 use App\Models\BillingPayment;
 use App\Models\BillingSubscription;
 use App\Models\BillingWebhookEffect;
 use App\Models\Organization;
+use App\Models\OrganizationMembership;
+use App\Models\User;
+use App\Notifications\ManualRenewalPaymentReceiptNotification;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
 
@@ -91,6 +97,30 @@ test('payment.paid settles exactly one matching QR Ph payment and its invoice', 
         ->and($payment->fresh()->billingInvoice->status)->toBe(BillingInvoiceStatus::Paid)
         ->and($payment->fresh()->billingInvoice->billingSubscription->provider_status)->toBe('active')
         ->and(BillingWebhookEffect::query()->count())->toBe(1);
+    Queue::assertPushed(SendManualRenewalPaymentReceipt::class, 1);
+});
+
+test('a settled payment sends one detailed receipt to billing administrators', function (): void {
+    Queue::fake();
+    Notification::fake();
+    $payment = manualWebhookPayment();
+    $recipient = User::factory()->create();
+    OrganizationMembership::factory()
+        ->for($payment->organization)
+        ->for($recipient)
+        ->create(['role' => OrganizationRole::Owner]);
+
+    postManualPaymentWebhook(manualPaymentPaidPayload())->assertNoContent();
+
+    $job = new SendManualRenewalPaymentReceipt($payment->getKey());
+    $job->handle();
+    $job->handle();
+
+    Notification::assertSentTo($recipient, ManualRenewalPaymentReceiptNotification::class, function (ManualRenewalPaymentReceiptNotification $notification) use ($payment): bool {
+        return $notification->payment->is($payment)
+            && $notification->payment->amount === 49_900;
+    });
+    expect($payment->fresh()->receipt_notification_dispatched_at)->not->toBeNull();
 });
 
 test('a mismatched payment amount fails closed without granting entitlement', function (): void {

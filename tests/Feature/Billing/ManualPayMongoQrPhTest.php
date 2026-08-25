@@ -5,10 +5,13 @@ use App\Enums\BillingCollectionMethod;
 use App\Enums\BillingInvoiceStatus;
 use App\Enums\BillingPaymentStatus;
 use App\Enums\BillingProvider;
+use App\Enums\OrganizationRole;
 use App\Models\BillingCustomer;
 use App\Models\BillingInvoice;
 use App\Models\BillingSubscription;
 use App\Models\Organization;
+use App\Models\OrganizationMembership;
+use App\Models\User;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
@@ -132,4 +135,27 @@ test('an expired QR Ph attempt remains historical and a retry uses a new payment
         ->and($second->payment->external_payment_intent_id)->toBe('pi_qrph_second')
         ->and($second->payment->isNot($first->payment))->toBeTrue()
         ->and($invoice->payments()->count())->toBe(2);
+});
+
+test('manual QR Ph endpoints are unavailable when the capability is disabled', function (): void {
+    Config::set('billing.providers.paymongo.manual_qrph', false);
+    $organization = Organization::factory()->create();
+    $user = User::factory()->create();
+    OrganizationMembership::factory()->for($organization)->for($user)->create(['role' => OrganizationRole::Owner]);
+
+    $this->actingAs($user)
+        ->post(route('organizations.billing.renew', $organization), ['plan' => 'starter', 'interval' => 'monthly'])
+        ->assertNotFound();
+});
+
+test('a billing administrator cannot create a QR checkout for another organization invoice', function (): void {
+    Config::set('billing.providers.paymongo.manual_qrph', true);
+    $invoice = manualQrPhInvoice();
+    $user = User::factory()->create();
+    OrganizationMembership::factory()->for($invoice->organization)->for($user)->create(['role' => OrganizationRole::Owner]);
+    $otherOrganization = Organization::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('organizations.billing.invoices.payments.store', [$otherOrganization, $invoice]))
+        ->assertForbidden();
 });

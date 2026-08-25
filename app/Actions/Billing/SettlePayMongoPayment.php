@@ -5,6 +5,7 @@ namespace App\Actions\Billing;
 use App\Enums\BillingInvoiceStatus;
 use App\Enums\BillingPaymentStatus;
 use App\Enums\BillingProvider;
+use App\Jobs\SendManualRenewalPaymentReceipt;
 use App\Models\BillingInvoice;
 use App\Models\BillingPayment;
 use App\Models\BillingSubscription;
@@ -16,8 +17,12 @@ final class SettlePayMongoPayment
 {
     public function handle(BillingPayment $payment, string $externalPaymentId, int $amount, string $currency, bool $livemode, ?Carbon $paidAt = null): BillingPayment
     {
-        return DB::transaction(function () use ($payment, $externalPaymentId, $amount, $currency, $livemode, $paidAt): BillingPayment {
-            $payment = BillingPayment::query()->lockForUpdate()->findOrFail($payment->getKey());
+        [$payment, $wasSettled] = DB::transaction(function () use ($payment, $externalPaymentId, $amount, $currency, $livemode, $paidAt): array {
+            $payment = BillingPayment::query()->lockForUpdate()->whereKey($payment->getKey())->first();
+
+            if ($payment === null) {
+                throw new RuntimeException('PayMongo payment was not found.');
+            }
             $invoice = BillingInvoice::query()->lockForUpdate()->findOrFail($payment->billing_invoice_id);
             $subscription = BillingSubscription::query()->lockForUpdate()->findOrFail($invoice->billing_subscription_id);
 
@@ -40,7 +45,7 @@ final class SettlePayMongoPayment
                     throw new RuntimeException('PayMongo payment identity conflicts with a settled attempt.');
                 }
 
-                return $payment;
+                return [$payment, false];
             }
 
             if (! $invoice->status->isPayable()) {
@@ -64,7 +69,13 @@ final class SettlePayMongoPayment
                 'cancelled_at' => null,
             ]);
 
-            return $payment->fresh();
+            return [$payment->fresh(), true];
         }, attempts: 3);
+
+        if ($wasSettled) {
+            SendManualRenewalPaymentReceipt::dispatch($payment->getKey());
+        }
+
+        return $payment;
     }
 }

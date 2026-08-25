@@ -179,13 +179,19 @@ class OrganizationBillingController extends Controller
     private function availablePlansData(PlanCatalog $planCatalog, BillingProviderManager $providerManager): array
     {
         $provider = $providerManager->defaultProvider();
+        $usesManualQrPh = $provider === BillingProvider::PayMongo
+            && config('billing.providers.paymongo.manual_qrph') === true;
 
         return array_values(array_map(
             static fn ($definition) => [
                 'code' => $definition->code->value,
                 'name' => $definition->name,
-                'monthly' => $definition->externalPlanId($provider, 'monthly') !== null,
-                'yearly' => $definition->externalPlanId($provider, 'yearly') !== null,
+                'monthly' => $usesManualQrPh
+                    ? $definition->manualAmount('monthly') !== null
+                    : $definition->externalPlanId($provider, 'monthly') !== null,
+                'yearly' => $usesManualQrPh
+                    ? $definition->manualAmount('yearly') !== null
+                    : $definition->externalPlanId($provider, 'yearly') !== null,
                 'features' => $definition->features,
                 'limits' => $definition->limits,
             ],

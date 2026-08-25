@@ -21,6 +21,8 @@ final class OrganizationManualRenewalController extends Controller
         CreateRenewalInvoice $createInvoice,
         CreatePayMongoQrPhPayment $createPayment,
     ): JsonResponse {
+        abort_unless(config('billing.providers.paymongo.manual_qrph') === true, 404);
+
         try {
             $subscription = $ensureSubscription->handle(
                 $organization,
