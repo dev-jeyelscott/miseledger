@@ -185,11 +185,9 @@ test('a worker interruption after delivery succeeds but before the job returns d
         'lifecycle_event' => BillingLifecycleEvent::PaymentFailed,
     ]);
 
-    // Simulates a worker that was killed after the notification was already accepted
-    // for delivery, but before the process returned control past the send call. The
-    // dispatch marker is committed as part of the outbox write, before delivery is
-    // attempted, so this state is indistinguishable from "already delivered" and must
-    // not trigger a resend.
+    // The dispatch marker is only committed after delivery succeeds, so pre-seeding it
+    // simulates a job that already completed delivery on a prior attempt. A retry must
+    // treat this as "already delivered" and must not trigger a resend.
     $effect->update([
         'notification_claimed_at' => now(),
         'notification_dispatched_at' => now(),
