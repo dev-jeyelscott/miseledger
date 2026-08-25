@@ -29,6 +29,7 @@ final class ProcessOrganizationBillingWebhookEffect
         string $externalCustomerId,
         BillingLifecycleEvent $lifecycleEvent,
         string $auditAction,
+        ?callable $project = null,
     ): void {
         $organization = $this->resolveOrganization($provider, $externalCustomerId);
 
@@ -36,7 +37,7 @@ final class ProcessOrganizationBillingWebhookEffect
             return;
         }
 
-        $effect = DB::transaction(function () use ($organization, $provider, $externalEventId, $lifecycleEvent, $auditAction): ?BillingWebhookEffect {
+        $effect = DB::transaction(function () use ($organization, $provider, $externalEventId, $lifecycleEvent, $auditAction, $project): ?BillingWebhookEffect {
             $wasCreated = BillingWebhookEffect::query()->insertOrIgnore([
                 'organization_id' => $organization->getKey(),
                 'provider' => $provider->value,
@@ -54,6 +55,8 @@ final class ProcessOrganizationBillingWebhookEffect
                 ->firstOrFail();
 
             if ($wasCreated) {
+                $project?->__invoke($organization);
+
                 $this->recordAuditEntry->handle(
                     $organization,
                     null,

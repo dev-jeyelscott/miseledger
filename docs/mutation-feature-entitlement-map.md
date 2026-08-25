@@ -70,11 +70,9 @@ under organization administration below.
 Billing recovery must remain reachable for an authorized organization member
 even when that organization is commercially `read_only`.
 
-The current implementation is Stripe-specific at the provider boundary.
-Application billing semantics are provider-neutral, but `/stripe/*`, Cashier
-portal behavior, Cashier checkout behavior, and Stripe webhook processing
-must remain documented as current Stripe adapter details until later PB work
-generalizes them.
+Application billing semantics are provider-neutral. Cashier continues to own
+Stripe portal, checkout, and lifecycle synchronization, while PayMongo owns
+its separate checkout and webhook boundary.
 
 | Route | Method | Current implementation | Commercial policy | Read availability |
 |---|---|---|---|---|
@@ -84,21 +82,28 @@ generalizes them.
 | `organizations/{organization}/billing/checkout/success` | GET | `OrganizationCheckoutStatusController@success`, current Stripe Checkout synchronization status | `always_allowed` relative to commercial write access, still requires billing RBAC | `available_read_only` |
 | `organizations/{organization}/billing/checkout/cancel` | GET | `OrganizationCheckoutStatusController@cancel` | `always_allowed` relative to commercial write access, still requires billing RBAC | `available_read_only` |
 | `stripe/payment/{id}` (`cashier.payment`) | GET | Cashier `PaymentController@show` | Stripe adapter recovery endpoint, outside organization commercial write gating | recovery endpoint |
-| `stripe/webhook` (`cashier.webhook`) | POST | `StripeWebhookController@handleWebhook` | Stripe provider callback, not an organization business mutation route | n/a |
+| `billing/webhooks/stripe` (`cashier.webhook`) | POST | `StripeWebhookController@handleWebhook` | Stripe provider callback, not an organization business mutation route | n/a |
+| `billing/webhooks/paymongo` (`billing.webhooks.paymongo`) | POST | `PayMongoWebhookController` | PayMongo provider callback, not an organization business mutation route | n/a |
 
 ### Billing-route rules
 
 Organization billing routes remain additive to RBAC. Commercial recovery
 access never grants membership or `BillingManage` permission.
 
-The Stripe webhook is not a user-authorized organization route. It is a
-provider callback and is protected through Stripe/Cashier webhook security,
-including signature handling when configured. The current CSRF exclusion is
-limited to `stripe/*`.
+These provider-specific callbacks are outside authentication, verification,
+organization RBAC, feature-entitlement, and commercial-write enforcement.
+They are infrastructure callbacks, not tenant business mutations. CSRF is
+excluded only for the exact callback paths above. Stripe remains protected by
+Cashier's signature handling and observability; PayMongo verifies the raw
+request body against its `Paymongo-Signature` HMAC boundary before parsing or
+processing payload data. Neither endpoint guesses a provider from request data.
 
-A later PayMongo implementation must add its own provider-specific callback
-surface and security model rather than reusing Stripe route semantics
-implicitly.
+PayMongo's currently documented subscription webhook contract exposes
+`subscription.activated`, `subscription.past_due`, `subscription.unpaid`, and
+`subscription.updated`, plus subscription-invoice payment events. It does not
+document a terminal subscription-ended/cancelled webhook event or a terminal
+subscription status in those examples, so this callback intentionally does not
+fabricate an `ended` lifecycle mapping.
 
 Changing `BILLING_PROVIDER` in the future must affect only new subscription
 acquisition. Existing provider-owned subscriptions must continue to use their

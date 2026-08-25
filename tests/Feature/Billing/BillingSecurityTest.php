@@ -78,16 +78,16 @@ test('browser billing mutations reject requests without a CSRF token', function 
     expect(fn () => $csrf->handle($portalRequest, fn () => response('')))
         ->toThrow(TokenMismatchException::class);
 
-    $webhookRequest = Request::create('/stripe/webhook', 'POST');
+    $webhookRequest = Request::create('/billing/webhooks/stripe', 'POST');
     $webhookRequest->setLaravelSession($session);
 
     expect($csrf->handle($webhookRequest, fn () => response('')))
         ->toBeInstanceOf(Response::class);
 });
 
-test('Stripe webhooks are the sole billing CSRF exclusion', function () {
+test('provider webhook callbacks are the sole billing CSRF exclusions', function () {
     expect(file_get_contents(base_path('bootstrap/app.php')))
-        ->toContain("->validateCsrfTokens(except: [\n            'stripe/*',\n        ])");
+        ->toContain("->validateCsrfTokens(except: [\n            'billing/webhooks/stripe',\n            'billing/webhooks/paymongo',\n        ])");
 });
 
 test('billing code remains isolated from stock balance projections and stock movement recording', function () {
@@ -97,6 +97,7 @@ test('billing code remains isolated from stock balance projections and stock mov
     $billingFiles[] = app_path('Http/Controllers/Billing/OrganizationCheckoutController.php');
     $billingFiles[] = app_path('Http/Controllers/Billing/OrganizationCheckoutStatusController.php');
     $billingFiles[] = app_path('Http/Controllers/Billing/StripeWebhookController.php');
+    $billingFiles[] = app_path('Http/Controllers/Billing/PayMongoWebhookController.php');
 
     $billingSource = implode("\n", array_map(file_get_contents(...), $billingFiles));
     $recordStockMovementSource = file_get_contents(
