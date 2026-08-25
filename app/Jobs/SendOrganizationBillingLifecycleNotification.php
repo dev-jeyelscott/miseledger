@@ -59,7 +59,10 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
                 return null;
             }
 
-            $effect->update(['notification_dispatched_at' => now()]);
+            // Records intent only; completion is stamped separately, after delivery
+            // succeeds, so a worker crash between this claim and delivery leaves the
+            // effect undispatched and safely retryable rather than stuck as "dispatched".
+            $effect->update(['notification_claimed_at' => now()]);
 
             return $effect;
         });
@@ -68,16 +71,9 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
             return;
         }
 
-        // The completion marker is committed before delivery is attempted, so retries after a
-        // caught delivery failure below are the only path that can resend: an uncaught worker
-        // crash mid-delivery leaves the marker set and is never retried, never duplicated.
-        try {
-            $notify->handle($this->stripeCustomerId, $effect->lifecycle_event);
-        } catch (Throwable $exception) {
-            $effect->update(['notification_dispatched_at' => null]);
+        $notify->handle($this->stripeCustomerId, $effect->lifecycle_event);
 
-            throw $exception;
-        }
+        $effect->update(['notification_dispatched_at' => now()]);
     }
 
     public function uniqueId(): string

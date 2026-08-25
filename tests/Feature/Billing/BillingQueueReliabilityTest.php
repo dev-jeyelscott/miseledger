@@ -118,7 +118,7 @@ test('billing jobs have bounded retries and report terminal failures with organi
         ->and($effect->fresh()->notification_dispatched_at)->toBeNull();
 });
 
-test('a caught delivery failure reverts the dispatch marker so a retry delivers exactly once', function () {
+test('a caught delivery failure leaves the dispatch marker unset so a retry delivers exactly once', function () {
     $recipient = billingQueueRecipient('cus_queue_crash_boundary');
     $effect = BillingWebhookEffect::query()->create([
         'organization_id' => $recipient['organization']->getKey(),
@@ -137,9 +137,38 @@ test('a caught delivery failure reverts the dispatch marker so a retry delivers 
     expect(fn (): mixed => $job->handle(app(NotifyOrganizationBillingLifecycle::class)))
         ->toThrow(RuntimeException::class);
 
-    expect($effect->fresh()->notification_dispatched_at)->toBeNull();
+    expect($effect->fresh()->notification_dispatched_at)->toBeNull()
+        ->and($effect->fresh()->notification_claimed_at)->not->toBeNull();
 
     Notification::fake();
+
+    $job->handle(app(NotifyOrganizationBillingLifecycle::class));
+    $job->handle(app(NotifyOrganizationBillingLifecycle::class));
+
+    Notification::assertSentTo($recipient['user'], BillingLifecycleNotification::class, 1);
+    expect($effect->fresh()->notification_dispatched_at)->not->toBeNull();
+});
+
+test('a worker crash after intent is claimed but before delivery completes is recoverable without duplicate delivery', function () {
+    $recipient = billingQueueRecipient('cus_queue_worker_crash');
+    $effect = BillingWebhookEffect::query()->create([
+        'organization_id' => $recipient['organization']->getKey(),
+        'stripe_event_id' => 'evt_queue_worker_crash',
+        'lifecycle_event' => BillingLifecycleEvent::PaymentFailed,
+    ]);
+
+    // Simulates a worker that crashed uncaught after the durable claim was committed but
+    // before delivery was attempted or the completion marker was stamped.
+    $effect->update(['notification_claimed_at' => now()]);
+
+    Notification::fake();
+
+    $job = new SendOrganizationBillingLifecycleNotification(
+        $effect->getKey(),
+        $recipient['organization']->getKey(),
+        'evt_queue_worker_crash',
+        $recipient['organization']->stripe_id,
+    );
 
     $job->handle(app(NotifyOrganizationBillingLifecycle::class));
     $job->handle(app(NotifyOrganizationBillingLifecycle::class));
