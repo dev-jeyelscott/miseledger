@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\BillingWebhookEffect;
 use App\Models\Organization;
 use App\Support\Billing\BillingObservability;
 use App\Support\Billing\OrganizationSubscriptionAccessResolver;
@@ -34,6 +35,8 @@ final class BillingReconcile extends Command
         $discrepancies = 0;
         $providerFailures = 0;
 
+        $discrepancies += $this->reconcileStaleNotificationClaims();
+
         Organization::query()->with('subscriptions.items')->chunkById(
             $this->chunkSize(),
             function (Collection $batch) use (&$organizations, &$discrepancies, &$providerFailures): void {
@@ -59,6 +62,32 @@ final class BillingReconcile extends Command
         ));
 
         return $discrepancies === 0 && $providerFailures === 0 ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * Surface notification claims left behind by a defunct job attempt: a claim with
+     * no dispatch marker, older than the job's maximum retry window, can no longer be
+     * a retry-in-progress and needs manual investigation to confirm whether delivery
+     * actually occurred before the claim can be safely cleared.
+     */
+    private function reconcileStaleNotificationClaims(): int
+    {
+        $staleClaims = BillingWebhookEffect::query()
+            ->with('organization')
+            ->whereNotNull('notification_claimed_at')
+            ->whereNull('notification_dispatched_at')
+            ->where('notification_claimed_at', '<', now()->subMinutes(30))
+            ->get();
+
+        foreach ($staleClaims as $effect) {
+            if ($effect->organization === null) {
+                continue;
+            }
+
+            $this->observability->staleNotificationClaim($effect->organization, $effect->stripe_event_id);
+        }
+
+        return $staleClaims->count();
     }
 
     /** @return array{0: int, 1: int} */

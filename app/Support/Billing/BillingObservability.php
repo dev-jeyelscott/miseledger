@@ -62,6 +62,13 @@ final class BillingObservability
         ]);
     }
 
+    public function staleNotificationClaim(Organization $organization, string $stripeEventId): void
+    {
+        $this->record('warning', 'billing.notification.stale_claim', 'application', $organization, [
+            'stripe_event_id' => $stripeEventId,
+        ]);
+    }
+
     private function failure(string $event, ?Organization $organization, Throwable $exception, ?string $failureSource = null): void
     {
         $this->record('error', $event, $failureSource ?? ($exception instanceof ApiErrorException ? 'provider' : 'application'), $organization, [

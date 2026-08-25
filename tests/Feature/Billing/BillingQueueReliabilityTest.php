@@ -4,6 +4,7 @@ use App\Actions\Billing\NotifyOrganizationBillingLifecycle;
 use App\Actions\Billing\ProcessOrganizationBillingWebhookEffect;
 use App\Enums\BillingLifecycleEvent;
 use App\Enums\OrganizationRole;
+use App\Exceptions\AmbiguousBillingNotificationDeliveryException;
 use App\Jobs\SendOrganizationBillingLifecycleNotification;
 use App\Models\BillingWebhookEffect;
 use App\Models\Organization;
@@ -14,7 +15,6 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
-use Symfony\Component\Mime\Email;
 
 function billingQueueRecipient(string $stripeCustomerId): array
 {
@@ -119,7 +119,7 @@ test('billing jobs have bounded retries and report terminal failures with organi
         ->and($effect->fresh()->notification_dispatched_at)->toBeNull();
 });
 
-test('a caught delivery failure leaves the dispatch marker unset so a retry delivers exactly once', function () {
+test('a caught delivery failure clears the claim so a retry delivers exactly once', function () {
     $recipient = billingQueueRecipient('cus_queue_crash_boundary');
     $effect = BillingWebhookEffect::query()->create([
         'organization_id' => $recipient['organization']->getKey(),
@@ -138,8 +138,11 @@ test('a caught delivery failure leaves the dispatch marker unset so a retry deli
     expect(fn (): mixed => $job->handle(app(NotifyOrganizationBillingLifecycle::class)))
         ->toThrow(RuntimeException::class);
 
+    // The send call threw before returning, so delivery is provably known not to have
+    // occurred; the claim is cleared so the retry below proceeds as a fresh attempt
+    // instead of being refused as ambiguous.
     expect($effect->fresh()->notification_dispatched_at)->toBeNull()
-        ->and($effect->fresh()->notification_claimed_at)->not->toBeNull();
+        ->and($effect->fresh()->notification_claimed_at)->toBeNull();
 
     Notification::fake();
 
@@ -150,7 +153,7 @@ test('a caught delivery failure leaves the dispatch marker unset so a retry deli
     expect($effect->fresh()->notification_dispatched_at)->not->toBeNull();
 });
 
-test('a claim left by a defunct prior attempt with no dispatch marker is retried to completion exactly once', function () {
+test('a claim left by a defunct prior attempt with no dispatch marker refuses redelivery instead of risking a duplicate send', function () {
     $recipient = billingQueueRecipient('cus_queue_worker_crash');
     $effect = BillingWebhookEffect::query()->create([
         'organization_id' => $recipient['organization']->getKey(),
@@ -158,10 +161,8 @@ test('a claim left by a defunct prior attempt with no dispatch marker is retried
         'lifecycle_event' => BillingLifecycleEvent::PaymentFailed,
     ]);
 
-    // Simulates a worker that crashed after the durable claim was committed but before
-    // the send call was ever made. Whether that call happened cannot be determined
-    // locally, but BillingLifecycleNotification carries a deterministic Message-Id for
-    // this Stripe event, so the retry below is safe to redeliver to completion.
+    // Simulates a worker that crashed after the durable claim was committed, leaving no
+    // local or provider-side signal to determine whether the send call ever happened.
     $effect->update(['notification_claimed_at' => now()->subMinutes(5)]);
 
     Notification::fake();
@@ -173,61 +174,41 @@ test('a claim left by a defunct prior attempt with no dispatch marker is retried
         $recipient['organization']->stripe_id,
     );
 
-    $job->handle(app(NotifyOrganizationBillingLifecycle::class));
-    $job->handle(app(NotifyOrganizationBillingLifecycle::class));
+    expect(fn (): mixed => $job->handle(app(NotifyOrganizationBillingLifecycle::class)))
+        ->toThrow(AmbiguousBillingNotificationDeliveryException::class);
 
-    Notification::assertSentTo($recipient['user'], BillingLifecycleNotification::class, 1);
-    expect($effect->fresh()->notification_dispatched_at)->not->toBeNull();
+    Notification::assertNothingSent();
+    expect($effect->fresh()->notification_dispatched_at)->toBeNull()
+        ->and($effect->fresh()->notification_claimed_at)->not->toBeNull();
 });
 
-test('a claim left by a defunct prior attempt carries a stable message id so a transport-level resend is deduplicated', function () {
-    $recipient = billingQueueRecipient('cus_queue_post_delivery_crash');
-    $effect = BillingWebhookEffect::query()->create([
-        'organization_id' => $recipient['organization']->getKey(),
-        'stripe_event_id' => 'evt_queue_post_delivery_crash',
+test('billing reconciliation surfaces a stale notification claim left by a defunct job attempt', function () {
+    $organization = Organization::factory()->create();
+    $staleEffect = BillingWebhookEffect::query()->create([
+        'organization_id' => $organization->getKey(),
+        'stripe_event_id' => 'evt_queue_stale_claim',
         'lifecycle_event' => BillingLifecycleEvent::PaymentFailed,
     ]);
-    $effect->update(['notification_claimed_at' => now()->subMinutes(5)]);
+    $staleEffect->update(['notification_claimed_at' => now()->subMinutes(45)]);
 
-    $notification = new BillingLifecycleNotification(
-        $recipient['organization'],
-        $effect->lifecycle_event,
-        $effect->stripe_event_id,
+    $inFlightOrganization = Organization::factory()->create();
+    $inFlightEffect = BillingWebhookEffect::query()->create([
+        'organization_id' => $inFlightOrganization->getKey(),
+        'stripe_event_id' => 'evt_queue_in_flight_claim',
+        'lifecycle_event' => BillingLifecycleEvent::PaymentFailed,
+    ]);
+    $inFlightEffect->update(['notification_claimed_at' => now()->subMinutes(2)]);
+
+    Log::shouldReceive('channel')->andReturnSelf();
+    Log::shouldReceive('warning')->once()->withArgs(
+        fn (string $message, array $context): bool => $message === 'Billing operational signal emitted.'
+            && $context['event'] === 'billing.notification.stale_claim'
+            && $context['organization_id'] === $organization->getKey()
+            && $context['stripe_event_id'] === 'evt_queue_stale_claim',
     );
+    Log::shouldReceive('info');
 
-    // Simulates the first (interrupted) attempt and the retry both rendering the mail
-    // representation for the same Stripe event: the Message-Id must be identical so
-    // the mail transport recognizes and deduplicates a resend rather than delivering
-    // it as a second, externally visible message.
-    $renderMessageId = function () use ($notification, $recipient): ?string {
-        $email = new Email;
-
-        foreach ($notification->toMail($recipient['user'])->callbacks as $callback) {
-            $callback($email);
-        }
-
-        return $email->getHeaders()->get('Message-Id')?->getBodyAsString();
-    };
-
-    $firstAttemptMessageId = $renderMessageId();
-    $retryMessageId = $renderMessageId();
-
-    expect($firstAttemptMessageId)->not->toBeNull()
-        ->and($firstAttemptMessageId)->toBe($retryMessageId);
-
-    Notification::fake();
-
-    $job = new SendOrganizationBillingLifecycleNotification(
-        $effect->getKey(),
-        $recipient['organization']->getKey(),
-        'evt_queue_post_delivery_crash',
-        $recipient['organization']->stripe_id,
-    );
-
-    $job->handle(app(NotifyOrganizationBillingLifecycle::class));
-
-    Notification::assertSentTo($recipient['user'], BillingLifecycleNotification::class, 1);
-    expect($effect->fresh()->notification_dispatched_at)->not->toBeNull();
+    $this->artisan('billing:reconcile')->assertExitCode(1);
 });
 
 test('local subscription authorization succeeds without resolving a queue connection', function () {
