@@ -2,245 +2,197 @@
 
 namespace App\Console\Commands;
 
+use App\Actions\Audit\RecordAuditEntry;
+use App\Enums\BillingProvider;
+use App\Models\BillingSubscription;
 use App\Models\BillingWebhookEffect;
 use App\Models\Organization;
 use App\Support\Billing\BillingObservability;
-use App\Support\Billing\OrganizationSubscriptionAccessResolver;
+use App\Support\Billing\Providers\BillingProviderManager;
+use App\Support\Billing\Providers\RemoteBillingSubscription;
+use App\Support\Billing\Providers\RemoteBillingSubscriptionNotFoundException;
 use Illuminate\Console\Command;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Laravel\Cashier\Cashier;
-use Laravel\Cashier\Subscription as CashierSubscription;
-use Laravel\Cashier\SubscriptionItem as CashierSubscriptionItem;
 use Stripe\Exception\InvalidRequestException;
-use Stripe\Subscription as StripeSubscription;
 use Throwable;
 
 final class BillingReconcile extends Command
 {
-    public function __construct(private readonly BillingObservability $observability)
-    {
+    public function __construct(
+        private readonly BillingObservability $observability,
+        private readonly BillingProviderManager $providerManager,
+        private readonly RecordAuditEntry $recordAuditEntry,
+    ) {
         parent::__construct();
     }
 
-    protected $signature = 'billing:reconcile
-        {--chunk=100 : Number of organizations to process per database batch}';
+    protected $signature = 'billing:reconcile {--chunk=100 : Number of billing subscriptions to process per database batch}';
 
-    protected $description =
-        'Detect local Cashier and Stripe billing discrepancies without changing data.';
+    protected $description = 'Reconcile local billing projections with authoritative provider subscription state.';
 
     public function handle(): int
     {
-        $organizations = 0;
-        $discrepancies = 0;
+        $subscriptions = 0;
+        $discrepancies = $this->reconcileStaleNotificationClaims();
         $providerFailures = 0;
 
-        $discrepancies += $this->reconcileStaleNotificationClaims();
-
-        Organization::query()->with('subscriptions.items')->chunkById(
-            $this->chunkSize(),
-            function (Collection $batch) use (&$organizations, &$discrepancies, &$providerFailures): void {
-                foreach ($batch as $organization) {
-                    $organizations++;
-                    [$organizationDiscrepancies, $organizationProviderFailures] = $this->reconcileOrganization($organization);
-                    $discrepancies += $organizationDiscrepancies;
-                    $providerFailures += $organizationProviderFailures;
+        BillingSubscription::query()->with(['organization', 'billingCustomer'])
+            ->where('type', (string) config('billing.subscription_type'))
+            ->chunkById($this->chunkSize(), function (Collection $batch) use (&$subscriptions, &$discrepancies, &$providerFailures): void {
+                foreach ($batch as $subscription) {
+                    if (! $subscription instanceof BillingSubscription || $subscription->organization === null || $subscription->billingCustomer === null) {
+                        continue;
+                    }
+                    $subscriptions++;
+                    [$found, $failed] = $this->reconcileSubscription($subscription);
+                    $discrepancies += $found;
+                    $providerFailures += $failed;
                 }
-            },
-        );
+            });
+
+        [$found, $failed] = $this->reconcileStripeRemoteOnlySubscriptions();
+        $discrepancies += $found;
+        $providerFailures += $failed;
 
         $this->observability->subscriptionStatusCounts(
-            Organization::query()->whereHas('subscriptions', fn ($query) => $query->where('stripe_status', 'past_due'))->count(),
-            Organization::query()->whereHas('subscriptions', fn ($query) => $query->where('stripe_status', 'unpaid'))->count(),
+            BillingSubscription::query()->where('provider_status', 'past_due')->count(),
+            BillingSubscription::query()->where('provider_status', 'unpaid')->count(),
         );
 
-        $this->line(sprintf(
-            'Billing reconciliation completed: %d organization%s inspected, %d discrepanc%s, %d provider failure%s.',
-            $organizations, $organizations === 1 ? '' : 's', $discrepancies,
-            $discrepancies === 1 ? 'y' : 'ies', $providerFailures,
-            $providerFailures === 1 ? '' : 's',
-        ));
+        $this->line(sprintf('Billing reconciliation completed: %d subscription%s inspected, %d discrepanc%s, %d provider failure%s.', $subscriptions, $subscriptions === 1 ? '' : 's', $discrepancies, $discrepancies === 1 ? 'y' : 'ies', $providerFailures, $providerFailures === 1 ? '' : 's'));
 
         return $discrepancies === 0 && $providerFailures === 0 ? self::SUCCESS : self::FAILURE;
     }
 
-    /**
-     * Surface notification claims left behind by a defunct job attempt: a claim with
-     * no dispatch marker, older than the job's maximum retry window, can no longer be
-     * a retry-in-progress and needs manual investigation to confirm whether delivery
-     * actually occurred before the claim can be safely cleared.
-     */
     private function reconcileStaleNotificationClaims(): int
     {
-        $staleClaims = BillingWebhookEffect::query()
-            ->with('organization')
-            ->whereNotNull('notification_claimed_at')
-            ->whereNull('notification_dispatched_at')
-            ->where('notification_claimed_at', '<', now()->subMinutes(30))
-            ->get();
-
-        foreach ($staleClaims as $effect) {
-            if ($effect->organization === null) {
-                continue;
+        $claims = BillingWebhookEffect::query()->with('organization')->whereNotNull('notification_claimed_at')->whereNull('notification_dispatched_at')->where('notification_claimed_at', '<', now()->subMinutes(30))->get();
+        foreach ($claims as $effect) {
+            if ($effect->organization !== null) {
+                $this->observability->staleNotificationClaim($effect->organization, $effect->external_event_id, $effect->provider);
             }
-
-            $this->observability->staleNotificationClaim($effect->organization, $effect->external_event_id);
         }
 
-        return $staleClaims->count();
+        return $claims->count();
     }
 
     /** @return array{0: int, 1: int} */
-    private function reconcileOrganization(Organization $organization): array
+    private function reconcileSubscription(BillingSubscription $subscription): array
     {
-        /** @var Collection<int, Model> $localSubscriptions */
-        $localSubscriptions = $organization->subscriptions->where('type', (string) config('billing.subscription_type'));
-
-        if (blank($organization->stripe_id)) {
-            if ($localSubscriptions->isEmpty()) {
-                return [0, 0];
-            }
-
-            $this->logDiscrepancy($organization, 'missing_stripe_customer');
+        try {
+            $remote = $this->providerManager->provider($subscription->provider)->retrieveSubscription($subscription);
+        } catch (RemoteBillingSubscriptionNotFoundException) {
+            $this->observability->reconciliationMismatch($subscription->organization, $subscription->provider, 'missing_remote_subscription', ['subscription_status' => $subscription->provider_status, 'livemode' => $subscription->livemode]);
 
             return [1, 0];
-        }
-
-        try {
-            Cashier::stripe()->customers->retrieve($organization->stripe_id);
-            $remoteSubscriptions = $this->remoteSubscriptions($organization->stripe_id);
         } catch (Throwable $exception) {
-            if ($this->isMissingCustomer($exception)) {
-                $this->logDiscrepancy($organization, 'missing_stripe_customer');
-
-                return [1, 0];
-            }
-
-            $this->logProviderFailure($organization, $exception);
+            $this->observability->reconciliationProviderFailure($subscription->organization, $subscription->provider, $exception, $subscription->provider_status, $subscription->livemode);
 
             return [0, 1];
         }
 
+        if ($remote->externalCustomerId !== $subscription->billingCustomer->external_customer_id || $remote->livemode !== $subscription->livemode) {
+            $this->observability->reconciliationProviderFailure($subscription->organization, $subscription->provider, new \RuntimeException('Provider subscription ownership validation failed.'), $subscription->provider_status, $subscription->livemode);
+
+            return [0, 1];
+        }
+        if ($this->projectionMatches($subscription, $remote)) {
+            return [0, 0];
+        }
+
+        $this->updateProjection($subscription, $remote);
+        $this->observability->reconciliationMismatch($subscription->organization, $subscription->provider, 'subscription_mismatch', ['subscription_status' => $remote->status, 'livemode' => $remote->livemode]);
+
+        return [1, 0];
+    }
+
+    private function updateProjection(BillingSubscription $subscription, RemoteBillingSubscription $remote): void
+    {
+        DB::transaction(function () use ($subscription, $remote): void {
+            $projection = BillingSubscription::query()->with(['organization', 'billingCustomer'])->lockForUpdate()->whereKey($subscription->getKey())
+                ->where('organization_id', $subscription->organization_id)->where('billing_customer_id', $subscription->billing_customer_id)
+                ->where('provider', $subscription->provider)->where('external_subscription_id', $subscription->external_subscription_id)
+                ->where('livemode', $subscription->livemode)->firstOrFail();
+            if ($projection->billingCustomer->external_customer_id !== $remote->externalCustomerId || $projection->livemode !== $remote->livemode || $this->projectionMatches($projection, $remote)) {
+                return;
+            }
+            $before = $this->projectionSnapshot($projection);
+            $projection->update($remote->projection());
+            $this->recordAuditEntry->handle($projection->organization, null, 'billing.subscription.reconciled', BillingSubscription::class, $projection->getKey(), $before, $this->projectionSnapshot($projection->fresh()), $projection->external_subscription_id);
+        });
+    }
+
+    /** @return array{0: int, 1: int} */
+    private function reconcileStripeRemoteOnlySubscriptions(): array
+    {
         $discrepancies = 0;
-
-        foreach ($remoteSubscriptions as $stripeId => $remoteSubscription) {
-            if ($localSubscriptions->contains('stripe_id', $stripeId)) {
-                continue;
-            }
-
-            $this->logDiscrepancy($organization, 'missing_local_subscription', ['stripe_subscription_id' => $stripeId]);
-            $discrepancies++;
-        }
-
-        foreach ($localSubscriptions as $localSubscription) {
-            if (! $localSubscription instanceof CashierSubscription) {
-                continue;
-            }
-
-            $remoteSubscription = $remoteSubscriptions[$localSubscription->stripe_id] ?? null;
-
-            if ($remoteSubscription === null) {
-                if (OrganizationSubscriptionAccessResolver::resolve($organization)->isWritable()) {
-                    $this->logDiscrepancy($organization, 'unexpected_local_active_state', [
-                        'stripe_subscription_id' => $localSubscription->stripe_id,
-                        'local_status' => $localSubscription->stripe_status,
-                    ]);
-                } else {
-                    $this->logDiscrepancy($organization, 'subscription_mismatch', [
-                        'stripe_subscription_id' => $localSubscription->stripe_id,
-                        'local_status' => $localSubscription->stripe_status,
-                        'remote_status' => 'missing',
-                    ]);
+        $providerFailures = 0;
+        Organization::query()->whereNotNull('stripe_id')->chunkById($this->chunkSize(), function (Collection $organizations) use (&$discrepancies, &$providerFailures): void {
+            foreach ($organizations as $organization) {
+                if (! $organization instanceof Organization || blank($organization->stripe_id)) {
+                    continue;
                 }
+                try {
+                    Cashier::stripe()->customers->retrieve($organization->stripe_id);
+                    $remoteIds = [];
+                    foreach (Cashier::stripe()->subscriptions->all(['customer' => $organization->stripe_id, 'status' => 'all', 'limit' => 100])->autoPagingIterator() as $remote) {
+                        $remoteIds[] = $remote->id;
+                    }
+                } catch (InvalidRequestException $exception) {
+                    if ($exception->getHttpStatus() === 404) {
+                        $this->observability->reconciliationMismatch($organization, BillingProvider::Stripe, 'missing_stripe_customer');
+                        $discrepancies++;
 
-                $discrepancies++;
+                        continue;
+                    }
 
-                continue;
+                    $this->observability->reconciliationProviderFailure($organization, BillingProvider::Stripe, $exception);
+                    $providerFailures++;
+
+                    continue;
+                } catch (Throwable $exception) {
+                    $this->observability->reconciliationProviderFailure($organization, BillingProvider::Stripe, $exception);
+                    $providerFailures++;
+
+                    continue;
+                }
+                $localIds = BillingSubscription::query()->where('organization_id', $organization->getKey())->where('provider', BillingProvider::Stripe)->pluck('external_subscription_id');
+                foreach ($remoteIds as $remoteId) {
+                    if (! $localIds->contains($remoteId)) {
+                        $this->observability->reconciliationMismatch($organization, BillingProvider::Stripe, 'missing_local_subscription');
+                        $discrepancies++;
+                    }
+                }
             }
+        });
 
-            if ($this->subscriptionsMatch($localSubscription, $remoteSubscription)) {
-                continue;
-            }
-
-            $this->logDiscrepancy($organization, 'subscription_mismatch', [
-                'stripe_subscription_id' => $localSubscription->stripe_id,
-                'local_status' => $localSubscription->stripe_status,
-                'remote_status' => $remoteSubscription->status,
-            ]);
-            $discrepancies++;
-        }
-
-        return [$discrepancies, 0];
+        return [$discrepancies, $providerFailures];
     }
 
-    /** @return array<string, StripeSubscription> */
-    private function remoteSubscriptions(string $stripeCustomerId): array
+    private function projectionMatches(BillingSubscription $subscription, RemoteBillingSubscription $remote): bool
     {
-        $remoteSubscriptions = [];
-
-        foreach (Cashier::stripe()->subscriptions->all([
-            'customer' => $stripeCustomerId, 'status' => 'all', 'limit' => 100,
-        ])->autoPagingIterator() as $subscription) {
-            $remoteSubscriptions[$subscription->id] = $subscription;
-        }
-
-        return $remoteSubscriptions;
+        return $this->projectionSnapshot($subscription) === $this->normalizeProjection($remote->projection());
     }
 
-    private function subscriptionsMatch(CashierSubscription $localSubscription, StripeSubscription $remoteSubscription): bool
+    /** @return array<string, bool|string|null> */
+    private function projectionSnapshot(BillingSubscription $subscription): array
     {
-        return $localSubscription->stripe_status === $remoteSubscription->status
-            && $this->localPriceIds($localSubscription) === $this->remotePriceIds($remoteSubscription);
+        return $this->normalizeProjection($subscription->only(['external_plan_id', 'provider_status', 'livemode', 'trial_ends_at', 'current_period_ends_at', 'next_billing_at', 'ends_at', 'cancelled_at']));
     }
 
-    /** @return list<string> */
-    private function localPriceIds(CashierSubscription $subscription): array
+    /** @param array<string, Carbon|bool|string|null> $projection @return array<string, bool|string|null> */
+    private function normalizeProjection(array $projection): array
     {
-        if ($subscription->stripe_price !== null) {
-            return [$subscription->stripe_price];
-        }
-
-        $priceIds = [];
-
-        foreach ($subscription->items as $item) {
-            if ($item instanceof CashierSubscriptionItem && $item->stripe_price !== '') {
-                $priceIds[] = $item->stripe_price;
+        foreach ($projection as $field => $value) {
+            if ($value instanceof Carbon) {
+                $projection[$field] = $value->utc()->toISOString();
             }
         }
 
-        sort($priceIds);
-
-        return $priceIds;
-    }
-
-    /** @return list<string> */
-    private function remotePriceIds(StripeSubscription $subscription): array
-    {
-        $priceIds = [];
-
-        foreach ($subscription->items->data as $item) {
-            $priceIds[] = $item->price->id;
-        }
-
-        sort($priceIds);
-
-        return $priceIds;
-    }
-
-    private function isMissingCustomer(Throwable $exception): bool
-    {
-        return $exception instanceof InvalidRequestException && $exception->getHttpStatus() === 404;
-    }
-
-    /** @param array<string, string> $context */
-    private function logDiscrepancy(Organization $organization, string $discrepancy, array $context = []): void
-    {
-        $this->observability->reconciliationMismatch($organization, $discrepancy, $context);
-    }
-
-    private function logProviderFailure(Organization $organization, Throwable $exception): void
-    {
-        $this->observability->reconciliationProviderFailure($organization, $exception);
+        return $projection;
     }
 
     private function chunkSize(): int

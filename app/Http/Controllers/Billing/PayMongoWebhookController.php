@@ -8,15 +8,30 @@ use App\Enums\BillingProvider;
 use App\Http\Controllers\Controller;
 use App\Models\BillingCustomer;
 use App\Models\BillingSubscription;
+use App\Support\Billing\BillingObservability;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 
 final class PayMongoWebhookController extends Controller
 {
-    public function __construct(private readonly ProcessOrganizationBillingWebhookEffect $process) {}
+    public function __construct(
+        private readonly ProcessOrganizationBillingWebhookEffect $process,
+        private readonly BillingObservability $observability,
+    ) {}
 
     public function __invoke(Request $request): Response
+    {
+        try {
+            return $this->processWebhook($request);
+        } catch (\Throwable $exception) {
+            $this->observability->webhookFailure(null, BillingProvider::PayMongo, $exception, data_get($request->json()->all(), 'data.id'), data_get($request->json()->all(), 'data.attributes.data.attributes.status'), data_get($request->json()->all(), 'data.attributes.livemode'));
+
+            throw $exception;
+        }
+    }
+
+    private function processWebhook(Request $request): Response
     {
         $payload = json_decode($request->getContent(), true);
 

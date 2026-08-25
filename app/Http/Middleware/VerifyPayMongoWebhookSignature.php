@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\BillingProvider;
 use App\Support\Billing\BillingObservability;
 use Closure;
 use Illuminate\Http\Request;
@@ -65,7 +66,7 @@ final class VerifyPayMongoWebhookSignature
 
     private function reject(): never
     {
-        $this->observability->invalidWebhookSignature();
+        $this->observability->invalidWebhookSignature(BillingProvider::PayMongo);
 
         throw new AccessDeniedHttpException('Invalid PayMongo webhook signature.');
     }

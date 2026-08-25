@@ -103,7 +103,8 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
     {
         app(BillingObservability::class)->queueFailure(
             $this->organizationId,
-            self::class,
+            $this->provider,
+            $this->externalEventId,
             $exception,
         );
     }

@@ -1,11 +1,15 @@
 <?php
 
+use App\Enums\BillingProvider;
+use App\Models\AuditLog;
+use App\Models\BillingCustomer;
+use App\Models\BillingSubscription;
 use App\Models\Organization;
 use App\Models\StockBalance;
 use App\Models\StockMovement;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use RuntimeException;
 use Stripe\ApiRequestor;
 use Stripe\HttpClient\ClientInterface;
 
@@ -40,6 +44,35 @@ final class BillingReconciliationStripeClient implements ClientInterface
         }
 
         if (str_contains($absUrl, '/v1/subscriptions')) {
+            if (preg_match('#/v1/subscriptions/(sub_[^/?]+)#', $absUrl, $matches) === 1) {
+                foreach ($this->subscriptionsByCustomer as $customerId => $subscription) {
+                    if ($subscription['id'] !== $matches[1]) {
+                        continue;
+                    }
+
+                    return [json_encode([
+                        'id' => $subscription['id'],
+                        'object' => 'subscription',
+                        'customer' => $customerId,
+                        'status' => $subscription['status'],
+                        'livemode' => false,
+                        'trial_end' => null,
+                        'current_period_end' => null,
+                        'cancel_at' => null,
+                        'cancel_at_period_end' => false,
+                        'canceled_at' => null,
+                        'items' => [
+                            'data' => [[
+                                'id' => 'si_'.$subscription['id'],
+                                'object' => 'subscription_item',
+                                'price' => ['id' => $subscription['price']],
+                            ]],
+                        ],
+                    ]), 200, []];
+                }
+
+                return [json_encode(['error' => ['type' => 'invalid_request_error']]), 404, []];
+            }
             $subscription = $this->subscriptionsByCustomer[$params['customer']] ?? null;
 
             return [json_encode([
@@ -65,10 +98,29 @@ afterEach(function (): void {
 
 function billingReconciliationSubscription(Organization $organization, array $attributes = []): void
 {
-    $organization->subscriptions()->create(array_merge([
+    $cashierSubscription = $organization->subscriptions()->create(array_merge([
         'type' => config('billing.subscription_type'), 'stripe_id' => 'sub_'.$organization->id,
         'stripe_status' => 'active', 'stripe_price' => 'price_standard', 'quantity' => 1,
     ], $attributes));
+
+    $customer = BillingCustomer::query()->firstOrCreate([
+        'organization_id' => $organization->getKey(),
+        'provider' => BillingProvider::Stripe,
+    ], [
+        'external_customer_id' => $organization->stripe_id,
+        'livemode' => false,
+    ]);
+
+    BillingSubscription::query()->create([
+        'organization_id' => $organization->getKey(),
+        'billing_customer_id' => $customer->getKey(),
+        'provider' => BillingProvider::Stripe,
+        'type' => $cashierSubscription->type,
+        'external_subscription_id' => $cashierSubscription->stripe_id,
+        'external_plan_id' => $cashierSubscription->stripe_price,
+        'provider_status' => $cashierSubscription->stripe_status,
+        'livemode' => false,
+    ]);
 }
 
 function billingReconciliationClient(): BillingReconciliationStripeClient
@@ -87,7 +139,7 @@ test('a clean reconciliation is idempotent and leaves inventory data unchanged',
     $client->subscriptionsByCustomer['cus_clean'] = ['id' => 'sub_clean', 'status' => 'active', 'price' => 'price_standard'];
 
     $this->artisan('billing:reconcile')
-        ->expectsOutputToContain('1 organization inspected, 0 discrepancies, 0 provider failures')
+        ->expectsOutputToContain('1 subscription inspected, 0 discrepancies, 0 provider failures')
         ->assertExitCode(0);
     $this->artisan('billing:reconcile')->assertExitCode(0);
 
@@ -113,12 +165,12 @@ test('it logs missing customers, missing local subscriptions, unexpected local a
     Log::shouldReceive('channel')->andReturnSelf();
 
     $this->artisan('billing:reconcile')
-        ->expectsOutputToContain('4 organizations inspected, 4 discrepancies, 0 provider failures')
+        ->expectsOutputToContain('2 subscriptions inspected, 4 discrepancies, 0 provider failures')
         ->assertExitCode(1);
 
     foreach ([
         [$missingCustomer->id, 'missing_stripe_customer'], [$missingLocal->id, 'missing_local_subscription'],
-        [$unexpectedLocal->id, 'unexpected_local_active_state'], [$mismatched->id, 'subscription_mismatch'],
+        [$unexpectedLocal->id, 'missing_remote_subscription'], [$mismatched->id, 'subscription_mismatch'],
     ] as [$organizationId, $discrepancy]) {
         Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context): bool => $message === 'Billing operational signal emitted.'
             && $context['organization_id'] === $organizationId
@@ -136,7 +188,7 @@ test('it logs provider failures without leaking provider messages', function () 
     Log::shouldReceive('channel')->andReturnSelf();
 
     $this->artisan('billing:reconcile')
-        ->expectsOutputToContain('1 organization inspected, 0 discrepancies, 1 provider failure')
+        ->expectsOutputToContain('0 subscriptions inspected, 0 discrepancies, 1 provider failure')
         ->assertExitCode(1);
 
     Log::shouldHaveReceived('error')->withArgs(fn (string $message, array $context): bool => $message === 'Billing operational signal emitted.'
@@ -155,8 +207,55 @@ test('it processes every organization across bounded batches', function () {
     $client = billingReconciliationClient();
 
     $this->artisan('billing:reconcile --chunk=1')
-        ->expectsOutputToContain('3 organizations inspected, 0 discrepancies, 0 provider failures')
+        ->expectsOutputToContain('0 subscriptions inspected, 0 discrepancies, 0 provider failures')
         ->assertExitCode(0);
 
     expect($client->requestedCustomers)->toEqualCanonicalizing($organizations->pluck('stripe_id')->all());
+});
+
+test('PayMongo reconciliation recovers projection drift idempotently without inventory changes', function () {
+    Config::set('billing.providers.paymongo.api_base_url', 'https://paymongo.test/v1');
+    Config::set('billing.providers.paymongo.secret_key', 'sk_test_paymongo');
+    $organization = Organization::factory()->create();
+    $customer = BillingCustomer::factory()->for($organization)->create([
+        'provider' => BillingProvider::PayMongo,
+        'external_customer_id' => 'cus_reconcile_paymongo',
+        'livemode' => false,
+    ]);
+    $subscription = BillingSubscription::factory()->for($customer, 'billingCustomer')->create([
+        'organization_id' => $organization->getKey(),
+        'provider' => BillingProvider::PayMongo,
+        'type' => config('billing.subscription_type'),
+        'external_subscription_id' => 'subs_reconcile_paymongo',
+        'external_plan_id' => 'plan_starter_monthly',
+        'provider_status' => 'active',
+        'livemode' => false,
+    ]);
+    Http::fake([
+        'paymongo.test/*' => Http::response([
+            'data' => [
+                'id' => 'subs_reconcile_paymongo',
+                'type' => 'subscription',
+                'attributes' => [
+                    'customer_id' => 'cus_reconcile_paymongo',
+                    'plan' => ['id' => 'plan_pro_monthly'],
+                    'status' => 'past_due',
+                    'livemode' => false,
+                    'next_billing_schedule' => '2026-09-01',
+                    'cancelled_at' => null,
+                ],
+            ],
+        ]),
+    ]);
+
+    $this->artisan('billing:reconcile')->assertExitCode(1);
+
+    expect($subscription->fresh()->only(['external_plan_id', 'provider_status']))->toBe([
+        'external_plan_id' => 'plan_pro_monthly', 'provider_status' => 'past_due',
+    ])->and(AuditLog::query()->where('action', 'billing.subscription.reconciled')->count())->toBe(1)
+        ->and(StockMovement::query()->count())->toBe(0)
+        ->and(StockBalance::query()->count())->toBe(0);
+
+    $this->artisan('billing:reconcile')->assertExitCode(0);
+    expect(AuditLog::query()->where('action', 'billing.subscription.reconciled')->count())->toBe(1);
 });

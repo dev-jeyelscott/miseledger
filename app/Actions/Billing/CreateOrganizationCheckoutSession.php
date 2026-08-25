@@ -82,7 +82,7 @@ final class CreateOrganizationCheckoutSession
                         $actor,
                     );
                 } catch (\Throwable $exception) {
-                    $this->observability->checkoutFailure($organization, $exception);
+                    $this->observability->checkoutFailure($organization, $provider, $exception);
 
                     throw $exception;
                 }

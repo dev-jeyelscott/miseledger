@@ -9,13 +9,16 @@ use App\Jobs\SendOrganizationBillingLifecycleNotification;
 use App\Models\BillingCustomer;
 use App\Models\BillingWebhookEffect;
 use App\Models\Organization;
+use App\Support\Billing\BillingObservability;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 
 final class ProcessOrganizationBillingWebhookEffect
 {
-    public function __construct(private readonly RecordAuditEntry $recordAuditEntry) {}
+    public function __construct(
+        private readonly RecordAuditEntry $recordAuditEntry,
+        private readonly BillingObservability $observability,
+    ) {}
 
     /**
      * Persist and dispatch the custom effects for one provider event without
@@ -70,6 +73,8 @@ final class ProcessOrganizationBillingWebhookEffect
                     ],
                     $externalEventId,
                 );
+            } else {
+                $this->observability->duplicateWebhookEvent($organization, $provider, $externalEventId);
             }
 
             if ($effect->notification_dispatched_at !== null) {
@@ -91,14 +96,13 @@ final class ProcessOrganizationBillingWebhookEffect
                 $externalEventId,
                 $externalCustomerId,
             );
-        } catch (Throwable) {
-            Log::channel((string) config('billing.logger'))
-                ->warning('Billing lifecycle notification dispatch failed.', [
-                    'organization_id' => $organization->getKey(),
-                    'event' => $lifecycleEvent->value,
-                    'provider' => $provider->value,
-                    'external_event_id' => $externalEventId,
-                ]);
+        } catch (Throwable $exception) {
+            $this->observability->queueFailure(
+                $organization->getKey(),
+                $provider,
+                $externalEventId,
+                $exception,
+            );
         }
     }
 

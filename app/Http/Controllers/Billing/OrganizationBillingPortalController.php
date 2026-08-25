@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Billing;
 
+use App\Enums\BillingProvider;
 use App\Enums\OrganizationPermission;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
@@ -41,7 +42,7 @@ class OrganizationBillingPortalController extends Controller
                 route('organizations.billing.show', $organization),
             );
         } catch (\Throwable $exception) {
-            $this->observability->portalFailure($organization, $exception);
+            $this->observability->portalFailure($organization, isset($provider) ? $provider->identity() : BillingProvider::Stripe, $exception);
 
             throw $exception;
         }

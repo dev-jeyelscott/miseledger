@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\BillingProvider;
 use App\Support\Billing\BillingObservability;
 use Closure;
 use Illuminate\Http\Request;
@@ -23,7 +24,7 @@ class ObserveStripeWebhookSignature
         try {
             WebhookSignature::verifyHeader($request->getContent(), $request->header('Stripe-Signature'), config('cashier.webhook.secret'), config('cashier.webhook.tolerance'));
         } catch (SignatureVerificationException $exception) {
-            $this->observability->invalidWebhookSignature();
+            $this->observability->invalidWebhookSignature(BillingProvider::Stripe);
 
             throw new AccessDeniedHttpException($exception->getMessage(), $exception);
         }

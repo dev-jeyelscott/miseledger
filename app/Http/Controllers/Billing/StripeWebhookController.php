@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Billing;
 
+use App\Enums\BillingProvider;
 use App\Http\Middleware\ObserveStripeWebhookSignature;
 use App\Models\Organization;
 use App\Support\Billing\BillingObservability;
@@ -24,7 +25,7 @@ final class StripeWebhookController extends WebhookController
         try {
             return parent::handleWebhook($request);
         } catch (Throwable $exception) {
-            $this->observability->webhookFailure($this->organizationFor($request), $exception);
+            $this->observability->webhookFailure($this->organizationFor($request), BillingProvider::Stripe, $exception, data_get($request->json()->all(), 'id'), data_get($request->json()->all(), 'data.object.status'), data_get($request->json()->all(), 'livemode'));
 
             throw $exception;
         }

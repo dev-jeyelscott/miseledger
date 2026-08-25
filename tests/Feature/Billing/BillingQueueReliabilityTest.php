@@ -108,9 +108,10 @@ test('billing jobs have bounded retries and report terminal failures with organi
     Log::shouldReceive('channel')->once()->andReturnSelf();
     Log::shouldReceive('error')->once()->withArgs(
         fn (string $message, array $context): bool => $message === 'Billing operational signal emitted.'
-            && $context['event'] === 'billing.queue.failure'
+            && $context['event'] === 'billing.notification.failure'
             && $context['organization_id'] === $recipient['organization']->getKey()
-            && $context['job'] === SendOrganizationBillingLifecycleNotification::class
+            && $context['billing_provider'] === 'stripe'
+            && $context['external_event_id'] === 'evt_queue_failure'
             && $context['exception'] === RuntimeException::class,
     );
 

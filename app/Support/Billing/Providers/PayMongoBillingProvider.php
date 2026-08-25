@@ -60,6 +60,49 @@ final class PayMongoBillingProvider implements BillingProvider
         throw new RuntimeException('The PayMongo billing portal is not available.');
     }
 
+    public function retrieveSubscription(BillingSubscription $subscription): RemoteBillingSubscription
+    {
+        try {
+            $response = $this->client->get(
+                'retrieve_subscription',
+                "/subscriptions/{$subscription->external_subscription_id}",
+                (string) $subscription->organization_id,
+            );
+        } catch (PayMongoRequestException $exception) {
+            if ($exception->httpStatus === 404) {
+                throw new RemoteBillingSubscriptionNotFoundException;
+            }
+
+            throw $exception;
+        }
+
+        $resource = $this->resource($response, 'subscription');
+        $attributes = $resource['attributes'] ?? null;
+        $customer = $subscription->billingCustomer;
+
+        if (! is_array($attributes) || ($resource['id'] ?? null) !== $subscription->external_subscription_id
+            || ($attributes['customer_id'] ?? null) !== $customer->external_customer_id
+            || ! is_string($attributes['status'] ?? null) || ! is_bool($attributes['livemode'] ?? null)
+            || ! is_string($attributes['plan']['id'] ?? null)) {
+            throw new RuntimeException('PayMongo returned an invalid subscription response.');
+        }
+
+        $nextBillingAt = $this->date($attributes['next_billing_schedule'] ?? null);
+        $cancelled = in_array($attributes['status'], ['cancelled', 'canceled'], true);
+
+        return new RemoteBillingSubscription(
+            externalSubscriptionId: $resource['id'],
+            externalCustomerId: $customer->external_customer_id,
+            externalPlanId: $attributes['plan']['id'],
+            status: $attributes['status'],
+            livemode: $attributes['livemode'],
+            currentPeriodEndsAt: $nextBillingAt,
+            nextBillingAt: $cancelled ? null : $nextBillingAt,
+            endsAt: $cancelled ? $nextBillingAt : null,
+            cancelledAt: $this->timestamp($attributes['cancelled_at'] ?? null),
+        );
+    }
+
     public function cancelSubscription(BillingSubscription $subscription): void
     {
         if ($subscription->provider !== BillingProviderEnum::PayMongo || ! str_starts_with($subscription->external_subscription_id, 'subs_')) {

@@ -41,6 +41,12 @@ interface BillingProvider
     public function billingPortalUrl(Organization $organization, string $returnUrl): string;
 
     /**
+     * Retrieve and normalize the authoritative state for one already-owned
+     * local projection. Implementations must validate the response identity.
+     */
+    public function retrieveSubscription(BillingSubscription $subscription): RemoteBillingSubscription;
+
+    /**
      * Stop future renewal for a subscription owned by this provider. Provider
      * adapters perform only provider mechanics; the local projection keeps
      * the normalized paid-access end time used by commercial access.
