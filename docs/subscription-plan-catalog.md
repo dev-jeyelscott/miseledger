@@ -3,11 +3,11 @@
 This is the authoritative contract for how subscription plans, pricing,
 provider selection, provider ownership, and entitlements are represented.
 
-The current executable billing implementation is Laravel Cashier with Stripe.
-PB-001 defines the provider-neutral commercial contract that later billing
-implementation work must satisfy. It does not claim that PayMongo,
-provider adapters, generic provider ownership persistence, or the
-`BILLING_PROVIDER` configuration described below already exists.
+The current executable subscription runtime remains Laravel Cashier with
+Stripe. PB-003 and PB-004 implement the provider-aware server configuration
+and production boot-validation portions of the provider-neutral commercial
+contract. PayMongo checkout, lifecycle adapters, generic provider ownership
+persistence, and other PayMongo runtime behavior are still not implemented.
 
 The current plan catalog lives in
 [`config/subscription.php`](../config/subscription.php) and is exposed to
@@ -44,7 +44,7 @@ identifiers:
 - `stripe`
 - `paymongo`
 
-The future environment contract is:
+The implemented provider-selection environment contract is:
 
 ```text
 BILLING_PROVIDER=
@@ -75,10 +75,11 @@ The selected provider must also be enabled. For example,
 paid-subscription acquisition unavailable rather than falling back to
 PayMongo.
 
-These environment values are a PB-001 contract only. They are not present in
-the current `.env.example` or executable billing configuration and must not be
-documented as implemented until the corresponding runtime task adds and tests
-them.
+PB-003 and PB-004 implement these values in `.env.example`,
+`config/billing.php`, and production boot validation. This is configuration
+and validation infrastructure only. Selecting PayMongo does not by itself
+implement PayMongo checkout, webhook handling, subscription synchronization,
+or lifecycle servicing.
 
 ## Subscription provider ownership
 
@@ -182,7 +183,8 @@ features a given internal `PlanCode` represents.
 
 ## Current Stripe implementation boundary
 
-The current runtime remains intentionally Stripe-specific:
+Provider-aware configuration and production boot validation now exist, but
+the subscription runtime remains intentionally Stripe-specific:
 
 - Laravel Cashier owns Stripe subscription synchronization.
 - `PlanCatalog` resolves Stripe Price IDs.
@@ -236,9 +238,9 @@ Failure must prevent new acquisition or unsafe provider operations. It must
 not grant paid entitlements, silently select another provider, or mutate an
 existing subscription's ownership.
 
-## Explicit non-goals of PB-001 and PB-002
+## Historical non-goals of PB-001 and PB-002
 
-This contract does not:
+PB-001 and PB-002 were documentation-only tasks and did not:
 
 - Install or integrate PayMongo.
 - Add provider factories, interfaces, adapters, or service bindings.

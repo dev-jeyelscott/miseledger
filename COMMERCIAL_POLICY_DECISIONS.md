@@ -19,8 +19,9 @@ policy for PayMongo or another payment provider.
 
 ## Provider-neutral billing selection policy
 
-PB-001 establishes the following commercial contract for future
-implementation.
+PB-001 established the following commercial contract. PB-003 and PB-004
+implement its server-side provider configuration and production validation
+boundary without implementing PayMongo acquisition or lifecycle behavior.
 
 Supported acquisition-provider identifiers are:
 
@@ -29,7 +30,7 @@ stripe
 paymongo
 ```
 
-The future provider-selection environment contract is:
+The provider-selection environment contract is:
 
 ```text
 BILLING_PROVIDER=
@@ -53,8 +54,10 @@ The selected provider must be enabled. If it is disabled, new paid
 subscription acquisition must remain unavailable until configuration is
 corrected.
 
-These environment variables are a commercial contract only at this phase.
-They are not yet implemented by the current MiseLedger billing runtime.
+PB-003 and PB-004 implement these environment variables in server-side
+billing configuration and production boot validation. PayMongo acquisition,
+webhook processing, subscription synchronization, lifecycle servicing, and
+generic provider ownership remain later implementation work.
 
 ## Existing subscription provider ownership
 

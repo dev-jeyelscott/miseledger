@@ -6,33 +6,28 @@
 |--------------------------------------------------------------------------
 |
 | This is the single config('billing.*') contract application code must use
-| for anything billing-related. It layers Stripe credentials, webhook
-| settings, and the billing logger on top of the plan/currency/trial/type
-| catalog already defined in config/subscription.php (required via plain
-| PHP `require`, not config(), so this file has no dependency on Laravel's
-| config-file load order).
+| for billing configuration. Provider-specific credentials remain server-side
+| and are never exposed through Inertia props or browser configuration.
+|
+| The selected provider controls new subscription acquisition only. Existing
+| provider-owned subscriptions retain their provider ownership independently
+| from this selection.
 |
 */
 
 $subscription = require __DIR__.'/subscription.php';
+
 $stripeKey = env('STRIPE_KEY');
-$stripeMode = is_string($stripeKey) && str_starts_with($stripeKey, 'pk_live_')
-    ? 'live'
-    : (is_string($stripeKey) && str_starts_with($stripeKey, 'pk_test_') ? 'test' : null);
 
-return [
+$stripeMode = match (true) {
+    is_string($stripeKey) && str_starts_with($stripeKey, 'pk_live_') => 'live',
+    is_string($stripeKey) && str_starts_with($stripeKey, 'pk_test_') => 'test',
+    default => null,
+};
 
-    /*
-    |--------------------------------------------------------------------------
-    | Stripe Credentials
-    |--------------------------------------------------------------------------
-    |
-    | Read from the environment only. Never pass these to Inertia::share,
-    | a controller response, or any React page prop.
-    |
-    */
-
+$providers = [
     'stripe' => [
+        'enabled' => (bool) env('BILLING_STRIPE_ENABLED', false),
         'key' => $stripeKey,
         'secret' => env('STRIPE_SECRET'),
         'mode' => $stripeMode,
@@ -43,13 +38,61 @@ return [
         },
     ],
 
+    'paymongo' => [
+        'enabled' => (bool) env('BILLING_PAYMONGO_ENABLED', false),
+        'public_key' => env('PAYMONGO_PUBLIC_KEY'),
+        'secret_key' => env('PAYMONGO_SECRET_KEY'),
+        'webhook_secret' => env('PAYMONGO_WEBHOOK_SECRET'),
+    ],
+];
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Acquisition Provider
+    |--------------------------------------------------------------------------
+    |
+    | No default is intentional. Production must explicitly select one of the
+    | supported providers, and BillingConfigurationValidator will fail closed
+    | when this value is missing, malformed, unsupported, or disabled.
+    |
+    */
+
+    'provider' => env('BILLING_PROVIDER'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Provider Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Provider credentials are environment-backed server configuration only.
+    | Enabling a provider does not select it.
+    |
+    */
+
+    'providers' => $providers,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Transitional Stripe Compatibility
+    |--------------------------------------------------------------------------
+    |
+    | Preserve the existing billing.stripe.* contract during migration. New
+    | provider-aware infrastructure should use billing.providers.stripe.*.
+    |
+    */
+
+    'stripe' => $providers['stripe'],
+
     /*
     |--------------------------------------------------------------------------
     | Subscription Identity, Currency, Trial, and Plan Catalog
     |--------------------------------------------------------------------------
     |
-    | Sourced from config/subscription.php, which remains the authoritative
-    | contract for these values (see docs/subscription-plan-catalog.md).
+    | config/subscription.php remains authoritative for application-owned
+    | subscription identity, billing currency, trial duration, plans,
+    | entitlements, and limits.
     |
     */
 
@@ -65,32 +108,21 @@ return [
     |--------------------------------------------------------------------------
     | Billing Logger
     |--------------------------------------------------------------------------
-    |
-    | Logging channel application code should use for billing-domain events
-    | (e.g. Log::channel(config('billing.logger'))). Falls back to the
-    | application's default "stack" channel when unset.
-    |
     */
 
     'logger' => env('BILLING_LOG_CHANNEL', 'stack'),
 
     /*
     |--------------------------------------------------------------------------
-    | Required Configuration
+    | Common Production Requirements
     |--------------------------------------------------------------------------
     |
-    | Dot-paths, relative to this file, that must resolve to a non-null
-    | value outside local/testing environments. Enforced by
-    | AppServiceProvider so missing billing configuration fails safely at
-    | boot instead of surfacing as a checkout-time Stripe API error.
+    | Provider-specific requirements are validated separately according to
+    | provider selection and enablement.
     |
     */
 
     'required_in_production' => [
-        'stripe.key',
-        'stripe.secret',
-        'stripe.webhook_secret',
-        'stripe.mode',
         'currency',
         'trial_days',
         'subscription_type',

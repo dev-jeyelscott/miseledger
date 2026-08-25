@@ -6,6 +6,7 @@ use Laravel\Cashier\Invoices\DompdfInvoiceRenderer;
 // use Laravel\Cashier\Invoices\LaravelPdfInvoiceRenderer;
 
 $billing = require __DIR__.'/billing.php';
+$stripe = $billing['providers']['stripe'];
 
 return [
 
@@ -20,9 +21,9 @@ return [
     |
     */
 
-    'key' => $billing['stripe']['key'],
+    'key' => $stripe['key'],
 
-    'secret' => $billing['stripe']['secret'],
+    'secret' => $stripe['secret'],
 
     /*
     |--------------------------------------------------------------------------
@@ -49,7 +50,7 @@ return [
     */
 
     'webhook' => [
-        'secret' => $billing['stripe']['webhook_secret'],
+        'secret' => $stripe['webhook_secret'],
         'tolerance' => env('STRIPE_WEBHOOK_TOLERANCE', 300),
         'events' => WebhookCommand::DEFAULT_EVENTS,
     ],
@@ -74,7 +75,7 @@ return [
     |
     | This is the default locale in which your money values are formatted in
     | for display. To utilize other locales besides the default en locale
-    | verify you have the "intl" PHP extension installed on the system.
+    | verify you have the "intl" PHP extension installed in the system.
     |
     */
 
@@ -98,9 +99,8 @@ return [
     | Invoice Settings
     |--------------------------------------------------------------------------
     |
-    | The following options determine how Cashier invoices are converted from
-    | HTML into PDFs. You're free to change the options based on the needs
-    | of your application or your preferences regarding invoice styling.
+    | These options determine how Cashier invoices are converted from HTML
+    | into PDFs.
     |
     */
 
@@ -122,8 +122,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | This setting defines which logging channel will be used by the Stripe
-    | library to write log messages. You are free to specify any of your
-    | logging channels listed inside the "logging" configuration file.
+    | library to write log messages.
     |
     */
 
