@@ -1,5 +1,12 @@
 # AGEAX commercial policy decisions
 
+## Manual QR Ph renewals
+
+PayMongo QR Ph plans do not auto-renew. A customer must initiate and complete
+each renewal payment. Paid access ends at the subscription's confirmed period
+boundary; absent a confirmed renewal, the organization becomes commercially
+read-only. A QR code, scan, or browser state is not payment confirmation.
+
 **Status:** Approved for Stripe sandbox testing only. Not authorization for live payments.
 
 **Approved by:** AGEAX sole proprietor

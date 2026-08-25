@@ -114,6 +114,7 @@ final readonly class PlanCatalog
             $features = array_values(array_filter((array) ($plan['features'] ?? []), 'is_string'));
             $limits = array_filter((array) ($plan['limits'] ?? []), static fn (mixed $value): bool => $value === null || is_int($value));
             $providers = self::providerPlans($plan);
+            $manualAmounts = self::manualAmounts($plan);
 
             foreach ($providers as $provider => $intervals) {
                 foreach ($intervals as $externalPlanId) {
@@ -130,6 +131,7 @@ final readonly class PlanCatalog
                 $limits,
                 $providers,
                 $providers[BillingProvider::Stripe->value],
+                $manualAmounts,
             );
         }
 
@@ -173,6 +175,29 @@ final readonly class PlanCatalog
         }
 
         return $providers;
+    }
+
+    /** @param array<string, mixed> $plan @return array<string, int|null> */
+    private static function manualAmounts(array $plan): array
+    {
+        $configured = is_array($plan['manual_amounts'] ?? null) ? $plan['manual_amounts'] : [];
+
+        return collect(self::INTERVALS)
+            ->mapWithKeys(static fn (string $interval): array => [
+                $interval => self::manualAmount($configured[$interval] ?? null),
+            ])
+            ->all();
+    }
+
+    private static function manualAmount(mixed $amount): ?int
+    {
+        if (is_int($amount) && $amount > 0) {
+            return $amount;
+        }
+
+        return is_string($amount) && ctype_digit($amount) && (int) $amount > 0
+            ? (int) $amount
+            : null;
     }
 
     private static function provider(BillingProvider|string $provider): ?BillingProvider

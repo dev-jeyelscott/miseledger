@@ -108,6 +108,10 @@ return [
     'plans' => [
         'starter' => [
             'name' => 'Starter Plan',
+            'manual_amounts' => [
+                'monthly' => env('PAYMONGO_QRPH_AMOUNT_STARTER_MONTHLY'),
+                'yearly' => env('PAYMONGO_QRPH_AMOUNT_STARTER_YEARLY'),
+            ],
             'providers' => [
                 'stripe' => [
                     'monthly' => env('STRIPE_PRICE_STARTER_MONTHLY'),
@@ -127,6 +131,10 @@ return [
         ],
         'growth' => [
             'name' => 'Growth Plan',
+            'manual_amounts' => [
+                'monthly' => env('PAYMONGO_QRPH_AMOUNT_GROWTH_MONTHLY'),
+                'yearly' => env('PAYMONGO_QRPH_AMOUNT_GROWTH_YEARLY'),
+            ],
             'providers' => [
                 'stripe' => [
                     'monthly' => env('STRIPE_PRICE_GROWTH_MONTHLY'),
@@ -151,6 +159,10 @@ return [
         ],
         'business' => [
             'name' => 'Business Plan',
+            'manual_amounts' => [
+                'monthly' => env('PAYMONGO_QRPH_AMOUNT_BUSINESS_MONTHLY'),
+                'yearly' => env('PAYMONGO_QRPH_AMOUNT_BUSINESS_YEARLY'),
+            ],
             'providers' => [
                 'stripe' => [
                     'monthly' => env('STRIPE_PRICE_BUSINESS_MONTHLY'),

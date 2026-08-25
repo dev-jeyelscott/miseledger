@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Billing;
 
 use App\Actions\Billing\ProcessOrganizationBillingWebhookEffect;
+use App\Actions\Billing\SettlePayMongoPayment;
 use App\Enums\BillingLifecycleEvent;
 use App\Enums\BillingProvider;
 use App\Http\Controllers\Controller;
 use App\Models\BillingCustomer;
+use App\Models\BillingPayment;
 use App\Models\BillingSubscription;
 use App\Support\Billing\BillingObservability;
 use Illuminate\Http\Request;
@@ -17,6 +19,7 @@ final class PayMongoWebhookController extends Controller
 {
     public function __construct(
         private readonly ProcessOrganizationBillingWebhookEffect $process,
+        private readonly SettlePayMongoPayment $settlePayment,
         private readonly BillingObservability $observability,
     ) {}
 
@@ -47,6 +50,10 @@ final class PayMongoWebhookController extends Controller
 
         if ($event['livemode'] !== (config('billing.providers.paymongo.mode') === 'live')) {
             abort(403, 'PayMongo webhook mode does not match this environment.');
+        }
+
+        if (($event['resource'] ?? null) === 'payment') {
+            return $this->processPaymentEvent($event);
         }
 
         $customer = BillingCustomer::query()
@@ -94,6 +101,55 @@ final class PayMongoWebhookController extends Controller
         return response()->noContent();
     }
 
+    /** @param array<string, mixed> $event */
+    private function processPaymentEvent(array $event): Response
+    {
+        $payment = BillingPayment::query()
+            ->where('provider', BillingProvider::PayMongo)
+            ->where('external_payment_intent_id', $event['payment_intent_id'])
+            ->where('livemode', $event['livemode'])
+            ->first();
+
+        if ($payment === null) {
+            return response()->noContent();
+        }
+
+        $subscription = $payment->billingInvoice->billingSubscription;
+        $customer = $subscription->billingCustomer;
+
+        $this->process->handle(
+            BillingProvider::PayMongo,
+            $event['event_id'],
+            $customer->external_customer_id,
+            $event['lifecycle_event'],
+            $event['audit_action'],
+            function () use ($event, $payment): void {
+                if ($event['lifecycle_event'] === BillingLifecycleEvent::Recovered) {
+                    $this->settlePayment->handle(
+                        $payment,
+                        $event['payment_id'],
+                        $event['amount'],
+                        $event['currency'],
+                        $event['livemode'],
+                        $event['paid_at'],
+                    );
+
+                    return;
+                }
+
+                BillingPayment::query()
+                    ->whereKey($payment->getKey())
+                    ->whereIn('status', ['pending', 'awaiting_payment'])
+                    ->update([
+                        'status' => $event['lifecycle_event'] === BillingLifecycleEvent::PaymentExpired ? 'expired' : 'failed',
+                        'failed_at' => now(),
+                    ]);
+            },
+        );
+
+        return response()->noContent();
+    }
+
     /**
      * @param  array<string, mixed>  $payload
      * @return array{event_id: string, customer_id: string, subscription_id: string, livemode: bool, lifecycle_event: BillingLifecycleEvent, audit_action: string, subscription_updates: array<string, mixed>}|null
@@ -112,10 +168,45 @@ final class PayMongoWebhookController extends Controller
         }
 
         return match ($attributes['type']) {
+            'payment.paid', 'payment.failed', 'qrph.expired' => $this->paymentEvent($event['id'], $attributes, $resource, $resourceAttributes),
             'subscription.activated', 'subscription.past_due', 'subscription.unpaid', 'subscription.cancelled', 'subscription.updated' => $this->subscriptionEvent($event['id'], $attributes, $resource, $resourceAttributes),
             'subscription.invoice.paid', 'subscription.invoice.payment_failed' => $this->invoiceEvent($event['id'], $attributes, $resource, $resourceAttributes),
             default => null,
         };
+    }
+
+    /** @param array<string, mixed> $attributes @param array<string, mixed> $resource @param array<string, mixed> $payment @return array<string, mixed> */
+    private function paymentEvent(string $eventId, array $attributes, array $resource, array $payment): array
+    {
+        $paid = $attributes['type'] === 'payment.paid';
+        $paymentIntentId = $payment['payment_intent_id'] ?? null;
+        $amount = $payment['amount'] ?? null;
+        $currency = $payment['currency'] ?? null;
+
+        if (($resource['type'] ?? null) !== 'payment' || ! is_string($resource['id'] ?? null)
+            || ! is_string($paymentIntentId) || ! str_starts_with($paymentIntentId, 'pi_')
+            || ! is_int($amount) || $amount <= 0 || ! is_string($currency) || preg_match('/^[A-Z]{3}$/', $currency) !== 1
+            || ! is_bool($payment['livemode'] ?? null) || $payment['livemode'] !== $attributes['livemode']
+            || ($paid && ($payment['status'] ?? null) !== 'paid')) {
+            abort(422, 'Invalid PayMongo payment webhook payload.');
+        }
+
+        return [
+            'resource' => 'payment',
+            'event_id' => $eventId,
+            'payment_id' => $resource['id'],
+            'payment_intent_id' => $paymentIntentId,
+            'amount' => $amount,
+            'currency' => $currency,
+            'livemode' => $attributes['livemode'],
+            'paid_at' => $paid ? $this->timestamp($payment['paid_at'] ?? null) : null,
+            'lifecycle_event' => $paid
+                ? BillingLifecycleEvent::Recovered
+                : ($attributes['type'] === 'qrph.expired' ? BillingLifecycleEvent::PaymentExpired : BillingLifecycleEvent::PaymentFailed),
+            'audit_action' => $paid
+                ? 'billing.payment.settled'
+                : ($attributes['type'] === 'qrph.expired' ? 'billing.payment.expired' : 'billing.payment.failed'),
+        ];
     }
 
     /** @param array<string, mixed> $attributes @param array<string, mixed> $resource @param array<string, mixed> $subscription @return array{event_id: string, customer_id: string, subscription_id: string, livemode: bool, lifecycle_event: BillingLifecycleEvent, audit_action: string, subscription_updates: array<string, mixed>} */

@@ -18,6 +18,7 @@ final readonly class PlanDefinition
      * @param  array<string, int|null>  $limits  Null means explicitly unlimited.
      * @param  array<string, array<string, string|null>>  $providers  Keyed by provider then interval.
      * @param  array<string, string|null>  $prices  Transitional Stripe compatibility view.
+     * @param  array<string, int|null>  $manualAmounts  Minor-unit collection amounts keyed by interval.
      */
     public function __construct(
         public PlanCode $code,
@@ -26,6 +27,7 @@ final readonly class PlanDefinition
         public array $limits,
         public array $providers,
         public array $prices,
+        public array $manualAmounts,
     ) {}
 
     public function hasFeature(string $feature): bool
@@ -61,5 +63,10 @@ final readonly class PlanDefinition
         }
 
         return $this->providers[$provider->value][$interval] ?? null;
+    }
+
+    public function manualAmount(string $interval): ?int
+    {
+        return $this->manualAmounts[$interval] ?? null;
     }
 }

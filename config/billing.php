@@ -40,6 +40,7 @@ $providers = [
 
     'paymongo' => [
         'enabled' => (bool) env('BILLING_PAYMONGO_ENABLED', false),
+        'manual_qrph' => (bool) env('BILLING_PAYMONGO_MANUAL_QRPH_ENABLED', false),
         'mode' => env('PAYMONGO_MODE'),
         'public_key' => env('PAYMONGO_PUBLIC_KEY'),
         'secret_key' => env('PAYMONGO_SECRET_KEY'),

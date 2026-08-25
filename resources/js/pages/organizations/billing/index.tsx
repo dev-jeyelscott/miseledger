@@ -1,8 +1,12 @@
-import { Head, router } from '@inertiajs/react';
-import { CreditCard, ExternalLink, XCircle } from 'lucide-react';
+import { Head, router, useHttp } from '@inertiajs/react';
+import { CheckCircle2, CreditCard, ExternalLink, RefreshCw, XCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import OrganizationBillingCancellationController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingCancellationController';
 import OrganizationBillingPortalController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingPortalController';
 import OrganizationCheckoutController from '@/actions/App/Http/Controllers/Billing/OrganizationCheckoutController';
+import OrganizationInvoicePaymentController from '@/actions/App/Http/Controllers/Billing/OrganizationInvoicePaymentController';
+import OrganizationInvoiceStatusController from '@/actions/App/Http/Controllers/Billing/OrganizationInvoiceStatusController';
+import OrganizationManualRenewalController from '@/actions/App/Http/Controllers/Billing/OrganizationManualRenewalController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,6 +30,18 @@ type Props = {
     subscription: OrganizationSubscriptionContext;
     entitlements: OrganizationEntitlementContext;
     availablePlans: OrganizationAvailablePlan[];
+    manualQrPhEnabled: boolean;
+};
+
+type QrPhCheckout = {
+    invoice_id: number;
+    invoice_status: string;
+    payment_id: number;
+    payment_status: 'awaiting_payment' | 'paid' | 'failed' | 'expired';
+    amount: number;
+    currency: string;
+    qr_code_url: string | null;
+    expires_at: string | null;
 };
 
 /** Format a plan or status code as a readable label. */
@@ -52,6 +68,18 @@ function formatDate(value: string | null): string | null {
     });
 }
 
+function expiryLabel(value: string | null, now: number): string | null {
+    if (value === null) {
+        return null;
+    }
+
+    const remainingSeconds = Math.max(0, Math.ceil((new Date(value).getTime() - now) / 1_000));
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
+
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
 function statusVariant(
     status: string | null,
 ): 'secondary' | 'outline' | 'destructive' {
@@ -74,6 +102,7 @@ export default function OrganizationBilling({
     subscription,
     entitlements,
     availablePlans,
+    manualQrPhEnabled,
 }: Props) {
     const hasActiveSubscription = subscription.status !== null;
     const trialEndsAt = formatDate(subscription.trialEndsAt);
@@ -82,13 +111,85 @@ export default function OrganizationBilling({
     const overLimitKeys = Object.entries(entitlements.usage)
         .filter(([, usage]) => usage.atLimit)
         .map(([key]) => formatLabel(key));
+    const [checkout, setCheckout] = useState<QrPhCheckout | null>(null);
+    const [currentTime, setCurrentTime] = useState(Date.now());
+    const renewal = useHttp<{ plan?: string; interval?: 'monthly' | 'yearly' }, QrPhCheckout>({});
+    const paymentRetry = useHttp<Record<string, never>, QrPhCheckout>({});
+    const paymentStatus = useHttp<Record<string, never>, Pick<QrPhCheckout, 'invoice_status' | 'payment_status' | 'expires_at'>>({});
+
+    useEffect(() => {
+        const timer = window.setInterval(() => setCurrentTime(Date.now()), 1_000);
+
+        return () => window.clearInterval(timer);
+    }, []);
 
     function subscribe(planCode: string, interval: 'monthly' | 'yearly') {
+        if (manualQrPhEnabled) {
+            renewal.setData({ plan: planCode, interval });
+            renewal.post(OrganizationManualRenewalController.store.url(organization.id), {
+                onSuccess: (data) => setCheckout(data),
+            });
+
+            return;
+        }
+
         router.post(OrganizationCheckoutController.store.url(organization.id), {
             plan: planCode,
             interval,
         });
     }
+
+    function renewSubscription() {
+        renewal.setData({});
+        renewal.post(OrganizationManualRenewalController.store.url(organization.id), {
+            onSuccess: (data) => setCheckout(data),
+        });
+    }
+
+    function generateNewQr() {
+        if (checkout === null) {
+            return;
+        }
+
+        paymentRetry.post(
+            OrganizationInvoicePaymentController.store.url({
+                organization: organization.id,
+                invoice: checkout.invoice_id,
+            }),
+            { onSuccess: (data) => setCheckout(data) },
+        );
+    }
+
+    useEffect(() => {
+        if (checkout === null || checkout.payment_status === 'paid') {
+            return;
+        }
+
+        const poll = window.setInterval(() => {
+            paymentStatus.get(
+                OrganizationInvoiceStatusController.show.url({
+                    organization: organization.id,
+                    invoice: checkout.invoice_id,
+                }),
+                {
+                    onSuccess: (data) => {
+                        setCheckout((current) =>
+                            current === null
+                                ? current
+                                : {
+                                      ...current,
+                                      invoice_status: data.invoice_status,
+                                      payment_status: data.payment_status as QrPhCheckout['payment_status'],
+                                      expires_at: data.expires_at,
+                                  },
+                        );
+                    },
+                },
+            );
+        }, 3_000);
+
+        return () => window.clearInterval(poll);
+    }, [checkout?.invoice_id, checkout?.payment_status, organization.id]);
 
     function openBillingPortal() {
         router.post(
@@ -305,7 +406,79 @@ export default function OrganizationBilling({
                                 )}
                             </CardFooter>
                         )}
+
+                        {subscription.collectionMethod === 'manual' && (
+                            <CardFooter className="justify-end border-t pt-6">
+                                <Button
+                                    type="button"
+                                    onClick={renewSubscription}
+                                    disabled={renewal.processing}
+                                >
+                                    <RefreshCw className="size-4" aria-hidden="true" />
+                                    {renewal.processing
+                                        ? 'Creating QR Ph code…'
+                                        : 'Renew subscription'}
+                                </Button>
+                            </CardFooter>
+                        )}
                     </Card>
+
+                    {checkout !== null && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>QR Ph payment</CardTitle>
+                                <CardDescription>
+                                    Scan this code using a QR Ph-supported bank or wallet. Payment is confirmed only after it is synchronized with MiseLedger.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="grid justify-items-center gap-4 text-center">
+                                <p className="text-xl font-semibold">
+                                    {new Intl.NumberFormat('en-PH', {
+                                        style: 'currency',
+                                        currency: checkout.currency,
+                                    }).format(checkout.amount / 100)}
+                                </p>
+
+                                {checkout.payment_status === 'paid' ? (
+                                    <div className="grid justify-items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                                        <CheckCircle2 className="size-12" aria-hidden="true" />
+                                        <p className="font-medium">Payment received. Your subscription has been renewed.</p>
+                                    </div>
+                                ) : checkout.qr_code_url !== null && checkout.payment_status === 'awaiting_payment' ? (
+                                    <img
+                                        src={checkout.qr_code_url}
+                                        alt="QR Ph payment code"
+                                        className="size-64 rounded-lg border bg-white p-2"
+                                    />
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">
+                                        This QR Ph code is no longer usable. Generate a new code to continue.
+                                    </p>
+                                )}
+
+                                {checkout.payment_status === 'awaiting_payment' && (
+                                    <p className="text-sm text-muted-foreground">
+                                        {expiryLabel(checkout.expires_at, currentTime) === '0:00'
+                                            ? 'This QR Ph code has expired. Generate a new code to continue.'
+                                            : `Waiting for payment confirmation… Expires in ${expiryLabel(checkout.expires_at, currentTime) ?? '30:00'}.`}
+                                    </p>
+                                )}
+                            </CardContent>
+                            {checkout.payment_status !== 'paid' && (
+                                <CardFooter className="justify-end border-t pt-6">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={generateNewQr}
+                                        disabled={paymentRetry.processing}
+                                    >
+                                        <RefreshCw className="size-4" aria-hidden="true" />
+                                        {paymentRetry.processing ? 'Creating QR Ph code…' : 'Generate new QR'}
+                                    </Button>
+                                </CardFooter>
+                            )}
+                        </Card>
+                    )}
 
                     <Card>
                         <CardHeader>

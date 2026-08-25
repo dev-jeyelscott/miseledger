@@ -53,3 +53,11 @@ You may stop using the Service at any time. We may suspend or terminate access w
 These Terms are intended to be governed by the laws of the Philippines, without limiting mandatory consumer protections that apply in your location. Before live launch, this clause must be reviewed for the jurisdictions in which AGEAX offers the Service.
 
 For support, cancellation, or refund requests, contact jleward.escote17@gmail.com.
+# Manual QR Ph subscription renewal
+
+Where a subscription uses manual QR Ph collection, it does not renew
+automatically. You must submit a renewal payment for each billing period.
+Access remains available through the confirmed paid period and may become
+read-only after that period if no payment is confirmed. Payment confirmation
+is determined by MiseLedger's payment-provider verification, not by a QR
+display, scan, or browser notification.

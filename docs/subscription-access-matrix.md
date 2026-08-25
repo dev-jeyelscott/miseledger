@@ -162,6 +162,18 @@ At every transition:
 
 ## Current implementation boundary
 
+## Manual QR Ph renewal
+
+For a `BillingSubscription` with `collection_method=manual`, a paid local
+period is the entitlement source. An active manual subscription is writable
+until `current_period_ends_at`; it becomes read-only when that time elapses
+without a confirmed renewal. There is no implicit grace period.
+
+Creating an invoice, rendering a QR, scanning it, and browser success are not
+commercial transitions. Only an authenticated, validated `payment.paid`
+webhook (or the same guarded reconciliation settlement path) changes the
+invoice, payment, and entitlement period.
+
 Today:
 
 - Laravel Cashier synchronizes Stripe subscriptions.

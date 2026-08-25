@@ -33,7 +33,7 @@ final class PayMongoBillingProvider implements BillingProvider
         array $metadata,
         User $actor,
     ): BillingCheckoutOutcome {
-        $customer = $this->customerFor($organization, $actor);
+        $customer = $this->ensureCustomer($organization, $actor);
         $subscription = $this->createSubscription($organization, $customer, $externalPriceId);
         $paymentIntentId = $this->paymentIntentId($subscription);
         $paymentIntent = $this->client->get('retrieve_subscription_payment_intent', "/payment_intents/{$paymentIntentId}", (string) $organization->getKey());
@@ -124,7 +124,7 @@ final class PayMongoBillingProvider implements BillingProvider
         }
     }
 
-    private function customerFor(Organization $organization, User $actor): BillingCustomer
+    public function ensureCustomer(Organization $organization, User $actor): BillingCustomer
     {
         $customer = BillingCustomer::query()
             ->where('organization_id', $organization->getKey())

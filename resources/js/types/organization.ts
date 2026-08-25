@@ -60,6 +60,7 @@ export type OrganizationSubscriptionContext = {
     interval: string | null;
     nextBillingAt: string | null;
     management: 'portal' | 'cancel' | 'none';
+    collectionMethod: 'automatic' | 'manual' | null;
 };
 
 export type FeatureCode =

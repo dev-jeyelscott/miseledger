@@ -13,3 +13,9 @@ Schedule::command('billing:reconcile')
     ->withoutOverlapping(30)
     ->onOneServer()
     ->runInBackground();
+
+Schedule::command('billing:send-renewal-reminders')
+    ->dailyAt('09:00')
+    ->withoutOverlapping(30)
+    ->onOneServer()
+    ->runInBackground();

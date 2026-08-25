@@ -89,3 +89,31 @@ test('PayMongo client distinguishes request timeouts without exposing transport 
     expect(fn () => (new PayMongoClient)->get('retrieve_plan', '/plans/plan_123'))
         ->toThrow(PayMongoRequestException::class, 'PayMongo timeout failure during retrieve_plan.');
 });
+
+test('PayMongo client creates a QR Ph payment intent, method, and attachment with opaque identifiers only', function (): void {
+    Http::fake([
+        'api.paymongo.test/v1/payment_intents' => Http::response(['data' => ['id' => 'pi_qrph_123']], 200),
+        'api.paymongo.test/v1/payment_methods' => Http::response(['data' => ['id' => 'pm_qrph_123']], 200),
+        'api.paymongo.test/v1/payment_intents/pi_qrph_123/attach' => Http::response(['data' => ['id' => 'pi_qrph_123']], 200),
+    ]);
+
+    $client = new PayMongoClient;
+    $client->createPaymentIntent(49_900, 'PHP', ['organization_id' => 1, 'billing_invoice_id' => 2], '1', 'intent-key');
+    $client->createQrPhPaymentMethod('1', 'method-key');
+    $client->attachPaymentMethod('pi_qrph_123', 'pm_qrph_123', '1', 'attach-key');
+
+    Http::assertSent(function (Request $request): bool {
+        $payload = $request->data();
+
+        return $request->url() === 'https://api.paymongo.test/v1/payment_intents'
+            && $request->hasHeader('Idempotency-Key', 'intent-key')
+            && data_get($payload, 'data.attributes.amount') === 49_900
+            && data_get($payload, 'data.attributes.currency') === 'PHP'
+            && data_get($payload, 'data.attributes.payment_method_allowed') === ['qrph']
+            && data_get($payload, 'data.attributes.metadata') === ['organization_id' => 1, 'billing_invoice_id' => 2];
+    });
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.paymongo.test/v1/payment_methods'
+        && data_get($request->data(), 'data.attributes.type') === 'qrph');
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.paymongo.test/v1/payment_intents/pi_qrph_123/attach'
+        && data_get($request->data(), 'data.attributes.payment_method') === 'pm_qrph_123');
+});

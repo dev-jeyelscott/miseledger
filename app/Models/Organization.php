@@ -157,6 +157,18 @@ class Organization extends Model
         return $this->hasMany(BillingSubscription::class);
     }
 
+    /** @return HasMany<BillingInvoice, $this> */
+    public function billingInvoices(): HasMany
+    {
+        return $this->hasMany(BillingInvoice::class);
+    }
+
+    /** @return HasMany<BillingPayment, $this> */
+    public function billingPayments(): HasMany
+    {
+        return $this->hasMany(BillingPayment::class);
+    }
+
     /**
      * Cast organization state to stable application types.
      *

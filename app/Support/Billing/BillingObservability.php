@@ -33,12 +33,21 @@ final class BillingObservability
         $this->failure('billing.portal.failure', $organization, $provider, 'portal', $exception);
     }
 
-    /** @param array<string, bool|string|null> $context */
+    /** @param array<string, bool|int|string|null> $context */
     public function reconciliationMismatch(Organization $organization, BillingProvider $provider, string $mismatch, array $context = []): void
     {
         $this->record('warning', 'billing.reconciliation.mismatch', $provider, 'reconciliation', $organization, null, $context['subscription_status'] ?? null, $context['livemode'] ?? null, [
             'mismatch' => $mismatch,
-            ...Arr::only($context, ['local_status', 'remote_status']),
+            ...Arr::only($context, [
+                'local_status',
+                'remote_status',
+                'billing_subscription_id',
+                'billing_invoice_id',
+                'billing_payment_id',
+                'external_payment_intent_id',
+                'payment_method',
+                'payment_status',
+            ]),
         ]);
     }
 

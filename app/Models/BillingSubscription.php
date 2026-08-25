@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Enums\BillingCollectionMethod;
 use App\Enums\BillingProvider;
 use Database\Factories\BillingSubscriptionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -27,6 +29,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $external_plan_id
  * @property string|null $plan_code
  * @property string|null $interval
+ * @property BillingCollectionMethod $collection_method
  * @property string|null $provider_status
  * @property bool $livemode
  * @property Carbon|null $trial_ends_at
@@ -44,6 +47,7 @@ use Illuminate\Support\Carbon;
     'external_plan_id',
     'plan_code',
     'interval',
+    'collection_method',
     'provider_status',
     'livemode',
     'trial_ends_at',
@@ -73,6 +77,12 @@ class BillingSubscription extends Model
         return $this->belongsTo(BillingCustomer::class);
     }
 
+    /** @return HasMany<BillingInvoice, $this> */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(BillingInvoice::class);
+    }
+
     /**
      * @return array<string, string>
      */
@@ -80,6 +90,7 @@ class BillingSubscription extends Model
     {
         return [
             'provider' => BillingProvider::class,
+            'collection_method' => BillingCollectionMethod::class,
             'livemode' => 'boolean',
             'trial_ends_at' => 'datetime',
             'current_period_ends_at' => 'datetime',

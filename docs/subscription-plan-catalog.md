@@ -145,6 +145,16 @@ capabilities without changing the commercial access semantics defined in
 
 ## Provider-specific external pricing identifiers
 
+### Manual QR Ph amounts
+
+Manual PayMongo QR Ph collection uses
+`subscription.plans.<code>.manual_amounts.<interval>`. Values are positive
+PHP minor-unit integers, configured through
+`PAYMONGO_QRPH_AMOUNT_<PLAN>_<INTERVAL>`. `PlanCatalog` resolves this amount
+on the server when creating a `BillingInvoice`; no browser input or provider
+metadata is trusted as price authority. A missing amount makes manual QR Ph
+unavailable for that plan interval.
+
 Provider-specific pricing identifiers are infrastructure details.
 
 Each plan uses a provider-neutral mapping in

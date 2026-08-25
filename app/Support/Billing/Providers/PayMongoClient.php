@@ -36,6 +36,42 @@ final class PayMongoClient
         return $this->send('POST', $operation, $path, $payload, $reference, $idempotencyKey);
     }
 
+    /** @param array<string, int|string> $metadata @return array<string, mixed> */
+    public function createPaymentIntent(int $amount, string $currency, array $metadata, string $reference, string $idempotencyKey): array
+    {
+        return $this->post('create_payment_intent', '/payment_intents', [
+            'data' => ['attributes' => [
+                'amount' => $amount,
+                'currency' => $currency,
+                'payment_method_allowed' => ['qrph'],
+                'payment_method_options' => ['qrph' => ['expiry_duration' => 1_800]],
+                'metadata' => $metadata,
+            ]],
+        ], $reference, $idempotencyKey);
+    }
+
+    /** @return array<string, mixed> */
+    public function retrievePaymentIntent(string $paymentIntentId, string $reference): array
+    {
+        return $this->get('retrieve_payment_intent', "/payment_intents/{$paymentIntentId}", $reference);
+    }
+
+    /** @return array<string, mixed> */
+    public function createQrPhPaymentMethod(string $reference, string $idempotencyKey): array
+    {
+        return $this->post('create_qrph_payment_method', '/payment_methods', [
+            'data' => ['attributes' => ['type' => 'qrph']],
+        ], $reference, $idempotencyKey);
+    }
+
+    /** @return array<string, mixed> */
+    public function attachPaymentMethod(string $paymentIntentId, string $paymentMethodId, string $reference, string $idempotencyKey): array
+    {
+        return $this->post('attach_payment_method', "/payment_intents/{$paymentIntentId}/attach", [
+            'data' => ['attributes' => ['payment_method' => $paymentMethodId]],
+        ], $reference, $idempotencyKey);
+    }
+
     /** @param array<string, mixed> $payload @return array<string, mixed> */
     private function send(string $method, string $operation, string $path, array $payload, ?string $reference, ?string $idempotencyKey = null): array
     {
@@ -105,7 +141,17 @@ final class PayMongoClient
     private function getWithBoundedRetries(PendingRequest $request, string $path): Response
     {
         for ($attempt = 1; $attempt <= self::READ_ATTEMPTS; $attempt++) {
-            $response = $request->retry(self::READ_ATTEMPTS, 150, $this->shouldRetry(...))->get($this->path($path));
+            try {
+                $response = $request->get($this->path($path));
+            } catch (ConnectionException $exception) {
+                if ($attempt === self::READ_ATTEMPTS) {
+                    throw $exception;
+                }
+
+                usleep(150_000);
+
+                continue;
+            }
 
             if (! $this->isRetryableResponse($response) || $attempt === self::READ_ATTEMPTS) {
                 return $response;
@@ -115,11 +161,6 @@ final class PayMongoClient
         }
 
         throw new PayMongoRequestException('request', 'transport');
-    }
-
-    private function shouldRetry(Throwable $exception, PendingRequest $request): bool
-    {
-        return $exception instanceof ConnectionException;
     }
 
     private function isRetryableResponse(Response $response): bool

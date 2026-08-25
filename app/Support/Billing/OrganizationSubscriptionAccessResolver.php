@@ -2,6 +2,7 @@
 
 namespace App\Support\Billing;
 
+use App\Enums\BillingCollectionMethod;
 use App\Enums\OrganizationAccessMode;
 use App\Enums\PlanCode;
 use App\Models\BillingSubscription;
@@ -171,6 +172,11 @@ final class OrganizationSubscriptionAccessResolver
 
     private static function isCancelled(BillingSubscription $subscription): bool
     {
+        if ($subscription->collection_method === BillingCollectionMethod::Manual) {
+            return $subscription->cancelled_at !== null
+                || in_array($subscription->provider_status, ['cancelled', 'canceled'], true);
+        }
+
         return $subscription->cancelled_at !== null
             || $subscription->ends_at !== null
             || in_array($subscription->provider_status, ['cancelled', 'canceled'], true);

@@ -1,8 +1,14 @@
 <?php
 
+use App\Enums\BillingCollectionMethod;
+use App\Enums\BillingInvoiceStatus;
+use App\Enums\BillingPaymentMethod;
+use App\Enums\BillingPaymentStatus;
 use App\Enums\BillingProvider;
 use App\Models\AuditLog;
 use App\Models\BillingCustomer;
+use App\Models\BillingInvoice;
+use App\Models\BillingPayment;
 use App\Models\BillingSubscription;
 use App\Models\Organization;
 use App\Models\StockBalance;
@@ -141,7 +147,9 @@ test('a clean reconciliation is idempotent and leaves inventory data unchanged',
     $this->artisan('billing:reconcile')
         ->expectsOutputToContain('1 subscription inspected, 0 discrepancies, 0 provider failures')
         ->assertExitCode(0);
-    $this->artisan('billing:reconcile')->assertExitCode(0);
+    $this->artisan('billing:reconcile')
+        ->expectsOutputToContain('Billing reconciliation completed: 1 subscription inspected, 0 discrepancies, 0 provider failures')
+        ->assertExitCode(0);
 
     expect(StockMovement::query()->count())->toBe(0)
         ->and(StockBalance::query()->count())->toBe(0)
@@ -256,6 +264,74 @@ test('PayMongo reconciliation recovers projection drift idempotently without inv
         ->and(StockMovement::query()->count())->toBe(0)
         ->and(StockBalance::query()->count())->toBe(0);
 
-    $this->artisan('billing:reconcile')->assertExitCode(0);
+    $this->artisan('billing:reconcile')
+        ->expectsOutputToContain('Billing reconciliation completed: 1 subscription inspected, 0 discrepancies, 0 provider failures')
+        ->assertExitCode(0);
     expect(AuditLog::query()->where('action', 'billing.subscription.reconciled')->count())->toBe(1);
+});
+
+test('PayMongo reconciliation settles a paid manual QR Ph intent through the guarded settlement action', function (): void {
+    Config::set('billing.providers.paymongo.api_base_url', 'https://paymongo.test/v1');
+    Config::set('billing.providers.paymongo.secret_key', 'sk_test_paymongo');
+    $organization = Organization::factory()->create();
+    $customer = BillingCustomer::factory()->for($organization)->create([
+        'provider' => BillingProvider::PayMongo,
+        'livemode' => false,
+    ]);
+    $subscription = BillingSubscription::factory()->for($customer, 'billingCustomer')->create([
+        'organization_id' => $organization->getKey(),
+        'provider' => BillingProvider::PayMongo,
+        'type' => config('billing.subscription_type'),
+        'external_subscription_id' => null,
+        'collection_method' => BillingCollectionMethod::Manual,
+        'plan_code' => 'starter',
+        'interval' => 'monthly',
+        'provider_status' => 'pending',
+        'livemode' => false,
+    ]);
+    $invoice = BillingInvoice::factory()->for($subscription, 'billingSubscription')->create([
+        'organization_id' => $organization->getKey(),
+        'provider' => BillingProvider::PayMongo,
+        'status' => BillingInvoiceStatus::PaymentPending,
+    ]);
+    $payment = BillingPayment::factory()->for($invoice, 'billingInvoice')->create([
+        'organization_id' => $organization->getKey(),
+        'provider' => BillingProvider::PayMongo,
+        'payment_method' => BillingPaymentMethod::QrPh,
+        'external_payment_intent_id' => 'pi_lost_webhook',
+        'amount' => $invoice->amount,
+        'currency' => $invoice->currency,
+        'status' => BillingPaymentStatus::AwaitingPayment,
+        'livemode' => false,
+    ]);
+    Http::fake([
+        'paymongo.test/*' => Http::response([
+            'data' => [
+                'id' => 'pi_lost_webhook',
+                'type' => 'payment_intent',
+                'attributes' => [
+                    'amount' => $invoice->amount,
+                    'currency' => $invoice->currency,
+                    'livemode' => false,
+                    'status' => 'succeeded',
+                    'payments' => [[
+                        'id' => 'pay_lost_webhook',
+                        'attributes' => ['paid_at' => now()->timestamp],
+                    ]],
+                ],
+            ],
+        ]),
+    ]);
+
+    $this->artisan('billing:reconcile')->assertExitCode(1);
+
+    expect($payment->fresh()->status)->toBe(BillingPaymentStatus::Paid)
+        ->and($invoice->fresh()->status)->toBe(BillingInvoiceStatus::Paid)
+        ->and($subscription->fresh()->provider_status)->toBe('active')
+        ->and(AuditLog::query()->where('action', 'billing.payment.reconciled')->count())->toBe(1)
+        ->and(StockMovement::query()->count())->toBe(0)
+        ->and(StockBalance::query()->count())->toBe(0);
+
+    $this->artisan('billing:reconcile')->assertExitCode(0);
+    expect(AuditLog::query()->where('action', 'billing.payment.reconciled')->count())->toBe(1);
 });

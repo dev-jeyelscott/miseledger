@@ -43,6 +43,8 @@ class OrganizationBillingController extends Controller
             'subscription' => $this->subscriptionData($access, $organization, $planCatalog),
             'entitlements' => $this->entitlementData($access, $organization, $planCatalog),
             'availablePlans' => $this->availablePlansData($planCatalog, $providerManager),
+            'manualQrPhEnabled' => config('billing.provider') === BillingProvider::PayMongo->value
+                && config('billing.providers.paymongo.manual_qrph') === true,
         ]);
     }
 
@@ -74,7 +76,8 @@ class OrganizationBillingController extends Controller
      *     planName: string|null,
      *     interval: string|null,
      *     nextBillingAt: string|null,
-     *     management: 'portal'|'cancel'|'none'
+     *     management: 'portal'|'cancel'|'none',
+     *     collectionMethod: string|null
      * }
      */
     private function subscriptionData(OrganizationSubscriptionAccess $access, Organization $organization, PlanCatalog $planCatalog): array
@@ -102,6 +105,7 @@ class OrganizationBillingController extends Controller
             'interval' => $subscription?->interval,
             'nextBillingAt' => $subscription?->next_billing_at?->toISOString(),
             'management' => $this->managementType($subscription, $paidAccessEndsAt?->isFuture() === true),
+            'collectionMethod' => $subscription?->collection_method->value,
         ];
     }
 
@@ -114,7 +118,9 @@ class OrganizationBillingController extends Controller
 
         return match ($subscription->provider) {
             BillingProvider::Stripe => 'portal',
-            BillingProvider::PayMongo => $subscription->cancelled_at === null && $hasPaidAccessEnd ? 'cancel' : 'none',
+            BillingProvider::PayMongo => $subscription->collection_method->value === 'manual'
+                ? 'none'
+                : ($subscription->cancelled_at === null && $hasPaidAccessEnd ? 'cancel' : 'none'),
         };
     }
 
