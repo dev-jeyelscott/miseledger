@@ -3,6 +3,8 @@
 use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
+use App\Models\StockBalance;
+use App\Models\StockMovement;
 use App\Models\User;
 use Illuminate\Support\Facades\Config;
 use Stripe\ApiRequestor;
@@ -142,6 +144,59 @@ test('an unpaid organization cannot mutate organization settings', function () {
         'id' => $organization->id,
         'name' => $organization->name,
     ]);
+});
+
+test('an unpaid organization recovering to active regains write access without any ledger mutation from the billing transition itself', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create(['role' => OrganizationRole::Owner]);
+
+    organizationWriteAccessSubscription($organization, [
+        'stripe_status' => 'unpaid',
+    ]);
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->post(route('inventory.categories.store'), [
+            'name' => 'Dry goods',
+            'active' => true,
+        ])
+        ->assertForbidden();
+
+    $this->assertDatabaseMissing('inventory_categories', [
+        'organization_id' => $organization->id,
+        'name' => 'Dry goods',
+    ]);
+
+    expect(StockMovement::query()->count())->toBe(0);
+    expect(StockBalance::query()->count())->toBe(0);
+
+    $organization->subscription(config('billing.subscription_type'))->update([
+        'stripe_status' => 'active',
+    ]);
+
+    expect(StockMovement::query()->count())->toBe(0);
+    expect(StockBalance::query()->count())->toBe(0);
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->post(route('inventory.categories.store'), [
+            'name' => 'Dry goods',
+            'active' => true,
+        ])
+        ->assertRedirect(route('inventory.categories.index'));
+
+    $this->assertDatabaseHas('inventory_categories', [
+        'organization_id' => $organization->id,
+        'name' => 'Dry goods',
+    ]);
+
+    expect(StockMovement::query()->count())->toBe(0);
+    expect(StockBalance::query()->count())->toBe(0);
 });
 
 test('a read-only organization still exposes GET reports and history routes', function () {

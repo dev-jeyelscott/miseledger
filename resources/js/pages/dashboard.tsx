@@ -20,11 +20,11 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 
+import OrganizationBillingController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingController';
 import LowStockReportController from '@/actions/App/Http/Controllers/Inventory/LowStockReportController';
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
 import StockMovementLedgerReportController from '@/actions/App/Http/Controllers/Inventory/StockMovementLedgerReportController';
 import WasteController from '@/actions/App/Http/Controllers/Inventory/WasteController';
-import OrganizationBillingController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingController';
 import OrganizationController from '@/actions/App/Http/Controllers/OrganizationController';
 import OrganizationLocationController from '@/actions/App/Http/Controllers/OrganizationLocationController';
 import OrganizationMemberController from '@/actions/App/Http/Controllers/OrganizationMemberController';
