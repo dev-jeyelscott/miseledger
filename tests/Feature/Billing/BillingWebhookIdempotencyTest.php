@@ -72,8 +72,8 @@ test('a duplicate Stripe event records and dispatches custom lifecycle effects o
         ->toBe(1);
 });
 
-test('a failed notification dispatch is retried without duplicating its audit transition', function () {
-    $recipient = billingWebhookRecipient('cus_retry_effect');
+test('a failed notification dispatch leaves an ambiguous claim that blocks resend without duplicating its audit transition', function () {
+    billingWebhookRecipient('cus_retry_effect');
     $payload = paymentFailurePayload('cus_retry_effect', 'evt_retry_effect');
 
     Notification::shouldReceive('sendNow')->once()->andThrow(new RuntimeException('mail transport unavailable'));
@@ -83,15 +83,19 @@ test('a failed notification dispatch is retried without duplicating its audit tr
     $effect = BillingWebhookEffect::query()->where('stripe_event_id', 'evt_retry_effect')->firstOrFail();
 
     expect($effect->notification_dispatched_at)->toBeNull()
+        ->and($effect->notification_claimed_at)->not->toBeNull()
         ->and(AuditLog::query()->where('correlation_id', 'evt_retry_effect')->count())
         ->toBe(1);
 
     Notification::fake();
 
+    // Whether the failed send above already reached the recipient cannot be determined
+    // locally, so a retry must refuse to resend instead of risking a duplicate.
     postIdempotencyWebhook($payload)->assertOk();
 
-    Notification::assertSentTo($recipient, BillingLifecycleNotification::class, 1);
+    Notification::assertNothingSent();
     expect(AuditLog::query()->where('correlation_id', 'evt_retry_effect')->count())
         ->toBe(1)
-        ->and($effect->fresh()->notification_dispatched_at)->not->toBeNull();
+        ->and($effect->fresh()->notification_dispatched_at)->toBeNull()
+        ->and($effect->fresh()->notification_claimed_at)->not->toBeNull();
 });

@@ -79,16 +79,13 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
             return;
         }
 
-        try {
-            $notify->handle($this->stripeCustomerId, $effect->lifecycle_event, $this->stripeEventId);
-        } catch (Throwable $exception) {
-            // The send call threw before returning, so delivery is provably known to
-            // have not occurred within this attempt. Clearing the claim lets a retry
-            // proceed as a fresh, unambiguous attempt instead of being refused.
-            $effect->forceFill(['notification_claimed_at' => null])->save();
-
-            throw $exception;
-        }
+        // The claim recorded above is left in place if this throws: a transport can
+        // accept a message and then throw on a lost acknowledgement, and a
+        // multi-recipient send can throw after earlier recipients already received
+        // it, so a thrown send is not provable non-delivery. Any subsequent retry
+        // attempt will find the claim already set and refuse to redeliver via the
+        // ambiguous-claim guard above, instead surfacing for manual reconciliation.
+        $notify->handle($this->stripeCustomerId, $effect->lifecycle_event, $this->stripeEventId);
 
         $effect->update(['notification_dispatched_at' => now()]);
     }

@@ -119,7 +119,7 @@ test('billing jobs have bounded retries and report terminal failures with organi
         ->and($effect->fresh()->notification_dispatched_at)->toBeNull();
 });
 
-test('a caught delivery failure clears the claim so a retry delivers exactly once', function () {
+test('a send failure that may be a lost acknowledgement or partial multi-recipient delivery retains the claim and blocks resend on retry', function () {
     $recipient = billingQueueRecipient('cus_queue_crash_boundary');
     $effect = BillingWebhookEffect::query()->create([
         'organization_id' => $recipient['organization']->getKey(),
@@ -133,24 +133,27 @@ test('a caught delivery failure clears the claim so a retry delivers exactly onc
         $recipient['organization']->stripe_id,
     );
 
-    Notification::shouldReceive('sendNow')->once()->andThrow(new RuntimeException('mail transport unavailable'));
+    // Simulates a transport that may have already delivered to one or more recipients
+    // (or accepted the message) before losing its acknowledgement and throwing.
+    Notification::shouldReceive('sendNow')->once()->andThrow(new RuntimeException('acknowledgement lost'));
 
     expect(fn (): mixed => $job->handle(app(NotifyOrganizationBillingLifecycle::class)))
         ->toThrow(RuntimeException::class);
 
-    // The send call threw before returning, so delivery is provably known not to have
-    // occurred; the claim is cleared so the retry below proceeds as a fresh attempt
-    // instead of being refused as ambiguous.
+    // The claim survives the failed attempt: whether the send actually reached a
+    // recipient before throwing cannot be determined locally.
     expect($effect->fresh()->notification_dispatched_at)->toBeNull()
-        ->and($effect->fresh()->notification_claimed_at)->toBeNull();
+        ->and($effect->fresh()->notification_claimed_at)->not->toBeNull();
 
     Notification::fake();
 
-    $job->handle(app(NotifyOrganizationBillingLifecycle::class));
-    $job->handle(app(NotifyOrganizationBillingLifecycle::class));
+    // A queued retry must not attempt to resend: the surviving claim causes it to be
+    // refused as ambiguous rather than risking a duplicate externally visible send.
+    expect(fn (): mixed => $job->handle(app(NotifyOrganizationBillingLifecycle::class)))
+        ->toThrow(AmbiguousBillingNotificationDeliveryException::class);
 
-    Notification::assertSentTo($recipient['user'], BillingLifecycleNotification::class, 1);
-    expect($effect->fresh()->notification_dispatched_at)->not->toBeNull();
+    Notification::assertNothingSent();
+    expect($effect->fresh()->notification_dispatched_at)->toBeNull();
 });
 
 test('a claim left by a defunct prior attempt with no dispatch marker refuses redelivery instead of risking a duplicate send', function () {
