@@ -143,7 +143,8 @@ export default function OrganizationCheckoutSuccess({
         );
 
         const paymentIntent = await paymentIntentResponse.json();
-        const redirectUrl = paymentIntent?.data?.attributes?.next_action?.redirect?.url;
+        const redirectUrl =
+            paymentIntent?.data?.attributes?.next_action?.redirect?.url;
 
         if (!paymentIntentResponse.ok) {
             throw new Error('Unable to start the payment.');
@@ -224,29 +225,56 @@ export default function OrganizationCheckoutSuccess({
                                     <form
                                         className="grid gap-3"
                                         onSubmit={(event) => {
-                                            void submitPayMongoCardPayment(event);
+                                            void submitPayMongoCardPayment(
+                                                event,
+                                            );
                                         }}
                                     >
                                         <p className="text-sm text-muted-foreground">
-                                            Enter your card details to complete the first payment. Card details are sent directly to PayMongo.
+                                            Enter your card details to complete
+                                            the first payment. Card details are
+                                            sent directly to PayMongo.
                                         </p>
                                         <label className="grid gap-2 text-sm font-medium">
                                             Card number
-                                            <input className="h-9 rounded-md border bg-background px-3" inputMode="numeric" name="cardNumber" required />
+                                            <input
+                                                className="h-9 rounded-md border bg-background px-3"
+                                                inputMode="numeric"
+                                                name="cardNumber"
+                                                required
+                                            />
                                         </label>
                                         <div className="grid grid-cols-2 gap-3">
                                             <label className="grid gap-2 text-sm font-medium">
                                                 Expiry month
-                                                <input className="h-9 rounded-md border bg-background px-3" inputMode="numeric" max="12" min="1" name="expiryMonth" required />
+                                                <input
+                                                    className="h-9 rounded-md border bg-background px-3"
+                                                    inputMode="numeric"
+                                                    max="12"
+                                                    min="1"
+                                                    name="expiryMonth"
+                                                    required
+                                                />
                                             </label>
                                             <label className="grid gap-2 text-sm font-medium">
                                                 Expiry year
-                                                <input className="h-9 rounded-md border bg-background px-3" inputMode="numeric" name="expiryYear" required />
+                                                <input
+                                                    className="h-9 rounded-md border bg-background px-3"
+                                                    inputMode="numeric"
+                                                    name="expiryYear"
+                                                    required
+                                                />
                                             </label>
                                         </div>
                                         <label className="grid gap-2 text-sm font-medium">
                                             Security code
-                                            <input className="h-9 rounded-md border bg-background px-3" inputMode="numeric" name="cvc" required type="password" />
+                                            <input
+                                                className="h-9 rounded-md border bg-background px-3"
+                                                inputMode="numeric"
+                                                name="cvc"
+                                                required
+                                                type="password"
+                                            />
                                         </label>
                                         <Button type="submit">
                                             <CreditCard aria-hidden="true" />
@@ -254,7 +282,10 @@ export default function OrganizationCheckoutSuccess({
                                         </Button>
                                     </form>
                                 )}
-                                <p className="text-sm text-muted-foreground" aria-live="polite">
+                                <p
+                                    className="text-sm text-muted-foreground"
+                                    aria-live="polite"
+                                >
                                     {pollExhausted
                                         ? "We're still waiting for the provider to synchronize billing. Automatic checking has stopped; use the refresh button below when you're ready to check again."
                                         : 'This page checks server-owned billing state automatically. A completed browser payment does not activate access until lifecycle synchronization confirms it.'}

@@ -1,19 +1,44 @@
 <?php
 
+use App\Enums\BillingProvider;
 use App\Enums\OrganizationAccessMode;
 use App\Enums\OrganizationRolloutClassification;
+use App\Models\BillingCustomer;
+use App\Models\BillingSubscription;
 use App\Models\Organization;
 use App\Support\Billing\OrganizationSubscriptionAccessResolver;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Config;
 
-function createOrganizationSubscription(Organization $organization, array $attributes = []): void
+beforeEach(function (): void {
+    Config::set('billing.plans', [
+        'starter' => [
+            'name' => 'Starter',
+            'providers' => [
+                'stripe' => ['monthly' => 'price_test', 'yearly' => null],
+                'paymongo' => ['monthly' => 'plan_test', 'yearly' => null],
+            ],
+            'features' => [],
+            'limits' => [],
+        ],
+    ]);
+});
+
+function createOrganizationSubscription(Organization $organization, array $attributes = []): BillingSubscription
 {
-    $organization->subscriptions()->create(array_merge([
+    $provider = $attributes['provider'] ?? BillingProvider::Stripe;
+    unset($attributes['provider']);
+    $customer = BillingCustomer::factory()->for($organization)->create(['provider' => $provider]);
+
+    return BillingSubscription::factory()->for($customer, 'billingCustomer')->create(array_merge([
+        'organization_id' => $organization->getKey(),
+        'billing_customer_id' => $customer->getKey(),
+        'provider' => $provider,
         'type' => config('billing.subscription_type'),
-        'stripe_id' => 'sub_'.str()->random(14),
-        'stripe_status' => 'active',
-        'stripe_price' => 'price_test',
-        'quantity' => 1,
+        'external_plan_id' => $provider === BillingProvider::Stripe ? 'price_test' : 'plan_test',
+        'plan_code' => 'starter',
+        'interval' => 'monthly',
+        'provider_status' => 'active',
     ], $attributes));
 }
 
@@ -48,7 +73,7 @@ test('a subscription trialing on stripe is writable and on trial', function () {
     $organization = Organization::factory()->create();
 
     createOrganizationSubscription($organization, [
-        'stripe_status' => 'trialing',
+        'provider_status' => 'trialing',
         'trial_ends_at' => Carbon::now()->addDays(3),
     ]);
 
@@ -56,14 +81,14 @@ test('a subscription trialing on stripe is writable and on trial', function () {
 
     expect($access->accessMode)->toBe(OrganizationAccessMode::Writable)
         ->and($access->onTrial)->toBeTrue()
-        ->and($access->subscriptionStatus)->toBe('trialing');
+        ->and($access->subscriptionStatus)->toBe('trial');
 });
 
 test('an active subscription is writable', function () {
     $organization = Organization::factory()->create();
 
     createOrganizationSubscription($organization, [
-        'stripe_status' => 'active',
+        'provider_status' => 'active',
     ]);
 
     $access = OrganizationSubscriptionAccessResolver::resolve($organization->fresh());
@@ -79,7 +104,7 @@ test('a past due subscription is writable with a billing warning', function () {
     $organization = Organization::factory()->create();
 
     createOrganizationSubscription($organization, [
-        'stripe_status' => 'past_due',
+        'provider_status' => 'past_due',
     ]);
 
     $access = OrganizationSubscriptionAccessResolver::resolve($organization->fresh());
@@ -94,7 +119,7 @@ test('a subscription scheduled to cancel remains writable during its paid grace 
     $organization = Organization::factory()->create();
 
     createOrganizationSubscription($organization, [
-        'stripe_status' => 'active',
+        'provider_status' => 'active',
         'ends_at' => Carbon::now()->addDays(10),
     ]);
 
@@ -109,7 +134,7 @@ test('a canceled subscription past its grace period is read-only', function () {
     $organization = Organization::factory()->create();
 
     createOrganizationSubscription($organization, [
-        'stripe_status' => 'canceled',
+        'provider_status' => 'cancelled',
         'ends_at' => Carbon::now()->subDay(),
     ]);
 
@@ -124,7 +149,7 @@ test('an unpaid subscription is read-only', function () {
     $organization = Organization::factory()->create();
 
     createOrganizationSubscription($organization, [
-        'stripe_status' => 'unpaid',
+        'provider_status' => 'unpaid',
     ]);
 
     $access = OrganizationSubscriptionAccessResolver::resolve($organization->fresh());
@@ -138,7 +163,7 @@ test('an unpaid subscription with a future ends_at remains read-only', function 
     $organization = Organization::factory()->create();
 
     createOrganizationSubscription($organization, [
-        'stripe_status' => 'unpaid',
+        'provider_status' => 'unpaid',
         'ends_at' => Carbon::now()->addDays(10),
     ]);
 
@@ -153,7 +178,7 @@ test('resolving the same organization state repeatedly yields identical results'
     $organization = Organization::factory()->create();
 
     createOrganizationSubscription($organization, [
-        'stripe_status' => 'past_due',
+        'provider_status' => 'past_due',
     ]);
 
     $organization = $organization->fresh();
@@ -164,7 +189,7 @@ test('resolving the same organization state repeatedly yields identical results'
     expect($first)->toEqual($second);
 });
 
-test('an unclassified legacy organization with no trial and no stripe customer stays writable', function () {
+test('an unclassified legacy organization with no trial and no durable billing customer stays writable', function () {
     $organization = Organization::factory()->create([
         'trial_ends_at' => null,
         'rollout_classification' => null,
@@ -177,12 +202,12 @@ test('an unclassified legacy organization with no trial and no stripe customer s
         ->and($access->onTrial)->toBeFalse();
 });
 
-test('a legacy organization already in checkout with no trial remains read-only pending webhook sync', function () {
+test('a legacy organization with a durable billing customer and no subscription remains read-only pending sync', function () {
     $organization = Organization::factory()->create([
         'trial_ends_at' => null,
         'rollout_classification' => null,
-        'stripe_id' => 'cus_test_pending',
     ]);
+    BillingCustomer::factory()->for($organization)->create(['provider' => BillingProvider::Stripe]);
 
     $access = OrganizationSubscriptionAccessResolver::resolve($organization);
 
@@ -213,4 +238,73 @@ test('a trial_eligible classification is derived from trial/subscription state l
     $access = OrganizationSubscriptionAccessResolver::resolve($organization);
 
     expect($access->accessMode)->toBe(OrganizationAccessMode::ReadOnly);
+});
+
+test('an immediately_billable classification is derived from subscription state like a normal tenant', function () {
+    $organization = Organization::factory()->create([
+        'trial_ends_at' => null,
+        'rollout_classification' => OrganizationRolloutClassification::ImmediatelyBillable,
+    ]);
+
+    createOrganizationSubscription($organization, ['provider' => BillingProvider::PayMongo]);
+
+    expect(OrganizationSubscriptionAccessResolver::resolve($organization)->accessMode)
+        ->toBe(OrganizationAccessMode::Writable);
+});
+
+test('Stripe and PayMongo projections resolve equivalent provider-neutral access', function (BillingProvider $provider, string $status, OrganizationAccessMode $mode, bool $warning) {
+    $organization = Organization::factory()->create();
+
+    createOrganizationSubscription($organization, [
+        'provider' => $provider,
+        'provider_status' => $status,
+    ]);
+
+    $access = OrganizationSubscriptionAccessResolver::resolve($organization);
+
+    expect($access->accessMode)->toBe($mode)
+        ->and($access->billingWarning)->toBe($warning);
+})->with([
+    'Stripe active' => [BillingProvider::Stripe, 'active', OrganizationAccessMode::Writable, false],
+    'PayMongo active' => [BillingProvider::PayMongo, 'active', OrganizationAccessMode::Writable, false],
+    'Stripe past due' => [BillingProvider::Stripe, 'past_due', OrganizationAccessMode::Writable, true],
+    'PayMongo past due' => [BillingProvider::PayMongo, 'past_due', OrganizationAccessMode::Writable, true],
+    'Stripe unpaid' => [BillingProvider::Stripe, 'unpaid', OrganizationAccessMode::ReadOnly, false],
+    'PayMongo unpaid' => [BillingProvider::PayMongo, 'unpaid', OrganizationAccessMode::ReadOnly, false],
+]);
+
+test('a cancellation remains writable immediately before and becomes read-only after its local paid-access end time', function () {
+    $organization = Organization::factory()->create();
+    $subscription = createOrganizationSubscription($organization, [
+        'provider' => BillingProvider::PayMongo,
+        'provider_status' => 'cancelled',
+        'ends_at' => now()->addSecond(),
+        'cancelled_at' => now(),
+    ]);
+
+    expect(OrganizationSubscriptionAccessResolver::resolve($organization)->accessMode)
+        ->toBe(OrganizationAccessMode::Writable);
+
+    $subscription->update(['ends_at' => now()->subSecond()]);
+
+    expect(OrganizationSubscriptionAccessResolver::resolve($organization)->accessMode)
+        ->toBe(OrganizationAccessMode::ReadOnly);
+});
+
+test('ambiguous subscription ownership fails closed and does not use the selected acquisition provider', function () {
+    Config::set('billing.provider', 'paymongo');
+    $organization = Organization::factory()->create();
+    createOrganizationSubscription($organization, ['provider' => BillingProvider::Stripe]);
+    createOrganizationSubscription($organization, ['provider' => BillingProvider::PayMongo]);
+
+    expect(OrganizationSubscriptionAccessResolver::resolve($organization)->accessMode)
+        ->toBe(OrganizationAccessMode::ReadOnly);
+});
+
+test('commercial resolution remains independent from administrative organization activity', function () {
+    $organization = Organization::factory()->create(['active' => false]);
+    createOrganizationSubscription($organization, ['provider' => BillingProvider::PayMongo]);
+
+    expect(OrganizationSubscriptionAccessResolver::resolve($organization)->accessMode)
+        ->toBe(OrganizationAccessMode::Writable);
 });

@@ -14,6 +14,10 @@ const baseSubscription: OrganizationSubscriptionContext = {
     trialEndsAt: null,
     endsAt: null,
     billingWarning: false,
+    planName: 'Starter',
+    interval: 'monthly',
+    nextBillingAt: null,
+    management: 'portal',
 };
 
 function membership(

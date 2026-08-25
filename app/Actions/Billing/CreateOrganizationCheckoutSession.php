@@ -3,7 +3,9 @@
 namespace App\Actions\Billing;
 
 use App\Actions\Audit\RecordAuditEntry;
+use App\Enums\BillingProvider;
 use App\Enums\PlanCode;
+use App\Models\BillingCustomer;
 use App\Models\Organization;
 use App\Models\User;
 use App\Support\Billing\BillingObservability;
@@ -85,6 +87,8 @@ final class CreateOrganizationCheckoutSession
                     throw $exception;
                 }
 
+                $this->persistStripeCustomerAfterCheckout($organization, $provider);
+
                 $this->recordAuditEntry->handle(
                     $organization,
                     $actor,
@@ -108,5 +112,23 @@ final class CreateOrganizationCheckoutSession
     private static function pendingCheckoutCacheKey(string $organizationId, string $type): string
     {
         return "billing:checkout:pending:{$organizationId}:{$type}";
+    }
+
+    private function persistStripeCustomerAfterCheckout(Organization $organization, BillingProvider $provider): void
+    {
+        if ($provider !== BillingProvider::Stripe) {
+            return;
+        }
+
+        $stripeId = $organization->fresh()->stripe_id;
+
+        if ($stripeId === null) {
+            return;
+        }
+
+        BillingCustomer::query()->updateOrCreate(
+            ['organization_id' => $organization->getKey(), 'provider' => BillingProvider::Stripe],
+            ['external_customer_id' => $stripeId, 'livemode' => false],
+        );
     }
 }

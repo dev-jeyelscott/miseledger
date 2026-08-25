@@ -75,9 +75,9 @@ reconciliation, portal behavior, and provider-specific management must use
 the subscription's own provider ownership rather than the currently selected
 provider for new acquisitions.
 
-The current database does not yet contain generic provider-ownership
-persistence. That capability requires a later implementation task and must
-not be considered complete merely because this policy is documented.
+Durable provider ownership is stored on each `billing_subscriptions.provider`
+projection. Existing subscription servicing, cancellation, recovery, and
+management must use that ownership and never `BILLING_PROVIDER`.
 
 ## Billing-provider security
 
@@ -130,8 +130,13 @@ grace period
 ended
 ```
 
-Provider-specific statuses are implementation inputs and must be normalized
-before they control commercial application access.
+Provider-specific statuses are retained by provider infrastructure and
+normalized by the application-owned resolver using local projection state and
+`PlanCatalog` before they control commercial access. After cancellation,
+`billing_subscriptions.ends_at` is the authoritative paid-access end time:
+renewal stops immediately, access continues until that time, and authorized
+billing recovery remains reachable afterward. Commercial access never changes
+historical stock, balances, valuation, reconciliation, or ledger primitives.
 
 Stripe-specific values such as `trialing` remain Stripe adapter terminology,
 not additional commercial lifecycle states.

@@ -56,6 +56,10 @@ export type OrganizationSubscriptionContext = {
     trialEndsAt: string | null;
     endsAt: string | null;
     billingWarning: boolean;
+    planName: string | null;
+    interval: string | null;
+    nextBillingAt: string | null;
+    management: 'portal' | 'cancel' | 'none';
 };
 
 export type FeatureCode =

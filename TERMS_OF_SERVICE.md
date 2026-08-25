@@ -20,13 +20,13 @@ You are responsible for the activity that occurs through your account and for en
 
 AGEAX may offer subscription plans in PHP and USD. Prices, features, and availability are displayed at checkout and may vary by plan and billing interval.
 
-Eligible plans include a 30-day trial. A valid payment method is required to start a trial. Unless you cancel before the trial ends, the plan you selected will automatically begin charging at the displayed price and interval. Payments are processed by Stripe; AGEAX does not receive or store your full payment-card details.
+Eligible plans include a 30-day trial. A valid payment method is required to start a trial. Unless you cancel before the trial ends, the plan you selected will automatically begin charging at the displayed price and interval. Payments are processed by the provider made available for your subscription; AGEAX does not receive or store your full payment-card details.
 
 You are responsible for applicable taxes, except where we are required to collect them. Where enabled and applicable, Stripe Tax may calculate taxes at checkout. Tax handling and availability can vary by location and are subject to applicable law.
 
 ## 4. Cancellation and refunds
 
-You may cancel a subscription at any time. Cancellation takes effect at the end of the current paid billing period, and you keep access until that period ends.
+You may cancel a subscription at any time. Cancellation stops future renewal, and you keep access until the end of the current paid billing period even if the provider records cancellation sooner.
 
 We offer a full refund when you contact support within 14 days of your first paid subscription charge. We do not provide prorated refunds for unused time after cancellation and do not offer discretionary refunds after that 14-day period, except where applicable law requires otherwise.
 

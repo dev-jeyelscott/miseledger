@@ -97,7 +97,7 @@ final class PayMongoWebhookController extends Controller
         }
 
         return match ($attributes['type']) {
-            'subscription.activated', 'subscription.past_due', 'subscription.unpaid', 'subscription.updated' => $this->subscriptionEvent($event['id'], $attributes, $resource, $resourceAttributes),
+            'subscription.activated', 'subscription.past_due', 'subscription.unpaid', 'subscription.cancelled', 'subscription.updated' => $this->subscriptionEvent($event['id'], $attributes, $resource, $resourceAttributes),
             'subscription.invoice.paid', 'subscription.invoice.payment_failed' => $this->invoiceEvent($event['id'], $attributes, $resource, $resourceAttributes),
             default => null,
         };
@@ -118,9 +118,11 @@ final class PayMongoWebhookController extends Controller
             'subscription.activated' => $status === 'active' ? BillingLifecycleEvent::SubscriptionStarted : null,
             'subscription.past_due' => $status === 'past_due' ? BillingLifecycleEvent::PaymentFailed : null,
             'subscription.unpaid' => $status === 'unpaid' ? BillingLifecycleEvent::PaymentFailed : null,
+            'subscription.cancelled' => in_array($status, ['cancelled', 'canceled'], true) ? BillingLifecycleEvent::ScheduledCancellation : null,
             'subscription.updated' => match ($status) {
                 'active' => BillingLifecycleEvent::Recovered,
                 'past_due', 'unpaid' => BillingLifecycleEvent::PaymentFailed,
+                'cancelled', 'canceled' => BillingLifecycleEvent::ScheduledCancellation,
                 default => null,
             },
         };
@@ -135,11 +137,21 @@ final class PayMongoWebhookController extends Controller
             'subscription_id' => $resource['id'],
             'livemode' => $attributes['livemode'],
             'lifecycle_event' => $lifecycleEvent,
-            'audit_action' => $lifecycleEvent === BillingLifecycleEvent::SubscriptionStarted ? 'billing.subscription.started' : ($lifecycleEvent === BillingLifecycleEvent::Recovered ? 'billing.payment.recovered' : 'billing.subscription.past_due'),
+            'audit_action' => match ($lifecycleEvent) {
+                BillingLifecycleEvent::SubscriptionStarted => 'billing.subscription.started',
+                BillingLifecycleEvent::Recovered => 'billing.payment.recovered',
+                BillingLifecycleEvent::ScheduledCancellation => 'billing.subscription.cancelled',
+                default => 'billing.subscription.past_due',
+            },
             'subscription_updates' => [
                 'provider_status' => $status,
                 'livemode' => $attributes['livemode'],
-                'next_billing_at' => $this->date($subscription['next_billing_schedule'] ?? null),
+                'next_billing_at' => in_array($status, ['cancelled', 'canceled'], true)
+                    ? null
+                    : $this->date($subscription['next_billing_schedule'] ?? null),
+                'ends_at' => in_array($status, ['cancelled', 'canceled'], true)
+                    ? $this->date($subscription['next_billing_schedule'] ?? null)
+                    : null,
                 'cancelled_at' => $this->timestamp($subscription['cancelled_at'] ?? null),
             ],
         ];

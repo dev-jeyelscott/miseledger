@@ -3,6 +3,7 @@
 namespace App\Support\Billing\Providers;
 
 use App\Enums\BillingProvider as BillingProviderEnum;
+use App\Models\BillingSubscription;
 use App\Models\Organization;
 use App\Models\User;
 
@@ -38,4 +39,11 @@ interface BillingProvider
     ): BillingCheckoutOutcome;
 
     public function billingPortalUrl(Organization $organization, string $returnUrl): string;
+
+    /**
+     * Stop future renewal for a subscription owned by this provider. Provider
+     * adapters perform only provider mechanics; the local projection keeps
+     * the normalized paid-access end time used by commercial access.
+     */
+    public function cancelSubscription(BillingSubscription $subscription): void;
 }

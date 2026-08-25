@@ -60,6 +60,27 @@ final class PayMongoBillingProvider implements BillingProvider
         throw new RuntimeException('The PayMongo billing portal is not available.');
     }
 
+    public function cancelSubscription(BillingSubscription $subscription): void
+    {
+        if ($subscription->provider !== BillingProviderEnum::PayMongo || ! str_starts_with($subscription->external_subscription_id, 'subs_')) {
+            throw new RuntimeException('PayMongo subscription ownership could not be resolved safely.');
+        }
+
+        $response = $this->client->post(
+            'cancel_subscription',
+            "/subscriptions/{$subscription->external_subscription_id}/cancel",
+            [],
+            (string) $subscription->organization_id,
+            "miseledger:paymongo:subscription-cancel:{$subscription->getKey()}",
+        );
+        $resource = $this->resource($response, 'subscription');
+        $status = $resource['attributes']['status'] ?? null;
+
+        if (($resource['id'] ?? null) !== $subscription->external_subscription_id || ! in_array($status, ['cancelled', 'canceled'], true)) {
+            throw new RuntimeException('PayMongo returned an invalid cancellation response.');
+        }
+    }
+
     private function customerFor(Organization $organization, User $actor): BillingCustomer
     {
         $customer = BillingCustomer::query()

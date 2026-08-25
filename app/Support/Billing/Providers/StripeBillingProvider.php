@@ -3,6 +3,7 @@
 namespace App\Support\Billing\Providers;
 
 use App\Enums\BillingProvider as BillingProviderEnum;
+use App\Models\BillingSubscription;
 use App\Models\Organization;
 use App\Models\User;
 
@@ -46,5 +47,10 @@ final class StripeBillingProvider implements BillingProvider
     public function billingPortalUrl(Organization $organization, string $returnUrl): string
     {
         return $organization->billingPortalUrl($returnUrl);
+    }
+
+    public function cancelSubscription(BillingSubscription $subscription): void
+    {
+        throw new \RuntimeException('Stripe subscription cancellation is managed through the billing portal.');
     }
 }

@@ -156,7 +156,8 @@ reached.
 `inventory_ledger_write` routes ultimately enter
 `RecordStockMovement` through their owning domain actions.
 
-Commercial enforcement belongs before that ledger boundary.
+Commercial enforcement belongs before that ledger boundary. Provider-neutral
+commercial access must never enter or alter the stock-ledger primitive.
 `RecordStockMovement`, `StockMovement`, and `StockBalance` must remain
 provider-neutral and billing-unaware.
 

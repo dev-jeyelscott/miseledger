@@ -1,5 +1,6 @@
 import { Head, router } from '@inertiajs/react';
-import { CreditCard, ExternalLink } from 'lucide-react';
+import { CreditCard, ExternalLink, XCircle } from 'lucide-react';
+import OrganizationBillingCancellationController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingCancellationController';
 import OrganizationBillingPortalController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingPortalController';
 import OrganizationCheckoutController from '@/actions/App/Http/Controllers/Billing/OrganizationCheckoutController';
 import { Badge } from '@/components/ui/badge';
@@ -51,9 +52,20 @@ function formatDate(value: string | null): string | null {
     });
 }
 
+function statusVariant(
+    status: string | null,
+): 'secondary' | 'outline' | 'destructive' {
+    return status === 'unpaid'
+        ? 'destructive'
+        : status === 'past_due'
+          ? 'outline'
+          : 'secondary';
+}
+
 /**
  * Present the organization's backend-derived commercial state and let the
- * billing administrator start Checkout or open Stripe's billing portal.
+ * billing administrator start Checkout or use the server-selected management
+ * path. Every restriction shown here is presentation only: the server remains
  * Every restriction shown here is presentation only: the server remains the
  * enforcement boundary for both this page and the actions it triggers.
  */
@@ -66,6 +78,7 @@ export default function OrganizationBilling({
     const hasActiveSubscription = subscription.status !== null;
     const trialEndsAt = formatDate(subscription.trialEndsAt);
     const endsAt = formatDate(subscription.endsAt);
+    const nextBillingAt = formatDate(subscription.nextBillingAt);
     const overLimitKeys = Object.entries(entitlements.usage)
         .filter(([, usage]) => usage.atLimit)
         .map(([key]) => formatLabel(key));
@@ -80,6 +93,22 @@ export default function OrganizationBilling({
     function openBillingPortal() {
         router.post(
             OrganizationBillingPortalController.store.url(organization.id),
+        );
+    }
+
+    function cancelPayMongoSubscription() {
+        if (
+            !window.confirm(
+                'Cancel renewal? Paid access remains available until the end of the current billing period.',
+            )
+        ) {
+            return;
+        }
+
+        router.post(
+            OrganizationBillingCancellationController.store.url(
+                organization.id,
+            ),
         );
     }
 
@@ -158,7 +187,8 @@ export default function OrganizationBilling({
                                         Plan
                                     </dt>
                                     <dd className="mt-1 font-medium">
-                                        {formatLabel(subscription.plan)}
+                                        {subscription.planName ??
+                                            formatLabel(subscription.plan)}
                                     </dd>
                                 </div>
 
@@ -167,7 +197,11 @@ export default function OrganizationBilling({
                                         Status
                                     </dt>
                                     <dd className="mt-1">
-                                        <Badge variant="secondary">
+                                        <Badge
+                                            variant={statusVariant(
+                                                subscription.status,
+                                            )}
+                                        >
                                             {formatLabel(subscription.status)}
                                         </Badge>
                                     </dd>
@@ -217,22 +251,58 @@ export default function OrganizationBilling({
                                         </dd>
                                     </div>
                                 )}
+
+                                {subscription.interval && (
+                                    <div>
+                                        <dt className="text-xs font-medium text-muted-foreground">
+                                            Billing interval
+                                        </dt>
+                                        <dd className="mt-1 font-medium">
+                                            {formatLabel(subscription.interval)}
+                                        </dd>
+                                    </div>
+                                )}
+
+                                {nextBillingAt && (
+                                    <div>
+                                        <dt className="text-xs font-medium text-muted-foreground">
+                                            Next billing date
+                                        </dt>
+                                        <dd className="mt-1 font-medium">
+                                            {nextBillingAt}
+                                        </dd>
+                                    </div>
+                                )}
                             </dl>
                         </CardContent>
 
-                        {hasActiveSubscription && (
+                        {subscription.management !== 'none' && (
                             <CardFooter className="justify-end border-t pt-6">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={openBillingPortal}
-                                >
-                                    <ExternalLink
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    Manage billing
-                                </Button>
+                                {subscription.management === 'portal' ? (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={openBillingPortal}
+                                    >
+                                        <ExternalLink
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        Manage billing
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        type="button"
+                                        variant="destructive"
+                                        onClick={cancelPayMongoSubscription}
+                                    >
+                                        <XCircle
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        Cancel renewal
+                                    </Button>
+                                )}
                             </CardFooter>
                         )}
                     </Card>

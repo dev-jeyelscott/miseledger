@@ -13,8 +13,8 @@ provider-neutral commercial contract.
 ## Why this plan is required
 
 `OrganizationSubscriptionAccessResolver` currently derives commercial access
-from the generic-trial `trial_ends_at` field and Cashier's locally
-synchronized Stripe subscription state.
+from the generic-trial `trial_ends_at` field and the durable provider-neutral
+local subscription projection.
 
 Organizations created before billing shipped may have neither a subscription
 nor a `trial_ends_at` value. Without an explicit legacy policy, such an
@@ -65,7 +65,7 @@ following are true:
 ```text
 rollout_classification IS NULL
 trial_ends_at IS NULL
-stripe_id IS NULL
+no durable billing customer exists
 ```
 
 The `stripe_id` condition is intentionally documented as a **current**

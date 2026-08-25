@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Billing\OrganizationBillingCancellationController;
 use App\Http\Controllers\Billing\OrganizationBillingController;
 use App\Http\Controllers\Billing\OrganizationBillingPortalController;
 use App\Http\Controllers\Billing\OrganizationCheckoutController;
@@ -79,6 +80,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         'organizations/{organization}/billing/portal',
         [OrganizationBillingPortalController::class, 'store'],
     )->name('organizations.billing.portal');
+
+    Route::post(
+        'organizations/{organization}/billing/cancel',
+        [OrganizationBillingCancellationController::class, 'store'],
+    )->name('organizations.billing.cancel');
 
     Route::get(
         'organizations/{organization}/billing/checkout/success',

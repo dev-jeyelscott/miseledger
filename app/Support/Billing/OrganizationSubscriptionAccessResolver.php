@@ -3,17 +3,16 @@
 namespace App\Support\Billing;
 
 use App\Enums\OrganizationAccessMode;
+use App\Enums\PlanCode;
+use App\Models\BillingSubscription;
 use App\Models\Organization;
-use Laravel\Cashier\Subscription;
-use Stripe\Subscription as StripeSubscription;
 
 /**
  * Single server-side authority deriving an organization's commercial
- * access from Cashier's locally synchronized subscription/grace-period
- * state and the organization's generic trial fields. Reads only,
- * mutates nothing, and never issues Stripe API calls: Cashier's synced
- * `stripe_status`/`trial_ends_at`/`ends_at` columns remain the sole
- * inputs, so this never competes with Cashier as billing state authority.
+ * access from the durable provider-neutral subscription projection and the
+ * organization's generic trial fields. Reads only and never issues provider
+ * API calls. Provider adapters synchronize the projection; this class owns
+ * the provider-neutral commercial interpretation of that local state.
  *
  * Deliberately independent from `Organization.active`: administrative
  * deactivation is decided elsewhere and is never read or influenced here.
@@ -26,13 +25,19 @@ final class OrganizationSubscriptionAccessResolver
             return self::resolveExempt();
         }
 
-        $subscription = $organization->subscription((string) config('billing.subscription_type'));
+        $subscriptions = $organization->billingSubscriptions()
+            ->where('type', (string) config('billing.subscription_type'))
+            ->get();
 
-        if ($subscription === null) {
+        if ($subscriptions->isEmpty()) {
             return self::resolveWithoutSubscription($organization);
         }
 
-        return self::resolveWithSubscription($subscription, $planCatalog ?? new PlanCatalog);
+        if ($subscriptions->count() !== 1) {
+            return self::resolveDenied();
+        }
+
+        return self::resolveWithSubscription($subscriptions->sole(), $planCatalog ?? new PlanCatalog);
     }
 
     /**
@@ -77,7 +82,7 @@ final class OrganizationSubscriptionAccessResolver
     /**
      * A pre-billing organization never touched by the trial/checkout flow:
      * no rollout classification has been assigned yet, it was never given a
-     * generic trial window, and it has never started Stripe checkout. Such
+     * generic trial window, and it has no durable provider customer. Such
      * an organization must stay writable rather than unexpectedly becoming
      * read-only the moment commercial enforcement code runs; it only moves
      * to trial/subscription-derived access once operations assigns an
@@ -87,20 +92,28 @@ final class OrganizationSubscriptionAccessResolver
     {
         return $organization->rollout_classification === null
             && $organization->trial_ends_at === null
-            && $organization->stripe_id === null;
+            && ! $organization->billingCustomers()->exists();
     }
 
-    private static function resolveWithSubscription(Subscription $subscription, PlanCatalog $planCatalog): OrganizationSubscriptionAccess
+    private static function resolveWithSubscription(BillingSubscription $subscription, PlanCatalog $planCatalog): OrganizationSubscriptionAccess
     {
-        $onGracePeriod = $subscription->onGracePeriod();
-        $status = $subscription->stripe_status;
-        $onTrial = $subscription->onTrial();
-
-        $plan = $subscription->stripe_price !== null
-            ? $planCatalog->resolveByPriceId($subscription->stripe_price)?->code
-            : null;
-
-        [$accessMode, $billingWarning] = self::resolveAccessModeAndWarning($subscription, $onGracePeriod, $status);
+        try {
+            $planCode = is_string($subscription->plan_code)
+                ? PlanCode::from($subscription->plan_code)
+                : null;
+        } catch (\InvalidArgumentException) {
+            $planCode = null;
+        }
+        $plan = $planCode !== null ? $planCatalog->get($planCode)?->code : null;
+        $status = self::normalizedStatus($subscription);
+        $onTrial = $status === 'trial';
+        $onGracePeriod = self::isCancelledWithPaidAccess($subscription);
+        [$accessMode, $billingWarning] = self::resolveAccessModeAndWarning(
+            $subscription,
+            $plan !== null,
+            $status,
+            $onGracePeriod,
+        );
 
         return new OrganizationSubscriptionAccess(
             accessMode: $accessMode,
@@ -117,9 +130,9 @@ final class OrganizationSubscriptionAccessResolver
     /**
      * @return array{0: OrganizationAccessMode, 1: bool}
      */
-    private static function resolveAccessModeAndWarning(Subscription $subscription, bool $onGracePeriod, string $status): array
+    private static function resolveAccessModeAndWarning(BillingSubscription $subscription, bool $hasValidPlan, ?string $status, bool $onGracePeriod): array
     {
-        if ($status === StripeSubscription::STATUS_UNPAID) {
+        if (! $hasValidPlan || self::hasEnded($subscription) || $status === 'unpaid') {
             return [OrganizationAccessMode::ReadOnly, false];
         }
 
@@ -127,15 +140,58 @@ final class OrganizationSubscriptionAccessResolver
             return [OrganizationAccessMode::Writable, true];
         }
 
-        if ($subscription->ended()) {
-            return [OrganizationAccessMode::ReadOnly, false];
-        }
-
         return match ($status) {
-            StripeSubscription::STATUS_TRIALING,
-            StripeSubscription::STATUS_ACTIVE => [OrganizationAccessMode::Writable, false],
-            StripeSubscription::STATUS_PAST_DUE => [OrganizationAccessMode::Writable, true],
+            'trial', 'active' => [OrganizationAccessMode::Writable, false],
+            'past_due' => [OrganizationAccessMode::Writable, true],
             default => [OrganizationAccessMode::ReadOnly, false],
         };
+    }
+
+    private static function normalizedStatus(BillingSubscription $subscription): ?string
+    {
+        if (self::isCancelled($subscription)) {
+            return 'cancelled';
+        }
+
+        if ($subscription->trial_ends_at?->isFuture() === true) {
+            return 'trial';
+        }
+
+        return match ($subscription->provider_status) {
+            'active', 'past_due', 'unpaid' => $subscription->provider_status,
+            default => null,
+        };
+    }
+
+    private static function isCancelledWithPaidAccess(BillingSubscription $subscription): bool
+    {
+        return self::isCancelled($subscription)
+            && $subscription->ends_at?->isFuture() === true;
+    }
+
+    private static function isCancelled(BillingSubscription $subscription): bool
+    {
+        return $subscription->cancelled_at !== null
+            || $subscription->ends_at !== null
+            || in_array($subscription->provider_status, ['cancelled', 'canceled'], true);
+    }
+
+    private static function hasEnded(BillingSubscription $subscription): bool
+    {
+        return $subscription->ends_at !== null && ! $subscription->ends_at->isFuture();
+    }
+
+    private static function resolveDenied(): OrganizationSubscriptionAccess
+    {
+        return new OrganizationSubscriptionAccess(
+            accessMode: OrganizationAccessMode::ReadOnly,
+            subscriptionStatus: null,
+            plan: null,
+            onTrial: false,
+            onGracePeriod: false,
+            billingWarning: false,
+            trialEndsAt: null,
+            endsAt: null,
+        );
     }
 }

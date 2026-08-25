@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Billing;
 
+use App\Enums\BillingProvider;
 use App\Enums\OrganizationPermission;
 use App\Http\Controllers\Controller;
+use App\Models\BillingSubscription;
 use App\Models\Organization;
 use App\Support\Billing\OrganizationSubscriptionAccess;
 use App\Support\Billing\OrganizationSubscriptionAccessResolver;
@@ -38,7 +40,7 @@ class OrganizationBillingController extends Controller
 
         return Inertia::render('organizations/billing/index', [
             'organization' => $this->organizationData($organization),
-            'subscription' => $this->subscriptionData($access),
+            'subscription' => $this->subscriptionData($access, $organization, $planCatalog),
             'entitlements' => $this->entitlementData($access, $organization, $planCatalog),
             'availablePlans' => $this->availablePlansData($planCatalog, $providerManager),
         ]);
@@ -68,11 +70,26 @@ class OrganizationBillingController extends Controller
      *     onTrial: bool,
      *     trialEndsAt: string|null,
      *     endsAt: string|null,
-     *     billingWarning: bool
+     *     billingWarning: bool,
+     *     planName: string|null,
+     *     interval: string|null,
+     *     nextBillingAt: string|null,
+     *     management: 'portal'|'cancel'|'none'
      * }
      */
-    private function subscriptionData(OrganizationSubscriptionAccess $access): array
+    private function subscriptionData(OrganizationSubscriptionAccess $access, Organization $organization, PlanCatalog $planCatalog): array
     {
+        $subscriptions = $organization->billingSubscriptions()
+            ->where('type', (string) config('billing.subscription_type'))
+            ->get();
+        $subscription = $subscriptions->count() === 1 ? $subscriptions->sole() : null;
+        $plan = $access->plan !== null ? $planCatalog->get($access->plan) : null;
+        $paidAccessEndsAt = $subscription === null
+            ? null
+            : ($subscription->ends_at
+                ?? $subscription->current_period_ends_at
+                ?? $subscription->next_billing_at);
+
         return [
             'plan' => $access->plan?->value,
             'status' => $access->subscriptionStatus,
@@ -81,7 +98,24 @@ class OrganizationBillingController extends Controller
             'trialEndsAt' => $access->trialEndsAt?->toISOString(),
             'endsAt' => $access->endsAt?->toISOString(),
             'billingWarning' => $access->billingWarning,
+            'planName' => $plan?->name,
+            'interval' => $subscription?->interval,
+            'nextBillingAt' => $subscription?->next_billing_at?->toISOString(),
+            'management' => $this->managementType($subscription, $paidAccessEndsAt?->isFuture() === true),
         ];
+    }
+
+    /** @return 'portal'|'cancel'|'none' */
+    private function managementType(?BillingSubscription $subscription, bool $hasPaidAccessEnd): string
+    {
+        if ($subscription === null) {
+            return 'none';
+        }
+
+        return match ($subscription->provider) {
+            BillingProvider::Stripe => 'portal',
+            BillingProvider::PayMongo => $subscription->cancelled_at === null && $hasPaidAccessEnd ? 'cancel' : 'none',
+        };
     }
 
     /**

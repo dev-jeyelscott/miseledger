@@ -1,4 +1,4 @@
-# Subscription Access Matrix (P0-003, PB-002)
+# Subscription Access Matrix (P0-003, PB-022, PB-023)
 
 This is the single authoritative contract mapping MiseLedger's normalized
 subscription lifecycle to application **commercial access**.
@@ -7,10 +7,9 @@ The commercial contract is provider-neutral. Provider integrations may use
 different raw statuses and lifecycle APIs, but those provider-specific values
 must be normalized before commercial access decisions are made.
 
-The current executable implementation is still Laravel Cashier with Stripe
-and directly interprets Cashier and Stripe state. PB-002 documents the future
-normalization boundary without claiming that a provider adapter already
-exists.
+The executable implementation derives access from the durable provider-neutral
+`billing_subscriptions` projection and `PlanCatalog`. Cashier remains Stripe's
+synchronization mechanism, but is not read by commercial authorization.
 
 ## Two independent axes
 
@@ -48,7 +47,7 @@ MiseLedger recognizes exactly these commercial lifecycle states:
 | `generic trial` | Organization is inside an approved trial window, regardless of whether that trial is currently represented only by MiseLedger or by the owning provider | `full` | n/a |
 | `active` | Provider-owned paid subscription is active | `full` | n/a |
 | `past_due` | Payment collection has failed but the subscription remains recoverable and operational access should continue temporarily | `full_with_warning` | yes |
-| `grace period` | Subscription is scheduled to end but remains inside its already-authorized paid access period | `full_with_warning` | yes |
+| `grace period` | Renewal is stopped but the locally synchronized paid-access end time has not elapsed | `full_with_warning` | yes |
 | `unpaid` | Provider lifecycle indicates payment recovery is exhausted or the account must no longer receive commercial write access | `read_only` | yes |
 | `ended` | Trial or subscription entitlement has ended | `read_only` | yes |
 
@@ -104,9 +103,9 @@ preserve that fail-closed property.
    Commercial access resolution must not mutate provider subscription state.
 2. `past_due` remains `full_with_warning`. It does not immediately become
    `read_only`, allowing day-to-day operations while billing is recovered.
-3. `grace period` remains `full_with_warning` until its paid entitlement
-   ends. Only after that entitlement ends does the organization become
-   `read_only`.
+3. `BillingSubscription.ends_at` is authoritative after cancellation.
+   Cancellation never revokes already-paid access early; once it elapses the
+   organization becomes `read_only`.
 4. `ended` and `unpaid` are `read_only`, not inaccessible. Authorized billing
    recovery routes must remain reachable so the organization can restore
    commercial access without losing historical data.

@@ -1,6 +1,9 @@
 <?php
 
+use App\Enums\BillingProvider;
 use App\Enums\OrganizationRole;
+use App\Models\BillingCustomer;
+use App\Models\BillingSubscription;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
@@ -30,6 +33,21 @@ function organizationBillingPageFixturePlans(): void
     ]);
 }
 
+function createBillingPageSubscription(Organization $organization, BillingProvider $provider = BillingProvider::Stripe): BillingSubscription
+{
+    $customer = BillingCustomer::factory()->for($organization)->create(['provider' => $provider]);
+
+    return BillingSubscription::factory()->for($customer, 'billingCustomer')->create([
+        'organization_id' => $organization->getKey(),
+        'provider' => $provider,
+        'type' => config('billing.subscription_type'),
+        'external_plan_id' => 'price_starter_monthly',
+        'plan_code' => 'starter',
+        'interval' => 'monthly',
+        'provider_status' => 'active',
+    ]);
+}
+
 test('an owner can view the billing page for a subscribed organization', function () {
     organizationBillingPageFixturePlans();
 
@@ -41,13 +59,7 @@ test('an owner can view the billing page for a subscribed organization', functio
         ->for($user)
         ->create(['role' => OrganizationRole::Owner]);
 
-    $organization->subscriptions()->create([
-        'type' => config('billing.subscription_type'),
-        'stripe_id' => 'sub_'.str()->random(14),
-        'stripe_status' => 'active',
-        'stripe_price' => 'price_starter_monthly',
-        'quantity' => 1,
-    ]);
+    createBillingPageSubscription($organization);
 
     $response = $this->actingAs($user)->get(
         route('organizations.billing.show', $organization),
@@ -105,13 +117,7 @@ test('the billing page never exposes Stripe secrets or raw provider objects', fu
         ->for($user)
         ->create(['role' => OrganizationRole::Owner]);
 
-    $organization->subscriptions()->create([
-        'type' => config('billing.subscription_type'),
-        'stripe_id' => 'sub_'.str()->random(14),
-        'stripe_status' => 'active',
-        'stripe_price' => 'price_starter_monthly',
-        'quantity' => 1,
-    ]);
+    createBillingPageSubscription($organization);
 
     $response = $this->actingAs($user)->get(
         route('organizations.billing.show', $organization),
@@ -127,6 +133,30 @@ test('the billing page never exposes Stripe secrets or raw provider objects', fu
             ->not->toContain('cus_test_123')
             ->not->toContain('price_starter_monthly');
     });
+});
+
+test('a PayMongo-owned subscription receives server-driven management data without external identifiers', function () {
+    organizationBillingPageFixturePlans();
+
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+    OrganizationMembership::factory()->for($organization)->for($user)->create(['role' => OrganizationRole::Owner]);
+    createBillingPageSubscription($organization, BillingProvider::PayMongo)->update([
+        'current_period_ends_at' => now()->addMonth(),
+        'next_billing_at' => now()->addMonth(),
+    ]);
+
+    $response = $this->actingAs($user)->get(route('organizations.billing.show', $organization));
+
+    $response->assertOk()->assertInertia(fn ($page) => $page
+        ->where('subscription.planName', 'Starter')
+        ->where('subscription.status', 'active')
+        ->where('subscription.interval', 'monthly')
+        ->where('subscription.management', 'cancel')
+        ->has('subscription.nextBillingAt'));
+
+    expect($response->getContent())->not->toContain('subs_')
+        ->not->toContain('cus_');
 });
 
 test('a non-owner without billing.manage is denied the billing page', function () {
@@ -168,13 +198,7 @@ test('an owner of a different organization cannot view another organization bill
         ->for($user)
         ->create(['role' => OrganizationRole::Owner]);
 
-    $otherOrganization->subscriptions()->create([
-        'type' => config('billing.subscription_type'),
-        'stripe_id' => 'sub_'.str()->random(14),
-        'stripe_status' => 'active',
-        'stripe_price' => 'price_starter_monthly',
-        'quantity' => 1,
-    ]);
+    createBillingPageSubscription($otherOrganization);
 
     $this->actingAs($user)->get(
         route('organizations.billing.show', $otherOrganization),
