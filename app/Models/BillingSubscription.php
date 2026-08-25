@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property int $organization_id
  * @property int $billing_customer_id
  * @property BillingProvider $provider
+ * @property string|null $type
  * @property string $external_subscription_id
  * @property string|null $external_plan_id
  * @property string|null $plan_code
@@ -38,6 +39,7 @@ use Illuminate\Support\Carbon;
     'organization_id',
     'billing_customer_id',
     'provider',
+    'type',
     'external_subscription_id',
     'external_plan_id',
     'plan_code',

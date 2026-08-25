@@ -183,17 +183,42 @@ features a given internal `PlanCode` represents.
 
 ## Current Stripe implementation boundary
 
-Provider-aware configuration and production boot validation now exist, but
-the subscription runtime remains intentionally Stripe-specific:
+Provider-aware configuration and production boot validation now exist, and
+Phase 3 (PB-009–PB-012) wrapped Stripe checkout and billing-portal
+acquisition/management behind a small provider boundary, but the
+subscription runtime otherwise remains intentionally Stripe-specific:
 
-- Laravel Cashier owns Stripe subscription synchronization.
-- `PlanCatalog` resolves Stripe Price IDs.
-- `OrganizationSubscriptionAccessResolver` reads Cashier subscription state.
-- Stripe checkout and billing portal flows use Cashier.
+- Laravel Cashier owns Stripe subscription synchronization; Cashier's
+  `subscriptions`/`subscription_items` tables and webhook routes are
+  unchanged and not replaced.
+- `App\Support\Billing\Providers\BillingProviderManager` resolves which
+  `BillingProvider` adapter services a checkout or billing-portal request:
+  `defaultProvider()` for new acquisition (from `config('billing.provider')`),
+  `providerForOrganization()` for existing-subscription management (from the
+  durable `billing_subscriptions.provider` projection, never from the
+  currently configured acquisition provider). Only `App\Support\Billing\Providers\StripeBillingProvider`
+  is implemented; selecting `paymongo` reports the provider as unavailable
+  rather than silently routing to Stripe.
+- `PlanCatalog` still resolves Stripe Price IDs; the provider boundary never
+  sees `PlanCode` or raw plan configuration, only an already-resolved
+  external price id.
+- `OrganizationSubscriptionAccessResolver` still reads Cashier subscription
+  state directly and is deliberately **not** refactored onto the
+  `billing_subscriptions` projection in Phase 3: the resolver's grace-period/
+  ended logic depends on Cashier's own computed `Subscription::onGracePeriod()`/
+  `onTrial()`/`ended()` semantics, which the projection's raw timestamp
+  columns do not yet replicate. Making the projection authoritative for
+  entitlement decisions before that logic is safely portable would risk a
+  second, competing access-computation path.
 - Stripe webhook routes synchronize Cashier state and application billing
-  effects.
+  effects, and now also synchronize the durable `billing_customers`/
+  `billing_subscriptions` projection via `SynchronizeStripeBillingProjection`,
+  reusing Cashier's own freshly-committed local subscription row (never a
+  Stripe API call). `php artisan billing:sync-projection` backfills that
+  projection for historical Cashier rows from local data only.
 - Existing Cashier subscription rows do not contain generic provider
-  ownership.
+  ownership; the durable `billing_subscriptions.provider` column is
+  additive projection data, not a change to Cashier's own schema.
 
 Those implementation details remain valid until later PB tasks replace or
 wrap them with a provider-neutral boundary.

@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\User;
 use App\Support\Billing\BillingObservability;
 use App\Support\Billing\PlanCatalog;
+use App\Support\Billing\Providers\BillingProviderManager;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 
@@ -32,6 +33,7 @@ final class CreateOrganizationCheckoutSession
         private readonly PlanCatalog $planCatalog,
         private readonly RecordAuditEntry $recordAuditEntry,
         private readonly BillingObservability $observability,
+        private readonly BillingProviderManager $providerManager,
     ) {}
 
     public function handle(Organization $organization, User $actor, PlanCode $plan, string $interval): string
@@ -57,7 +59,7 @@ final class CreateOrganizationCheckoutSession
 
         return Cache::lock('billing:checkout:lock:'.$organizationId, 10)->block(
             5,
-            function () use ($organization, $actor, $plan, $interval, $priceId, $organizationId, $type, $pendingCacheKey): string {
+            function () use ($organization, $actor, $plan, $interval, $priceId, $organizationId, $pendingCacheKey): string {
                 $pendingUrl = Cache::get($pendingCacheKey);
 
                 if (is_string($pendingUrl)) {
@@ -65,25 +67,20 @@ final class CreateOrganizationCheckoutSession
                 }
 
                 try {
-                    $checkout = $organization->newSubscription($type, $priceId)->checkout([
-                        'success_url' => route('organizations.billing.checkout.success', $organization),
-                        'cancel_url' => route('organizations.billing.checkout.cancel', $organization),
-                        'metadata' => [
-                            'organization_id' => $organizationId,
-                        ],
-                        'subscription_data' => [
-                            'metadata' => [
-                                'organization_id' => $organizationId,
-                            ],
-                        ],
-                    ]);
+                    $provider = $this->providerManager->provider($this->providerManager->defaultProvider());
+
+                    $url = $provider->startCheckout(
+                        $organization,
+                        $priceId,
+                        route('organizations.billing.checkout.success', $organization),
+                        route('organizations.billing.checkout.cancel', $organization),
+                        ['organization_id' => $organizationId],
+                    );
                 } catch (\Throwable $exception) {
                     $this->observability->checkoutFailure($organization, $exception);
 
                     throw $exception;
                 }
-
-                $url = $checkout->redirect()->getTargetUrl();
 
                 $this->recordAuditEntry->handle(
                     $organization,
