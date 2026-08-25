@@ -3,6 +3,7 @@
 use App\Actions\Billing\NotifyOrganizationBillingLifecycle;
 use App\Actions\Billing\ProcessOrganizationBillingWebhookEffect;
 use App\Enums\BillingLifecycleEvent;
+use App\Enums\BillingProvider;
 use App\Enums\OrganizationRole;
 use App\Exceptions\AmbiguousBillingNotificationDeliveryException;
 use App\Jobs\SendOrganizationBillingLifecycleNotification;
@@ -48,12 +49,14 @@ test('billing lifecycle delivery is uniquely queued and idempotent for duplicate
     $process = app(ProcessOrganizationBillingWebhookEffect::class);
 
     $process->handle(
+        BillingProvider::Stripe,
         'evt_queue_duplicate',
         $recipient['organization']->stripe_id,
         BillingLifecycleEvent::PaymentFailed,
         'billing.subscription.past_due',
     );
     $process->handle(
+        BillingProvider::Stripe,
         'evt_queue_duplicate',
         $recipient['organization']->stripe_id,
         BillingLifecycleEvent::PaymentFailed,
@@ -67,6 +70,7 @@ test('billing lifecycle delivery is uniquely queued and idempotent for duplicate
     $job = new SendOrganizationBillingLifecycleNotification(
         $effect->getKey(),
         $recipient['organization']->getKey(),
+        BillingProvider::Stripe,
         'evt_queue_duplicate',
         $recipient['organization']->stripe_id,
     );
@@ -82,12 +86,15 @@ test('billing jobs have bounded retries and report terminal failures with organi
     $recipient = billingQueueRecipient('cus_queue_failure');
     $effect = BillingWebhookEffect::query()->create([
         'organization_id' => $recipient['organization']->getKey(),
+        'provider' => BillingProvider::Stripe,
+        'external_event_id' => 'evt_queue_failure',
         'stripe_event_id' => 'evt_queue_failure',
         'lifecycle_event' => BillingLifecycleEvent::PaymentFailed,
     ]);
     $job = new SendOrganizationBillingLifecycleNotification(
         $effect->getKey(),
         $recipient['organization']->getKey(),
+        BillingProvider::Stripe,
         'evt_queue_failure',
         $recipient['organization']->stripe_id,
     );
@@ -112,7 +119,7 @@ test('billing jobs have bounded retries and report terminal failures with organi
     expect($job->tries)->toBe(3)
         ->and($job->backoff)->toBe([60, 300, 900])
         ->and($job->timeout)->toBe(60)
-        ->and($job->uniqueId())->toBe('evt_queue_failure')
+        ->and($job->uniqueId())->toBe('stripe:evt_queue_failure')
         ->and(config('queue.connections.database.retry_after'))->toBeGreaterThan($job->timeout)
         ->and(config('queue.connections.redis.retry_after'))->toBeGreaterThan($job->timeout)
         ->and(config('queue.failed.driver'))->toBe('database-uuids')
@@ -123,12 +130,15 @@ test('a send failure that may be a lost acknowledgement or partial multi-recipie
     $recipient = billingQueueRecipient('cus_queue_crash_boundary');
     $effect = BillingWebhookEffect::query()->create([
         'organization_id' => $recipient['organization']->getKey(),
+        'provider' => BillingProvider::Stripe,
+        'external_event_id' => 'evt_queue_crash_boundary',
         'stripe_event_id' => 'evt_queue_crash_boundary',
         'lifecycle_event' => BillingLifecycleEvent::PaymentFailed,
     ]);
     $job = new SendOrganizationBillingLifecycleNotification(
         $effect->getKey(),
         $recipient['organization']->getKey(),
+        BillingProvider::Stripe,
         'evt_queue_crash_boundary',
         $recipient['organization']->stripe_id,
     );
@@ -160,6 +170,8 @@ test('a claim left by a defunct prior attempt with no dispatch marker refuses re
     $recipient = billingQueueRecipient('cus_queue_worker_crash');
     $effect = BillingWebhookEffect::query()->create([
         'organization_id' => $recipient['organization']->getKey(),
+        'provider' => BillingProvider::Stripe,
+        'external_event_id' => 'evt_queue_worker_crash',
         'stripe_event_id' => 'evt_queue_worker_crash',
         'lifecycle_event' => BillingLifecycleEvent::PaymentFailed,
     ]);
@@ -173,6 +185,7 @@ test('a claim left by a defunct prior attempt with no dispatch marker refuses re
     $job = new SendOrganizationBillingLifecycleNotification(
         $effect->getKey(),
         $recipient['organization']->getKey(),
+        BillingProvider::Stripe,
         'evt_queue_worker_crash',
         $recipient['organization']->stripe_id,
     );
@@ -189,6 +202,8 @@ test('billing reconciliation surfaces a stale notification claim left by a defun
     $organization = Organization::factory()->create();
     $staleEffect = BillingWebhookEffect::query()->create([
         'organization_id' => $organization->getKey(),
+        'provider' => BillingProvider::Stripe,
+        'external_event_id' => 'evt_queue_stale_claim',
         'stripe_event_id' => 'evt_queue_stale_claim',
         'lifecycle_event' => BillingLifecycleEvent::PaymentFailed,
     ]);
@@ -197,6 +212,8 @@ test('billing reconciliation surfaces a stale notification claim left by a defun
     $inFlightOrganization = Organization::factory()->create();
     $inFlightEffect = BillingWebhookEffect::query()->create([
         'organization_id' => $inFlightOrganization->getKey(),
+        'provider' => BillingProvider::Stripe,
+        'external_event_id' => 'evt_queue_in_flight_claim',
         'stripe_event_id' => 'evt_queue_in_flight_claim',
         'lifecycle_event' => BillingLifecycleEvent::PaymentFailed,
     ]);

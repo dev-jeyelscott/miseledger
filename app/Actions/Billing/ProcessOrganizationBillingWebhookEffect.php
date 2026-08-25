@@ -4,7 +4,9 @@ namespace App\Actions\Billing;
 
 use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\BillingLifecycleEvent;
+use App\Enums\BillingProvider;
 use App\Jobs\SendOrganizationBillingLifecycleNotification;
+use App\Models\BillingCustomer;
 use App\Models\BillingWebhookEffect;
 use App\Models\Organization;
 use Illuminate\Support\Facades\DB;
@@ -16,27 +18,30 @@ final class ProcessOrganizationBillingWebhookEffect
     public function __construct(private readonly RecordAuditEntry $recordAuditEntry) {}
 
     /**
-     * Persist and dispatch the custom effects for one Stripe event without
-     * participating in Cashier's subscription synchronization.
+     * Persist and dispatch the custom effects for one provider event without
+     * participating in Cashier's subscription synchronization. Idempotency
+     * is enforced by the database's unique (provider, external_event_id)
+     * constraint plus the row lock below, not by a check-then-act race.
      */
     public function handle(
-        string $stripeEventId,
-        string $stripeCustomerId,
+        BillingProvider $provider,
+        string $externalEventId,
+        string $externalCustomerId,
         BillingLifecycleEvent $lifecycleEvent,
         string $auditAction,
     ): void {
-        $organization = Organization::query()
-            ->where('stripe_id', $stripeCustomerId)
-            ->first();
+        $organization = $this->resolveOrganization($provider, $externalCustomerId);
 
         if ($organization === null) {
             return;
         }
 
-        $effect = DB::transaction(function () use ($organization, $stripeEventId, $lifecycleEvent, $auditAction): ?BillingWebhookEffect {
+        $effect = DB::transaction(function () use ($organization, $provider, $externalEventId, $lifecycleEvent, $auditAction): ?BillingWebhookEffect {
             $wasCreated = BillingWebhookEffect::query()->insertOrIgnore([
                 'organization_id' => $organization->getKey(),
-                'stripe_event_id' => $stripeEventId,
+                'provider' => $provider->value,
+                'external_event_id' => $externalEventId,
+                'stripe_event_id' => $provider === BillingProvider::Stripe ? $externalEventId : null,
                 'lifecycle_event' => $lifecycleEvent->value,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -44,7 +49,8 @@ final class ProcessOrganizationBillingWebhookEffect
 
             $effect = BillingWebhookEffect::query()
                 ->lockForUpdate()
-                ->where('stripe_event_id', $stripeEventId)
+                ->where('provider', $provider->value)
+                ->where('external_event_id', $externalEventId)
                 ->firstOrFail();
 
             if ($wasCreated) {
@@ -56,10 +62,10 @@ final class ProcessOrganizationBillingWebhookEffect
                     $effect->getKey(),
                     null,
                     [
-                        'origin' => 'stripe_webhook',
+                        'origin' => $provider->value.'_webhook',
                         'lifecycle_event' => $lifecycleEvent->value,
                     ],
-                    $stripeEventId,
+                    $externalEventId,
                 );
             }
 
@@ -78,16 +84,33 @@ final class ProcessOrganizationBillingWebhookEffect
             SendOrganizationBillingLifecycleNotification::dispatch(
                 $effect->getKey(),
                 $organization->getKey(),
-                $stripeEventId,
-                $stripeCustomerId,
+                $provider,
+                $externalEventId,
+                $externalCustomerId,
             );
         } catch (Throwable) {
             Log::channel((string) config('billing.logger'))
                 ->warning('Billing lifecycle notification dispatch failed.', [
                     'organization_id' => $organization->getKey(),
                     'event' => $lifecycleEvent->value,
-                    'stripe_event_id' => $stripeEventId,
+                    'provider' => $provider->value,
+                    'external_event_id' => $externalEventId,
                 ]);
         }
+    }
+
+    private function resolveOrganization(BillingProvider $provider, string $externalCustomerId): ?Organization
+    {
+        if ($provider === BillingProvider::Stripe) {
+            return Organization::query()
+                ->where('stripe_id', $externalCustomerId)
+                ->first();
+        }
+
+        return BillingCustomer::query()
+            ->where('provider', $provider->value)
+            ->where('external_customer_id', $externalCustomerId)
+            ->first()
+            ?->organization;
     }
 }

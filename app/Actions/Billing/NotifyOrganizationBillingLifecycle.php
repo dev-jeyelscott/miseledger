@@ -11,19 +11,13 @@ use Illuminate\Support\Facades\Notification;
 class NotifyOrganizationBillingLifecycle
 {
     /**
-     * Notify billing-authorized members of the organization identified by its
-     * Stripe customer ID.
+     * Notify billing-authorized members of the organization. The organization
+     * is passed in already resolved (the caller has already looked it up
+     * provider-neutrally) rather than re-derived here via a Stripe-specific
+     * customer id lookup.
      */
-    public function handle(string $stripeCustomerId, BillingLifecycleEvent $event, string $stripeEventId): void
+    public function handle(Organization $organization, BillingLifecycleEvent $event, string $externalEventId): void
     {
-        $organization = Organization::query()
-            ->where('stripe_id', $stripeCustomerId)
-            ->first();
-
-        if ($organization === null) {
-            return;
-        }
-
         $recipients = $organization->memberships()
             ->with('user')
             ->get()
@@ -41,7 +35,7 @@ class NotifyOrganizationBillingLifecycle
         // instead of to enqueue-time intent.
         Notification::sendNow(
             $recipients,
-            new BillingLifecycleNotification($organization, $event, $stripeEventId),
+            new BillingLifecycleNotification($organization, $event, $externalEventId),
         );
     }
 }

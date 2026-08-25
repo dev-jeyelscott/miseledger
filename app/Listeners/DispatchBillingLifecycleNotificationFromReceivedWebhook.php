@@ -4,6 +4,7 @@ namespace App\Listeners;
 
 use App\Actions\Billing\ProcessOrganizationBillingWebhookEffect;
 use App\Enums\BillingLifecycleEvent;
+use App\Enums\BillingProvider;
 use Laravel\Cashier\Events\WebhookReceived;
 
 class DispatchBillingLifecycleNotificationFromReceivedWebhook
@@ -35,6 +36,7 @@ class DispatchBillingLifecycleNotificationFromReceivedWebhook
 
         if ($lifecycleEvent !== null) {
             $this->process->handle(
+                BillingProvider::Stripe,
                 $stripeEventId,
                 $customerId,
                 $lifecycleEvent,

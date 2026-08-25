@@ -84,7 +84,7 @@ final class BillingReconcile extends Command
                 continue;
             }
 
-            $this->observability->staleNotificationClaim($effect->organization, $effect->stripe_event_id);
+            $this->observability->staleNotificationClaim($effect->organization, $effect->external_event_id);
         }
 
         return $staleClaims->count();

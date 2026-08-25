@@ -13,10 +13,10 @@ use RuntimeException;
  */
 final class AmbiguousBillingNotificationDeliveryException extends RuntimeException
 {
-    public function __construct(string $stripeEventId)
+    public function __construct(string $externalEventId)
     {
         parent::__construct(
-            "Billing lifecycle notification for Stripe event [{$stripeEventId}] was claimed by a prior attempt with no recorded delivery outcome; refusing to redeliver.",
+            "Billing lifecycle notification for provider event [{$externalEventId}] was claimed by a prior attempt with no recorded delivery outcome; refusing to redeliver.",
         );
     }
 }

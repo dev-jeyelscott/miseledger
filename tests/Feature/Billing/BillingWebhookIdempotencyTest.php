@@ -1,7 +1,11 @@
 <?php
 
+use App\Actions\Billing\ProcessOrganizationBillingWebhookEffect;
+use App\Enums\BillingLifecycleEvent;
+use App\Enums\BillingProvider;
 use App\Enums\OrganizationRole;
 use App\Models\AuditLog;
+use App\Models\BillingCustomer;
 use App\Models\BillingWebhookEffect;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
@@ -98,4 +102,47 @@ test('a failed notification dispatch leaves an ambiguous claim that blocks resen
         ->toBe(1)
         ->and($effect->fresh()->notification_dispatched_at)->toBeNull()
         ->and($effect->fresh()->notification_claimed_at)->not->toBeNull();
+});
+
+test('a duplicate PayMongo event records and dispatches custom lifecycle effects once through the provider-neutral effect boundary', function () {
+    Notification::fake();
+
+    $recipient = billingWebhookRecipient('cus_paymongo_recipient_placeholder');
+    $organization = $recipient->organizations()->sole();
+    BillingCustomer::factory()->for($organization)->create([
+        'provider' => BillingProvider::PayMongo,
+        'external_customer_id' => 'cus_paymongo_duplicate',
+    ]);
+
+    $process = app(ProcessOrganizationBillingWebhookEffect::class);
+
+    $process->handle(BillingProvider::PayMongo, 'evt_paymongo_duplicate', 'cus_paymongo_duplicate', BillingLifecycleEvent::PaymentFailed, 'billing.subscription.past_due');
+    $process->handle(BillingProvider::PayMongo, 'evt_paymongo_duplicate', 'cus_paymongo_duplicate', BillingLifecycleEvent::PaymentFailed, 'billing.subscription.past_due');
+
+    Notification::assertSentTo($recipient, BillingLifecycleNotification::class, 1);
+    expect(BillingWebhookEffect::query()->where('provider', BillingProvider::PayMongo)->where('external_event_id', 'evt_paymongo_duplicate')->count())
+        ->toBe(1)
+        ->and(AuditLog::query()->where('correlation_id', 'evt_paymongo_duplicate')->count())
+        ->toBe(1);
+});
+
+test('Stripe and PayMongo may independently reuse the same raw external event id without colliding', function () {
+    Notification::fake();
+
+    $recipient = billingWebhookRecipient('cus_shared_event_id');
+    $organization = $recipient->organizations()->sole();
+    BillingCustomer::factory()->for($organization)->create([
+        'provider' => BillingProvider::PayMongo,
+        'external_customer_id' => 'cus_shared_event_id_paymongo',
+    ]);
+
+    $process = app(ProcessOrganizationBillingWebhookEffect::class);
+
+    $process->handle(BillingProvider::Stripe, 'evt_shared_identifier', 'cus_shared_event_id', BillingLifecycleEvent::PaymentFailed, 'billing.subscription.past_due');
+    $process->handle(BillingProvider::PayMongo, 'evt_shared_identifier', 'cus_shared_event_id_paymongo', BillingLifecycleEvent::PaymentFailed, 'billing.subscription.past_due');
+
+    expect(BillingWebhookEffect::query()->where('external_event_id', 'evt_shared_identifier')->count())->toBe(2)
+        ->and(AuditLog::query()->where('correlation_id', 'evt_shared_identifier')->count())->toBe(2);
+
+    Notification::assertSentTo($recipient, BillingLifecycleNotification::class, 2);
 });

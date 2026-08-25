@@ -136,6 +136,28 @@ class Organization extends Model
     }
 
     /**
+     * Get the organization's durable, provider-neutral billing-customer
+     * identities (one per provider it has been onboarded with).
+     *
+     * @return HasMany<BillingCustomer, $this>
+     */
+    public function billingCustomers(): HasMany
+    {
+        return $this->hasMany(BillingCustomer::class);
+    }
+
+    /**
+     * Get the organization's durable, provider-neutral subscription
+     * projections.
+     *
+     * @return HasMany<BillingSubscription, $this>
+     */
+    public function billingSubscriptions(): HasMany
+    {
+        return $this->hasMany(BillingSubscription::class);
+    }
+
+    /**
      * Cast organization state to stable application types.
      *
      * @return array<string, string>

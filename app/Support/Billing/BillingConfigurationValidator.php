@@ -2,21 +2,12 @@
 
 namespace App\Support\Billing;
 
+use App\Enums\BillingProvider;
 use Illuminate\Support\Arr;
 use RuntimeException;
 
 final class BillingConfigurationValidator
 {
-    /**
-     * Provider identifiers approved by the MiseLedger commercial contract.
-     *
-     * @var list<string>
-     */
-    private const SUPPORTED_PROVIDERS = [
-        'stripe',
-        'paymongo',
-    ];
-
     /**
      * Reject incomplete, unsupported, disabled, or non-live provider
      * configuration before production requests can use billing services.
@@ -44,7 +35,8 @@ final class BillingConfigurationValidator
             throw new RuntimeException('The selected billing provider must be enabled in production.');
         }
 
-        foreach (self::SUPPORTED_PROVIDERS as $provider) {
+        foreach (BillingProvider::cases() as $case) {
+            $provider = $case->value;
             $providerConfiguration = $providers[$provider] ?? null;
 
             if (! is_array($providerConfiguration)) {
@@ -61,9 +53,9 @@ final class BillingConfigurationValidator
                 continue;
             }
 
-            match ($provider) {
-                'stripe' => self::validateStripe($providerConfiguration),
-                'paymongo' => self::validatePayMongo($providerConfiguration),
+            match ($case) {
+                BillingProvider::Stripe => self::validateStripe($providerConfiguration),
+                BillingProvider::PayMongo => self::validatePayMongo($providerConfiguration),
             };
         }
     }
@@ -103,7 +95,7 @@ final class BillingConfigurationValidator
 
         if (
             ! is_string($provider)
-            || ! in_array($provider, self::SUPPORTED_PROVIDERS, true)
+            || BillingIdentity::provider($provider) === null
         ) {
             throw new RuntimeException(
                 'Production billing configuration requires BILLING_PROVIDER to be explicitly set to stripe or paymongo.',

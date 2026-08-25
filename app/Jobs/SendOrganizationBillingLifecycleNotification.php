@@ -3,8 +3,10 @@
 namespace App\Jobs;
 
 use App\Actions\Billing\NotifyOrganizationBillingLifecycle;
+use App\Enums\BillingProvider;
 use App\Exceptions\AmbiguousBillingNotificationDeliveryException;
 use App\Models\BillingWebhookEffect;
+use App\Models\Organization;
 use App\Support\Billing\BillingObservability;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -39,8 +41,9 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
     public function __construct(
         public readonly int $billingWebhookEffectId,
         public readonly int $organizationId,
-        public readonly string $stripeEventId,
-        public readonly string $stripeCustomerId,
+        public readonly BillingProvider $provider,
+        public readonly string $externalEventId,
+        public readonly string $externalCustomerId,
     ) {}
 
     /**
@@ -53,7 +56,8 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
                 ->lockForUpdate()
                 ->whereKey($this->billingWebhookEffectId)
                 ->where('organization_id', $this->organizationId)
-                ->where('stripe_event_id', $this->stripeEventId)
+                ->where('provider', $this->provider->value)
+                ->where('external_event_id', $this->externalEventId)
                 ->first();
 
             if ($effect === null || $effect->notification_dispatched_at !== null) {
@@ -67,7 +71,7 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
             // notification, so the claim is left untouched and delivery is refused;
             // billing:reconcile surfaces stale claims like this for manual recovery.
             if ($effect->notification_claimed_at !== null) {
-                throw new AmbiguousBillingNotificationDeliveryException($this->stripeEventId);
+                throw new AmbiguousBillingNotificationDeliveryException($this->externalEventId);
             }
 
             $effect->update(['notification_claimed_at' => now()]);
@@ -85,14 +89,14 @@ final class SendOrganizationBillingLifecycleNotification implements ShouldBeUniq
         // it, so a thrown send is not provable non-delivery. Any subsequent retry
         // attempt will find the claim already set and refuse to redeliver via the
         // ambiguous-claim guard above, instead surfacing for manual reconciliation.
-        $notify->handle($this->stripeCustomerId, $effect->lifecycle_event, $this->stripeEventId);
+        $notify->handle(Organization::findOrFail($this->organizationId), $effect->lifecycle_event, $this->externalEventId);
 
         $effect->update(['notification_dispatched_at' => now()]);
     }
 
     public function uniqueId(): string
     {
-        return $this->stripeEventId;
+        return $this->provider->value.':'.$this->externalEventId;
     }
 
     public function failed(Throwable $exception): void

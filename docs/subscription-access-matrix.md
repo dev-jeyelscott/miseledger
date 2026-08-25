@@ -171,10 +171,62 @@ Today:
   state.
 - Stripe checkout and webhook synchronization remain provider-specific.
 - No provider-neutral lifecycle adapter is implemented yet.
-- No generic provider-ownership column is implemented yet.
+- A generic provider-ownership identity layer (`billing_customers` /
+  `billing_subscriptions`, see below) exists as of Phase 2, but commercial
+  access decisions still read Cashier/Stripe state directly rather than this
+  identity layer.
 
 These facts are implementation details, not the long-term business
 vocabulary.
+
+## Durable provider-neutral billing identity (Phase 2, PB-005–PB-008)
+
+Phase 2 adds a durable, provider-neutral persistence layer underneath the
+commercial contract above. It is additive infrastructure, not a new
+entitlement authority:
+
+- `App\Enums\BillingProvider` (`stripe`, `paymongo`) and
+  `App\Support\Billing\BillingIdentity` are the sole boundary converting a
+  raw provider string into that enum. Business logic should use the enum,
+  never the raw `'stripe'`/`'paymongo'` string literals.
+- `billing_customers` durably records which external customer identity an
+  organization holds on a given provider: `(organization_id, provider,
+  external_customer_id, livemode)`, unique per `(organization_id, provider)`
+  and per `(provider, external_customer_id)`. An organization may hold
+  separate Stripe and PayMongo customer identities simultaneously.
+- `billing_subscriptions` durably records normalized subscription identity
+  and lifecycle timestamps per provider: `external_subscription_id`,
+  `external_plan_id`, `plan_code`, `interval`, `provider_status`,
+  `trial_ends_at`, `current_period_ends_at`, `next_billing_at`, `ends_at`,
+  `cancelled_at`. Unique per `(provider, external_subscription_id)`. Its
+  `(billing_customer_id, organization_id, provider)` composite foreign key
+  makes it database-impossible for a subscription to belong to a billing
+  customer from a different organization or a different provider.
+- `provider_status` is retained verbatim from the provider and is never
+  interpreted here — only `OrganizationSubscriptionAccessResolver` decides
+  commercial access, and it continues to do so by reading Cashier's
+  synchronized Stripe state directly, exactly as described above. This
+  table is durable identity/history, not a competing entitlement source.
+- **Laravel Cashier is not replaced or migrated away from.** Its
+  `subscriptions`/`subscription_items` tables and the `stripe_id`/
+  `pm_type`/`pm_last_four` columns on `Organization` remain the Stripe
+  integration and storage mechanism exactly as before. `billing_customers`/
+  `billing_subscriptions` are synchronized *from* that authoritative Stripe
+  state (via `App\Actions\Billing\SynchronizeStripeBillingProjection`,
+  triggered by `App\Listeners\SynchronizeBillingProjectionFromWebhook` on
+  Cashier's `WebhookHandled` event) — never the reverse.
+- `billing_webhook_effects`, which guards webhook-triggered audit entries
+  and lifecycle notifications against duplicate delivery, is now
+  provider-neutral: uniqueness is enforced at the database level on
+  `(provider, external_event_id)` rather than a Stripe-only event id. Stripe
+  and PayMongo may each reuse the same raw external event id independently
+  without colliding. The legacy `stripe_event_id` column is preserved
+  (now nullable, populated only for `provider = stripe` rows) for backward
+  compatibility rather than removed.
+- PayMongo synchronization is schema- and boundary-ready but not
+  implemented in this phase: no PayMongo webhook ingress exists yet, so no
+  PayMongo `billing_customers`/`billing_subscriptions` rows are created or
+  backfilled by application code.
 
 ## Explicit non-goals of PB-002
 
