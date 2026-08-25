@@ -19,7 +19,10 @@ use RuntimeException;
  */
 final class BillingProviderManager
 {
-    public function __construct(private readonly StripeBillingProvider $stripe) {}
+    public function __construct(
+        private readonly StripeBillingProvider $stripe,
+        private readonly PayMongoBillingProvider $payMongo,
+    ) {}
 
     /**
      * The provider new subscription acquisition should use, for an
@@ -48,9 +51,7 @@ final class BillingProviderManager
     {
         return match ($provider) {
             BillingProviderEnum::Stripe => $this->stripe,
-            BillingProviderEnum::PayMongo => throw new RuntimeException(
-                'The paymongo billing provider is not yet available.',
-            ),
+            BillingProviderEnum::PayMongo => $this->payMongo,
         };
     }
 

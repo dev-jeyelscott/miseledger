@@ -34,6 +34,7 @@ class OrganizationCheckoutStatusController extends Controller
             'synchronized' => $organization->subscription(
                 (string) config('billing.subscription_type'),
             ) !== null,
+            'payment' => $this->paymentData(),
         ]);
     }
 
@@ -91,6 +92,24 @@ class OrganizationCheckoutStatusController extends Controller
             'trialEndsAt' => $access->trialEndsAt?->toISOString(),
             'endsAt' => $access->endsAt?->toISOString(),
             'billingWarning' => $access->billingWarning,
+        ];
+    }
+
+    /** @return array{paymentIntentId: string, clientKey: string, publicKey: string, apiBaseUrl: string}|null */
+    private function paymentData(): ?array
+    {
+        $payment = session('billing.checkout.payment');
+
+        if (! is_array($payment) || ! array_all($payment, 'is_string')
+            || ! isset($payment['payment_intent_id'], $payment['client_key'], $payment['public_key'], $payment['api_base_url'])) {
+            return null;
+        }
+
+        return [
+            'paymentIntentId' => $payment['payment_intent_id'],
+            'clientKey' => $payment['client_key'],
+            'publicKey' => $payment['public_key'],
+            'apiBaseUrl' => $payment['api_base_url'],
         ];
     }
 }

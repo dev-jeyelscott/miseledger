@@ -4,6 +4,7 @@ namespace App\Support\Billing\Providers;
 
 use App\Enums\BillingProvider as BillingProviderEnum;
 use App\Models\Organization;
+use App\Models\User;
 
 /**
  * Wraps the current Cashier/Stripe integration behind `BillingProvider`.
@@ -26,7 +27,8 @@ final class StripeBillingProvider implements BillingProvider
         string $successUrl,
         string $cancelUrl,
         array $metadata,
-    ): string {
+        User $actor,
+    ): BillingCheckoutOutcome {
         $checkout = $organization
             ->newSubscription((string) config('billing.subscription_type'), $externalPriceId)
             ->checkout([
@@ -38,7 +40,7 @@ final class StripeBillingProvider implements BillingProvider
                 ],
             ]);
 
-        return $checkout->redirect()->getTargetUrl();
+        return BillingCheckoutOutcome::redirect($checkout->redirect()->getTargetUrl());
     }
 
     public function billingPortalUrl(Organization $organization, string $returnUrl): string

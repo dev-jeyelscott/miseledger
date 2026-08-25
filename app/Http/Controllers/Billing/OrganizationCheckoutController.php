@@ -20,13 +20,18 @@ class OrganizationCheckoutController extends Controller
         CreateOrganizationCheckoutSession $createCheckoutSession,
         Organization $organization,
     ): Response {
-        $checkoutUrl = $createCheckoutSession->handle(
+        $outcome = $createCheckoutSession->handle(
             $organization,
             $request->user(),
             $request->planCode(),
             (string) $request->validated('interval'),
         );
 
-        return Inertia::location($checkoutUrl);
+        if ($outcome->type === 'redirect') {
+            return Inertia::location((string) $outcome->redirectUrl);
+        }
+
+        return to_route('organizations.billing.checkout.success', $organization)
+            ->with('billing.checkout.payment', $outcome->payment);
     }
 }

@@ -5,9 +5,11 @@ provider selection, provider ownership, and entitlements are represented.
 
 The current executable subscription runtime remains Laravel Cashier with
 Stripe. PB-014 adds a small configuration-backed PayMongo HTTP boundary and
-PB-015 adds PayMongo's provider-scoped plan resolution; PayMongo checkout,
-lifecycle adapters, and webhook synchronization remain intentionally
-unimplemented.
+PB-015 adds PayMongo's provider-scoped plan resolution. PB-016 through PB-018
+add PayMongo customer reuse, pending subscription creation, and the first
+payment interaction. PayMongo webhook ingress and lifecycle normalization
+remain intentionally unimplemented: a browser payment or pending projection
+never activates commercial access.
 
 The current plan catalog lives in
 [`config/subscription.php`](../config/subscription.php) and is exposed to

@@ -31,19 +31,19 @@ final class PayMongoClient
     }
 
     /** @param array<string, mixed> $payload @return array<string, mixed> */
-    public function post(string $operation, string $path, array $payload, ?string $reference = null): array
+    public function post(string $operation, string $path, array $payload, ?string $reference = null, ?string $idempotencyKey = null): array
     {
-        return $this->send('POST', $operation, $path, $payload, $reference);
+        return $this->send('POST', $operation, $path, $payload, $reference, $idempotencyKey);
     }
 
     /** @param array<string, mixed> $payload @return array<string, mixed> */
-    private function send(string $method, string $operation, string $path, array $payload, ?string $reference): array
+    private function send(string $method, string $operation, string $path, array $payload, ?string $reference, ?string $idempotencyKey = null): array
     {
         try {
             $request = $this->request();
             $response = $method === 'GET'
                 ? $this->getWithBoundedRetries($request, $path)
-                : $request->post($this->path($path), $payload);
+                : $this->postWithIdempotencyKey($request, $path, $payload, $idempotencyKey);
         } catch (PayMongoRequestException $exception) {
             throw $exception;
         } catch (ConnectionException $exception) {
@@ -90,6 +90,16 @@ final class PayMongoClient
     private function path(string $path): string
     {
         return '/'.ltrim($path, '/');
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function postWithIdempotencyKey(PendingRequest $request, string $path, array $payload, ?string $idempotencyKey): Response
+    {
+        if ($idempotencyKey !== null) {
+            $request = $request->withHeader('Idempotency-Key', $idempotencyKey);
+        }
+
+        return $request->post($this->path($path), $payload);
     }
 
     private function getWithBoundedRetries(PendingRequest $request, string $path): Response

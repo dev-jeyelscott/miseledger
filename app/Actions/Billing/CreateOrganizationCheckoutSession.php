@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\User;
 use App\Support\Billing\BillingObservability;
 use App\Support\Billing\PlanCatalog;
+use App\Support\Billing\Providers\BillingCheckoutOutcome;
 use App\Support\Billing\Providers\BillingProviderManager;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
@@ -36,7 +37,7 @@ final class CreateOrganizationCheckoutSession
         private readonly BillingProviderManager $providerManager,
     ) {}
 
-    public function handle(Organization $organization, User $actor, PlanCode $plan, string $interval): string
+    public function handle(Organization $organization, User $actor, PlanCode $plan, string $interval): BillingCheckoutOutcome
     {
         $provider = $this->providerManager->defaultProvider();
         $externalPlanId = $this->planCatalog->externalPlanId($plan, $provider, $interval);
@@ -60,22 +61,23 @@ final class CreateOrganizationCheckoutSession
 
         return Cache::lock('billing:checkout:lock:'.$organizationId, 10)->block(
             5,
-            function () use ($organization, $actor, $plan, $interval, $provider, $externalPlanId, $organizationId, $pendingCacheKey): string {
-                $pendingUrl = Cache::get($pendingCacheKey);
+            function () use ($organization, $actor, $plan, $interval, $provider, $externalPlanId, $organizationId, $pendingCacheKey): BillingCheckoutOutcome {
+                $pendingOutcome = Cache::get($pendingCacheKey);
 
-                if (is_string($pendingUrl)) {
-                    return $pendingUrl;
+                if (is_array($pendingOutcome)) {
+                    return BillingCheckoutOutcome::fromCacheValue($pendingOutcome);
                 }
 
                 try {
                     $billingProvider = $this->providerManager->provider($provider);
 
-                    $url = $billingProvider->startCheckout(
+                    $outcome = $billingProvider->startCheckout(
                         $organization,
                         $externalPlanId,
                         route('organizations.billing.checkout.success', $organization),
                         route('organizations.billing.checkout.cancel', $organization),
                         ['organization_id' => $organizationId],
+                        $actor,
                     );
                 } catch (\Throwable $exception) {
                     $this->observability->checkoutFailure($organization, $exception);
@@ -96,9 +98,9 @@ final class CreateOrganizationCheckoutSession
                     ],
                 );
 
-                Cache::put($pendingCacheKey, $url, now()->addMinutes(self::PENDING_CHECKOUT_TTL_MINUTES));
+                Cache::put($pendingCacheKey, $outcome->toCacheValue(), now()->addMinutes(self::PENDING_CHECKOUT_TTL_MINUTES));
 
-                return $url;
+                return $outcome;
             },
         );
     }

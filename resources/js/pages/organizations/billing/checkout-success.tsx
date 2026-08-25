@@ -1,6 +1,7 @@
 import { Head, Link, router, usePoll } from '@inertiajs/react';
-import { CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { CheckCircle2, CreditCard, Loader2, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +22,12 @@ type Props = {
     organization: OrganizationSummary;
     subscription: OrganizationSubscriptionContext;
     synchronized: boolean;
+    payment: {
+        paymentIntentId: string;
+        clientKey: string;
+        publicKey: string;
+        apiBaseUrl: string;
+    } | null;
 };
 
 const POLL_INTERVAL_MS = 4000;
@@ -50,6 +57,7 @@ export default function OrganizationCheckoutSuccess({
     organization,
     subscription,
     synchronized: isSynchronized,
+    payment,
 }: Props) {
     const [pollAttempts, setPollAttempts] = useState(0);
     const pollExhausted = pollAttempts >= MAX_POLL_ATTEMPTS;
@@ -68,6 +76,87 @@ export default function OrganizationCheckoutSuccess({
             poll.stop();
         }
     }, [isSynchronized, pollExhausted, poll]);
+
+    async function submitPayMongoCardPayment(
+        event: FormEvent<HTMLFormElement>,
+    ) {
+        event.preventDefault();
+
+        if (payment === null) {
+            return;
+        }
+
+        const formData = new FormData(event.currentTarget);
+        const authorization = `Basic ${btoa(`${payment.publicKey}:`)}`;
+
+        const paymentMethodResponse = await fetch(
+            `${payment.apiBaseUrl}/payment_methods`,
+            {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    Authorization: authorization,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    data: {
+                        attributes: {
+                            type: 'card',
+                            details: {
+                                card_number: formData.get('cardNumber'),
+                                exp_month: Number(formData.get('expiryMonth')),
+                                exp_year: Number(formData.get('expiryYear')),
+                                cvc: formData.get('cvc'),
+                            },
+                        },
+                    },
+                }),
+            },
+        );
+
+        const paymentMethod = await paymentMethodResponse.json();
+        const paymentMethodId = paymentMethod?.data?.id;
+
+        if (!paymentMethodResponse.ok || typeof paymentMethodId !== 'string') {
+            throw new Error('Unable to create the payment method.');
+        }
+
+        const paymentIntentResponse = await fetch(
+            `${payment.apiBaseUrl}/payment_intents/${payment.paymentIntentId}/attach`,
+            {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    Authorization: authorization,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    data: {
+                        attributes: {
+                            payment_method: paymentMethodId,
+                            client_key: payment.clientKey,
+                            return_url: window.location.href,
+                        },
+                    },
+                }),
+            },
+        );
+
+        const paymentIntent = await paymentIntentResponse.json();
+        const redirectUrl = paymentIntent?.data?.attributes?.next_action?.redirect?.url;
+
+        if (!paymentIntentResponse.ok) {
+            throw new Error('Unable to start the payment.');
+        }
+
+        if (typeof redirectUrl === 'string') {
+            window.location.assign(redirectUrl);
+
+            return;
+        }
+
+        router.reload({ only: ['subscription', 'synchronized'] });
+    }
 
     return (
         <>
@@ -99,8 +188,8 @@ export default function OrganizationCheckoutSuccess({
                                 </CardTitle>
                                 <CardDescription>
                                     {isSynchronized
-                                        ? `Stripe Checkout completed for ${organization.name}.`
-                                        : `We're still syncing your Stripe subscription for ${organization.name}.`}
+                                        ? `Subscription payment was confirmed for ${organization.name}.`
+                                        : `We're still waiting for an authoritative subscription update for ${organization.name}.`}
                                 </CardDescription>
                             </div>
                         </div>
@@ -130,14 +219,47 @@ export default function OrganizationCheckoutSuccess({
                                 </div>
                             </dl>
                         ) : (
-                            <p
-                                className="text-sm text-muted-foreground"
-                                aria-live="polite"
-                            >
-                                {pollExhausted
-                                    ? "We're still waiting on Stripe to notify MiseLedger. Automatic checking has stopped; use the refresh button below when you're ready to check again."
-                                    : 'This page checks for updates automatically. It can take a few seconds for Stripe to notify MiseLedger once your payment is processed.'}
-                            </p>
+                            <div className="grid gap-4">
+                                {payment !== null && (
+                                    <form
+                                        className="grid gap-3"
+                                        onSubmit={(event) => {
+                                            void submitPayMongoCardPayment(event);
+                                        }}
+                                    >
+                                        <p className="text-sm text-muted-foreground">
+                                            Enter your card details to complete the first payment. Card details are sent directly to PayMongo.
+                                        </p>
+                                        <label className="grid gap-2 text-sm font-medium">
+                                            Card number
+                                            <input className="h-9 rounded-md border bg-background px-3" inputMode="numeric" name="cardNumber" required />
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <label className="grid gap-2 text-sm font-medium">
+                                                Expiry month
+                                                <input className="h-9 rounded-md border bg-background px-3" inputMode="numeric" max="12" min="1" name="expiryMonth" required />
+                                            </label>
+                                            <label className="grid gap-2 text-sm font-medium">
+                                                Expiry year
+                                                <input className="h-9 rounded-md border bg-background px-3" inputMode="numeric" name="expiryYear" required />
+                                            </label>
+                                        </div>
+                                        <label className="grid gap-2 text-sm font-medium">
+                                            Security code
+                                            <input className="h-9 rounded-md border bg-background px-3" inputMode="numeric" name="cvc" required type="password" />
+                                        </label>
+                                        <Button type="submit">
+                                            <CreditCard aria-hidden="true" />
+                                            Continue to payment
+                                        </Button>
+                                    </form>
+                                )}
+                                <p className="text-sm text-muted-foreground" aria-live="polite">
+                                    {pollExhausted
+                                        ? "We're still waiting for the provider to synchronize billing. Automatic checking has stopped; use the refresh button below when you're ready to check again."
+                                        : 'This page checks server-owned billing state automatically. A completed browser payment does not activate access until lifecycle synchronization confirms it.'}
+                                </p>
+                            </div>
                         )}
                     </CardContent>
 

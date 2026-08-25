@@ -4,6 +4,7 @@ namespace App\Support\Billing\Providers;
 
 use App\Enums\BillingProvider as BillingProviderEnum;
 use App\Models\Organization;
+use App\Models\User;
 
 /**
  * The smallest set of provider capabilities MiseLedger's checkout and
@@ -33,7 +34,8 @@ interface BillingProvider
         string $successUrl,
         string $cancelUrl,
         array $metadata,
-    ): string;
+        User $actor,
+    ): BillingCheckoutOutcome;
 
     public function billingPortalUrl(Organization $organization, string $returnUrl): string;
 }

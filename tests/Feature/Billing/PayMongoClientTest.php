@@ -25,6 +25,18 @@ test('PayMongo client uses configured base URL and secret-key basic authenticati
     });
 });
 
+test('PayMongo client sends an explicit idempotency key for supported resource-creation requests without retrying the post', function () {
+    Http::fake(['api.paymongo.test/*' => Http::response(['data' => ['id' => 'cus_123']], 200)]);
+
+    (new PayMongoClient)->post('create_customer', '/customers', ['data' => []], '1', 'customer-key');
+
+    Http::assertSent(function (Request $request): bool {
+        return $request->method() === 'POST'
+            && $request->hasHeader('Idempotency-Key', 'customer-key');
+    });
+    Http::assertSentCount(1);
+});
+
 test('PayMongo client classifies provider responses without exposing response bodies or secrets', function (int $status, string $classification) {
     Http::fake(['api.paymongo.test/*' => Http::response(['errors' => [['detail' => 'sensitive provider response']]], $status)]);
 

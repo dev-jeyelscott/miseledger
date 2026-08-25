@@ -5,6 +5,7 @@ use App\Models\BillingCustomer;
 use App\Models\BillingSubscription;
 use App\Models\Organization;
 use App\Support\Billing\Providers\BillingProviderManager;
+use App\Support\Billing\Providers\PayMongoBillingProvider;
 use App\Support\Billing\Providers\StripeBillingProvider;
 use Illuminate\Support\Facades\Config;
 
@@ -32,9 +33,11 @@ test('provider resolves the implemented Stripe adapter', function () {
         ->and($provider->identity())->toBe(BillingProvider::Stripe);
 });
 
-test('provider reports paymongo as unavailable rather than falling back to Stripe', function () {
-    expect(fn () => app(BillingProviderManager::class)->provider(BillingProvider::PayMongo))
-        ->toThrow(RuntimeException::class, 'paymongo billing provider is not yet available');
+test('provider resolves the PayMongo adapter without falling back to Stripe', function () {
+    $provider = app(BillingProviderManager::class)->provider(BillingProvider::PayMongo);
+
+    expect($provider)->toBeInstanceOf(PayMongoBillingProvider::class)
+        ->and($provider->identity())->toBe(BillingProvider::PayMongo);
 });
 
 test('providerForOrganization resolves the persisted provider for an existing subscription', function () {
