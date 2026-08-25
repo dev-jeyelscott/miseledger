@@ -138,6 +138,12 @@ final class PayMongoBillingProvider implements BillingProvider
         }
 
         [$firstName, $lastName] = $this->customerName($actor);
+        $phone = config('billing.providers.paymongo.customer_phone');
+
+        if (! is_string($phone) || preg_match('/^\+?\d{11,15}$/', $phone) !== 1) {
+            throw new RuntimeException('PayMongo billing contact phone configuration is unavailable.');
+        }
+
         $response = $this->client->post(
             'create_customer',
             '/customers',
@@ -145,6 +151,7 @@ final class PayMongoBillingProvider implements BillingProvider
                 'first_name' => $firstName,
                 'last_name' => $lastName,
                 'email' => $actor->email,
+                'phone' => $phone,
             ]]],
             (string) $organization->getKey(),
             "miseledger:paymongo:customer:{$organization->getKey()}",

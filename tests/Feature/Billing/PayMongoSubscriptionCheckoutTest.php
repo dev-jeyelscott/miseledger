@@ -20,6 +20,7 @@ beforeEach(function (): void {
     Config::set('billing.providers.paymongo.api_base_url', 'https://api.paymongo.test/v1');
     Config::set('billing.providers.paymongo.secret_key', 'sk_test_never_leak');
     Config::set('billing.providers.paymongo.public_key', 'pk_test_browser_safe');
+    Config::set('billing.providers.paymongo.customer_phone', '09171234567');
     Config::set('billing.plans', ['starter' => ['name' => 'Starter', 'providers' => ['stripe' => ['monthly' => 'price_starter_monthly', 'yearly' => null], 'paymongo' => ['monthly' => 'plan_starter_monthly', 'yearly' => null]], 'features' => [], 'limits' => []]]);
 });
 
@@ -72,6 +73,10 @@ test('creates a pending PayMongo projection without granting access or leaking p
     $response = $this->actingAs($user)->get(route('organizations.billing.checkout.success', $organization));
     $response->assertInertia(fn ($page) => $page->where('payment.paymentIntentId', 'pi_paymongo_123')->missing('payment.externalCustomerId')->missing('payment.externalPlanId'));
     expect($response->getContent())->not->toContain('cus_paymongo_123')->not->toContain('plan_starter_monthly')->not->toContain('sk_test_never_leak');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && str_ends_with($request->url(), '/customers')
+        && data_get($request->data(), 'data.attributes.phone') === '09171234567');
 });
 
 test('reuses the organization customer and pending checkout outcome without duplicate PayMongo customer creation', function () {

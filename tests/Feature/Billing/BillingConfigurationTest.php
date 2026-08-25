@@ -27,7 +27,7 @@ test('billing configuration exposes the provider-aware contract and Stripe compa
         ->and(config('billing.providers.stripe'))
         ->toHaveKeys(['enabled', 'key', 'secret', 'mode', 'webhook_secret'])
         ->and(config('billing.providers.paymongo'))
-        ->toHaveKeys(['enabled', 'mode', 'public_key', 'secret_key', 'webhook_secret', 'api_base_url'])
+        ->toHaveKeys(['enabled', 'mode', 'public_key', 'secret_key', 'webhook_secret', 'customer_phone', 'api_base_url'])
         ->and(config('billing.stripe'))
         ->toBe(config('billing.providers.stripe'));
 });
@@ -52,6 +52,7 @@ test('provider environment placeholders contain no committed credentials', funct
         ->toContain('PAYMONGO_PUBLIC_KEY=')
         ->toContain('PAYMONGO_SECRET_KEY=')
         ->toContain('PAYMONGO_WEBHOOK_SECRET=')
+        ->toContain('PAYMONGO_CUSTOMER_PHONE=')
         ->toContain('STRIPE_PRICE_STARTER_MONTHLY=')
         ->toContain('STRIPE_PRICE_GROWTH_MONTHLY=')
         ->toContain('STRIPE_PRICE_BUSINESS_MONTHLY=')
@@ -422,6 +423,7 @@ function paymongoOnlyProductionConfiguration(array $overrides = []): array
                     'public_key' => 'pk_live_placeholder',
                     'secret_key' => 'sk_live_placeholder',
                     'webhook_secret' => 'whsk_placeholder',
+                    'customer_phone' => '09171234567',
                     'mode' => 'live',
                     'api_base_url' => 'https://api.paymongo.com/v1',
                 ],

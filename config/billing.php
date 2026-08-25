@@ -44,6 +44,7 @@ $providers = [
         'public_key' => env('PAYMONGO_PUBLIC_KEY'),
         'secret_key' => env('PAYMONGO_SECRET_KEY'),
         'webhook_secret' => env('PAYMONGO_WEBHOOK_SECRET'),
+        'customer_phone' => env('PAYMONGO_CUSTOMER_PHONE'),
         'api_base_url' => env('PAYMONGO_API_BASE_URL', 'https://api.paymongo.com/v1'),
     ],
 ];

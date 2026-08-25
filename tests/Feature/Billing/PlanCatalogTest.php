@@ -167,6 +167,21 @@ test('a malformed configured price id is excluded from resolution', function () 
         ->and($catalog->resolveByPriceId('not-a-stripe-price'))->toBeNull();
 });
 
+test('a PayMongo amount is not accepted in place of a provider plan identifier', function () {
+    $catalog = new PlanCatalog([
+        'starter' => [
+            'name' => 'Starter',
+            'providers' => [
+                'paymongo' => ['monthly' => '990', 'yearly' => null],
+            ],
+            'features' => [],
+            'limits' => [],
+        ],
+    ]);
+
+    expect($catalog->externalPlanId(PlanCode::from('starter'), 'paymongo', 'monthly'))->toBeNull();
+});
+
 test('a lookup value matching a malformed price id never resolves to a plan', function () {
     $catalog = new PlanCatalog(planCatalogFixturePlans());
 

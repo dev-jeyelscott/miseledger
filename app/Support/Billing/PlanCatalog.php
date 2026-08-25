@@ -186,6 +186,9 @@ final readonly class PlanCatalog
             return false;
         }
 
-        return $provider !== BillingProvider::Stripe || preg_match('/^price_[A-Za-z0-9_]+$/', $externalPlanId) === 1;
+        return match ($provider) {
+            BillingProvider::Stripe => preg_match('/^price_[A-Za-z0-9_]+$/', $externalPlanId) === 1,
+            BillingProvider::PayMongo => preg_match('/^plan_[A-Za-z0-9_]+$/', $externalPlanId) === 1,
+        };
     }
 }

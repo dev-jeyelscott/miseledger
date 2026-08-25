@@ -159,12 +159,13 @@ final class BillingConfigurationValidator
         self::validateRequiredProviderConfiguration(
             'PayMongo',
             $configuration,
-            ['public_key', 'secret_key', 'webhook_secret', 'mode', 'api_base_url'],
+            ['public_key', 'secret_key', 'webhook_secret', 'customer_phone', 'mode', 'api_base_url'],
         );
 
         $publicKey = Arr::get($configuration, 'public_key');
         $secretKey = Arr::get($configuration, 'secret_key');
         $webhookSecret = Arr::get($configuration, 'webhook_secret');
+        $customerPhone = Arr::get($configuration, 'customer_phone');
 
         if (
             ! is_string($publicKey)
@@ -184,6 +185,12 @@ final class BillingConfigurationValidator
         ) {
             throw new RuntimeException(
                 'Production PayMongo billing configuration requires a PayMongo webhook secret.',
+            );
+        }
+
+        if (! is_string($customerPhone) || preg_match('/^\+?\d{11,15}$/', $customerPhone) !== 1) {
+            throw new RuntimeException(
+                'Production PayMongo billing configuration requires a valid billing contact phone number.',
             );
         }
     }
