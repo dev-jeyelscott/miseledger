@@ -351,7 +351,7 @@ function PricingAndTrial({
                     </h2>
                     <p className="mt-5 max-w-xl text-base leading-7 text-[#5b6c77]">
                         {trialDays !== null
-                            ? `Every new organization starts with a ${trialDays}-day trial, no credit card required. Subscribe from your organization's billing settings whenever you are ready to continue.`
+                            ? `Every new organization starts with a ${trialDays}-day trial. Subscribe from your organization's billing settings whenever you are ready to continue.`
                             : "Create an organization to start using MiseLedger. Subscription plans are managed from your organization's billing settings."}
                     </p>
                 </div>

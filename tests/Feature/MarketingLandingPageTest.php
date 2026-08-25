@@ -79,6 +79,12 @@ test('an unauthenticated visitor is served the auth-aware contract needed to rou
             ->component('welcome')
             ->where('auth.user', null),
     );
+
+    expect(route('register'))->toEndWith('/register');
+    expect(route('login'))->toEndWith('/login');
+
+    $this->get(route('register'))->assertOk();
+    $this->get(route('login'))->assertOk();
 });
 
 test('an authenticated visitor is served the auth-aware contract needed to route them to the dashboard', function () {
@@ -92,4 +98,8 @@ test('an authenticated visitor is served the auth-aware contract needed to route
             ->component('welcome')
             ->where('auth.user.id', $user->id),
     );
+
+    expect(route('dashboard'))->toEndWith('/dashboard');
+
+    $this->actingAs($user)->get(route('dashboard'))->assertOk();
 });
