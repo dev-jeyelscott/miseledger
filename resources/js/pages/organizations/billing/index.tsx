@@ -139,6 +139,7 @@ export default function OrganizationBilling({
     const [paymentSuccessDialogOpen, setPaymentSuccessDialogOpen] =
         useState(false);
     const announcedPaidPaymentId = useRef<number | null>(null);
+    const qrCardRef = useRef<HTMLDivElement>(null);
     const renewal = useHttp<
         { plan?: string; interval?: 'monthly' | 'yearly' },
         QrPhCheckout
@@ -170,6 +171,17 @@ export default function OrganizationBilling({
         announcedPaidPaymentId.current = checkout.payment_id;
         setPaymentSuccessDialogOpen(true);
     }, [checkout?.payment_id, checkout?.payment_status]);
+
+    useEffect(() => {
+        if (checkout?.invoice_id === undefined) {
+            return;
+        }
+
+        qrCardRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+        });
+    }, [checkout?.invoice_id, checkout?.payment_id]);
 
     function subscribe(planCode: string, interval: 'monthly' | 'yearly') {
         if (manualQrPhEnabled) {
@@ -557,7 +569,7 @@ export default function OrganizationBilling({
                         )}
 
                     {checkout !== null && (
-                        <Card>
+                        <Card ref={qrCardRef}>
                             <CardHeader>
                                 <CardTitle>QR Ph payment</CardTitle>
                                 <CardDescription>

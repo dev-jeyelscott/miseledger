@@ -186,6 +186,26 @@ test('duplicate upgrade requests for the same target reuse the pending invoice',
     Carbon::setTestNow();
 });
 
+test('a pending upgrade invoice priced under stale config is cancelled and replaced once pricing changes', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-08-31 00:00:00', 'UTC'));
+    $subscription = upgradeTestSubscription();
+
+    $stale = app(CreateUpgradeInvoice::class)->handle($subscription, PlanCode::from('growth'));
+    expect($stale->amount)->toBe(10_000);
+
+    Config::set('billing.plans.growth.manual_amounts.monthly', 90_000);
+    Carbon::setTestNow(Carbon::parse('2026-08-31 00:00:01', 'UTC'));
+
+    $fresh = app(CreateUpgradeInvoice::class)->handle($subscription->fresh(), PlanCode::from('growth'));
+
+    expect($fresh->is($stale))->toBeFalse()
+        ->and($fresh->amount)->toBe(20_000)
+        ->and($stale->fresh()->status)->toBe(BillingInvoiceStatus::Cancelled)
+        ->and($subscription->invoices()->where('status', BillingInvoiceStatus::Pending)->count())->toBe(1);
+
+    Carbon::setTestNow();
+});
+
 test('a Stripe-owned subscription is rejected with a not-yet-available error', function (): void {
     $organization = Organization::factory()->create();
     $customer = BillingCustomer::factory()->for($organization)->create(['provider' => BillingProvider::Stripe]);

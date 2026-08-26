@@ -5,6 +5,7 @@ namespace App\Actions\Billing;
 use App\Enums\BillingCollectionMethod;
 use App\Enums\BillingInvoiceStatus;
 use App\Enums\BillingInvoiceType;
+use App\Enums\BillingPaymentStatus;
 use App\Enums\PlanCode;
 use App\Models\BillingInvoice;
 use App\Models\BillingSubscription;
@@ -24,6 +25,14 @@ use RuntimeException;
  * `plan_code` stays the subscription's current plan; `target_plan_code`
  * carries the requested plan, applied to the subscription only after
  * `SettlePayMongoPayment` verifies payment.
+ *
+ * The prorated amount is a function of "days remaining right now", so it is
+ * only ever valid at the moment it was computed -- unlike a renewal invoice,
+ * it cannot be trusted to stay correct indefinitely. Every call recomputes
+ * the current amount and compares it against any still-pending invoice for
+ * the same target plan: an unpaid invoice reuse is only safe when the
+ * amount still matches; otherwise the stale invoice (and its unpaid
+ * payment attempts) are cancelled and a fresh one is created.
  */
 final class CreateUpgradeInvoice
 {
@@ -54,6 +63,15 @@ final class CreateUpgradeInvoice
                 throw new RuntimeException('This plan change is not a supported upgrade.');
             }
 
+            $currency = config('billing.currency');
+            $currency = is_string($currency) ? mb_strtoupper($currency) : null;
+
+            if ($currency === null || preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
+                throw new RuntimeException('Manual upgrade pricing is unavailable.');
+            }
+
+            $amount = $this->proratedAmount($subscription, $currentPlan, $targetPlan);
+
             $existing = BillingInvoice::query()
                 ->where('billing_subscription_id', $subscription->getKey())
                 ->where('invoice_type', BillingInvoiceType::Upgrade)
@@ -63,17 +81,12 @@ final class CreateUpgradeInvoice
                 ->first();
 
             if ($existing !== null) {
-                return $existing;
+                if ($existing->amount === $amount && $existing->currency === $currency) {
+                    return $existing;
+                }
+
+                $this->cancelStaleInvoice($existing);
             }
-
-            $currency = config('billing.currency');
-            $currency = is_string($currency) ? mb_strtoupper($currency) : null;
-
-            if ($currency === null || preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
-                throw new RuntimeException('Manual upgrade pricing is unavailable.');
-            }
-
-            $amount = $this->proratedAmount($subscription, $currentPlan, $targetPlan);
 
             return BillingInvoice::query()->create([
                 'organization_id' => $subscription->organization_id,
@@ -92,6 +105,29 @@ final class CreateUpgradeInvoice
                 'due_at' => now(),
             ]);
         }, attempts: 3);
+    }
+
+    /**
+     * Cancels a pending upgrade invoice whose amount no longer matches the
+     * current proration (e.g. plan pricing changed, or enough time has
+     * passed that the remaining-days calculation moved) and fails any of
+     * its unpaid payment attempts, so neither is ever mistaken for still
+     * being valid.
+     */
+    private function cancelStaleInvoice(BillingInvoice $invoice): void
+    {
+        $invoice->payments()
+            ->whereIn('status', [BillingPaymentStatus::Pending, BillingPaymentStatus::AwaitingPayment])
+            ->get()
+            ->each(fn ($payment) => $payment->update([
+                'status' => BillingPaymentStatus::Failed,
+                'failed_at' => now(),
+            ]));
+
+        $invoice->update([
+            'status' => BillingInvoiceStatus::Cancelled,
+            'cancelled_at' => now(),
+        ]);
     }
 
     /**
