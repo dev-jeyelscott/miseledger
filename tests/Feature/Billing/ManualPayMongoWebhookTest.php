@@ -86,6 +86,18 @@ function postManualPaymentWebhook(array $payload): TestResponse
     ], $body);
 }
 
+function postLiveManualPaymentWebhook(array $payload): TestResponse
+{
+    $body = json_encode($payload, JSON_THROW_ON_ERROR);
+    $timestamp = (string) time();
+    $signature = hash_hmac('sha256', $timestamp.'.'.$body, 'whsk_paymongo_webhook_live');
+
+    return test()->call('POST', route('billing.webhooks.paymongo'), [], [], [], [
+        'HTTP_PAYMONGO-SIGNATURE' => "t={$timestamp},te=,li={$signature}",
+        'CONTENT_TYPE' => 'application/json',
+    ], $body);
+}
+
 test('payment.paid settles exactly one matching QR Ph payment and its invoice', function (): void {
     Queue::fake();
     $payment = manualWebhookPayment();
@@ -98,6 +110,22 @@ test('payment.paid settles exactly one matching QR Ph payment and its invoice', 
         ->and($payment->fresh()->billingInvoice->billingSubscription->provider_status)->toBe('active')
         ->and(BillingWebhookEffect::query()->count())->toBe(1);
     Queue::assertPushed(SendManualRenewalPaymentReceipt::class, 1);
+});
+
+test('a verified live QR Ph payment repairs a legacy test-mode manual subscription before settlement', function (): void {
+    Queue::fake();
+    Config::set('billing.providers.paymongo.mode', 'live');
+    Config::set('billing.providers.paymongo.webhook_secret', 'whsk_paymongo_webhook_live');
+    $payment = manualWebhookPayment();
+    $payment->update(['livemode' => true]);
+    $payload = manualPaymentPaidPayload('evt_live_manual_payment_paid');
+    data_set($payload, 'data.attributes.livemode', true);
+    data_set($payload, 'data.attributes.data.attributes.livemode', true);
+
+    postLiveManualPaymentWebhook($payload)->assertNoContent();
+
+    expect($payment->fresh()->status)->toBe(BillingPaymentStatus::Paid)
+        ->and($payment->fresh()->billingInvoice->billingSubscription->livemode)->toBeTrue();
 });
 
 test('a settled payment sends one detailed receipt to billing administrators', function (): void {

@@ -27,6 +27,10 @@ final class CreatePayMongoQrPhPayment
         $payment = DB::transaction(function () use ($invoice): BillingPayment|ManualRenewalCheckout {
             $invoice = BillingInvoice::query()->with('billingSubscription')->lockForUpdate()->findOrFail($invoice->getKey());
 
+            if ($invoice->billingSubscription->livemode !== (config('billing.providers.paymongo.mode') === 'live')) {
+                throw new RuntimeException('The QR Ph billing profile belongs to a different PayMongo environment.');
+            }
+
             if (! $invoice->status->isPayable()
                 || $invoice->provider !== BillingProvider::PayMongo
                 || $invoice->billingSubscription->collection_method !== BillingCollectionMethod::Manual) {

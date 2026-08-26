@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
+    Config::set('billing.providers.paymongo.mode', 'test');
     Http::preventStrayRequests();
     Config::set('billing.providers.paymongo.api_base_url', 'https://api.paymongo.test/v1');
     Config::set('billing.providers.paymongo.secret_key', 'sk_test_never_leak');
@@ -98,6 +99,14 @@ test('it accepts PayMongo QR image data URIs returned by the test API', function
     $checkout = app(CreatePayMongoQrPhPayment::class)->handle($invoice);
 
     expect($checkout->payment->qr_code_url)->toBe($qrCodeUrl);
+});
+
+test('it refuses to create a QR Ph payment when the billing profile belongs to another PayMongo environment', function (): void {
+    Config::set('billing.providers.paymongo.mode', 'live');
+    $invoice = manualQrPhInvoice();
+
+    expect(fn () => app(CreatePayMongoQrPhPayment::class)->handle($invoice))
+        ->toThrow('The QR Ph billing profile belongs to a different PayMongo environment.');
 });
 
 test('an expired QR Ph attempt remains historical and a retry uses a new payment intent', function (): void {

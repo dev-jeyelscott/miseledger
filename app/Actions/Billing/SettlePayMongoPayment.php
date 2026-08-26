@@ -26,6 +26,10 @@ final class SettlePayMongoPayment
             $invoice = BillingInvoice::query()->lockForUpdate()->findOrFail($payment->billing_invoice_id);
             $subscription = BillingSubscription::query()->lockForUpdate()->findOrFail($invoice->billing_subscription_id);
 
+            if ($this->canRepairLegacyManualSubscriptionMode($payment, $subscription, $livemode)) {
+                $subscription->update(['livemode' => $livemode]);
+            }
+
             if ($payment->provider !== BillingProvider::PayMongo
                 || $invoice->provider !== BillingProvider::PayMongo
                 || $subscription->provider !== BillingProvider::PayMongo
@@ -77,5 +81,15 @@ final class SettlePayMongoPayment
         }
 
         return $payment;
+    }
+
+    private function canRepairLegacyManualSubscriptionMode(BillingPayment $payment, BillingSubscription $subscription, bool $livemode): bool
+    {
+        return $livemode
+            && $payment->payment_method->value === 'qrph'
+            && $payment->status === BillingPaymentStatus::AwaitingPayment
+            && $payment->livemode === $livemode
+            && $subscription->collection_method->value === 'manual'
+            && ! $subscription->livemode;
     }
 }
