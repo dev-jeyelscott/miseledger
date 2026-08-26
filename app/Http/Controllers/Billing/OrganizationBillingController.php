@@ -12,6 +12,7 @@ use App\Support\Billing\OrganizationSubscriptionAccessResolver;
 use App\Support\Billing\OrganizationUsageOverview;
 use App\Support\Billing\OrganizationUsageOverviewResolver;
 use App\Support\Billing\PlanCatalog;
+use App\Support\Billing\PlanUpgradePolicy;
 use App\Support\Billing\Providers\BillingProviderManager;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -30,6 +31,7 @@ class OrganizationBillingController extends Controller
         Organization $organization,
         PlanCatalog $planCatalog,
         BillingProviderManager $providerManager,
+        PlanUpgradePolicy $upgradePolicy,
     ): Response {
         Gate::authorize(
             OrganizationPermission::BillingManage->value,
@@ -37,12 +39,16 @@ class OrganizationBillingController extends Controller
         );
 
         $access = OrganizationSubscriptionAccessResolver::resolve($organization, $planCatalog);
+        $subscriptions = $organization->billingSubscriptions()
+            ->where('type', (string) config('billing.subscription_type'))
+            ->get();
+        $subscription = $subscriptions->count() === 1 ? $subscriptions->sole() : null;
 
         return Inertia::render('organizations/billing/index', [
             'organization' => $this->organizationData($organization),
-            'subscription' => $this->subscriptionData($access, $organization, $planCatalog),
+            'subscription' => $this->subscriptionData($access, $subscription, $planCatalog),
             'entitlements' => $this->entitlementData($access, $organization, $planCatalog),
-            'availablePlans' => $this->availablePlansData($planCatalog, $providerManager),
+            'availablePlans' => $this->availablePlansData($planCatalog, $providerManager, $upgradePolicy, $access, $subscription),
             'manualQrPhEnabled' => config('billing.provider') === BillingProvider::PayMongo->value
                 && config('billing.providers.paymongo.manual_qrph') === true,
         ]);
@@ -80,12 +86,8 @@ class OrganizationBillingController extends Controller
      *     collectionMethod: string|null
      * }
      */
-    private function subscriptionData(OrganizationSubscriptionAccess $access, Organization $organization, PlanCatalog $planCatalog): array
+    private function subscriptionData(OrganizationSubscriptionAccess $access, ?BillingSubscription $subscription, PlanCatalog $planCatalog): array
     {
-        $subscriptions = $organization->billingSubscriptions()
-            ->where('type', (string) config('billing.subscription_type'))
-            ->get();
-        $subscription = $subscriptions->count() === 1 ? $subscriptions->sole() : null;
         $plan = $access->plan !== null ? $planCatalog->get($access->plan) : null;
         $paidAccessEndsAt = $subscription === null
             ? null
@@ -173,28 +175,52 @@ class OrganizationBillingController extends Controller
     /**
      * Serialize only internal plan metadata and availability for the
      * effective acquisition provider, never its external plan identifiers.
+     * `eligibleUpgrade` is only ever true for a manual PayMongo subscription
+     * (the only upgrade path currently supported), at the subscription's
+     * existing interval -- never inferred for Stripe or any other state.
      *
-     * @return list<array{code: string, name: string, monthly: bool, yearly: bool, features: list<string>, limits: array<string, int|null>}>
+     * @return list<array{code: string, name: string, monthly: bool, yearly: bool, features: list<string>, limits: array<string, int|null>, current: bool, eligibleUpgrade: bool}>
      */
-    private function availablePlansData(PlanCatalog $planCatalog, BillingProviderManager $providerManager): array
-    {
+    private function availablePlansData(
+        PlanCatalog $planCatalog,
+        BillingProviderManager $providerManager,
+        PlanUpgradePolicy $upgradePolicy,
+        OrganizationSubscriptionAccess $access,
+        ?BillingSubscription $subscription,
+    ): array {
         $provider = $providerManager->defaultProvider();
         $usesManualQrPh = $provider === BillingProvider::PayMongo
             && config('billing.providers.paymongo.manual_qrph') === true;
 
+        $canUpgrade = $access->plan !== null
+            && $subscription !== null
+            && $subscription->provider === BillingProvider::PayMongo
+            && $subscription->collection_method->value === 'manual'
+            && $subscription->interval !== null;
+
         return array_values(array_map(
-            static fn ($definition) => [
-                'code' => $definition->code->value,
-                'name' => $definition->name,
-                'monthly' => $usesManualQrPh
-                    ? $definition->manualAmount('monthly') !== null
-                    : $definition->externalPlanId($provider, 'monthly') !== null,
-                'yearly' => $usesManualQrPh
-                    ? $definition->manualAmount('yearly') !== null
-                    : $definition->externalPlanId($provider, 'yearly') !== null,
-                'features' => $definition->features,
-                'limits' => $definition->limits,
-            ],
+            static function ($definition) use ($usesManualQrPh, $provider, $access, $upgradePolicy, $canUpgrade, $subscription) {
+                $isCurrent = $access->plan !== null && $access->plan->value === $definition->code->value;
+                $eligibleUpgrade = $canUpgrade
+                    && ! $isCurrent
+                    && $upgradePolicy->isEligibleUpgrade($access->plan, $definition->code)
+                    && $definition->manualAmount($subscription->interval) !== null;
+
+                return [
+                    'code' => $definition->code->value,
+                    'name' => $definition->name,
+                    'monthly' => $usesManualQrPh
+                        ? $definition->manualAmount('monthly') !== null
+                        : $definition->externalPlanId($provider, 'monthly') !== null,
+                    'yearly' => $usesManualQrPh
+                        ? $definition->manualAmount('yearly') !== null
+                        : $definition->externalPlanId($provider, 'yearly') !== null,
+                    'features' => $definition->features,
+                    'limits' => $definition->limits,
+                    'current' => $isCurrent,
+                    'eligibleUpgrade' => $eligibleUpgrade,
+                ];
+            },
             $planCatalog->all(),
         ));
     }

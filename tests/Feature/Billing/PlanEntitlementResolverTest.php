@@ -10,6 +10,7 @@ function planEntitlementFixtureCatalog(): PlanCatalog
     return new PlanCatalog([
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'prices' => [
                 'monthly' => 'price_starter_monthly',
                 'yearly' => null,
@@ -98,6 +99,7 @@ test('the entitlement resolver defaults to the billing configuration catalog', f
     Config::set('billing.plans', [
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'prices' => ['monthly' => 'price_starter_monthly', 'yearly' => null],
             'features' => ['inventory.view'],
             'limits' => [],

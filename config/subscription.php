@@ -62,8 +62,10 @@ return [
     |
     | Each internal plan maps each provider and billing interval to its
     | provider-owned external plan ID via env,
-    | plus a display name, feature entitlements, and optional quantitative
-    | limits granted by that plan. No `plans`, `features`, or
+    | plus a display name, an explicit `tier` (the sole plan-precedence
+    | signal used for upgrade eligibility -- never inferred from array
+    | order, price, limits, or display name), feature entitlements, and
+    | optional quantitative limits granted by that plan. No `plans`, `features`, or
     | `plan_features` database tables exist for the MVP: this array is the
     | single source of truth consumed by `App\Support\Billing\PlanCatalog`
     | which is the only supported way to resolve an external provider plan ID
@@ -108,6 +110,7 @@ return [
     'plans' => [
         'starter' => [
             'name' => 'Starter Plan',
+            'tier' => 1,
             'manual_amounts' => [
                 'monthly' => env('PAYMONGO_QRPH_AMOUNT_STARTER_MONTHLY'),
                 'yearly' => env('PAYMONGO_QRPH_AMOUNT_STARTER_YEARLY'),
@@ -131,6 +134,7 @@ return [
         ],
         'growth' => [
             'name' => 'Growth Plan',
+            'tier' => 2,
             'manual_amounts' => [
                 'monthly' => env('PAYMONGO_QRPH_AMOUNT_GROWTH_MONTHLY'),
                 'yearly' => env('PAYMONGO_QRPH_AMOUNT_GROWTH_YEARLY'),
@@ -159,6 +163,7 @@ return [
         ],
         'business' => [
             'name' => 'Business Plan',
+            'tier' => 3,
             'manual_amounts' => [
                 'monthly' => env('PAYMONGO_QRPH_AMOUNT_BUSINESS_MONTHLY'),
                 'yearly' => env('PAYMONGO_QRPH_AMOUNT_BUSINESS_YEARLY'),

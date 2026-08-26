@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Billing;
 
 use App\Actions\Billing\CreatePayMongoQrPhPayment;
+use App\Enums\BillingInvoiceType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Billing\CreateOrganizationInvoicePaymentRequest;
 use App\Models\BillingInvoice;
@@ -23,8 +24,10 @@ final class OrganizationInvoicePaymentController extends Controller
         }
 
         return response()->json([
+            'kind' => $checkout->invoice->invoice_type === BillingInvoiceType::Upgrade ? 'upgrade' : 'renewal',
             'invoice_id' => $checkout->invoice->getKey(),
             'invoice_status' => $checkout->invoice->status->value,
+            'target_plan' => $checkout->invoice->target_plan_code,
             'payment_id' => $checkout->payment->getKey(),
             'payment_status' => $checkout->payment->status->value,
             'amount' => $checkout->payment->amount,

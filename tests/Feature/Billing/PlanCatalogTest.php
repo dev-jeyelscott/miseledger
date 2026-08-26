@@ -9,6 +9,7 @@ function planCatalogFixturePlans(): array
     return [
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'prices' => [
                 'monthly' => 'price_starter_monthly',
                 'yearly' => 'price_starter_yearly',
@@ -18,6 +19,7 @@ function planCatalogFixturePlans(): array
         ],
         'pro' => [
             'name' => 'Pro',
+            'tier' => 1,
             'prices' => [
                 'monthly' => 'price_pro_monthly',
                 'yearly' => 'price_pro_yearly',
@@ -100,6 +102,7 @@ test('a missing price id for an interval never resolves', function () {
     $catalog = new PlanCatalog([
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'prices' => ['monthly' => 'price_starter_monthly', 'yearly' => null],
             'features' => [],
             'limits' => [],
@@ -116,12 +119,14 @@ test('a duplicate price id across plans fails safely and resolves to no plan', f
     $catalog = new PlanCatalog([
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'prices' => ['monthly' => 'price_shared', 'yearly' => null],
             'features' => [],
             'limits' => [],
         ],
         'pro' => [
             'name' => 'Pro',
+            'tier' => 1,
             'prices' => ['monthly' => 'price_shared', 'yearly' => null],
             'features' => [],
             'limits' => [],
@@ -135,12 +140,14 @@ test('an invalid plan code entry is excluded from the catalog rather than crashi
     $catalog = new PlanCatalog([
         'Invalid Code!' => [
             'name' => 'Broken',
+            'tier' => 1,
             'prices' => ['monthly' => 'price_broken', 'yearly' => null],
             'features' => [],
             'limits' => [],
         ],
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'prices' => ['monthly' => 'price_starter_monthly', 'yearly' => null],
             'features' => [],
             'limits' => [],
@@ -155,6 +162,7 @@ test('a malformed configured price id is excluded from resolution', function () 
     $catalog = new PlanCatalog([
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'prices' => ['monthly' => 'not-a-stripe-price', 'yearly' => null],
             'features' => [],
             'limits' => [],
@@ -171,6 +179,7 @@ test('a PayMongo amount is not accepted in place of a provider plan identifier',
     $catalog = new PlanCatalog([
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'providers' => [
                 'paymongo' => ['monthly' => '990', 'yearly' => null],
             ],
@@ -238,6 +247,7 @@ test('provider-neutral mappings resolve within their configured provider only', 
     $catalog = new PlanCatalog([
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'providers' => [
                 'stripe' => ['monthly' => 'price_starter_monthly', 'yearly' => null],
                 'paymongo' => ['monthly' => 'plan_starter_monthly', 'yearly' => 'plan_starter_yearly'],
@@ -259,11 +269,13 @@ test('provider-neutral mappings fail closed for blank IDs, unknown providers, an
     $catalog = new PlanCatalog([
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'providers' => ['paymongo' => ['monthly' => 'plan_shared', 'yearly' => '']],
             'features' => [], 'limits' => [],
         ],
         'pro' => [
             'name' => 'Pro',
+            'tier' => 1,
             'providers' => ['paymongo' => ['monthly' => 'plan_shared', 'yearly' => null]],
             'features' => [], 'limits' => [],
         ],

@@ -111,6 +111,12 @@ final readonly class PlanCatalog
                 continue;
             }
 
+            $tier = $plan['tier'] ?? null;
+
+            if (! is_int($tier) || $tier < 1) {
+                continue;
+            }
+
             $features = array_values(array_filter((array) ($plan['features'] ?? []), 'is_string'));
             $limits = array_filter((array) ($plan['limits'] ?? []), static fn (mixed $value): bool => $value === null || is_int($value));
             $providers = self::providerPlans($plan);
@@ -127,6 +133,7 @@ final readonly class PlanCatalog
             $definitions[$code] = new PlanDefinition(
                 $planCode,
                 $name,
+                $tier,
                 $features,
                 $limits,
                 $providers,

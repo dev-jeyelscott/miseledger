@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\BillingInvoiceStatus;
+use App\Enums\BillingInvoiceType;
 use App\Enums\BillingProvider;
 use Carbon\CarbonInterface;
 use Database\Factories\BillingInvoiceFactory;
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonInterface|null $paid_at
  * @property CarbonInterface|null $cancelled_at
  */
-#[Fillable(['organization_id', 'billing_subscription_id', 'provider', 'invoice_number', 'plan_code', 'billing_interval', 'currency', 'amount', 'status', 'period_starts_at', 'period_ends_at', 'due_at', 'paid_at', 'cancelled_at'])]
+#[Fillable(['organization_id', 'billing_subscription_id', 'provider', 'invoice_number', 'plan_code', 'invoice_type', 'target_plan_code', 'billing_interval', 'currency', 'amount', 'status', 'period_starts_at', 'period_ends_at', 'due_at', 'paid_at', 'cancelled_at'])]
 class BillingInvoice extends Model
 {
     /** @use HasFactory<BillingInvoiceFactory> */
@@ -54,6 +55,7 @@ class BillingInvoice extends Model
         return [
             'provider' => BillingProvider::class,
             'status' => BillingInvoiceStatus::class,
+            'invoice_type' => BillingInvoiceType::class,
             'period_starts_at' => 'datetime',
             'period_ends_at' => 'datetime',
             'due_at' => 'datetime',

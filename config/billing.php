@@ -110,6 +110,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Manual Upgrade Minimum Charge
+    |--------------------------------------------------------------------------
+    |
+    | Floor (in minor currency units) applied to a prorated manual QR Ph
+    | upgrade invoice, so a plan change requested very close to the paid
+    | period boundary never produces a negligible or zero-amount charge.
+    |
+    | UNRESOLVED BUSINESS DECISION: no default is set. Leaving this unset
+    | applies no floor (a zero-value proration is allowed) until approved.
+    |
+    */
+
+    'upgrade_minimum_manual_amount' => env('BILLING_UPGRADE_MINIMUM_MANUAL_AMOUNT'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Billing Logger
     |--------------------------------------------------------------------------
     */

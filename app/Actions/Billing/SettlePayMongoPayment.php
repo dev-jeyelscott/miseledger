@@ -2,22 +2,27 @@
 
 namespace App\Actions\Billing;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\BillingInvoiceStatus;
+use App\Enums\BillingInvoiceType;
 use App\Enums\BillingPaymentStatus;
 use App\Enums\BillingProvider;
 use App\Jobs\SendManualRenewalPaymentReceipt;
 use App\Models\BillingInvoice;
 use App\Models\BillingPayment;
 use App\Models\BillingSubscription;
+use App\Models\Organization;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 final class SettlePayMongoPayment
 {
+    public function __construct(private readonly RecordAuditEntry $recordAuditEntry) {}
+
     public function handle(BillingPayment $payment, string $externalPaymentId, int $amount, string $currency, bool $livemode, ?Carbon $paidAt = null): BillingPayment
     {
-        [$payment, $wasSettled] = DB::transaction(function () use ($payment, $externalPaymentId, $amount, $currency, $livemode, $paidAt): array {
+        [$payment, $wasSettled, $upgrade] = DB::transaction(function () use ($payment, $externalPaymentId, $amount, $currency, $livemode, $paidAt): array {
             $payment = BillingPayment::query()->lockForUpdate()->whereKey($payment->getKey())->first();
 
             if ($payment === null) {
@@ -49,12 +54,20 @@ final class SettlePayMongoPayment
                     throw new RuntimeException('PayMongo payment identity conflicts with a settled attempt.');
                 }
 
-                return [$payment, false];
+                return [$payment, false, null];
             }
 
             if (! $invoice->status->isPayable()) {
                 throw new RuntimeException('PayMongo payment targets an invoice that is not payable.');
             }
+
+            $isUpgrade = $invoice->invoice_type === BillingInvoiceType::Upgrade;
+
+            if ($isUpgrade && $invoice->target_plan_code === null) {
+                throw new RuntimeException('Upgrade invoice is missing its target plan.');
+            }
+
+            $previousPlanCode = $subscription->plan_code;
 
             $payment->update([
                 'status' => BillingPaymentStatus::Paid,
@@ -71,13 +84,36 @@ final class SettlePayMongoPayment
                 'next_billing_at' => $invoice->period_ends_at,
                 'ends_at' => $invoice->period_ends_at,
                 'cancelled_at' => null,
+                ...($isUpgrade ? ['plan_code' => $invoice->target_plan_code] : []),
             ]);
 
-            return [$payment->fresh(), true];
+            $upgrade = $isUpgrade ? [
+                'organization_id' => $subscription->organization_id,
+                'subscription_id' => $subscription->getKey(),
+                'previous_plan' => $previousPlanCode,
+                'target_plan' => $invoice->target_plan_code,
+                'interval' => $subscription->interval,
+                'external_payment_id' => $externalPaymentId,
+            ] : null;
+
+            return [$payment->fresh(), true, $upgrade];
         }, attempts: 3);
 
         if ($wasSettled) {
             SendManualRenewalPaymentReceipt::dispatch($payment->getKey());
+        }
+
+        if (is_array($upgrade)) {
+            $this->recordAuditEntry->handle(
+                Organization::query()->findOrFail($upgrade['organization_id']),
+                null,
+                'billing.subscription.upgraded',
+                BillingSubscription::class,
+                $upgrade['subscription_id'],
+                ['plan' => $upgrade['previous_plan'], 'interval' => $upgrade['interval']],
+                ['plan' => $upgrade['target_plan'], 'interval' => $upgrade['interval'], 'provider' => 'paymongo'],
+                $upgrade['external_payment_id'],
+            );
         }
 
         return $payment;

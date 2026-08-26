@@ -34,12 +34,14 @@ function lifecyclePlans(): void
     Config::set('billing.plans', [
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'prices' => ['monthly' => 'price_lifecycle_starter', 'yearly' => null],
             'features' => [],
             'limits' => [],
         ],
         'growth' => [
             'name' => 'Growth',
+            'tier' => 1,
             'prices' => ['monthly' => 'price_lifecycle_growth', 'yearly' => null],
             'features' => [],
             'limits' => [],

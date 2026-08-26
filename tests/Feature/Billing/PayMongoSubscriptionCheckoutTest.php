@@ -22,7 +22,7 @@ beforeEach(function (): void {
     Config::set('billing.providers.paymongo.secret_key', 'sk_test_never_leak');
     Config::set('billing.providers.paymongo.public_key', 'pk_test_browser_safe');
     Config::set('billing.providers.paymongo.customer_phone', '09171234567');
-    Config::set('billing.plans', ['starter' => ['name' => 'Starter', 'providers' => ['stripe' => ['monthly' => 'price_starter_monthly', 'yearly' => null], 'paymongo' => ['monthly' => 'plan_starter_monthly', 'yearly' => null]], 'features' => [], 'limits' => []]]);
+    Config::set('billing.plans', ['starter' => ['name' => 'Starter', 'tier' => 1, 'providers' => ['stripe' => ['monthly' => 'price_starter_monthly', 'yearly' => null], 'paymongo' => ['monthly' => 'plan_starter_monthly', 'yearly' => null]], 'features' => [], 'limits' => []]]);
 });
 
 function fakePayMongoCheckout(string $customerId = 'cus_paymongo_123'): void

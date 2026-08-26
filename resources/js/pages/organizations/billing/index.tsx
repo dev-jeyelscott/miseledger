@@ -6,13 +6,14 @@ import {
     RefreshCw,
     XCircle,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import OrganizationBillingCancellationController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingCancellationController';
 import OrganizationBillingPortalController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingPortalController';
 import OrganizationCheckoutController from '@/actions/App/Http/Controllers/Billing/OrganizationCheckoutController';
 import OrganizationInvoicePaymentController from '@/actions/App/Http/Controllers/Billing/OrganizationInvoicePaymentController';
 import OrganizationInvoiceStatusController from '@/actions/App/Http/Controllers/Billing/OrganizationInvoiceStatusController';
 import OrganizationManualRenewalController from '@/actions/App/Http/Controllers/Billing/OrganizationManualRenewalController';
+import OrganizationSubscriptionUpgradeController from '@/actions/App/Http/Controllers/Billing/OrganizationSubscriptionUpgradeController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +24,15 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { dashboard } from '@/routes';
 import type {
     OrganizationAvailablePlan,
@@ -40,8 +50,10 @@ type Props = {
 };
 
 type QrPhCheckout = {
+    kind?: 'renewal' | 'upgrade';
     invoice_id: number;
     invoice_status: string;
+    target_plan?: string | null;
     payment_id: number;
     payment_status: 'awaiting_payment' | 'paid' | 'failed' | 'expired';
     amount: number;
@@ -113,6 +125,9 @@ export default function OrganizationBilling({
     manualQrPhEnabled,
 }: Props) {
     const hasActiveSubscription = subscription.status !== null;
+    const upgradeableTo = hasActiveSubscription
+        ? availablePlans.filter((plan) => plan.eligibleUpgrade)
+        : [];
     const trialEndsAt = formatDate(subscription.trialEndsAt);
     const endsAt = formatDate(subscription.endsAt);
     const nextBillingAt = formatDate(subscription.nextBillingAt);
@@ -121,11 +136,15 @@ export default function OrganizationBilling({
         .map(([key]) => formatLabel(key));
     const [checkout, setCheckout] = useState<QrPhCheckout | null>(null);
     const [currentTime, setCurrentTime] = useState(0);
+    const [paymentSuccessDialogOpen, setPaymentSuccessDialogOpen] =
+        useState(false);
+    const announcedPaidPaymentId = useRef<number | null>(null);
     const renewal = useHttp<
         { plan?: string; interval?: 'monthly' | 'yearly' },
         QrPhCheckout
     >({});
     const paymentRetry = useHttp<Record<string, never>, QrPhCheckout>({});
+    const upgrade = useHttp<{ plan?: string }, QrPhCheckout>({});
     const paymentStatus = useHttp<
         Record<string, never>,
         Pick<QrPhCheckout, 'invoice_status' | 'payment_status' | 'expires_at'>
@@ -139,6 +158,18 @@ export default function OrganizationBilling({
 
         return () => window.clearInterval(timer);
     }, []);
+
+    useEffect(() => {
+        if (
+            checkout?.payment_status !== 'paid' ||
+            checkout.payment_id === announcedPaidPaymentId.current
+        ) {
+            return;
+        }
+
+        announcedPaidPaymentId.current = checkout.payment_id;
+        setPaymentSuccessDialogOpen(true);
+    }, [checkout?.payment_id, checkout?.payment_status]);
 
     function subscribe(planCode: string, interval: 'monthly' | 'yearly') {
         if (manualQrPhEnabled) {
@@ -166,6 +197,21 @@ export default function OrganizationBilling({
         renewal.setData({});
         renewal.post(
             OrganizationManualRenewalController.store.url(organization.id),
+            {
+                onSuccess: (data) => {
+                    setCurrentTime(Date.now());
+                    setCheckout(data);
+                },
+            },
+        );
+    }
+
+    function upgradeTo(planCode: string) {
+        upgrade.setData({ plan: planCode });
+        upgrade.post(
+            OrganizationSubscriptionUpgradeController.store.url(
+                organization.id,
+            ),
             {
                 onSuccess: (data) => {
                     setCurrentTime(Date.now());
@@ -469,6 +515,47 @@ export default function OrganizationBilling({
                         )}
                     </Card>
 
+                    {hasActiveSubscription &&
+                        manualQrPhEnabled &&
+                        upgradeableTo.length > 0 && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Upgrade plan</CardTitle>
+                                    <CardDescription>
+                                        Move this organization to a higher plan.
+                                        Your current billing interval stays the
+                                        same.
+                                    </CardDescription>
+                                </CardHeader>
+
+                                <CardContent className="grid gap-4 sm:grid-cols-2">
+                                    {upgradeableTo.map((plan) => (
+                                        <div
+                                            key={plan.code}
+                                            className="flex flex-col gap-3 rounded-lg border p-4"
+                                        >
+                                            <p className="font-medium">
+                                                {plan.name}
+                                            </p>
+
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                disabled={upgrade.processing}
+                                                onClick={() =>
+                                                    upgradeTo(plan.code)
+                                                }
+                                            >
+                                                {upgrade.processing
+                                                    ? 'Starting upgrade…'
+                                                    : `Upgrade to ${plan.name}`}
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
+                        )}
+
                     {checkout !== null && (
                         <Card>
                             <CardHeader>
@@ -494,8 +581,9 @@ export default function OrganizationBilling({
                                             aria-hidden="true"
                                         />
                                         <p className="font-medium">
-                                            Payment received. Your subscription
-                                            has been renewed.
+                                            {checkout.kind === 'upgrade'
+                                                ? 'Payment received. Your subscription has been upgraded.'
+                                                : 'Payment received. Your subscription has been renewed.'}
                                         </p>
                                     </div>
                                 ) : checkout.qr_code_url !== null &&
@@ -695,6 +783,39 @@ export default function OrganizationBilling({
                     )}
                 </div>
             </div>
+
+            <Dialog
+                open={paymentSuccessDialogOpen}
+                onOpenChange={setPaymentSuccessDialogOpen}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader className="items-center text-center sm:items-center sm:text-center">
+                        <CheckCircle2
+                            className="size-14 text-emerald-600 dark:text-emerald-400"
+                            aria-hidden="true"
+                        />
+                        <DialogTitle>Payment received</DialogTitle>
+                        <DialogDescription>
+                            {checkout?.kind === 'upgrade'
+                                ? 'Your QR Ph payment has been confirmed and your subscription has been upgraded.'
+                                : 'Your QR Ph payment has been confirmed and your subscription has been renewed.'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {checkout !== null && (
+                        <p className="text-center text-2xl font-semibold">
+                            {new Intl.NumberFormat('en-PH', {
+                                style: 'currency',
+                                currency: checkout.currency,
+                            }).format(checkout.amount / 100)}
+                        </p>
+                    )}
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button type="button">Done</Button>
+                        </DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

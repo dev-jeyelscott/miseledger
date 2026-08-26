@@ -19,6 +19,7 @@ function overagePlansConfig(): void
     Config::set('billing.plans', [
         'growth' => [
             'name' => 'Growth',
+            'tier' => 1,
             'prices' => [
                 'monthly' => 'price_growth_monthly',
                 'yearly' => null,
@@ -28,6 +29,7 @@ function overagePlansConfig(): void
         ],
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'prices' => [
                 'monthly' => 'price_starter_monthly',
                 'yearly' => null,

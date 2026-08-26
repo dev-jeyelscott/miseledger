@@ -23,6 +23,7 @@ final readonly class PlanDefinition
     public function __construct(
         public PlanCode $code,
         public string $name,
+        public int $tier,
         public array $features,
         public array $limits,
         public array $providers,
@@ -33,6 +34,15 @@ final readonly class PlanDefinition
     public function hasFeature(string $feature): bool
     {
         return in_array($feature, $this->features, true);
+    }
+
+    /**
+     * The sole plan-precedence signal used for upgrade eligibility. Never
+     * infer ordering from array position, price, limits, or display name.
+     */
+    public function tier(): int
+    {
+        return $this->tier;
     }
 
     /**

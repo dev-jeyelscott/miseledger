@@ -42,6 +42,7 @@ final class OrganizationManualRenewalController extends Controller
     private function checkoutData(ManualRenewalCheckout $checkout): array
     {
         return [
+            'kind' => 'renewal',
             'invoice_id' => $checkout->invoice->getKey(),
             'invoice_status' => $checkout->invoice->status->value,
             'payment_id' => $checkout->payment->getKey(),

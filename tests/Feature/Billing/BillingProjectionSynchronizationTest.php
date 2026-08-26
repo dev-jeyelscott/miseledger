@@ -13,6 +13,7 @@ function projectionSyncPlans(): void
     Config::set('billing.plans', [
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'prices' => ['monthly' => 'price_projection_starter', 'yearly' => null],
             'features' => [],
             'limits' => [],

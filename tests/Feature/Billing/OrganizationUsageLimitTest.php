@@ -16,6 +16,7 @@ function usageLimitFixturePlans(array $limits = ['locations' => null, 'seats' =>
     Config::set('billing.plans', [
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'prices' => [
                 'monthly' => 'price_starter_monthly',
                 'yearly' => null,
@@ -137,6 +138,7 @@ test('a disabled (undeclared) member limit imposes no ceiling', function () {
     Config::set('billing.plans', [
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'prices' => ['monthly' => 'price_starter_monthly', 'yearly' => null],
             'features' => ['locations.multi'],
             'limits' => [],

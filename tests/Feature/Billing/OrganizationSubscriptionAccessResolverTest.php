@@ -14,6 +14,7 @@ beforeEach(function (): void {
     Config::set('billing.plans', [
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'providers' => [
                 'stripe' => ['monthly' => 'price_test', 'yearly' => null],
                 'paymongo' => ['monthly' => 'plan_test', 'yearly' => null],

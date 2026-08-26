@@ -87,6 +87,8 @@ export type OrganizationAvailablePlan = {
     yearly: boolean;
     features: string[];
     limits: Record<string, number | null>;
+    current: boolean;
+    eligibleUpgrade: boolean;
 };
 
 export type OrganizationContext = {

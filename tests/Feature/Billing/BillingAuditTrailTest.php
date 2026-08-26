@@ -92,6 +92,7 @@ test('checkout start records its initiating actor and preserves immutable audit 
     Config::set('billing.plans', [
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'prices' => ['monthly' => 'price_billing_audit', 'yearly' => null],
             'features' => [],
             'limits' => [],

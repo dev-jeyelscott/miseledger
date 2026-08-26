@@ -185,6 +185,7 @@ test('a read-only organization blocks a stock-affecting purchasing mutation but 
     Config::set('billing.plans', [
         'growth' => [
             'name' => 'Growth',
+            'tier' => 1,
             'prices' => ['monthly' => 'price_matrix_growth', 'yearly' => null],
             'features' => ['purchasing'],
             'limits' => [],
@@ -339,12 +340,14 @@ test('a plan lacking the purchasing feature blocks goods receipt finalization fo
     Config::set('billing.plans', [
         'starter' => [
             'name' => 'Starter',
+            'tier' => 1,
             'prices' => ['monthly' => 'price_matrix_starter', 'yearly' => null],
             'features' => [],
             'limits' => [],
         ],
         'growth' => [
             'name' => 'Growth',
+            'tier' => 1,
             'prices' => ['monthly' => 'price_matrix_growth', 'yearly' => null],
             'features' => ['purchasing'],
             'limits' => [],

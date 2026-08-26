@@ -8,6 +8,7 @@ use App\Http\Controllers\Billing\OrganizationCheckoutStatusController;
 use App\Http\Controllers\Billing\OrganizationInvoicePaymentController;
 use App\Http\Controllers\Billing\OrganizationInvoiceStatusController;
 use App\Http\Controllers\Billing\OrganizationManualRenewalController;
+use App\Http\Controllers\Billing\OrganizationSubscriptionUpgradeController;
 use App\Http\Controllers\Billing\PayMongoWebhookController;
 use App\Http\Controllers\Billing\StripeWebhookController;
 use App\Http\Controllers\DashboardController;
@@ -93,6 +94,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         'organizations/{organization}/billing/renew',
         [OrganizationManualRenewalController::class, 'store'],
     )->name('organizations.billing.renew');
+
+    Route::post(
+        'organizations/{organization}/billing/upgrade',
+        [OrganizationSubscriptionUpgradeController::class, 'store'],
+    )->name('organizations.billing.upgrade');
 
     Route::post(
         'organizations/{organization}/billing/invoices/{invoice}/payments',
