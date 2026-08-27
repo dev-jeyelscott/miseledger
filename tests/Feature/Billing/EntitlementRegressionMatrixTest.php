@@ -21,6 +21,21 @@ use App\Models\User;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Str;
 
+beforeEach(function (): void {
+    Config::set('billing.plans', [
+        'matrix_growth' => [
+            'name' => 'Matrix Growth',
+            'tier' => 1,
+            'prices' => [
+                'monthly' => 'price_matrix_growth',
+                'yearly' => null,
+            ],
+            'features' => [],
+            'limits' => [],
+        ],
+    ]);
+});
+
 /**
  * P5-006 regression matrix: proves subscription enforcement, feature
  * gates, quantitative limits, RBAC, tenant isolation, and stock-ledger

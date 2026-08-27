@@ -26,10 +26,8 @@ class DispatchBillingLifecycleNotification
         }
 
         $lifecycleEvent = match ($payload['type'] ?? null) {
-            'customer.subscription.created' =>
-                BillingLifecycleEvent::SubscriptionStarted,
-            'customer.subscription.deleted' =>
-                BillingLifecycleEvent::SubscriptionEnded,
+            'customer.subscription.created' => BillingLifecycleEvent::SubscriptionStarted,
+            'customer.subscription.deleted' => BillingLifecycleEvent::SubscriptionEnded,
             'customer.subscription.updated' => $this->updatedSubscriptionEvent(
                 $object,
                 $payload['data']['previous_attributes'] ?? [],
@@ -89,24 +87,15 @@ class DispatchBillingLifecycleNotification
         BillingLifecycleEvent $lifecycleEvent,
     ): string {
         return match ($lifecycleEvent) {
-            BillingLifecycleEvent::SubscriptionStarted =>
-                'billing.subscription.started',
-            BillingLifecycleEvent::PlanChanged =>
-                'billing.subscription.plan_changed',
-            BillingLifecycleEvent::ScheduledCancellation =>
-                'billing.subscription.cancellation_scheduled',
-            BillingLifecycleEvent::SubscriptionResumed =>
-                'billing.subscription.resumed',
-            BillingLifecycleEvent::SubscriptionEnded =>
-                'billing.subscription.ended',
-            BillingLifecycleEvent::PaymentFailed =>
-                'billing.subscription.past_due',
-            BillingLifecycleEvent::Recovered =>
-                'billing.payment.recovered',
-            BillingLifecycleEvent::TrialEnding =>
-                'billing.subscription.trial_ending',
-            BillingLifecycleEvent::PaymentExpired =>
-                'billing.payment.expired',
+            BillingLifecycleEvent::SubscriptionStarted => 'billing.subscription.started',
+            BillingLifecycleEvent::PlanChanged => 'billing.subscription.plan_changed',
+            BillingLifecycleEvent::ScheduledCancellation => 'billing.subscription.cancellation_scheduled',
+            BillingLifecycleEvent::SubscriptionResumed => 'billing.subscription.resumed',
+            BillingLifecycleEvent::SubscriptionEnded => 'billing.subscription.ended',
+            BillingLifecycleEvent::PaymentFailed => 'billing.subscription.past_due',
+            BillingLifecycleEvent::Recovered => 'billing.payment.recovered',
+            BillingLifecycleEvent::TrialEnding => 'billing.subscription.trial_ending',
+            BillingLifecycleEvent::PaymentExpired => 'billing.payment.expired',
         };
     }
 }

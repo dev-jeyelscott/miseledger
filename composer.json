@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "laravel/react-starter-kit",
     "type": "project",
-    "description": "A starter kit for the Laravel framework.",
+    "description": "The skeleton application for the Laravel framework.",
     "keywords": [
         "laravel",
         "framework"
@@ -12,21 +12,24 @@
         "php": "^8.3",
         "inertiajs/inertia-laravel": "^3.0",
         "laravel/cashier": "^16.7",
-        "laravel/framework": "^13.0",
-        "laravel/passkeys": "^0.2.1",
+        "laravel/chisel": "^0.1.0",
+        "laravel/fortify": "^1.37.2",
+        "laravel/framework": "^13.17",
         "laravel/tinker": "^3.0",
-        "laravel/wayfinder": "^0.1.21"
+        "laravel/wayfinder": "^0.1.14"
     },
     "require-dev": {
-        "fakerphp/faker": "^1.23",
-        "laravel/boost": "^2.0",
-        "laravel/pail": "^1.2.2",
-        "laravel/pint": "^1.24",
+        "fakerphp/faker": "^1.24",
+        "larastan/larastan": "^3.9",
+        "laravel/boost": "^2.2",
+        "laravel/pail": "^1.2.5",
+        "laravel/pao": "^1.0.6",
+        "laravel/pint": "^1.27",
         "laravel/sail": "^1.53",
         "mockery/mockery": "^1.6",
-        "nunomaduro/collision": "^8.6",
-        "pestphp/pest": "^4.0",
-        "pestphp/pest-plugin-laravel": "^4.0"
+        "nunomaduro/collision": "^8.9.3",
+        "pestphp/pest": "^5.1",
+        "pestphp/pest-plugin-laravel": "^5.0"
     },
     "autoload": {
         "psr-4": {
@@ -54,37 +57,33 @@
             "docker compose up -d",
             "docker compose logs -f app worker scheduler vite"
         ],
-        "dev:ssr": [
+        "lint": [
+            "pint"
+        ],
+        "lint:check": [
+            "pint --test"
+        ],
+        "format": [
+            "pint",
+            "npm run lint",
+            "npm run format"
+        ],
+        "ci:check": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"php artisan pail --timeout=0\" \"npm run dev\" \"php artisan inertia:start-ssr\" --names=server,queue,logs,vite,ssr --kill-others"
+            "npm run lint:check",
+            "npm run format:check",
+            "npm run types:check",
+            "npm run build",
+            "@test"
+        ],
+        "types:check": [
+            "@php -d memory_limit=512M vendor/bin/phpstan analyse"
         ],
         "test": [
             "@php artisan config:clear --ansi",
-            "@php artisan test"
-        ],
-        "ci:check": [
-            "@format:check",
+            "@lint:check",
             "@types:check",
-            "@test"
-        ],
-        "format": [
-            "@php vendor/bin/pint --parallel",
-            "npm run format"
-        ],
-        "format:check": [
-            "@php vendor/bin/pint --parallel --test",
-            "npm run format:check"
-        ],
-        "test:lint": [
-            "@php vendor/bin/pint --parallel --test"
-        ],
-        "test:lint:fix": [
-            "@php vendor/bin/pint --parallel"
-        ],
-        "types:check": [
-            "@php artisan wayfinder:generate --with-form",
-            "@php vendor/bin/phpstan analyse --memory-limit=768M",
-            "npm run types:check"
+            "@php artisan test"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
@@ -108,7 +107,10 @@
     },
     "extra": {
         "laravel": {
-            "dont-discover": []
+            "dont-discover": [],
+            "installer": {
+                "post-create-project": []
+            }
         }
     },
     "config": {

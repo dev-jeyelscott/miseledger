@@ -13,6 +13,21 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Testing\TestResponse;
 
+beforeEach(function (): void {
+    Config::set('billing.plans', [
+        'lifecycle_test' => [
+            'name' => 'Lifecycle Test',
+            'tier' => 1,
+            'prices' => [
+                'monthly' => 'price_billing_lifecycle',
+                'yearly' => null,
+            ],
+            'features' => [],
+            'limits' => [],
+        ],
+    ]);
+});
+
 function postBillingLifecycleWebhook(array $payload, string $secret = 'whsec_billing_lifecycle'): TestResponse
 {
     Config::set('cashier.webhook.secret', $secret);

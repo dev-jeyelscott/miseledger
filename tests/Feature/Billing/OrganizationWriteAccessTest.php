@@ -10,6 +10,21 @@ use Illuminate\Support\Facades\Config;
 use Stripe\ApiRequestor;
 use Stripe\HttpClient\ClientInterface;
 
+beforeEach(function (): void {
+    Config::set('billing.plans', [
+        'write_access_test' => [
+            'name' => 'Write Access Test',
+            'tier' => 1,
+            'prices' => [
+                'monthly' => 'price_test',
+                'yearly' => null,
+            ],
+            'features' => [],
+            'limits' => [],
+        ],
+    ]);
+});
+
 /**
  * Fakes the Stripe HTTP transport boundary Cashier's `ApiRequestor` uses,
  * so this billing recovery test never makes a real network call while still

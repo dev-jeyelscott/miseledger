@@ -144,7 +144,7 @@ final class SettlePayMongoPayment
 
             $upgrade = null;
 
-            if ($isUpgrade && $targetPlanCode !== null) {
+            if ($isUpgrade) {
                 $upgrade = [
                     'organization_id' => $subscription->organization_id,
                     'subscription_id' => $subscription->id,

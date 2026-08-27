@@ -4,6 +4,22 @@ use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
+use Illuminate\Support\Facades\Config;
+
+beforeEach(function (): void {
+    Config::set('billing.plans', [
+        'checkout_test' => [
+            'name' => 'Checkout Test',
+            'tier' => 1,
+            'prices' => [
+                'monthly' => 'price_starter_monthly',
+                'yearly' => null,
+            ],
+            'features' => [],
+            'limits' => [],
+        ],
+    ]);
+});
 
 test('an owner sees a pending processing state when webhook synchronization has not landed yet', function () {
     $user = User::factory()->create();

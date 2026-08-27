@@ -8,9 +8,6 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
-/**
- * Small configuration-backed PayMongo HTTP boundary with sanitized failures.
- */
 final class PayMongoClient
 {
     private const CONNECT_TIMEOUT_SECONDS = 3;
@@ -21,7 +18,7 @@ final class PayMongoClient
 
     private const MAX_RETRY_AFTER_MILLISECONDS = 2_000;
 
-    /** Perform one bounded-retry provider GET operation. */
+    /** @return array<string, mixed> */
     public function get(
         string $operation,
         string $path,
@@ -37,8 +34,6 @@ final class PayMongoClient
     }
 
     /**
-     * Perform one non-retried POST operation with optional idempotency evidence.
-     *
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
@@ -60,8 +55,6 @@ final class PayMongoClient
     }
 
     /**
-     * Create a QR Ph-compatible PayMongo PaymentIntent.
-     *
      * @param  array<string, int|string>  $metadata
      * @return array<string, mixed>
      */
@@ -80,7 +73,9 @@ final class PayMongoClient
                     'attributes' => [
                         'amount' => $amount,
                         'currency' => $currency,
-                        'payment_method_allowed' => ['qrph'],
+                        'payment_method_allowed' => [
+                            'qrph',
+                        ],
                         'payment_method_options' => [
                             'qrph' => [
                                 'expiry_duration' => 1_800,
@@ -95,7 +90,7 @@ final class PayMongoClient
         );
     }
 
-    /** Retrieve an authoritative PayMongo PaymentIntent. */
+    /** @return array<string, mixed> */
     public function retrievePaymentIntent(
         string $paymentIntentId,
         string $reference,
@@ -107,7 +102,7 @@ final class PayMongoClient
         );
     }
 
-    /** Create one QR Ph PaymentMethod. */
+    /** @return array<string, mixed> */
     public function createQrPhPaymentMethod(
         string $reference,
         string $idempotencyKey,
@@ -127,7 +122,7 @@ final class PayMongoClient
         );
     }
 
-    /** Attach a QR Ph PaymentMethod to its exact PaymentIntent. */
+    /** @return array<string, mixed> */
     public function attachPaymentMethod(
         string $paymentIntentId,
         string $paymentMethodId,
@@ -150,8 +145,6 @@ final class PayMongoClient
     }
 
     /**
-     * Execute a provider request and sanitize all transport failures.
-     *
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
@@ -167,7 +160,10 @@ final class PayMongoClient
             $request = $this->request();
 
             $response = $method === 'GET'
-                ? $this->getWithBoundedRetries($request, $path)
+                ? $this->getWithBoundedRetries(
+                    $request,
+                    $path,
+                )
                 : $this->postWithIdempotencyKey(
                     $request,
                     $path,
@@ -180,14 +176,16 @@ final class PayMongoClient
             throw new PayMongoRequestException(
                 $operation,
                 str_contains(
-                    mb_strtolower($exception->getMessage()),
+                    mb_strtolower(
+                        $exception->getMessage(),
+                    ),
                     'timed out',
                 )
                     ? 'timeout'
                     : 'connection',
                 reference: $reference,
             );
-        } catch (Throwable $exception) {
+        } catch (Throwable) {
             throw new PayMongoRequestException(
                 $operation,
                 'transport',
@@ -211,14 +209,21 @@ final class PayMongoClient
         );
     }
 
-    /** Build an authenticated PayMongo HTTP request using runtime configuration. */
     private function request(): PendingRequest
     {
-        $baseUrl = config('billing.providers.paymongo.api_base_url');
-        $secretKey = config('billing.providers.paymongo.secret_key');
+        $baseUrl = config(
+            'billing.providers.paymongo.api_base_url',
+        );
+
+        $secretKey = config(
+            'billing.providers.paymongo.secret_key',
+        );
 
         if (! is_string($baseUrl)
-            || ! filter_var($baseUrl, FILTER_VALIDATE_URL)
+            || ! filter_var(
+                $baseUrl,
+                FILTER_VALIDATE_URL,
+            )
             || ! is_string($secretKey)
             || $secretKey === '') {
             throw new PayMongoRequestException(
@@ -227,25 +232,26 @@ final class PayMongoClient
             );
         }
 
-        return Http::baseUrl(rtrim($baseUrl, '/'))
+        return Http::baseUrl(
+            rtrim($baseUrl, '/'),
+        )
             ->acceptJson()
             ->asJson()
             ->withBasicAuth($secretKey, '')
-            ->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
-            ->timeout(self::REQUEST_TIMEOUT_SECONDS);
+            ->connectTimeout(
+                self::CONNECT_TIMEOUT_SECONDS,
+            )
+            ->timeout(
+                self::REQUEST_TIMEOUT_SECONDS,
+            );
     }
 
-    /** Normalize a relative provider path. */
     private function path(string $path): string
     {
         return '/'.ltrim($path, '/');
     }
 
-    /**
-     * Send one POST and attach an idempotency key when supplied.
-     *
-     * @param  array<string, mixed>  $payload
-     */
+    /** @param array<string, mixed> $payload */
     private function postWithIdempotencyKey(
         PendingRequest $request,
         string $path,
@@ -265,7 +271,6 @@ final class PayMongoClient
         );
     }
 
-    /** Retry only safe GET requests and stop after the configured attempt bound. */
     private function getWithBoundedRetries(
         PendingRequest $request,
         string $path,
@@ -295,41 +300,50 @@ final class PayMongoClient
             }
 
             usleep(
-                $this->retryDelayMicroseconds($response),
+                $this->retryDelayMicroseconds(
+                    $response,
+                ),
             );
         }
     }
 
-    /** Determine whether a safe read may be retried. */
-    private function isRetryableResponse(Response $response): bool
-    {
+    private function isRetryableResponse(
+        Response $response,
+    ): bool {
         return $response->status() === 429
             || $response->serverError();
     }
 
-    /** Calculate a bounded provider retry delay. */
-    private function retryDelayMicroseconds(Response $response): int
-    {
-        $retryAfter = $response->header('Retry-After');
+    private function retryDelayMicroseconds(
+        Response $response,
+    ): int {
+        $retryAfter = $response->header(
+            'Retry-After',
+        );
 
         if (is_numeric($retryAfter)) {
             return min(
                 (int) $retryAfter * 1_000_000,
-                self::MAX_RETRY_AFTER_MILLISECONDS * 1_000,
+                self::MAX_RETRY_AFTER_MILLISECONDS
+                    * 1_000,
             );
         }
 
         return 150_000;
     }
 
-    /** Convert a failed HTTP response into a safe operational classification. */
-    private function classification(Response $response): string
-    {
+    private function classification(
+        Response $response,
+    ): string {
         return match (true) {
             $response->status() === 400 => 'validation',
+
             $response->status() === 401 => 'authentication',
+
             $response->status() === 429 => 'rate_limit',
+
             $response->serverError() => 'provider',
+
             default => 'client',
         };
     }

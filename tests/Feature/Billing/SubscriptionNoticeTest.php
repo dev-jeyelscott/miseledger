@@ -5,7 +5,23 @@ use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Config;
 use Inertia\Testing\AssertableInertia as Assert;
+
+beforeEach(function (): void {
+    Config::set('billing.plans', [
+        'notice_test' => [
+            'name' => 'Notice Test',
+            'tier' => 1,
+            'prices' => [
+                'monthly' => 'price_starter_monthly',
+                'yearly' => null,
+            ],
+            'features' => [],
+            'limits' => [],
+        ],
+    ]);
+});
 
 function createSubscriptionNoticeOrganizationSubscription(Organization $organization, array $attributes = []): void
 {

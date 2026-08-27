@@ -149,11 +149,14 @@ test('a canceled subscription past its grace period is read-only', function () {
 test('an unpaid subscription is read-only', function () {
     $organization = Organization::factory()->create();
 
-    createOrganizationSubscription($organization, [
+    $sub = createOrganizationSubscription($organization, [
         'provider_status' => 'unpaid',
     ]);
+    dump($sub->toArray());
+    dump($organization->fresh()->rollout_classification);
 
     $access = OrganizationSubscriptionAccessResolver::resolve($organization->fresh());
+    dump($access);
 
     expect($access->accessMode)->toBe(OrganizationAccessMode::ReadOnly)
         ->and($access->isReadOnly())->toBeTrue()

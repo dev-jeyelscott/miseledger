@@ -34,37 +34,53 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonInterface|null $paid_at
  * @property CarbonInterface|null $cancelled_at
  */
-#[Fillable(['organization_id', 'billing_subscription_id', 'provider', 'invoice_number', 'plan_code', 'invoice_type', 'target_plan_code', 'billing_interval', 'currency', 'amount', 'status', 'period_starts_at', 'period_ends_at', 'due_at', 'paid_at', 'cancelled_at'])]
+#[Fillable([
+    'organization_id',
+    'billing_subscription_id',
+    'provider',
+    'invoice_number',
+    'plan_code',
+    'invoice_type',
+    'target_plan_code',
+    'billing_interval',
+    'currency',
+    'amount',
+    'status',
+    'period_starts_at',
+    'period_ends_at',
+    'due_at',
+    'paid_at',
+    'cancelled_at',
+])]
 class BillingInvoice extends Model
 {
     /** @use HasFactory<BillingInvoiceFactory> */
     use HasFactory;
 
-    /** Return the organization that owns this invoice. */
+    /** @return BelongsTo<Organization, $this> */
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
     }
 
-    /** Return the subscription whose commercial obligation this invoice represents. */
+    /** @return BelongsTo<BillingSubscription, $this> */
     public function billingSubscription(): BelongsTo
     {
         return $this->belongsTo(BillingSubscription::class);
     }
 
-    /** Return all payment attempts created for this invoice. */
+    /** @return HasMany<BillingPayment, $this> */
     public function payments(): HasMany
     {
         return $this->hasMany(BillingPayment::class);
     }
 
-    /** Return renewal-reminder evidence associated with this invoice. */
+    /** @return HasMany<BillingRenewalReminder, $this> */
     public function renewalReminders(): HasMany
     {
         return $this->hasMany(BillingRenewalReminder::class);
     }
 
-    /** Define the authoritative Eloquent casts for billing invoice attributes. */
     protected function casts(): array
     {
         return [

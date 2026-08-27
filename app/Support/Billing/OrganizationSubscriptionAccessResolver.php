@@ -11,32 +11,37 @@ use App\Models\Organization;
 use Laravel\Cashier\Subscription as CashierSubscription;
 
 /**
- * Single server-side authority deriving an organization's commercial
- * access from the durable provider-neutral subscription projection and the
- * organization's generic trial fields. Reads only and never issues provider
- * API calls. Provider adapters synchronize the projection; this class owns
- * the provider-neutral commercial interpretation of that local state.
- *
- * Deliberately independent from `Organization.active`: administrative
- * deactivation is decided elsewhere and is never read or influenced here.
+ * Derives an organization's commercial access from synchronized local billing
+ * state without issuing provider API calls or mutating business data.
  */
 final class OrganizationSubscriptionAccessResolver
 {
-    public static function resolve(Organization $organization, ?PlanCatalog $planCatalog = null): OrganizationSubscriptionAccess
-    {
-        if ($organization->rollout_classification?->isPermanentlyExempt() === true) {
+    public static function resolve(
+        Organization $organization,
+        ?PlanCatalog $planCatalog = null,
+    ): OrganizationSubscriptionAccess {
+        if ($organization->rollout_classification
+            ?->isPermanentlyExempt() === true) {
             return self::resolveExempt();
         }
 
         $subscriptions = $organization->billingSubscriptions()
-            ->where('type', (string) config('billing.subscription_type'))
+            ->where(
+                'type',
+                (string) config('billing.subscription_type'),
+            )
             ->get();
 
         if ($subscriptions->isEmpty()) {
-            $cashierSubscription = $organization->subscription((string) config('billing.subscription_type'));
+            $cashierSubscription = $organization->subscription(
+                (string) config('billing.subscription_type'),
+            );
 
             if ($cashierSubscription instanceof CashierSubscription) {
-                return self::resolveWithCashierSubscription($cashierSubscription, $planCatalog ?? new PlanCatalog);
+                return self::resolveWithCashierSubscription(
+                    $cashierSubscription,
+                    $planCatalog ?? new PlanCatalog,
+                );
             }
 
             return self::resolveWithoutSubscription($organization);
@@ -46,14 +51,12 @@ final class OrganizationSubscriptionAccessResolver
             return self::resolveDenied();
         }
 
-        return self::resolveWithSubscription($subscriptions->sole(), $planCatalog ?? new PlanCatalog);
+        return self::resolveWithSubscription(
+            $subscriptions->sole(),
+            $planCatalog ?? new PlanCatalog,
+        );
     }
 
-    /**
-     * Writable regardless of trial/subscription state: covers organizations
-     * classified `development_test`, `internal_free`, or `grandfathered`
-     * (see `docs/existing-organization-rollout-plan.md`).
-     */
     private static function resolveExempt(): OrganizationSubscriptionAccess
     {
         return new OrganizationSubscriptionAccess(
@@ -68,44 +71,49 @@ final class OrganizationSubscriptionAccessResolver
         );
     }
 
-    private static function resolveWithoutSubscription(Organization $organization): OrganizationSubscriptionAccess
-    {
+    private static function resolveWithoutSubscription(
+        Organization $organization,
+    ): OrganizationSubscriptionAccess {
         $onGenericTrial = $organization->onGenericTrial();
 
-        if (! $onGenericTrial && self::isUnclassifiedLegacyOrganization($organization)) {
+        if (! $onGenericTrial
+            && self::isUnclassifiedLegacyOrganization($organization)) {
             return self::resolveExempt();
         }
 
         return new OrganizationSubscriptionAccess(
-            accessMode: $onGenericTrial ? OrganizationAccessMode::Writable : OrganizationAccessMode::ReadOnly,
+            accessMode: $onGenericTrial
+                ? OrganizationAccessMode::Writable
+                : OrganizationAccessMode::ReadOnly,
             subscriptionStatus: null,
             plan: null,
             onTrial: $onGenericTrial,
             onGracePeriod: false,
             billingWarning: false,
-            trialEndsAt: $onGenericTrial ? $organization->trial_ends_at : null,
+            trialEndsAt: $onGenericTrial
+                ? $organization->trial_ends_at
+                : null,
             endsAt: null,
         );
     }
 
     /**
-     * A pre-billing organization never touched by the trial/checkout flow:
-     * no rollout classification has been assigned yet, it was never given a
-     * generic trial window, and it has no durable provider customer. Such
-     * an organization must stay writable rather than unexpectedly becoming
-     * read-only the moment commercial enforcement code runs; it only moves
-     * to trial/subscription-derived access once operations assigns an
-     * explicit rollout classification.
+     * Preserve pre-billing organizations that have never entered any billing
+     * ownership or checkout flow.
      */
-    private static function isUnclassifiedLegacyOrganization(Organization $organization): bool
-    {
+    private static function isUnclassifiedLegacyOrganization(
+        Organization $organization,
+    ): bool {
         return $organization->rollout_classification === null
             && $organization->trial_ends_at === null
+            && blank($organization->stripe_id)
             && ! $organization->billingCustomers()->exists();
     }
 
-    private static function resolveWithSubscription(BillingSubscription $subscription, PlanCatalog $planCatalog): OrganizationSubscriptionAccess
-    {
+    private static function resolveWithSubscription(
+        BillingSubscription $subscription,
+        PlanCatalog $planCatalog,
+    ): OrganizationSubscriptionAccess {
         try {
             $planCode = is_string($subscription->plan_code)
                 ? PlanCode::from($subscription->plan_code)
@@ -113,16 +121,22 @@ final class OrganizationSubscriptionAccessResolver
         } catch (\InvalidArgumentException) {
             $planCode = null;
         }
-        $plan = $planCode !== null ? $planCatalog->get($planCode)?->code : null;
+
+        $plan = $planCode !== null
+            ? $planCatalog->get($planCode)?->code
+            : null;
+
         $status = self::normalizedStatus($subscription);
         $onTrial = $status === 'trial';
         $onGracePeriod = self::isCancelledWithPaidAccess($subscription);
-        [$accessMode, $billingWarning] = self::resolveAccessModeAndWarning(
-            $subscription,
-            $plan !== null,
-            $status,
-            $onGracePeriod,
-        );
+
+        [$accessMode, $billingWarning] =
+            self::resolveAccessModeAndWarning(
+                $subscription,
+                $plan !== null,
+                $status,
+                $onGracePeriod,
+            );
 
         return new OrganizationSubscriptionAccess(
             accessMode: $accessMode,
@@ -131,24 +145,45 @@ final class OrganizationSubscriptionAccessResolver
             onTrial: $onTrial,
             onGracePeriod: $onGracePeriod,
             billingWarning: $billingWarning,
-            trialEndsAt: $onTrial ? $subscription->trial_ends_at : null,
+            trialEndsAt: $onTrial
+                ? $subscription->trial_ends_at
+                : null,
             endsAt: $subscription->ends_at,
         );
     }
 
     /**
-     * Keep legacy Cashier rows commercially readable during the projection
-     * migration. New manual QR Ph subscriptions never use this path: they
-     * always have a provider-neutral BillingSubscription projection.
+     * Preserve commercial access for legacy Cashier rows during projection
+     * migration while still failing closed for unknown plans and statuses.
      */
-    private static function resolveWithCashierSubscription(CashierSubscription $subscription, PlanCatalog $planCatalog): OrganizationSubscriptionAccess
-    {
-        $plan = $planCatalog->resolveExternalPlan(BillingProvider::Stripe, $subscription->stripe_price)?->code;
+    private static function resolveWithCashierSubscription(
+        CashierSubscription $subscription,
+        PlanCatalog $planCatalog,
+    ): OrganizationSubscriptionAccess {
+        $plan = $planCatalog
+            ->resolveExternalPlan(
+                BillingProvider::Stripe,
+                $subscription->stripe_price,
+            )
+            ?->code;
+
         $status = $subscription->stripe_status;
-        $onTrial = $status === 'trialing' && $subscription->trial_ends_at?->isFuture() === true;
-        $cancelled = $subscription->ends_at !== null || in_array($status, ['cancelled', 'canceled'], true);
-        $onGracePeriod = $cancelled && $subscription->ends_at?->isFuture() === true;
-        $ended = $subscription->ends_at !== null && ! $subscription->ends_at->isFuture();
+
+        $onTrial = $status === 'trialing'
+            && $subscription->trial_ends_at?->isFuture() === true;
+
+        $cancelled = $subscription->ends_at !== null
+            || in_array(
+                $status,
+                ['cancelled', 'canceled'],
+                true,
+            );
+
+        $onGracePeriod = $cancelled
+            && $subscription->ends_at?->isFuture() === true;
+
+        $ended = $subscription->ends_at !== null
+            && ! $subscription->ends_at->isFuture();
 
         if ($plan === null || $ended || $status === 'unpaid') {
             $accessMode = OrganizationAccessMode::ReadOnly;
@@ -158,9 +193,19 @@ final class OrganizationSubscriptionAccessResolver
             $billingWarning = true;
         } else {
             [$accessMode, $billingWarning] = match ($status) {
-                'trialing', 'active' => [OrganizationAccessMode::Writable, false],
-                'past_due' => [OrganizationAccessMode::Writable, true],
-                default => [OrganizationAccessMode::ReadOnly, false],
+                'trialing',
+                'active' => [
+                    OrganizationAccessMode::Writable,
+                    false,
+                ],
+                'past_due' => [
+                    OrganizationAccessMode::Writable,
+                    true,
+                ],
+                default => [
+                    OrganizationAccessMode::ReadOnly,
+                    false,
+                ],
             };
         }
 
@@ -171,7 +216,9 @@ final class OrganizationSubscriptionAccessResolver
             onTrial: $onTrial,
             onGracePeriod: $onGracePeriod,
             billingWarning: $billingWarning,
-            trialEndsAt: $onTrial ? $subscription->trial_ends_at : null,
+            trialEndsAt: $onTrial
+                ? $subscription->trial_ends_at
+                : null,
             endsAt: $subscription->ends_at,
         );
     }
@@ -179,25 +226,52 @@ final class OrganizationSubscriptionAccessResolver
     /**
      * @return array{0: OrganizationAccessMode, 1: bool}
      */
-    private static function resolveAccessModeAndWarning(BillingSubscription $subscription, bool $hasValidPlan, ?string $status, bool $onGracePeriod): array
-    {
-        if (! $hasValidPlan || self::hasEnded($subscription) || $status === 'unpaid') {
-            return [OrganizationAccessMode::ReadOnly, false];
+    private static function resolveAccessModeAndWarning(
+        BillingSubscription $subscription,
+        bool $hasValidPlan,
+        ?string $status,
+        bool $onGracePeriod,
+    ): array {
+        if (! $hasValidPlan
+            || self::hasEnded($subscription)
+            || $status === 'unpaid') {
+            return [
+                OrganizationAccessMode::ReadOnly,
+                false,
+            ];
         }
 
         if ($onGracePeriod) {
-            return [OrganizationAccessMode::Writable, true];
+            return [
+                OrganizationAccessMode::Writable,
+                true,
+            ];
         }
 
         return match ($status) {
-            'trial', 'active' => [OrganizationAccessMode::Writable, false],
-            'past_due' => [OrganizationAccessMode::Writable, true],
-            default => [OrganizationAccessMode::ReadOnly, false],
+            'trial',
+            'active' => [
+                OrganizationAccessMode::Writable,
+                false,
+            ],
+            'past_due' => [
+                OrganizationAccessMode::Writable,
+                true,
+            ],
+            default => [
+                OrganizationAccessMode::ReadOnly,
+                false,
+            ],
         };
     }
 
-    private static function normalizedStatus(BillingSubscription $subscription): ?string
-    {
+    private static function normalizedStatus(
+        BillingSubscription $subscription,
+    ): ?string {
+        if ($subscription->provider_status === 'unpaid') {
+            return 'unpaid';
+        }
+
         if (self::isCancelled($subscription)) {
             return 'cancelled';
         }
@@ -207,32 +281,47 @@ final class OrganizationSubscriptionAccessResolver
         }
 
         return match ($subscription->provider_status) {
-            'active', 'past_due', 'unpaid' => $subscription->provider_status,
+            'active',
+            'past_due',
+            'unpaid' => $subscription->provider_status,
             default => null,
         };
     }
 
-    private static function isCancelledWithPaidAccess(BillingSubscription $subscription): bool
-    {
+    private static function isCancelledWithPaidAccess(
+        BillingSubscription $subscription,
+    ): bool {
         return self::isCancelled($subscription)
             && $subscription->ends_at?->isFuture() === true;
     }
 
-    private static function isCancelled(BillingSubscription $subscription): bool
-    {
-        if ($subscription->collection_method === BillingCollectionMethod::Manual) {
+    private static function isCancelled(
+        BillingSubscription $subscription,
+    ): bool {
+        if ($subscription->collection_method
+            === BillingCollectionMethod::Manual) {
             return $subscription->cancelled_at !== null
-                || in_array($subscription->provider_status, ['cancelled', 'canceled'], true);
+                || in_array(
+                    $subscription->provider_status,
+                    ['cancelled', 'canceled'],
+                    true,
+                );
         }
 
         return $subscription->cancelled_at !== null
             || $subscription->ends_at !== null
-            || in_array($subscription->provider_status, ['cancelled', 'canceled'], true);
+            || in_array(
+                $subscription->provider_status,
+                ['cancelled', 'canceled'],
+                true,
+            );
     }
 
-    private static function hasEnded(BillingSubscription $subscription): bool
-    {
-        return $subscription->ends_at !== null && ! $subscription->ends_at->isFuture();
+    private static function hasEnded(
+        BillingSubscription $subscription,
+    ): bool {
+        return $subscription->ends_at !== null
+            && ! $subscription->ends_at->isFuture();
     }
 
     private static function resolveDenied(): OrganizationSubscriptionAccess

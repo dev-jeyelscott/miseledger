@@ -13,18 +13,20 @@ use Throwable;
 /** Emits safe, structured billing operational signals. */
 final class BillingObservability
 {
-    /** Record a rejected webhook signature without recording secrets. */
-    public function invalidWebhookSignature(BillingProvider $provider): void
-    {
+    public function invalidWebhookSignature(
+        BillingProvider $provider,
+    ): void {
         $this->record(
             'warning',
             'billing.webhook.invalid_signature',
             $provider,
             'webhook_signature',
+            context: [
+                'failure_source' => 'provider',
+            ],
         );
     }
 
-    /** Record a sanitized webhook-processing failure. */
     public function webhookFailure(
         ?Organization $organization,
         BillingProvider $provider,
@@ -45,7 +47,6 @@ final class BillingObservability
         );
     }
 
-    /** Record a sanitized checkout failure. */
     public function checkoutFailure(
         Organization $organization,
         BillingProvider $provider,
@@ -60,7 +61,6 @@ final class BillingObservability
         );
     }
 
-    /** Record a sanitized billing-portal failure. */
     public function portalFailure(
         Organization $organization,
         BillingProvider $provider,
@@ -75,7 +75,7 @@ final class BillingObservability
         );
     }
 
-    /** Record one reconciliation mismatch using only approved context keys. */
+    /** @param array<string, bool|int|string|null> $context */
     public function reconciliationMismatch(
         Organization $organization,
         BillingProvider $provider,
@@ -92,8 +92,12 @@ final class BillingObservability
             'reconciliation',
             $organization,
             null,
-            is_string($status) ? $status : null,
-            is_bool($livemode) ? $livemode : null,
+            is_string($status)
+                ? $status
+                : null,
+            is_bool($livemode)
+                ? $livemode
+                : null,
             [
                 'mismatch' => $mismatch,
                 ...Arr::only($context, [
@@ -110,7 +114,6 @@ final class BillingObservability
         );
     }
 
-    /** Record a provider failure encountered during reconciliation. */
     public function reconciliationProviderFailure(
         Organization $organization,
         BillingProvider $provider,
@@ -130,26 +133,22 @@ final class BillingObservability
         );
     }
 
-    /** Record aggregate unhealthy subscription-state counts. */
-    public function subscriptionStatusCounts(int $pastDue, int $unpaid): void
-    {
+    public function subscriptionStatusCounts(
+        int $pastDue,
+        int $unpaid,
+    ): void {
         $this->record(
             'info',
             'billing.subscription_status_counts',
             null,
             'subscription_monitor',
-            null,
-            null,
-            null,
-            null,
-            [
+            context: [
                 'past_due_count' => $pastDue,
                 'unpaid_count' => $unpaid,
             ],
         );
     }
 
-    /** Record an idempotently ignored duplicate webhook event. */
     public function duplicateWebhookEvent(
         Organization $organization,
         BillingProvider $provider,
@@ -169,7 +168,6 @@ final class BillingObservability
         );
     }
 
-    /** Record failure to dispatch a billing notification job. */
     public function queueFailure(
         int $organizationId,
         BillingProvider $provider,
@@ -186,7 +184,6 @@ final class BillingObservability
         );
     }
 
-    /** Record notification work that appears abandoned after being claimed. */
     public function staleNotificationClaim(
         Organization $organization,
         string $externalEventId,
@@ -204,7 +201,6 @@ final class BillingObservability
         );
     }
 
-    /** Convert a provider or application exception into sanitized failure context. */
     private function failure(
         string $event,
         ?Organization $organization,
@@ -231,25 +227,23 @@ final class BillingObservability
                         : 'application',
                 'exception' => $exception::class,
                 'http_status' => $exception instanceof PayMongoRequestException
-                    ? $exception->httpStatus
-                    : (
-                        method_exists($exception, 'getHttpStatus')
-                            ? $exception->getHttpStatus()
-                            : null
-                    ),
-                'provider_api_operation' =>
-                    $exception instanceof PayMongoRequestException
+                        ? $exception->httpStatus
+                        : (
+                            method_exists(
+                                $exception,
+                                'getHttpStatus',
+                            )
+                                ? $exception->getHttpStatus()
+                                : null
+                        ),
+                'provider_api_operation' => $exception instanceof PayMongoRequestException
                         ? $exception->operation
                         : null,
             ],
         );
     }
 
-    /**
-     * Emit one structured billing signal without raw provider payloads.
-     *
-     * @param  array<string, bool|int|string|null>  $context
-     */
+    /** @param array<string, bool|int|string|null> $context */
     private function record(
         string $level,
         string $event,
@@ -262,15 +256,18 @@ final class BillingObservability
         array $context = [],
     ): void {
         Log::channel((string) config('billing.logger'))
-            ->{$level}('Billing operational signal emitted.', [
-                'event' => $event,
-                'billing_provider' => $provider?->value,
-                'billing_operation' => $operation,
-                'organization_id' => $organization?->getKey(),
-                'external_event_id' => $externalEventId,
-                'subscription_status' => $status,
-                'livemode' => $livemode,
-                ...$context,
-            ]);
+            ->{$level}(
+                'Billing operational signal emitted.',
+                [
+                    'event' => $event,
+                    'billing_provider' => $provider?->value,
+                    'billing_operation' => $operation,
+                    'organization_id' => $organization?->getKey(),
+                    'external_event_id' => $externalEventId,
+                    'subscription_status' => $status,
+                    'livemode' => $livemode,
+                    ...$context,
+                ],
+            );
     }
 }

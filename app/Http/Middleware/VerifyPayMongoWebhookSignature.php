@@ -14,20 +14,32 @@ final class VerifyPayMongoWebhookSignature
         private readonly BillingObservability $observability,
     ) {}
 
-    /** Verify the raw request body signature before provider payload processing. */
-    public function handle(Request $request, Closure $next): mixed
-    {
-        $mode = config('billing.providers.paymongo.mode');
-        $secret = config('billing.providers.paymongo.webhook_secret');
+    public function handle(
+        Request $request,
+        Closure $next,
+    ): mixed {
+        $mode = config(
+            'billing.providers.paymongo.mode',
+        );
 
-        if (! in_array($mode, ['test', 'live'], true)
+        $secret = config(
+            'billing.providers.paymongo.webhook_secret',
+        );
+
+        if (! in_array(
+            $mode,
+            ['test', 'live'],
+            true,
+        )
             || ! is_string($secret)
             || $secret === '') {
             $this->reject();
         }
 
         $parts = $this->signatureParts(
-            $request->header('Paymongo-Signature'),
+            $request->header(
+                'Paymongo-Signature',
+            ),
         );
 
         if ($parts === null) {
@@ -38,7 +50,10 @@ final class VerifyPayMongoWebhookSignature
             ? $parts['li']
             : $parts['te'];
 
-        if (preg_match('/^[a-f0-9]{64}$/D', $signature) !== 1) {
+        if (preg_match(
+            '/^[a-f0-9]{64}$/D',
+            $signature,
+        ) !== 1) {
             $this->reject();
         }
 
@@ -48,16 +63,26 @@ final class VerifyPayMongoWebhookSignature
             $secret,
         );
 
-        if (! hash_equals($expected, $signature)) {
+        if (! hash_equals(
+            $expected,
+            $signature,
+        )) {
             $this->reject();
         }
 
         return $next($request);
     }
 
-    /** Parse the PayMongo signature header into its required exact shape. */
-    private function signatureParts(?string $header): ?array
-    {
+    /**
+     * @return array{
+     *     t: string,
+     *     te: string,
+     *     li: string
+     * }|null
+     */
+    private function signatureParts(
+        ?string $header,
+    ): ?array {
         if (! is_string($header)) {
             return null;
         }
@@ -66,21 +91,33 @@ final class VerifyPayMongoWebhookSignature
 
         foreach (explode(',', $header) as $part) {
             [$key, $value] = array_pad(
-                explode('=', trim($part), 2),
+                explode(
+                    '=',
+                    trim($part),
+                    2,
+                ),
                 2,
                 null,
             );
 
-            if (! in_array($key, ['t', 'te', 'li'], true)
+            if (! in_array(
+                $key,
+                ['t', 'te', 'li'],
+                true,
+            )
                 || ! is_string($value)
-                || array_key_exists($key, $parts)) {
+                || array_key_exists(
+                    $key,
+                    $parts,
+                )) {
                 return null;
             }
 
             $parts[$key] = $value;
         }
 
-        if (array_keys($parts) !== ['t', 'te', 'li']) {
+        if (array_keys($parts)
+            !== ['t', 'te', 'li']) {
             return null;
         }
 
@@ -91,7 +128,10 @@ final class VerifyPayMongoWebhookSignature
         if (! is_string($timestamp)
             || ! is_string($testSignature)
             || ! is_string($liveSignature)
-            || preg_match('/^[1-9][0-9]*$/D', $timestamp) !== 1) {
+            || preg_match(
+                '/^[1-9][0-9]*$/D',
+                $timestamp,
+            ) !== 1) {
             return null;
         }
 
@@ -102,12 +142,12 @@ final class VerifyPayMongoWebhookSignature
         ];
     }
 
-    /** Reject an unauthenticated provider callback and emit sanitized evidence. */
     private function reject(): never
     {
-        $this->observability->invalidWebhookSignature(
-            BillingProvider::PayMongo,
-        );
+        $this->observability
+            ->invalidWebhookSignature(
+                BillingProvider::PayMongo,
+            );
 
         throw new AccessDeniedHttpException(
             'Invalid PayMongo webhook signature.',

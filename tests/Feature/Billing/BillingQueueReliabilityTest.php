@@ -225,7 +225,7 @@ test('billing reconciliation surfaces a stale notification claim left by a defun
         fn (string $message, array $context): bool => $message === 'Billing operational signal emitted.'
             && $context['event'] === 'billing.notification.stale_claim'
             && $context['organization_id'] === $organization->getKey()
-            && $context['stripe_event_id'] === 'evt_queue_stale_claim',
+            && $context['external_event_id'] === 'evt_queue_stale_claim',
     );
     Log::shouldReceive('info');
 

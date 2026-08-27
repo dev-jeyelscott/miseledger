@@ -14,10 +14,7 @@ use Inertia\Response;
 class OrganizationCheckoutStatusController extends Controller
 {
     /**
-     * Show the post-Checkout success page. The Stripe redirect is never
-     * treated as proof of activation: the locally synchronized subscription
-     * state is re-read on every request, and the page renders a processing
-     * state until Cashier's webhook has recorded the subscription.
+     * Show the post-Checkout success page from synchronized local billing state.
      */
     public function success(Organization $organization): Response
     {
@@ -39,9 +36,7 @@ class OrganizationCheckoutStatusController extends Controller
     }
 
     /**
-     * Show the Checkout cancellation page, returning the member safely to
-     * the organization's billing context. No subscription state is read or
-     * mutated here.
+     * Show the Checkout cancellation page without changing subscription state.
      */
     public function cancel(Organization $organization): Response
     {
@@ -68,10 +63,6 @@ class OrganizationCheckoutStatusController extends Controller
     }
 
     /**
-     * Serialize only safe commercial state, matching the shared Inertia
-     * subscription context shape. Never exposes Stripe secrets, customer
-     * identifiers, payment-method tokens, or raw Cashier/Stripe objects.
-     *
      * @return array{
      *     plan: string|null,
      *     status: string|null,
@@ -82,8 +73,9 @@ class OrganizationCheckoutStatusController extends Controller
      *     billingWarning: bool
      * }
      */
-    private function subscriptionData(OrganizationSubscriptionAccess $access): array
-    {
+    private function subscriptionData(
+        OrganizationSubscriptionAccess $access,
+    ): array {
         return [
             'plan' => $access->plan?->value,
             'status' => $access->subscriptionStatus,
@@ -95,13 +87,29 @@ class OrganizationCheckoutStatusController extends Controller
         ];
     }
 
-    /** @return array{paymentIntentId: string, clientKey: string, publicKey: string, apiBaseUrl: string}|null */
+    /**
+     * @return array{
+     *     paymentIntentId: string,
+     *     clientKey: string,
+     *     publicKey: string,
+     *     apiBaseUrl: string
+     * }|null
+     */
     private function paymentData(): ?array
     {
         $payment = session('billing.checkout.payment');
 
-        if (! is_array($payment) || ! array_all($payment, 'is_string')
-            || ! isset($payment['payment_intent_id'], $payment['client_key'], $payment['public_key'], $payment['api_base_url'])) {
+        if (! is_array($payment)
+            || ! array_all(
+                $payment,
+                static fn (mixed $value, mixed $_key): bool => is_string($value),
+            )
+            || ! isset(
+                $payment['payment_intent_id'],
+                $payment['client_key'],
+                $payment['public_key'],
+                $payment['api_base_url'],
+            )) {
             return null;
         }
 

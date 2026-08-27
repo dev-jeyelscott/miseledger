@@ -258,8 +258,8 @@ test('provider-neutral mappings resolve within their configured provider only', 
     ]);
 
     expect($catalog->externalPlanId(PlanCode::from('starter'), 'paymongo', 'yearly'))->toBe('plan_starter_yearly')
-        ->and($catalog->resolveExternalPlan('stripe', 'price_starter_monthly')?->code)->toBe(PlanCode::from('starter'))
-        ->and($catalog->resolveExternalPlan('paymongo', 'plan_starter_monthly')?->code)->toBe(PlanCode::from('starter'))
+        ->and($catalog->resolveExternalPlan('stripe', 'price_starter_monthly')?->code->value)->toBe('starter')
+        ->and($catalog->resolveExternalPlan('paymongo', 'plan_starter_monthly')?->code->value)->toBe('starter')
         ->and($catalog->resolveExternalPlan('stripe', 'plan_starter_monthly'))->toBeNull()
         ->and($catalog->resolveExternalPlan('paymongo', 'price_starter_monthly'))->toBeNull()
         ->and($catalog->resolveExternalPlanInterval('paymongo', 'plan_starter_yearly'))->toBe('yearly');

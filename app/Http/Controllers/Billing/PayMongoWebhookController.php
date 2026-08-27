@@ -408,12 +408,9 @@ final class PayMongoWebhookController extends Controller
             'livemode' => $attributes['livemode'],
             'lifecycle_event' => $lifecycleEvent,
             'audit_action' => match ($lifecycleEvent) {
-                BillingLifecycleEvent::SubscriptionStarted =>
-                    'billing.subscription.started',
-                BillingLifecycleEvent::Recovered =>
-                    'billing.payment.recovered',
-                BillingLifecycleEvent::ScheduledCancellation =>
-                    'billing.subscription.cancelled',
+                BillingLifecycleEvent::SubscriptionStarted => 'billing.subscription.started',
+                BillingLifecycleEvent::Recovered => 'billing.payment.recovered',
+                BillingLifecycleEvent::ScheduledCancellation => 'billing.subscription.cancelled',
                 default => 'billing.subscription.past_due',
             },
             'subscription_updates' => [

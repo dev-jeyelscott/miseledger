@@ -18,16 +18,33 @@ final readonly class BillingCheckoutOutcome
         return new self('redirect', $url);
     }
 
-    /** @param array{payment_intent_id: string, client_key: string, public_key: string, api_base_url: string} $payment */
+    /**
+     * @param array{
+     *     payment_intent_id: string,
+     *     client_key: string,
+     *     public_key: string,
+     *     api_base_url: string
+     * } $payment
+     */
     public static function payment(array $payment): self
     {
         return new self('payment', payment: $payment);
     }
 
-    /** @return array{type: string, redirect_url: string|null, payment: array<string, string>} */
+    /**
+     * @return array{
+     *     type: string,
+     *     redirect_url: string|null,
+     *     payment: array<string, string>
+     * }
+     */
     public function toCacheValue(): array
     {
-        return ['type' => $this->type, 'redirect_url' => $this->redirectUrl, 'payment' => $this->payment];
+        return [
+            'type' => $this->type,
+            'redirect_url' => $this->redirectUrl,
+            'payment' => $this->payment,
+        ];
     }
 
     /** @param array<string, mixed> $value */
@@ -35,16 +52,30 @@ final readonly class BillingCheckoutOutcome
     {
         $type = $value['type'] ?? null;
 
-        if ($type === 'redirect' && is_string($value['redirect_url'] ?? null)) {
+        if ($type === 'redirect'
+            && is_string($value['redirect_url'] ?? null)) {
             return self::redirect($value['redirect_url']);
         }
 
         $payment = $value['payment'] ?? null;
 
-        if ($type === 'payment' && is_array($payment) && array_all($payment, 'is_string') && isset($payment['payment_intent_id'], $payment['client_key'], $payment['public_key'], $payment['api_base_url'])) {
+        if ($type === 'payment'
+            && is_array($payment)
+            && array_all(
+                $payment,
+                static fn (mixed $value, mixed $_key): bool => is_string($value),
+            )
+            && isset(
+                $payment['payment_intent_id'],
+                $payment['client_key'],
+                $payment['public_key'],
+                $payment['api_base_url'],
+            )) {
             return self::payment($payment);
         }
 
-        throw new InvalidArgumentException('The cached billing checkout outcome is malformed.');
+        throw new InvalidArgumentException(
+            'The cached billing checkout outcome is malformed.',
+        );
     }
 }

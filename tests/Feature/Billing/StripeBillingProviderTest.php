@@ -168,11 +168,10 @@ test('startCheckout produces the expected Stripe Checkout Session request', func
 
     $checkoutRequest = collect($client->requests)
         ->last(
-            fn (array $request): bool =>
-                str_contains(
-                    $request['url'],
-                    '/v1/checkout/sessions',
-                ),
+            fn (array $request): bool => str_contains(
+                $request['url'],
+                '/v1/checkout/sessions',
+            ),
         );
 
     $lineItemPrices = collect(
@@ -206,11 +205,10 @@ test('billingPortalUrl produces the expected Stripe Billing Portal request', fun
 
     $portalRequest = collect($client->requests)
         ->last(
-            fn (array $request): bool =>
-                str_contains(
-                    $request['url'],
-                    '/v1/billing_portal/sessions',
-                ),
+            fn (array $request): bool => str_contains(
+                $request['url'],
+                '/v1/billing_portal/sessions',
+            ),
         );
 
     expect($portalRequest['params']['customer'])
