@@ -198,7 +198,7 @@ class OrganizationBillingController extends Controller
             && $subscription->collection_method->value === 'manual'
             && $subscription->interval !== null;
 
-        return array_values(array_map(
+        return array_map(
             static function ($definition) use ($usesManualQrPh, $provider, $access, $upgradePolicy, $canUpgrade, $subscription) {
                 $isCurrent = $access->plan !== null && $access->plan->value === $definition->code->value;
                 $eligibleUpgrade = $canUpgrade
@@ -222,6 +222,6 @@ class OrganizationBillingController extends Controller
                 ];
             },
             $planCatalog->all(),
-        ));
+        );
     }
 }

@@ -32,12 +32,12 @@ class WelcomeController extends Controller
      */
     private function plansData(PlanCatalog $planCatalog): array
     {
-        return array_values(array_map(
+        return array_map(
             static fn ($definition): array => [
                 'code' => $definition->code->value,
                 'name' => $definition->name,
             ],
             $planCatalog->all(),
-        ));
+        );
     }
 }
