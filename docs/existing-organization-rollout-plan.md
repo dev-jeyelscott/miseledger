@@ -38,7 +38,26 @@ auto-assigned by a migration backfill.
 
 The column created by
 `database/migrations/2026_08_25_000000_add_rollout_classification_to_organizations_table.php`
-is nullable and starts unassigned.
+is nullable and starts unassigned. Approved classifications are recorded in
+`config/organization_rollout.php`, keyed by each organization's stable
+`slug`, and applied by
+`php artisan organizations:apply-rollout-classifications`.
+
+That command only ever writes `rollout_classification`; it never mutates
+`Organization.active` or any trial/subscription field, and it refuses to run
+while any existing organization is missing an approved entry, so it can
+never leave a tenant unclassified. Each application is recorded as an
+`organization.rollout_classification.applied` audit log entry carrying the
+approved rationale. Support `--dry-run` to preview changes first.
+
+Every organization present at the time this task was completed was
+classified `development_test`: each is either the seeded demo tenant created
+by `DemoOrganizationSeeder` (guarded against running in production), a
+Faker-generated factory/test artifact, or a manually created browser-testing
+tenant. None is a real customer. Future pre-existing organizations
+discovered before enforcement activates must have their own approved entry
+added to `config/organization_rollout.php` before the apply command is
+re-run.
 
 `App\Enums\OrganizationRolloutClassification` defines the five allowed
 values:
@@ -218,7 +237,6 @@ provider.
 
 These tasks do not:
 
-- Classify any organization.
 - Change `OrganizationSubscriptionAccessResolver`.
 - Change the current `stripe_id` legacy-detection rule.
 - Add provider ownership persistence.
