@@ -1,0 +1,237 @@
+name: container smoke
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  production-image:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build production image
+        run: |
+          docker build \
+            --pull \
+            --target production \
+            --tag miseledger:smoke \
+            .
+
+      - name: Verify production runtime contents
+        run: |
+          docker run --rm miseledger:smoke php -r '
+          if (PHP_MAJOR_VERSION !== 8 || PHP_MINOR_VERSION !== 5) {
+              fwrite(STDERR, "Expected PHP 8.5, got ".PHP_VERSION.PHP_EOL);
+              exit(1);
+          }
+
+          $required = [
+              "bcmath",
+              "curl",
+              "dom",
+              "fileinfo",
+              "mbstring",
+              "openssl",
+              "pcntl",
+              "pdo_pgsql",
+              "posix",
+              "redis",
+          ];
+
+          foreach ($required as $extension) {
+              if (! extension_loaded($extension)) {
+                  fwrite(STDERR, "Missing PHP extension: {$extension}".PHP_EOL);
+                  exit(1);
+              }
+          }
+          '
+
+          docker run --rm miseledger:smoke sh -ec '
+            test -f public/build/manifest.json
+            test ! -e .env
+            test ! -d node_modules
+            test ! -d vendor/pestphp
+            test ! -e public/hot
+            test ! -w app
+            test -w storage
+            ! command -v composer
+            ! command -v node
+            ! command -v npm
+            ! command -v gcc
+            ! command -v make
+          '
+
+      - name: Start PostgreSQL and Redis
+        run: |
+          docker network create miseledger-smoke
+
+          docker run \
+            --detach \
+            --name miseledger-smoke-pgsql \
+            --network miseledger-smoke \
+            --env POSTGRES_DB=miseledger_smoke \
+            --env POSTGRES_USER=miseledger \
+            --env POSTGRES_PASSWORD=miseledger \
+            postgres:18-alpine
+
+          docker run \
+            --detach \
+            --name miseledger-smoke-redis \
+            --network miseledger-smoke \
+            redis:7-alpine
+
+          for attempt in {1..30}; do
+            if docker exec miseledger-smoke-pgsql \
+              pg_isready -q -U miseledger -d miseledger_smoke; then
+              break
+            fi
+
+            if [ "${attempt}" -eq 30 ]; then
+              docker logs miseledger-smoke-pgsql
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          for attempt in {1..30}; do
+            if docker exec miseledger-smoke-redis \
+              redis-cli ping | grep -q PONG; then
+              break
+            fi
+
+            if [ "${attempt}" -eq 30 ]; then
+              docker logs miseledger-smoke-redis
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+      - name: Create smoke environment
+        run: |
+          APP_KEY="base64:$(openssl rand -base64 32)"
+
+          cat > /tmp/miseledger-smoke.env <<EOF_ENV
+          APP_NAME=MiseLedger
+          APP_ENV=testing
+          APP_KEY=${APP_KEY}
+          APP_DEBUG=false
+          APP_URL=http://127.0.0.1:8080
+
+          LOG_CHANNEL=stderr
+          LOG_LEVEL=debug
+
+          DB_CONNECTION=pgsql
+          DB_HOST=miseledger-smoke-pgsql
+          DB_PORT=5432
+          DB_DATABASE=miseledger_smoke
+          DB_USERNAME=miseledger
+          DB_PASSWORD=miseledger
+
+          SESSION_DRIVER=redis
+          SESSION_SECURE_COOKIE=false
+          CACHE_STORE=redis
+          QUEUE_CONNECTION=redis
+
+          REDIS_CLIENT=phpredis
+          REDIS_HOST=miseledger-smoke-redis
+          REDIS_PORT=6379
+
+          MAIL_MAILER=array
+          FILESYSTEM_DISK=local
+
+          BILLING_PROVIDER=stripe
+          EOF_ENV
+
+      - name: Verify Artisan, PostgreSQL, Redis, queue, and scheduler
+        run: |
+          docker run \
+            --rm \
+            --network miseledger-smoke \
+            --env-file /tmp/miseledger-smoke.env \
+            miseledger:smoke \
+            php artisan about
+
+          docker run \
+            --rm \
+            --network miseledger-smoke \
+            --env-file /tmp/miseledger-smoke.env \
+            miseledger:smoke \
+            php artisan migrate --force
+
+          docker run \
+            --rm \
+            --network miseledger-smoke \
+            --env-file /tmp/miseledger-smoke.env \
+            miseledger:smoke \
+            php artisan migrate:status
+
+          docker run \
+            --rm \
+            --network miseledger-smoke \
+            --env-file /tmp/miseledger-smoke.env \
+            miseledger:smoke \
+            php artisan cache:clear
+
+          docker run \
+            --rm \
+            --network miseledger-smoke \
+            --env-file /tmp/miseledger-smoke.env \
+            miseledger:smoke \
+            php artisan schedule:list
+
+          docker run \
+            --rm \
+            --network miseledger-smoke \
+            --env-file /tmp/miseledger-smoke.env \
+            miseledger:smoke \
+            php artisan queue:work redis \
+              --stop-when-empty \
+              --sleep=1 \
+              --tries=1 \
+              --timeout=90
+
+      - name: Verify production HTTP health
+        run: |
+          docker run \
+            --detach \
+            --name miseledger-smoke-web \
+            --network miseledger-smoke \
+            --env-file /tmp/miseledger-smoke.env \
+            --publish 127.0.0.1:8080:8080 \
+            miseledger:smoke
+
+          if ! curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 30 \
+            --retry-delay 1 \
+            --retry-connrefused \
+            http://127.0.0.1:8080/up; then
+            docker logs miseledger-smoke-web
+            exit 1
+          fi
+
+      - name: Cleanup smoke containers
+        if: always()
+        run: |
+          docker rm -f \
+            miseledger-smoke-web \
+            miseledger-smoke-pgsql \
+            miseledger-smoke-redis \
+            2>/dev/null || true
+
+          docker network rm miseledger-smoke 2>/dev/null || true
+          rm -f /tmp/miseledger-smoke.env
