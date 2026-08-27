@@ -187,6 +187,47 @@ enforcement depends on that provider.
 Today's implementation uses Stripe-specific billing observability. PB-001
 does not claim equivalent PayMongo monitoring exists.
 
+### 6. Live launch monitoring gate
+
+Passing gates 1-5 verifies observability exists; it does not by itself prove
+the production event path is working. Before any `trial_eligible` or
+`immediately_billable` organization is moved onto real trial or
+subscription-derived enforcement, operations must observe live provider
+events during the activation window, not merely confirm monitoring is wired
+up in advance.
+
+Required during the launch observation window:
+
+- Watch the Stripe webhook endpoint and queue worker logs for the affected
+  environment continuously while enforcement is being activated.
+- Confirm that live `checkout.session.completed`,
+  `customer.subscription.created`, `customer.subscription.updated`, and
+  `customer.subscription.deleted` events (or the provider-equivalent
+  lifecycle events) are received, processed successfully, and reflected in
+  the Cashier `subscriptions` table for at least one real transition during
+  the window.
+- Confirm no elevated rate of webhook signature failures, queue job
+  failures, or synchronization errors is observed for billing jobs during
+  the window.
+- Keep an operator explicitly assigned as responsible for this observation
+  period; enforcement activation must not proceed unattended.
+
+Rollback/escalation criterion for this gate:
+
+- If a live event fails to be received, fails signature verification, fails
+  to process, or fails to synchronize into the local subscription
+  projection during the observation window, activation must pause
+  immediately. No further organization may be moved onto real
+  trial/subscription-derived enforcement until the failure is diagnosed and
+  resolved.
+- Organizations already classified `trial_eligible` or
+  `immediately_billable` but not yet moved onto enforced access are
+  unaffected by a paused activation; they remain protected by their
+  classification until the gate is re-verified.
+- A pause at this gate is reversible by definition: it only withholds
+  further activation and does not require any data rollback, since no
+  stock-ledger or classification data is touched by this gate.
+
 ## Activation behavior
 
 Only after the applicable rollout gates pass should operations deliberately
