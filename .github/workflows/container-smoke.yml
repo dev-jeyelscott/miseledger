@@ -4,18 +4,27 @@ on:
   push:
     branches:
       - main
+      - develop
   pull_request:
+    branches:
+      - main
+      - develop
 
 permissions:
   contents: read
 
+concurrency:
+  group: container-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   production-image:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
@@ -54,9 +63,15 @@ jobs:
                   exit(1);
               }
           }
+
+          if (extension_loaded("xdebug")) {
+              fwrite(STDERR, "Xdebug must not be installed in the production image.".PHP_EOL);
+              exit(1);
+          }
           '
 
           docker run --rm miseledger:smoke sh -ec '
+            test "$(id -un)" = "www-data"
             test -f public/build/manifest.json
             test ! -e .env
             test ! -d node_modules
@@ -64,6 +79,7 @@ jobs:
             test ! -e public/hot
             test ! -w app
             test -w storage
+            test -w bootstrap/cache
             ! command -v composer
             ! command -v node
             ! command -v npm
@@ -71,7 +87,7 @@ jobs:
             ! command -v make
           '
 
-      - name: Start PostgreSQL and Redis
+      - name: Start backing services
         run: |
           docker network create miseledger-smoke
 
@@ -154,7 +170,7 @@ jobs:
           BILLING_PROVIDER=stripe
           EOF_ENV
 
-      - name: Verify Artisan, PostgreSQL, Redis, queue, and scheduler
+      - name: Verify Artisan and backing-service connectivity
         run: |
           docker run \
             --rm \
@@ -212,19 +228,40 @@ jobs:
             --publish 127.0.0.1:8080:8080 \
             miseledger:smoke
 
-          if ! curl \
-            --fail \
-            --silent \
-            --show-error \
-            --retry 30 \
-            --retry-delay 1 \
-            --retry-connrefused \
-            http://127.0.0.1:8080/up; then
+          healthy=false
+
+          for attempt in {1..30}; do
+            if [ "$(docker inspect --format='{{.State.Running}}' miseledger-smoke-web)" != "true" ]; then
+              docker inspect \
+                --format='status={{.State.Status}} running={{.State.Running}} exit_code={{.State.ExitCode}} error={{json .State.Error}} started_at={{.State.StartedAt}} finished_at={{.State.FinishedAt}}' \
+                miseledger-smoke-web
+              docker logs miseledger-smoke-web
+              exit 1
+            fi
+
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              --connect-timeout 1 \
+              --max-time 2 \
+              http://127.0.0.1:8080/up; then
+              healthy=true
+              break
+            fi
+
+            sleep 1
+          done
+
+          if [ "${healthy}" != "true" ]; then
+            docker inspect \
+              --format='status={{.State.Status}} running={{.State.Running}} exit_code={{.State.ExitCode}} error={{json .State.Error}} started_at={{.State.StartedAt}} finished_at={{.State.FinishedAt}}' \
+              miseledger-smoke-web
             docker logs miseledger-smoke-web
             exit 1
           fi
 
-      - name: Cleanup smoke containers
+      - name: Cleanup
         if: always()
         run: |
           docker rm -f \

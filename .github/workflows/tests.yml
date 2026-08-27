@@ -4,30 +4,26 @@ on:
   push:
     branches:
       - main
+      - develop
   pull_request:
+    branches:
+      - main
+      - develop
 
 permissions:
   contents: read
 
-jobs:
-  ci:
-    runs-on: ubuntu-latest
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-    env:
-      DB_CONNECTION: pgsql
-      DB_HOST: 127.0.0.1
-      DB_PORT: 5432
-      DB_DATABASE: miseledger_testing
-      DB_USERNAME: miseledger
-      DB_PASSWORD: miseledger
-      REDIS_CLIENT: phpredis
-      REDIS_HOST: 127.0.0.1
-      SESSION_DRIVER: redis
-      QUEUE_CONNECTION: redis
-      CACHE_STORE: redis
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
 
     services:
-      postgres:
+      pgsql:
         image: postgres:18-alpine
         env:
           POSTGRES_DB: miseledger_testing
@@ -51,32 +47,57 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: miseledger_testing
+      DB_USERNAME: miseledger
+      DB_PASSWORD: miseledger
+
+      CACHE_STORE: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
+
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        uses: shivammathur/setup-php@157b36a476930944ed837c3758e866476ef9f240
         with:
           php-version: '8.5.9'
-          extensions: pdo_pgsql, redis
-          tools: composer:v2
+          extensions: bcmath, curl, dom, fileinfo, mbstring, openssl, pcntl, pdo_pgsql, posix, redis
           coverage: none
 
       - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '22'
+          node-version: 22
+          cache: npm
+
+      - name: Prepare Application Environment
+        run: cp .env.example .env
+
+      - name: Install Composer Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
       - name: Setup Application
         run: |
-          composer install --no-interaction --prefer-dist --optimize-autoloader
-          cp .env.example .env
           php artisan key:generate
           npm ci
           npm run build
 
-      - name: Run CI Checks
-        run: composer ci:check
+      - name: Run Backend Format Check
+        run: composer format:check
+
+      - name: Run Static Analysis
+        run: composer types:check
+
+      - name: Run Tests
+        run: composer test
