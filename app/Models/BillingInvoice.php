@@ -14,9 +14,23 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
+ * Provider-neutral commercial invoice for one renewal or upgrade obligation.
+ *
+ * @property int $id
+ * @property int $organization_id
+ * @property int $billing_subscription_id
+ * @property BillingProvider $provider
+ * @property string $invoice_number
+ * @property string $plan_code
+ * @property BillingInvoiceType $invoice_type
+ * @property string|null $target_plan_code
+ * @property string $billing_interval
+ * @property string $currency
+ * @property int $amount
+ * @property BillingInvoiceStatus $status
  * @property CarbonInterface $period_starts_at
  * @property CarbonInterface $period_ends_at
- * @property CarbonInterface $due_at
+ * @property CarbonInterface|null $due_at
  * @property CarbonInterface|null $paid_at
  * @property CarbonInterface|null $cancelled_at
  */
@@ -26,30 +40,31 @@ class BillingInvoice extends Model
     /** @use HasFactory<BillingInvoiceFactory> */
     use HasFactory;
 
-    /** @return BelongsTo<Organization, $this> */
+    /** Return the organization that owns this invoice. */
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
     }
 
-    /** @return BelongsTo<BillingSubscription, $this> */
+    /** Return the subscription whose commercial obligation this invoice represents. */
     public function billingSubscription(): BelongsTo
     {
         return $this->belongsTo(BillingSubscription::class);
     }
 
-    /** @return HasMany<BillingPayment, $this> */
+    /** Return all payment attempts created for this invoice. */
     public function payments(): HasMany
     {
         return $this->hasMany(BillingPayment::class);
     }
 
-    /** @return HasMany<BillingRenewalReminder, $this> */
+    /** Return renewal-reminder evidence associated with this invoice. */
     public function renewalReminders(): HasMany
     {
         return $this->hasMany(BillingRenewalReminder::class);
     }
 
+    /** Define the authoritative Eloquent casts for billing invoice attributes. */
     protected function casts(): array
     {
         return [

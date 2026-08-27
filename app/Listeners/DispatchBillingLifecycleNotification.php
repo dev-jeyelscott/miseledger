@@ -9,27 +9,27 @@ use Laravel\Cashier\Events\WebhookHandled;
 
 class DispatchBillingLifecycleNotification
 {
-    public function __construct(private ProcessOrganizationBillingWebhookEffect $process) {}
+    public function __construct(
+        private ProcessOrganizationBillingWebhookEffect $process,
+    ) {}
 
-    /**
-     * Dispatch notifications for lifecycle events Cashier has synchronized.
-     */
+    /** Dispatch notifications for lifecycle events Cashier has synchronized. */
     public function handle(WebhookHandled $event): void
     {
         $payload = $event->payload;
         $object = $payload['data']['object'] ?? null;
 
-        if (
-            ! is_array($object)
+        if (! is_array($object)
             || ! is_string($stripeEventId = $payload['id'] ?? null)
-            || ! is_string($customerId = $object['customer'] ?? null)
-        ) {
+            || ! is_string($customerId = $object['customer'] ?? null)) {
             return;
         }
 
         $lifecycleEvent = match ($payload['type'] ?? null) {
-            'customer.subscription.created' => BillingLifecycleEvent::SubscriptionStarted,
-            'customer.subscription.deleted' => BillingLifecycleEvent::SubscriptionEnded,
+            'customer.subscription.created' =>
+                BillingLifecycleEvent::SubscriptionStarted,
+            'customer.subscription.deleted' =>
+                BillingLifecycleEvent::SubscriptionEnded,
             'customer.subscription.updated' => $this->updatedSubscriptionEvent(
                 $object,
                 $payload['data']['previous_attributes'] ?? [],
@@ -49,8 +49,7 @@ class DispatchBillingLifecycleNotification
     }
 
     /**
-     * Determine whether a synchronized subscription update represents a
-     * lifecycle state transition that billing administrators should receive.
+     * Determine whether a synchronized subscription update is notification-worthy.
      *
      * @param  array<string, mixed>  $subscription
      * @param  array<string, mixed>  $previousAttributes
@@ -73,10 +72,8 @@ class DispatchBillingLifecycleNotification
             return BillingLifecycleEvent::SubscriptionResumed;
         }
 
-        if (
-            ($subscription['status'] ?? null) === 'active'
-            && in_array($previousStatus, ['past_due', 'unpaid'], true)
-        ) {
+        if (($subscription['status'] ?? null) === 'active'
+            && in_array($previousStatus, ['past_due', 'unpaid'], true)) {
             return BillingLifecycleEvent::Recovered;
         }
 
@@ -87,20 +84,29 @@ class DispatchBillingLifecycleNotification
         return null;
     }
 
-    /**
-     * Return the stable audit action for a provider-synchronized event.
-     */
-    private function auditAction(BillingLifecycleEvent $lifecycleEvent): string
-    {
+    /** Return the stable audit action for one billing lifecycle event. */
+    private function auditAction(
+        BillingLifecycleEvent $lifecycleEvent,
+    ): string {
         return match ($lifecycleEvent) {
-            BillingLifecycleEvent::SubscriptionStarted => 'billing.subscription.started',
-            BillingLifecycleEvent::PlanChanged => 'billing.subscription.plan_changed',
-            BillingLifecycleEvent::ScheduledCancellation => 'billing.subscription.cancellation_scheduled',
-            BillingLifecycleEvent::SubscriptionResumed => 'billing.subscription.resumed',
-            BillingLifecycleEvent::SubscriptionEnded => 'billing.subscription.ended',
-            BillingLifecycleEvent::PaymentFailed => 'billing.subscription.past_due',
-            BillingLifecycleEvent::Recovered => 'billing.payment.recovered',
-            BillingLifecycleEvent::TrialEnding => 'billing.subscription.trial_ending',
+            BillingLifecycleEvent::SubscriptionStarted =>
+                'billing.subscription.started',
+            BillingLifecycleEvent::PlanChanged =>
+                'billing.subscription.plan_changed',
+            BillingLifecycleEvent::ScheduledCancellation =>
+                'billing.subscription.cancellation_scheduled',
+            BillingLifecycleEvent::SubscriptionResumed =>
+                'billing.subscription.resumed',
+            BillingLifecycleEvent::SubscriptionEnded =>
+                'billing.subscription.ended',
+            BillingLifecycleEvent::PaymentFailed =>
+                'billing.subscription.past_due',
+            BillingLifecycleEvent::Recovered =>
+                'billing.payment.recovered',
+            BillingLifecycleEvent::TrialEnding =>
+                'billing.subscription.trial_ending',
+            BillingLifecycleEvent::PaymentExpired =>
+                'billing.payment.expired',
         };
     }
 }

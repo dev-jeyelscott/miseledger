@@ -22,10 +22,17 @@ final class CreatePayMongoQrPhPayment
 {
     public function __construct(private readonly PayMongoClient $client) {}
 
+    /** Create or reuse a safe QR Ph payment attempt for one payable invoice. */
     public function handle(BillingInvoice $invoice): ManualRenewalCheckout
     {
-        $payment = DB::transaction(function () use ($invoice): BillingPayment|ManualRenewalCheckout {
-            $invoice = BillingInvoice::query()->with('billingSubscription')->lockForUpdate()->findOrFail($invoice->getKey());
+        $invoiceId = $invoice->id;
+
+        $payment = DB::transaction(function () use ($invoiceId): BillingPayment|ManualRenewalCheckout {
+            $invoice = BillingInvoice::query()
+                ->with('billingSubscription')
+                ->whereKey($invoiceId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
             if ($invoice->billingSubscription->livemode !== (config('billing.providers.paymongo.mode') === 'live')) {
                 throw new RuntimeException('The QR Ph billing profile belongs to a different PayMongo environment.');
@@ -37,7 +44,8 @@ final class CreatePayMongoQrPhPayment
                 throw new RuntimeException('This invoice cannot be paid with QR Ph.');
             }
 
-            $payment = $invoice->payments()->lockForUpdate()
+            $payment = $invoice->payments()
+                ->lockForUpdate()
                 ->where('status', BillingPaymentStatus::AwaitingPayment)
                 ->latest()
                 ->first();
@@ -50,7 +58,8 @@ final class CreatePayMongoQrPhPayment
                 $payment->update(['status' => BillingPaymentStatus::Expired]);
             }
 
-            $pendingPayment = $invoice->payments()->lockForUpdate()
+            $pendingPayment = $invoice->payments()
+                ->lockForUpdate()
                 ->where('status', BillingPaymentStatus::Pending)
                 ->latest()
                 ->first();
@@ -61,7 +70,7 @@ final class CreatePayMongoQrPhPayment
 
             return BillingPayment::query()->create([
                 'organization_id' => $invoice->organization_id,
-                'billing_invoice_id' => $invoice->getKey(),
+                'billing_invoice_id' => $invoice->id,
                 'provider' => BillingProvider::PayMongo,
                 'payment_method' => BillingPaymentMethod::QrPh,
                 'provider_request_key' => 'miseledger:paymongo:qrph:intent:'.Str::lower((string) Str::ulid()),
@@ -76,16 +85,21 @@ final class CreatePayMongoQrPhPayment
             return $payment;
         }
 
+        $invoice = BillingInvoice::query()
+            ->whereKey($invoiceId)
+            ->firstOrFail();
+
         $paymentIntent = $this->client->createPaymentIntent(
             $invoice->amount,
             $invoice->currency,
             [
                 'organization_id' => (string) $invoice->organization_id,
-                'billing_invoice_id' => (string) $invoice->getKey(),
+                'billing_invoice_id' => (string) $invoice->id,
             ],
             (string) $invoice->organization_id,
             $payment->provider_request_key,
         );
+
         $paymentIntentAttributes = $this->resourceAttributes($paymentIntent, 'payment_intent');
         $paymentIntentId = $paymentIntent['data']['id'] ?? null;
 
@@ -107,7 +121,7 @@ final class CreatePayMongoQrPhPayment
                 ->where('external_payment_intent_id', $paymentIntentId)
                 ->firstOrFail();
 
-            if ($payment->billing_invoice_id !== $invoice->getKey()) {
+            if ($payment->billing_invoice_id !== $invoice->id) {
                 throw new RuntimeException('PayMongo payment intent ownership conflicts with this invoice.');
             }
         }
@@ -128,6 +142,7 @@ final class CreatePayMongoQrPhPayment
             (string) $invoice->organization_id,
             "{$payment->provider_request_key}:attach",
         );
+
         $attributes = $this->resourceAttributes($attachedPaymentIntent, 'payment_intent');
         $qrCodeUrl = data_get($attributes, 'next_action.code.image_url');
 
@@ -136,11 +151,21 @@ final class CreatePayMongoQrPhPayment
             throw new RuntimeException('PayMongo did not return a QR Ph code.');
         }
 
-        $expiresAt = $this->expiresAt(data_get($attributes, 'next_action.code.expires_at'));
+        $expiresAt = $this->expiresAt(
+            data_get($attributes, 'next_action.code.expires_at'),
+        );
+        $paymentId = $payment->id;
 
-        return DB::transaction(function () use ($invoice, $payment, $qrCodeUrl, $expiresAt): ManualRenewalCheckout {
-            $invoice = BillingInvoice::query()->lockForUpdate()->findOrFail($invoice->getKey());
-            $payment = BillingPayment::query()->lockForUpdate()->findOrFail($payment->getKey());
+        return DB::transaction(function () use ($invoiceId, $paymentId, $qrCodeUrl, $expiresAt): ManualRenewalCheckout {
+            $invoice = BillingInvoice::query()
+                ->whereKey($invoiceId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $payment = BillingPayment::query()
+                ->whereKey($paymentId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
             if (! $invoice->status->isPayable()) {
                 throw new RuntimeException('This invoice is no longer payable.');
@@ -151,25 +176,39 @@ final class CreatePayMongoQrPhPayment
                 'qr_code_url' => $qrCodeUrl,
                 'expires_at' => $expiresAt,
             ]);
-            $invoice->update(['status' => BillingInvoiceStatus::PaymentPending]);
 
-            return new ManualRenewalCheckout($invoice->fresh(), $payment->fresh());
+            $invoice->update([
+                'status' => BillingInvoiceStatus::PaymentPending,
+            ]);
+
+            $invoice->refresh();
+            $payment->refresh();
+
+            return new ManualRenewalCheckout($invoice, $payment);
         }, attempts: 3);
     }
 
-    /** @param array<string, mixed> $response @return array<string, mixed> */
+    /**
+     * Validate and extract attributes from one PayMongo JSON:API resource.
+     *
+     * @param  array<string, mixed>  $response
+     * @return array<string, mixed>
+     */
     private function resourceAttributes(array $response, string $type): array
     {
         $resource = $response['data'] ?? null;
         $attributes = is_array($resource) ? $resource['attributes'] ?? null : null;
 
-        if (! is_array($resource) || ($resource['type'] ?? null) !== $type || ! is_array($attributes)) {
+        if (! is_array($resource)
+            || ($resource['type'] ?? null) !== $type
+            || ! is_array($attributes)) {
             throw new RuntimeException("PayMongo returned an invalid {$type} response.");
         }
 
         return $attributes;
     }
 
+    /** Convert PayMongo expiry evidence to a bounded local expiration timestamp. */
     private function expiresAt(mixed $value): CarbonInterface
     {
         return (is_int($value) || (is_string($value) && ctype_digit($value)))
@@ -177,6 +216,7 @@ final class CreatePayMongoQrPhPayment
             : now()->addMinutes(30);
     }
 
+    /** Accept only normal URLs or bounded image data URLs as QR display artifacts. */
     private function isSafeQrCodeUrl(mixed $value): bool
     {
         if (! is_string($value) || $value === '' || mb_strlen($value) > 500_000) {

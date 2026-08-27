@@ -7,9 +7,7 @@ use App\Enums\PlanCode;
 use InvalidArgumentException;
 
 /**
- * Resolves configuration-owned external provider plan identifiers into
- * MiseLedger's stable, internal plan definitions. Reverse lookup is always
- * provider-scoped, so two providers may never resolve each other's IDs.
+ * Resolves provider-specific external plan identifiers to stable MiseLedger plans.
  */
 final readonly class PlanCatalog
 {
@@ -18,55 +16,81 @@ final readonly class PlanCatalog
     /** @var array<string, PlanDefinition> */
     private array $definitions;
 
-    /** @var array<string, array<string, string>> Provider => external ID => plan code. */
+    /** @var array<string, array<string, string>> */
     private array $externalPlanIndexes;
 
-    /** @param array<string, mixed>|null $config Defaults to config('billing.plans'). */
+    /** Build the plan catalog from validated application configuration. */
     public function __construct(?array $config = null)
     {
-        [$this->definitions, $this->externalPlanIndexes] = self::build($config ?? (array) config('billing.plans', []));
+        [$this->definitions, $this->externalPlanIndexes] = self::build(
+            $config ?? (array) config('billing.plans', []),
+        );
     }
 
-    /** @return PlanDefinition[] */
+    /** Return all configured internal plan definitions. */
     public function all(): array
     {
         return array_values($this->definitions);
     }
 
+    /** Resolve one stable internal plan code. */
     public function get(PlanCode $code): ?PlanDefinition
     {
         return $this->definitions[$code->value] ?? null;
     }
 
-    public function externalPlanId(PlanCode $code, BillingProvider|string $provider, string $interval): ?string
-    {
-        return $this->get($code)?->externalPlanId($provider, $interval);
+    /** Resolve the provider plan ID for an internal plan and interval. */
+    public function externalPlanId(
+        PlanCode $code,
+        BillingProvider|string $provider,
+        string $interval,
+    ): ?string {
+        return $this->get($code)?->externalPlanId(
+            $provider,
+            $interval,
+        );
     }
 
-    public function resolveExternalPlan(BillingProvider|string $provider, string $externalPlanId): ?PlanDefinition
-    {
+    /** Resolve a provider-owned external plan ID back to its internal plan. */
+    public function resolveExternalPlan(
+        BillingProvider|string $provider,
+        string $externalPlanId,
+    ): ?PlanDefinition {
         $provider = self::provider($provider);
 
-        if ($provider === null || ! self::isValidExternalPlanId($externalPlanId, $provider)) {
+        if ($provider === null
+            || ! self::isValidExternalPlanId(
+                $externalPlanId,
+                $provider,
+            )) {
             return null;
         }
 
-        $code = $this->externalPlanIndexes[$provider->value][$externalPlanId] ?? null;
+        $code = $this->externalPlanIndexes[$provider->value][$externalPlanId]
+            ?? null;
 
-        return $code !== null ? $this->definitions[$code] : null;
+        return $code !== null
+            ? $this->definitions[$code]
+            : null;
     }
 
-    public function resolveExternalPlanInterval(BillingProvider|string $provider, string $externalPlanId): ?string
-    {
+    /** Resolve the billing interval encoded by an external provider plan ID. */
+    public function resolveExternalPlanInterval(
+        BillingProvider|string $provider,
+        string $externalPlanId,
+    ): ?string {
         $provider = self::provider($provider);
-        $definition = $provider !== null ? $this->resolveExternalPlan($provider, $externalPlanId) : null;
+        $definition = $provider !== null
+            ? $this->resolveExternalPlan($provider, $externalPlanId)
+            : null;
 
         if ($definition === null) {
             return null;
         }
 
         foreach (self::INTERVALS as $interval) {
-            if ($definition->externalPlanId($provider, $interval) === $externalPlanId) {
+            if ($definition->externalPlanId($provider, $interval)
+                === $externalPlanId) {
                 return $interval;
             }
         }
@@ -74,20 +98,32 @@ final readonly class PlanCatalog
         return null;
     }
 
-    /** Transitional Stripe compatibility aliases for existing Cashier flows. */
+    /** Preserve the existing Cashier price-ID compatibility lookup. */
     public function resolveByPriceId(string $priceId): ?PlanDefinition
     {
-        return $this->resolveExternalPlan(BillingProvider::Stripe, $priceId);
+        return $this->resolveExternalPlan(
+            BillingProvider::Stripe,
+            $priceId,
+        );
     }
 
+    /** Preserve the existing Cashier price interval compatibility lookup. */
     public function resolveIntervalByPriceId(string $priceId): ?string
     {
-        return $this->resolveExternalPlanInterval(BillingProvider::Stripe, $priceId);
+        return $this->resolveExternalPlanInterval(
+            BillingProvider::Stripe,
+            $priceId,
+        );
     }
 
     /**
+     * Build validated definitions and provider-specific reverse indexes.
+     *
      * @param  array<int|string, mixed>  $config
-     * @return array{0: array<string, PlanDefinition>, 1: array<string, array<string, string>>}
+     * @return array{
+     *     0: array<string, PlanDefinition>,
+     *     1: array<string, array<string, string>>
+     * }
      */
     private static function build(array $config): array
     {
@@ -117,15 +153,27 @@ final readonly class PlanCatalog
                 continue;
             }
 
-            $features = array_values(array_filter((array) ($plan['features'] ?? []), 'is_string'));
-            $limits = array_filter((array) ($plan['limits'] ?? []), static fn (mixed $value): bool => $value === null || is_int($value));
+            $features = array_values(
+                array_filter(
+                    (array) ($plan['features'] ?? []),
+                    'is_string',
+                ),
+            );
+
+            $limits = array_filter(
+                (array) ($plan['limits'] ?? []),
+                static fn (mixed $value): bool =>
+                    $value === null || is_int($value),
+            );
+
             $providers = self::providerPlans($plan);
             $manualAmounts = self::manualAmounts($plan);
 
             foreach ($providers as $provider => $intervals) {
                 foreach ($intervals as $externalPlanId) {
                     if ($externalPlanId !== null) {
-                        $occurrences[$provider][$externalPlanId] = ($occurrences[$provider][$externalPlanId] ?? 0) + 1;
+                        $occurrences[$provider][$externalPlanId] =
+                            ($occurrences[$provider][$externalPlanId] ?? 0) + 1;
                     }
                 }
             }
@@ -147,7 +195,8 @@ final readonly class PlanCatalog
         foreach ($definitions as $code => $definition) {
             foreach ($definition->providers as $provider => $intervals) {
                 foreach ($intervals as $externalPlanId) {
-                    if ($externalPlanId !== null && ($occurrences[$provider][$externalPlanId] ?? 0) === 1) {
+                    if ($externalPlanId !== null
+                        && ($occurrences[$provider][$externalPlanId] ?? 0) === 1) {
                         $indexes[$provider][$externalPlanId] = $code;
                     }
                 }
@@ -157,7 +206,12 @@ final readonly class PlanCatalog
         return [$definitions, $indexes];
     }
 
-    /** @param array<string, mixed> $plan @return array<string, array<string, string|null>> */
+    /**
+     * Normalize provider plan IDs for every supported billing provider.
+     *
+     * @param  array<string, mixed>  $plan
+     * @return array<string, array<string, string|null>>
+     */
     private static function providerPlans(array $plan): array
     {
         $providers = [];
@@ -165,62 +219,93 @@ final readonly class PlanCatalog
         foreach (BillingProvider::cases() as $provider) {
             $configured = $plan['providers'][$provider->value] ?? null;
 
-            // `prices` remains a deliberately narrow read compatibility path
-            // while existing Stripe configuration is migrated to `providers`.
-            if ($provider === BillingProvider::Stripe && ! is_array($configured)) {
+            if ($provider === BillingProvider::Stripe
+                && ! is_array($configured)) {
                 $configured = $plan['prices'] ?? [];
             }
 
             $providers[$provider->value] = [];
 
             foreach (self::INTERVALS as $interval) {
-                $externalPlanId = is_array($configured) ? ($configured[$interval] ?? null) : null;
-                $providers[$provider->value][$interval] = is_string($externalPlanId) && self::isValidExternalPlanId($externalPlanId, $provider)
-                    ? $externalPlanId
+                $externalPlanId = is_array($configured)
+                    ? ($configured[$interval] ?? null)
                     : null;
+
+                $providers[$provider->value][$interval] =
+                    is_string($externalPlanId)
+                    && self::isValidExternalPlanId(
+                        $externalPlanId,
+                        $provider,
+                    )
+                        ? $externalPlanId
+                        : null;
             }
         }
 
         return $providers;
     }
 
-    /** @param array<string, mixed> $plan @return array<string, int|null> */
+    /**
+     * Normalize manual minor-unit prices for each supported interval.
+     *
+     * @param  array<string, mixed>  $plan
+     * @return array<string, int|null>
+     */
     private static function manualAmounts(array $plan): array
     {
-        $configured = is_array($plan['manual_amounts'] ?? null) ? $plan['manual_amounts'] : [];
+        $configured = is_array($plan['manual_amounts'] ?? null)
+            ? $plan['manual_amounts']
+            : [];
 
-        return collect(self::INTERVALS)
-            ->mapWithKeys(static fn (string $interval): array => [
-                $interval => self::manualAmount($configured[$interval] ?? null),
-            ])
-            ->all();
+        $amounts = [];
+
+        foreach (self::INTERVALS as $interval) {
+            $amounts[$interval] = self::manualAmount(
+                $configured[$interval] ?? null,
+            );
+        }
+
+        return $amounts;
     }
 
+    /** Convert one configured manual price to a positive minor-unit integer. */
     private static function manualAmount(mixed $amount): ?int
     {
         if (is_int($amount) && $amount > 0) {
             return $amount;
         }
 
-        return is_string($amount) && ctype_digit($amount) && (int) $amount > 0
-            ? (int) $amount
-            : null;
+        return is_string($amount)
+            && ctype_digit($amount)
+            && (int) $amount > 0
+                ? (int) $amount
+                : null;
     }
 
-    private static function provider(BillingProvider|string $provider): ?BillingProvider
-    {
-        return is_string($provider) ? BillingIdentity::provider($provider) : $provider;
+    /** Normalize a string or enum provider identifier. */
+    private static function provider(
+        BillingProvider|string $provider,
+    ): ?BillingProvider {
+        return is_string($provider)
+            ? BillingIdentity::provider($provider)
+            : $provider;
     }
 
-    private static function isValidExternalPlanId(string $externalPlanId, BillingProvider $provider): bool
-    {
-        if (trim($externalPlanId) === '' || preg_match('/^\S+$/', $externalPlanId) !== 1) {
+    /** Validate the external ID prefix for a specific billing provider. */
+    private static function isValidExternalPlanId(
+        string $externalPlanId,
+        BillingProvider $provider,
+    ): bool {
+        if (trim($externalPlanId) === ''
+            || preg_match('/^\S+$/', $externalPlanId) !== 1) {
             return false;
         }
 
         return match ($provider) {
-            BillingProvider::Stripe => preg_match('/^price_[A-Za-z0-9_]+$/', $externalPlanId) === 1,
-            BillingProvider::PayMongo => preg_match('/^plan_[A-Za-z0-9_]+$/', $externalPlanId) === 1,
+            BillingProvider::Stripe =>
+                preg_match('/^price_[A-Za-z0-9_]+$/', $externalPlanId) === 1,
+            BillingProvider::PayMongo =>
+                preg_match('/^plan_[A-Za-z0-9_]+$/', $externalPlanId) === 1,
         };
     }
 }

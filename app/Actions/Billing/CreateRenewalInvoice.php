@@ -21,10 +21,14 @@ final class CreateRenewalInvoice
         private readonly PlanCatalog $planCatalog,
     ) {}
 
+    /** Create or reuse the single renewal invoice for a manual subscription period. */
     public function handle(BillingSubscription $subscription, ?Carbon $activationPoint = null): BillingInvoice
     {
         return DB::transaction(function () use ($subscription, $activationPoint): BillingInvoice {
-            $subscription = BillingSubscription::query()->lockForUpdate()->findOrFail($subscription->getKey());
+            $subscription = BillingSubscription::query()
+                ->whereKey($subscription->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
             if ($subscription->collection_method !== BillingCollectionMethod::Manual
                 || $subscription->plan_code === null
@@ -49,7 +53,7 @@ final class CreateRenewalInvoice
             );
 
             $existing = BillingInvoice::query()
-                ->where('billing_subscription_id', $subscription->getKey())
+                ->where('billing_subscription_id', $subscription->id)
                 ->where('period_starts_at', $period['starts_at'])
                 ->where('period_ends_at', $period['ends_at'])
                 ->lockForUpdate()
@@ -61,7 +65,7 @@ final class CreateRenewalInvoice
 
             return BillingInvoice::query()->create([
                 'organization_id' => $subscription->organization_id,
-                'billing_subscription_id' => $subscription->getKey(),
+                'billing_subscription_id' => $subscription->id,
                 'provider' => $subscription->provider,
                 'invoice_number' => 'INV-'.Str::upper((string) Str::ulid()),
                 'plan_code' => $subscription->plan_code,

@@ -16,23 +16,8 @@ use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
- * Creates (or reuses) a `BillingInvoice` representing a requested plan
- * upgrade for a manual PayMongo subscription. Deliberately a sibling of
- * `CreateRenewalInvoice`, not an extension of it: an upgrade invoice never
- * represents a new billing period, must never mutate the subscription's
- * `plan_code` before payment, and must never advance the subscription's
- * existing paid-through boundary (`current_period_ends_at`). The invoice's
- * `plan_code` stays the subscription's current plan; `target_plan_code`
- * carries the requested plan, applied to the subscription only after
- * `SettlePayMongoPayment` verifies payment.
- *
- * The prorated amount is a function of "days remaining right now", so it is
- * only ever valid at the moment it was computed -- unlike a renewal invoice,
- * it cannot be trusted to stay correct indefinitely. Every call recomputes
- * the current amount and compares it against any still-pending invoice for
- * the same target plan: an unpaid invoice reuse is only safe when the
- * amount still matches; otherwise the stale invoice (and its unpaid
- * payment attempts) are cancelled and a fresh one is created.
+ * Creates or reuses an invoice representing a requested manual subscription
+ * upgrade without mutating entitlement before authoritative payment.
  */
 final class CreateUpgradeInvoice
 {
@@ -41,10 +26,14 @@ final class CreateUpgradeInvoice
         private readonly PlanUpgradePolicy $upgradePolicy,
     ) {}
 
+    /** Create or reuse the currently valid prorated upgrade invoice. */
     public function handle(BillingSubscription $subscription, PlanCode $targetPlan): BillingInvoice
     {
         return DB::transaction(function () use ($subscription, $targetPlan): BillingInvoice {
-            $subscription = BillingSubscription::query()->lockForUpdate()->findOrFail($subscription->getKey());
+            $subscription = BillingSubscription::query()
+                ->whereKey($subscription->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
             if ($subscription->collection_method !== BillingCollectionMethod::Manual
                 || $subscription->plan_code === null
@@ -73,7 +62,7 @@ final class CreateUpgradeInvoice
             $amount = $this->proratedAmount($subscription, $currentPlan, $targetPlan);
 
             $existing = BillingInvoice::query()
-                ->where('billing_subscription_id', $subscription->getKey())
+                ->where('billing_subscription_id', $subscription->id)
                 ->where('invoice_type', BillingInvoiceType::Upgrade)
                 ->where('target_plan_code', $targetPlan->value)
                 ->whereIn('status', [BillingInvoiceStatus::Pending, BillingInvoiceStatus::PaymentPending])
@@ -90,7 +79,7 @@ final class CreateUpgradeInvoice
 
             return BillingInvoice::query()->create([
                 'organization_id' => $subscription->organization_id,
-                'billing_subscription_id' => $subscription->getKey(),
+                'billing_subscription_id' => $subscription->id,
                 'provider' => $subscription->provider,
                 'invoice_number' => 'INV-'.Str::upper((string) Str::ulid()),
                 'plan_code' => $subscription->plan_code,
@@ -107,13 +96,7 @@ final class CreateUpgradeInvoice
         }, attempts: 3);
     }
 
-    /**
-     * Cancels a pending upgrade invoice whose amount no longer matches the
-     * current proration (e.g. plan pricing changed, or enough time has
-     * passed that the remaining-days calculation moved) and fails any of
-     * its unpaid payment attempts, so neither is ever mistaken for still
-     * being valid.
-     */
+    /** Cancel a stale upgrade invoice and its still-unpaid payment attempts. */
     private function cancelStaleInvoice(BillingInvoice $invoice): void
     {
         $invoice->payments()
@@ -130,12 +113,7 @@ final class CreateUpgradeInvoice
         ]);
     }
 
-    /**
-     * Daily-rate difference proration for the remaining whole days of the
-     * subscription's existing paid period: nominal 30-day (monthly) /
-     * 365-day (yearly) periods, rounded to the nearest minor currency unit,
-     * floored at `billing.upgrade_minimum_manual_amount` when configured.
-     */
+    /** Calculate the current remaining-period price difference for an upgrade. */
     private function proratedAmount(BillingSubscription $subscription, PlanCode $currentPlan, PlanCode $targetPlan): int
     {
         $interval = $subscription->interval;
@@ -151,7 +129,10 @@ final class CreateUpgradeInvoice
 
         $nominalDays = $interval === 'yearly' ? 365 : 30;
 
-        $remainingSeconds = max(0, $subscription->current_period_ends_at->getTimestamp() - now()->getTimestamp());
+        $remainingSeconds = max(
+            0,
+            $subscription->current_period_ends_at->getTimestamp() - now()->getTimestamp(),
+        );
         $remainingDays = (int) min($nominalDays, ceil($remainingSeconds / 86400));
 
         if ($remainingDays === 0) {

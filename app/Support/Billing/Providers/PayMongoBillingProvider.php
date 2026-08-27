@@ -356,7 +356,12 @@ final class PayMongoBillingProvider implements BillingProvider
         return $interval;
     }
 
-    /** @param array<string, mixed> $response @return array<string, mixed> */
+    /**
+     * Validate and return one PayMongo JSON:API resource.
+     *
+     * @param  array<string, mixed>  $response
+     * @return array<string, mixed>
+     */
     private function resource(array $response, string $type): array
     {
         $data = $response['data'] ?? null;

@@ -9,21 +9,21 @@ use App\Models\User;
 use Illuminate\Support\Carbon;
 use Laravel\Cashier\Cashier;
 use Stripe\Exception\InvalidRequestException;
-use Stripe\Subscription as StripeSubscription;
 
 /**
- * Wraps the current Cashier/Stripe integration behind `BillingProvider`.
- * Preserves the exact Cashier calls and Checkout/Portal option shapes the
- * application already relied on before this abstraction existed.
+ * Wrap the existing Cashier/Stripe integration behind the billing provider contract.
  */
 final class StripeBillingProvider implements BillingProvider
 {
+    /** Return the provider identity represented by this adapter. */
     public function identity(): BillingProviderEnum
     {
         return BillingProviderEnum::Stripe;
     }
 
     /**
+     * Start the existing Cashier Stripe Checkout subscription flow.
+     *
      * @param  array<string, string>  $metadata
      */
     public function startCheckout(
@@ -35,7 +35,10 @@ final class StripeBillingProvider implements BillingProvider
         User $actor,
     ): BillingCheckoutOutcome {
         $checkout = $organization
-            ->newSubscription((string) config('billing.subscription_type'), $externalPriceId)
+            ->newSubscription(
+                (string) config('billing.subscription_type'),
+                $externalPriceId,
+            )
             ->checkout([
                 'success_url' => $successUrl,
                 'cancel_url' => $cancelUrl,
@@ -45,18 +48,27 @@ final class StripeBillingProvider implements BillingProvider
                 ],
             ]);
 
-        return BillingCheckoutOutcome::redirect($checkout->redirect()->getTargetUrl());
+        return BillingCheckoutOutcome::redirect(
+            $checkout->redirect()->getTargetUrl(),
+        );
     }
 
-    public function billingPortalUrl(Organization $organization, string $returnUrl): string
-    {
+    /** Resolve the organization's existing Stripe billing portal URL. */
+    public function billingPortalUrl(
+        Organization $organization,
+        string $returnUrl,
+    ): string {
         return $organization->billingPortalUrl($returnUrl);
     }
 
-    public function retrieveSubscription(BillingSubscription $subscription): RemoteBillingSubscription
-    {
+    /** Retrieve and normalize authoritative Stripe subscription state. */
+    public function retrieveSubscription(
+        BillingSubscription $subscription,
+    ): RemoteBillingSubscription {
         try {
-            $remote = Cashier::stripe()->subscriptions->retrieve($subscription->external_subscription_id);
+            $remote = Cashier::stripe()
+                ->subscriptions
+                ->retrieve($subscription->external_subscription_id);
         } catch (InvalidRequestException $exception) {
             if ($exception->getHttpStatus() === 404) {
                 throw new RemoteBillingSubscriptionNotFoundException;
@@ -65,44 +77,63 @@ final class StripeBillingProvider implements BillingProvider
             throw $exception;
         }
 
-        if (! $remote instanceof StripeSubscription || $remote->id !== $subscription->external_subscription_id
-            || $remote->customer !== $subscription->billingCustomer->external_customer_id
-            || ! is_string($remote->status)) {
-            throw new \RuntimeException('Stripe returned an invalid subscription response.');
+        $externalCustomerId =
+            $subscription->billingCustomer->external_customer_id;
+
+        if ($remote->id !== $subscription->external_subscription_id
+            || $remote->customer !== $externalCustomerId) {
+            throw new \RuntimeException(
+                'Stripe returned an invalid subscription response.',
+            );
         }
 
-        $priceId = $remote->items->data[0]->price->id ?? null;
+        $item = $remote->items->data[0] ?? null;
 
-        if (! is_string($priceId) && $priceId !== null) {
-            throw new \RuntimeException('Stripe returned an invalid subscription price.');
+        if ($item === null) {
+            throw new \RuntimeException(
+                'Stripe returned a subscription without a billing item.',
+            );
         }
 
-        $currentPeriodEndsAt = $this->timestamp($remote->current_period_end);
+        $priceId = $item->price->id;
+        $currentPeriodEndsAt = $this->timestamp(
+            $item->current_period_end,
+        );
+
         $endsAt = $remote->cancel_at_period_end === true
             ? $currentPeriodEndsAt
             : $this->timestamp($remote->cancel_at);
 
         return new RemoteBillingSubscription(
             externalSubscriptionId: $remote->id,
-            externalCustomerId: $remote->customer,
+            externalCustomerId: $externalCustomerId,
             externalPlanId: $priceId,
             status: $remote->status,
             livemode: $remote->livemode,
             trialEndsAt: $this->timestamp($remote->trial_end),
             currentPeriodEndsAt: $currentPeriodEndsAt,
-            nextBillingAt: $endsAt === null ? $currentPeriodEndsAt : null,
+            nextBillingAt: $endsAt === null
+                ? $currentPeriodEndsAt
+                : null,
             endsAt: $endsAt,
             cancelledAt: $this->timestamp($remote->canceled_at),
         );
     }
 
-    public function cancelSubscription(BillingSubscription $subscription): void
-    {
-        throw new \RuntimeException('Stripe subscription cancellation is managed through the billing portal.');
+    /** Preserve Stripe cancellation management through its billing portal. */
+    public function cancelSubscription(
+        BillingSubscription $subscription,
+    ): void {
+        throw new \RuntimeException(
+            'Stripe subscription cancellation is managed through the billing portal.',
+        );
     }
 
+    /** Convert a Stripe Unix timestamp to UTC. */
     private function timestamp(mixed $value): ?Carbon
     {
-        return is_int($value) ? Carbon::createFromTimestampUTC($value) : null;
+        return is_int($value)
+            ? Carbon::createFromTimestampUTC($value)
+            : null;
     }
 }
