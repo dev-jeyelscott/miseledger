@@ -1,11 +1,11 @@
 import { Form, Head } from '@inertiajs/react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InventoryItemUnitController from '@/actions/App/Http/Controllers/Inventory/InventoryItemUnitController';
-import InputError from '@/components/input-error';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 import type { InventoryItemUnitData, UnitOfMeasureData } from '@/types';
 
@@ -35,7 +35,7 @@ export default function EditInventoryItemUnit({ item, conversion }: Props) {
                     </p>
                 </div>
 
-                <div className="max-w-xl rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
+                <div className="max-w-xl rounded-xl border border-border bg-card p-5">
                     <Form
                         {...InventoryItemUnitController.update.form([
                             item.id,
@@ -45,13 +45,19 @@ export default function EditInventoryItemUnit({ item, conversion }: Props) {
                     >
                         {({ processing, errors }) => (
                             <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="quantity_in_base_unit">
-                                        Quantity in base unit
-                                    </Label>
-
+                                <Field
+                                    id="quantity_in_base_unit"
+                                    label="Quantity in base unit"
+                                    error={errors.quantity_in_base_unit}
+                                    helper={
+                                        <>
+                                            1 {conversion.unitOfMeasure.symbol}{' '}
+                                            = quantity ×{' '}
+                                            {item.baseUnitOfMeasure.symbol}
+                                        </>
+                                    }
+                                >
                                     <Input
-                                        id="quantity_in_base_unit"
                                         name="quantity_in_base_unit"
                                         type="number"
                                         min="0.000001"
@@ -61,39 +67,29 @@ export default function EditInventoryItemUnit({ item, conversion }: Props) {
                                         }
                                         required
                                     />
+                                </Field>
 
-                                    <p className="text-xs text-muted-foreground">
-                                        1 {conversion.unitOfMeasure.symbol} ={' '}
-                                        quantity ×{' '}
-                                        {item.baseUnitOfMeasure.symbol}
-                                    </p>
-
-                                    <InputError
-                                        message={errors.quantity_in_base_unit}
-                                    />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="active">Status</Label>
-
-                                    <select
-                                        id="active"
+                                <Field
+                                    id="active"
+                                    label="Status"
+                                    error={errors.active}
+                                >
+                                    <NativeSelect
                                         name="active"
                                         defaultValue={
                                             conversion.active ? '1' : '0'
                                         }
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="1">Active</option>
                                         <option value="0">Inactive</option>
-                                    </select>
+                                    </NativeSelect>
+                                </Field>
 
-                                    <InputError message={errors.active} />
-                                </div>
-
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2">
                                     <Button type="submit" disabled={processing}>
-                                        Save conversion
+                                        {processing
+                                            ? 'Saving…'
+                                            : 'Save conversion'}
                                     </Button>
 
                                     <PreviousPageButton
@@ -117,15 +113,23 @@ export default function EditInventoryItemUnit({ item, conversion }: Props) {
     );
 }
 
-EditInventoryItemUnit.layout = {
+EditInventoryItemUnit.layout = (page: Props) => ({
     breadcrumbs: [
+        { title: 'Dashboard', href: dashboard() },
         {
-            title: 'Dashboard',
-            href: dashboard(),
-        },
-        {
-            title: 'Inventory',
+            title: 'Inventory items',
             href: InventoryItemController.index(),
         },
+        {
+            title: page.item.name,
+            href: InventoryItemController.edit(page.item.id),
+        },
+        {
+            title: 'Edit unit conversion',
+            href: InventoryItemUnitController.edit([
+                page.item.id,
+                page.conversion.id,
+            ]),
+        },
     ],
-};
+});

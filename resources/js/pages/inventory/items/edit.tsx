@@ -3,7 +3,6 @@ import { useEffect } from 'react';
 import InventoryItemBarcodeController from '@/actions/App/Http/Controllers/Inventory/InventoryItemBarcodeController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InventoryItemUnitController from '@/actions/App/Http/Controllers/Inventory/InventoryItemUnitController';
-import InputError from '@/components/input-error';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { PageHeader } from '@/components/page-header';
 import { StatusBadge } from '@/components/status-badge';
@@ -19,7 +18,6 @@ import {
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import { useDirtyFormNavigation } from '@/hooks/use-dirty-form-navigation';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
@@ -109,35 +107,30 @@ function EditBarcodeDialog({
                             <>
                                 <input type="hidden" name="_modal" value="1" />
 
-                                <div className="grid gap-2">
-                                    <Label
-                                        htmlFor={`barcode-value-${barcode.id}`}
-                                    >
-                                        Value
-                                    </Label>
+                                <Field
+                                    id={`barcode-value-${barcode.id}`}
+                                    label="Value"
+                                    error={errors.value}
+                                >
                                     <Input
-                                        id={`barcode-value-${barcode.id}`}
                                         name="value"
                                         defaultValue={barcode.value}
                                         maxLength={64}
                                         required
                                         autoFocus
+                                        className="font-mono"
                                     />
-                                    <InputError message={errors.value} />
-                                </div>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label
-                                        htmlFor={`barcode-symbology-${barcode.id}`}
-                                    >
-                                        Symbology
-                                    </Label>
-                                    <select
-                                        id={`barcode-symbology-${barcode.id}`}
+                                <Field
+                                    id={`barcode-symbology-${barcode.id}`}
+                                    label="Symbology"
+                                    error={errors.symbology}
+                                >
+                                    <NativeSelect
                                         name="symbology"
                                         defaultValue={barcode.symbology}
                                         required
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         {BARCODE_SYMBOLOGY_OPTIONS.map(
                                             (option) => (
@@ -149,23 +142,19 @@ function EditBarcodeDialog({
                                                 </option>
                                             ),
                                         )}
-                                    </select>
-                                    <InputError message={errors.symbology} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label
-                                        htmlFor={`barcode-unit-${barcode.id}`}
-                                    >
-                                        Associated unit
-                                    </Label>
-                                    <select
-                                        id={`barcode-unit-${barcode.id}`}
+                                <Field
+                                    id={`barcode-unit-${barcode.id}`}
+                                    label="Associated unit"
+                                    error={errors.inventory_item_unit_id}
+                                >
+                                    <NativeSelect
                                         name="inventory_item_unit_id"
                                         defaultValue={
                                             barcode.inventoryItemUnit?.id ?? ''
                                         }
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="">
                                             Base item (no alternate unit)
@@ -179,56 +168,45 @@ function EditBarcodeDialog({
                                                 {unit.unitOfMeasure.symbol})
                                             </option>
                                         ))}
-                                    </select>
-                                    <InputError
-                                        message={errors.inventory_item_unit_id}
-                                    />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label
-                                        htmlFor={`barcode-primary-${barcode.id}`}
-                                    >
-                                        Primary
-                                    </Label>
-                                    <select
-                                        id={`barcode-primary-${barcode.id}`}
+                                <Field
+                                    id={`barcode-primary-${barcode.id}`}
+                                    label="Primary"
+                                    error={errors.is_primary}
+                                >
+                                    <NativeSelect
                                         name="is_primary"
                                         defaultValue={
                                             barcode.isPrimary ? '1' : '0'
                                         }
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="0">Not primary</option>
                                         <option value="1">Primary</option>
-                                    </select>
-                                    <InputError message={errors.is_primary} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label
-                                        htmlFor={`barcode-active-${barcode.id}`}
-                                    >
-                                        Status
-                                    </Label>
-                                    <select
-                                        id={`barcode-active-${barcode.id}`}
+                                <Field
+                                    id={`barcode-active-${barcode.id}`}
+                                    label="Status"
+                                    error={errors.active}
+                                >
+                                    <NativeSelect
                                         name="active"
                                         defaultValue={
                                             barcode.active ? '1' : '0'
                                         }
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="1">Active</option>
                                         <option value="0">Inactive</option>
-                                    </select>
-                                    <InputError message={errors.active} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
                                 <div className="flex flex-wrap gap-2">
                                     <Button type="submit" disabled={processing}>
                                         {processing
-                                            ? 'Saving...'
+                                            ? 'Saving…'
                                             : 'Save barcode'}
                                     </Button>
                                     <Button
@@ -295,15 +273,18 @@ function EditInventoryItemUnitDialog({
                             <>
                                 <input type="hidden" name="_modal" value="1" />
 
-                                <div className="grid gap-2">
-                                    <Label
-                                        htmlFor={`conversion-quantity-${conversion.id}`}
-                                    >
-                                        Quantity in base unit
-                                    </Label>
-
+                                <Field
+                                    id={`conversion-quantity-${conversion.id}`}
+                                    label="Quantity in base unit"
+                                    error={errors.quantity_in_base_unit}
+                                    helper={
+                                        <>
+                                            1 {conversion.unitOfMeasure.symbol}{' '}
+                                            = quantity × {baseUnitSymbol}
+                                        </>
+                                    }
+                                >
                                     <Input
-                                        id={`conversion-quantity-${conversion.id}`}
                                         name="quantity_in_base_unit"
                                         type="number"
                                         min="0.000001"
@@ -314,43 +295,28 @@ function EditInventoryItemUnitDialog({
                                         required
                                         autoFocus
                                     />
+                                </Field>
 
-                                    <p className="text-xs text-muted-foreground">
-                                        1 {conversion.unitOfMeasure.symbol} ={' '}
-                                        quantity × {baseUnitSymbol}
-                                    </p>
-
-                                    <InputError
-                                        message={errors.quantity_in_base_unit}
-                                    />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label
-                                        htmlFor={`conversion-active-${conversion.id}`}
-                                    >
-                                        Status
-                                    </Label>
-
-                                    <select
-                                        id={`conversion-active-${conversion.id}`}
+                                <Field
+                                    id={`conversion-active-${conversion.id}`}
+                                    label="Status"
+                                    error={errors.active}
+                                >
+                                    <NativeSelect
                                         name="active"
                                         defaultValue={
                                             conversion.active ? '1' : '0'
                                         }
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="1">Active</option>
                                         <option value="0">Inactive</option>
-                                    </select>
-
-                                    <InputError message={errors.active} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
                                 <div className="flex flex-wrap gap-2">
                                     <Button type="submit" disabled={processing}>
                                         {processing
-                                            ? 'Saving...'
+                                            ? 'Saving…'
                                             : 'Save conversion'}
                                     </Button>
                                     <Button
@@ -770,7 +736,7 @@ export default function EditInventoryItem({
                                     {item.unitConversions.map((conversion) => (
                                         <div
                                             key={conversion.id}
-                                            className="flex items-center justify-between gap-4 px-5 py-4"
+                                            className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between md:gap-4"
                                         >
                                             <div>
                                                 <p className="font-medium">
@@ -789,11 +755,20 @@ export default function EditInventoryItem({
                                                     }
                                                 </p>
 
-                                                <p className="mt-1 text-sm text-muted-foreground">
-                                                    {conversion.active
-                                                        ? 'Active'
-                                                        : 'Inactive'}
-                                                </p>
+                                                <div className="mt-2">
+                                                    <StatusBadge
+                                                        label={
+                                                            conversion.active
+                                                                ? 'Active'
+                                                                : 'Inactive'
+                                                        }
+                                                        variant={
+                                                            conversion.active
+                                                                ? 'success'
+                                                                : 'neutral'
+                                                        }
+                                                    />
+                                                </div>
                                             </div>
 
                                             <EditInventoryItemUnitDialog
@@ -839,17 +814,17 @@ export default function EditInventoryItem({
                                                 value="1"
                                             />
 
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="unit_of_measure_id">
-                                                    Unit
-                                                </Label>
-
-                                                <select
-                                                    id="unit_of_measure_id"
+                                            <Field
+                                                id="unit_of_measure_id"
+                                                label="Unit"
+                                                error={
+                                                    errors.unit_of_measure_id
+                                                }
+                                            >
+                                                <NativeSelect
                                                     name="unit_of_measure_id"
                                                     defaultValue=""
                                                     required
-                                                    className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                                 >
                                                     <option value="" disabled>
                                                         Select unit
@@ -866,22 +841,29 @@ export default function EditInventoryItem({
                                                             </option>
                                                         ),
                                                     )}
-                                                </select>
+                                                </NativeSelect>
+                                            </Field>
 
-                                                <InputError
-                                                    message={
-                                                        errors.unit_of_measure_id
-                                                    }
-                                                />
-                                            </div>
-
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="quantity_in_base_unit">
-                                                    Quantity in base unit
-                                                </Label>
-
+                                            <Field
+                                                id="quantity_in_base_unit"
+                                                label="Quantity in base unit"
+                                                error={
+                                                    errors.quantity_in_base_unit
+                                                }
+                                                helper={
+                                                    <>
+                                                        Number of{' '}
+                                                        {
+                                                            item
+                                                                .baseUnitOfMeasure
+                                                                .symbol
+                                                        }{' '}
+                                                        contained in one
+                                                        selected unit.
+                                                    </>
+                                                }
+                                            >
                                                 <Input
-                                                    id="quantity_in_base_unit"
                                                     name="quantity_in_base_unit"
                                                     type="number"
                                                     min="0.000001"
@@ -889,23 +871,7 @@ export default function EditInventoryItem({
                                                     required
                                                     placeholder="1000"
                                                 />
-
-                                                <p className="text-xs text-muted-foreground">
-                                                    Number of{' '}
-                                                    {
-                                                        item.baseUnitOfMeasure
-                                                            .symbol
-                                                    }{' '}
-                                                    contained in one selected
-                                                    unit.
-                                                </p>
-
-                                                <InputError
-                                                    message={
-                                                        errors.quantity_in_base_unit
-                                                    }
-                                                />
-                                            </div>
+                                            </Field>
 
                                             <Button
                                                 type="submit"
@@ -942,38 +908,49 @@ export default function EditInventoryItem({
                                 {item.barcodes.map((barcode) => (
                                     <div
                                         key={barcode.id}
-                                        className="flex items-center justify-between gap-4 px-5 py-4"
+                                        className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between md:gap-4"
                                     >
-                                        <div>
-                                            <p className="font-medium">
+                                        <div className="min-w-0">
+                                            <p className="font-mono text-sm break-all">
                                                 {barcode.value}
+                                            </p>
+
+                                            <div className="mt-2 flex flex-wrap items-center gap-2">
                                                 {barcode.isPrimary && (
-                                                    <Badge
-                                                        variant="secondary"
-                                                        className="ml-2"
-                                                    >
+                                                    <Badge variant="secondary">
                                                         Primary
                                                     </Badge>
                                                 )}
-                                            </p>
 
-                                            <p className="mt-1 text-sm text-muted-foreground">
-                                                {
-                                                    BARCODE_SYMBOLOGY_OPTIONS.find(
-                                                        (option) =>
-                                                            option.value ===
-                                                            barcode.symbology,
-                                                    )?.label
-                                                }
-                                                {' · '}
-                                                {barcode.inventoryItemUnit
-                                                    ? `${barcode.inventoryItemUnit.unitOfMeasure.name} (${barcode.inventoryItemUnit.unitOfMeasure.symbol})`
-                                                    : 'Base item'}
-                                                {' · '}
-                                                {barcode.active
-                                                    ? 'Active'
-                                                    : 'Inactive'}
-                                            </p>
+                                                <span className="text-sm text-muted-foreground">
+                                                    {
+                                                        BARCODE_SYMBOLOGY_OPTIONS.find(
+                                                            (option) =>
+                                                                option.value ===
+                                                                barcode.symbology,
+                                                        )?.label
+                                                    }
+                                                </span>
+
+                                                <span className="text-sm text-muted-foreground">
+                                                    {barcode.inventoryItemUnit
+                                                        ? `${barcode.inventoryItemUnit.unitOfMeasure.name} (${barcode.inventoryItemUnit.unitOfMeasure.symbol})`
+                                                        : 'Base item'}
+                                                </span>
+
+                                                <StatusBadge
+                                                    label={
+                                                        barcode.active
+                                                            ? 'Active'
+                                                            : 'Inactive'
+                                                    }
+                                                    variant={
+                                                        barcode.active
+                                                            ? 'success'
+                                                            : 'neutral'
+                                                    }
+                                                />
+                                            </div>
                                         </div>
 
                                         <EditBarcodeDialog
@@ -1007,28 +984,29 @@ export default function EditInventoryItem({
                         >
                             {({ processing, errors }) => (
                                 <>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="value">Value</Label>
+                                    <Field
+                                        id="value"
+                                        label="Value"
+                                        error={errors.value}
+                                    >
                                         <Input
-                                            id="value"
                                             name="value"
                                             maxLength={64}
                                             required
                                             placeholder="0123456789012"
+                                            className="font-mono"
                                         />
-                                        <InputError message={errors.value} />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="symbology">
-                                            Symbology
-                                        </Label>
-                                        <select
-                                            id="symbology"
+                                    <Field
+                                        id="symbology"
+                                        label="Symbology"
+                                        error={errors.symbology}
+                                    >
+                                        <NativeSelect
                                             name="symbology"
                                             defaultValue="ean_13"
                                             required
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                         >
                                             {BARCODE_SYMBOLOGY_OPTIONS.map(
                                                 (option) => (
@@ -1040,21 +1018,17 @@ export default function EditInventoryItem({
                                                     </option>
                                                 ),
                                             )}
-                                        </select>
-                                        <InputError
-                                            message={errors.symbology}
-                                        />
-                                    </div>
+                                        </NativeSelect>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="inventory_item_unit_id">
-                                            Associated unit
-                                        </Label>
-                                        <select
-                                            id="inventory_item_unit_id"
+                                    <Field
+                                        id="inventory_item_unit_id"
+                                        label="Associated unit"
+                                        error={errors.inventory_item_unit_id}
+                                    >
+                                        <NativeSelect
                                             name="inventory_item_unit_id"
                                             defaultValue=""
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                         >
                                             <option value="">
                                                 Base item (no alternate unit)
@@ -1078,33 +1052,24 @@ export default function EditInventoryItem({
                                                     </option>
                                                 ),
                                             )}
-                                        </select>
-                                        <InputError
-                                            message={
-                                                errors.inventory_item_unit_id
-                                            }
-                                        />
-                                    </div>
+                                        </NativeSelect>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="is_primary">
-                                            Primary
-                                        </Label>
-                                        <select
-                                            id="is_primary"
+                                    <Field
+                                        id="is_primary"
+                                        label="Primary"
+                                        error={errors.is_primary}
+                                    >
+                                        <NativeSelect
                                             name="is_primary"
                                             defaultValue="0"
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                         >
                                             <option value="0">
                                                 Not primary
                                             </option>
                                             <option value="1">Primary</option>
-                                        </select>
-                                        <InputError
-                                            message={errors.is_primary}
-                                        />
-                                    </div>
+                                        </NativeSelect>
+                                    </Field>
 
                                     <input
                                         type="hidden"

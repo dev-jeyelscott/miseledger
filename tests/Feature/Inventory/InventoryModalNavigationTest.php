@@ -291,3 +291,36 @@ test('inventory modal and return controls use shared navigation primitives', fun
             ->toContain('PreviousPageButton');
     }
 });
+
+test('inventory item unit conversion and barcode ui follow the canonical contract', function () {
+    $editSource = file_get_contents(
+        resource_path('js/pages/inventory/items/edit.tsx'),
+    );
+
+    expect($editSource)
+        ->toContain("import { Field } from '@/components/ui/field';")
+        ->toContain(
+            "import { NativeSelect } from '@/components/ui/native-select';",
+        )
+        ->not->toContain('<select')
+        ->toContain('font-mono text-sm break-all')
+        ->toContain('md:flex-row md:items-center md:justify-between')
+        ->toContain("'Saving…'")
+        ->toContain("'Adding…'")
+        ->not->toContain('Saving...');
+
+    $unitEditSource = file_get_contents(
+        resource_path('js/pages/inventory/items/unit-edit.tsx'),
+    );
+
+    expect($unitEditSource)
+        ->toContain("import { Field } from '@/components/ui/field';")
+        ->toContain(
+            "import { NativeSelect } from '@/components/ui/native-select';",
+        )
+        ->not->toContain('<select')
+        ->not->toContain('border-sidebar-border')
+        ->toContain("'Saving…'")
+        ->toContain('page.item.name')
+        ->toContain("'Edit unit conversion'");
+});
