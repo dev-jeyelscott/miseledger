@@ -225,6 +225,23 @@ Backup verification failures are detectable through the workflow's own failure s
 
 Backup verification always runs against an isolated CI-provisioned PostgreSQL instance and restores only into a separate, disposable database created for that run. It never connects to, restores into, or mutates the production database, and it never logs secrets, connection strings, or archive contents.
 
+## Restore Drill
+
+The scheduled `billing restore readiness` workflow (`.github/workflows/billing-restore-readiness.yml`) is also the required non-production restore drill: it is runnable on demand before launch and runs monthly on a schedule, entirely against an isolated, CI-provisioned PostgreSQL instance, restoring only into a clean, disposable target created for that run. It never uses production credentials or connects to the production database.
+
+Each drill run records the following evidence in the workflow run's GitHub Actions job summary, the same approved operational evidence destination used for [Backup Verification](#backup-verification):
+
+- backup timestamp;
+- restore start time;
+- restore completion time;
+- backup size;
+- result;
+- validation result of the restored business and ledger records;
+- achieved RTO;
+- achieved RPO.
+
+The initial targets are a maximum RPO of 24 hours and a maximum RTO of 4 hours. Achieved RPO is measured as the age of the backup relative to the restore start; achieved RTO is measured as the elapsed time from restore start to validated restore completion. A drill that misses either target fails the workflow: the run turns red in the Actions tab and triggers GitHub's default failed-scheduled-workflow notification, the same operator-approved alerting path documented in [Backup Verification](#backup-verification).
+
 ## Restore Runbook
 
 This runbook recovers MiseLedger from a verified PostgreSQL backup after data loss or corruption. Use it only when the incident is PostgreSQL data loss/corruption; use [Rollback](#rollback) instead when the application image itself is at fault and the schema remains compatible.

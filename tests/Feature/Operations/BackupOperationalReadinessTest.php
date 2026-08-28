@@ -160,3 +160,63 @@ test('the backup verification workflow restores only into an isolated, disposabl
         ->not->toContain('production')
         ->not->toContain('DB_PASSWORD }}');
 });
+
+test('the restore drill workflow is runnable on demand and scheduled for periodic execution', function () {
+    $workflow = file_get_contents(base_path('.github/workflows/billing-restore-readiness.yml'));
+
+    expect($workflow)
+        ->toContain('workflow_dispatch:')
+        ->toContain('schedule:')
+        ->toContain('cron:');
+});
+
+test('the restore drill workflow records backup timestamp, restore start and completion, backup size, validation result, achieved RTO, and achieved RPO', function () {
+    $workflow = file_get_contents(base_path('.github/workflows/billing-restore-readiness.yml'));
+
+    expect($workflow)
+        ->toContain('BACKUP_TIMESTAMP=$(date -u +%FT%TZ)')
+        ->toContain('BACKUP_SIZE_BYTES=$(stat -c%s')
+        ->toContain('RESTORE_START=$(date -u +%FT%TZ)')
+        ->toContain('RESTORE_END=$(date -u +%FT%TZ)')
+        ->toContain('VALIDATION_RESULT=pass')
+        ->toContain('VALIDATION_RESULT=fail')
+        ->toContain('ACHIEVED_RTO_SECONDS=$((RESTORE_END_EPOCH - RESTORE_START_EPOCH))')
+        ->toContain('ACHIEVED_RPO_SECONDS=$((RESTORE_START_EPOCH - BACKUP_EPOCH))')
+        ->toContain('- Backup timestamp: $BACKUP_TIMESTAMP')
+        ->toContain('- Backup size (bytes): $BACKUP_SIZE_BYTES')
+        ->toContain('- Restore start: $RESTORE_START')
+        ->toContain('- Restore completion: $RESTORE_END')
+        ->toContain('- Validation result: $VALIDATION_RESULT')
+        ->toContain('- Achieved RTO (seconds):')
+        ->toContain('- Achieved RPO (seconds):')
+        ->toContain('- Drill result: $DRILL_RESULT');
+});
+
+test('the restore drill workflow targets a maximum RPO of 24 hours and RTO of 4 hours and fails the run when either target is missed', function () {
+    $workflow = file_get_contents(base_path('.github/workflows/billing-restore-readiness.yml'));
+
+    expect($workflow)
+        ->toContain('RTO_TARGET_SECONDS=14400')
+        ->toContain('RPO_TARGET_SECONDS=86400')
+        ->toContain('if [ "$ACHIEVED_RTO_SECONDS" -gt "$RTO_TARGET_SECONDS" ] || [ "$ACHIEVED_RPO_SECONDS" -gt "$RPO_TARGET_SECONDS" ]; then')
+        ->toContain('DRILL_RESULT=fail')
+        ->toContain('Restore drill missed its RTO/RPO target')
+        ->toContain('exit 1');
+});
+
+test('the deployment guide documents the restore drill evidence contract and its initial RPO/RTO targets', function () {
+    $docs = file_get_contents(base_path('docs/deployment.md'));
+
+    expect($docs)
+        ->toContain('## Restore Drill')
+        ->toContain('required non-production restore drill')
+        ->toContain('- backup timestamp;')
+        ->toContain('- restore start time;')
+        ->toContain('- restore completion time;')
+        ->toContain('- backup size;')
+        ->toContain('- validation result of the restored business and ledger records;')
+        ->toContain('- achieved RTO;')
+        ->toContain('- achieved RPO.')
+        ->toContain('maximum RPO of 24 hours and a maximum RTO of 4 hours')
+        ->toContain('A drill that misses either target fails the workflow');
+});

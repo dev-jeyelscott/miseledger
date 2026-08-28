@@ -91,27 +91,72 @@ jobs:
       - name: Create and verify PostgreSQL backup artifact
         run: |
           set -euo pipefail
+          echo "BACKUP_TIMESTAMP=$(date -u +%FT%TZ)" >> "$GITHUB_ENV"
           pg_dump --format=custom --no-owner --no-privileges --file=/tmp/miseledger-restore-readiness.dump --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" "$DB_DATABASE"
           test -s /tmp/miseledger-restore-readiness.dump
           pg_restore --list /tmp/miseledger-restore-readiness.dump > /dev/null
+          echo "BACKUP_SIZE_BYTES=$(stat -c%s /tmp/miseledger-restore-readiness.dump)" >> "$GITHUB_ENV"
 
       - name: Restore PostgreSQL backup into a separate database
         run: |
           set -euo pipefail
+          echo "RESTORE_START=$(date -u +%FT%TZ)" >> "$GITHUB_ENV"
           createdb --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" miseledger_restore_target
           pg_restore --clean --if-exists --no-owner --no-privileges --dbname="postgresql://$DB_USERNAME:$DB_PASSWORD@$DB_HOST:$DB_PORT/miseledger_restore_target" /tmp/miseledger-restore-readiness.dump
 
       - name: Verify restored billing and ledger records
         run: |
-          psql --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" --dbname=miseledger_restore_target --tuples-only --no-align --command="SELECT (SELECT count(*) FROM organizations WHERE stripe_id = 'cus_restore_readiness'), (SELECT count(*) FROM subscriptions WHERE stripe_id = 'sub_restore_readiness'), (SELECT count(*) FROM stock_movements WHERE idempotency_key = 'restore-readiness:opening');" | grep -Fx '1|1|1'
+          set -o pipefail
+          RESULT=$(psql --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" --dbname=miseledger_restore_target --tuples-only --no-align --command="SELECT (SELECT count(*) FROM organizations WHERE stripe_id = 'cus_restore_readiness'), (SELECT count(*) FROM subscriptions WHERE stripe_id = 'sub_restore_readiness'), (SELECT count(*) FROM stock_movements WHERE idempotency_key = 'restore-readiness:opening');")
+          echo "RESTORE_END=$(date -u +%FT%TZ)" >> "$GITHUB_ENV"
+          if echo "$RESULT" | grep -Fx '1|1|1'; then
+            echo "VALIDATION_RESULT=pass" >> "$GITHUB_ENV"
+          else
+            echo "VALIDATION_RESULT=fail" >> "$GITHUB_ENV"
+            exit 1
+          fi
 
       - name: Record backup verification timestamp
         if: success()
         run: |
-          echo "**Backup verification succeeded:** $(date -u +%FT%TZ)" >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          BACKUP_EPOCH=$(date -u -d "$BACKUP_TIMESTAMP" +%s)
+          RESTORE_START_EPOCH=$(date -u -d "$RESTORE_START" +%s)
+          RESTORE_END_EPOCH=$(date -u -d "$RESTORE_END" +%s)
+          ACHIEVED_RTO_SECONDS=$((RESTORE_END_EPOCH - RESTORE_START_EPOCH))
+          ACHIEVED_RPO_SECONDS=$((RESTORE_START_EPOCH - BACKUP_EPOCH))
+          RTO_TARGET_SECONDS=14400
+          RPO_TARGET_SECONDS=86400
+          DRILL_RESULT=pass
+          if [ "$ACHIEVED_RTO_SECONDS" -gt "$RTO_TARGET_SECONDS" ] || [ "$ACHIEVED_RPO_SECONDS" -gt "$RPO_TARGET_SECONDS" ]; then
+            DRILL_RESULT=fail
+          fi
+          {
+            echo "**Backup verification succeeded:** $(date -u +%FT%TZ)"
+            echo "- Backup timestamp: $BACKUP_TIMESTAMP"
+            echo "- Backup size (bytes): $BACKUP_SIZE_BYTES"
+            echo "- Restore start: $RESTORE_START"
+            echo "- Restore completion: $RESTORE_END"
+            echo "- Validation result: $VALIDATION_RESULT"
+            echo "- Achieved RTO (seconds): $ACHIEVED_RTO_SECONDS (target: $RTO_TARGET_SECONDS)"
+            echo "- Achieved RPO (seconds): $ACHIEVED_RPO_SECONDS (target: $RPO_TARGET_SECONDS)"
+            echo "- Drill result: $DRILL_RESULT"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$DRILL_RESULT" = "fail" ]; then
+            echo "Restore drill missed its RTO/RPO target" >&2
+            exit 1
+          fi
 
       - name: Report backup verification failure
         if: failure()
         run: |
-          echo "**Backup verification FAILED:** $(date -u +%FT%TZ)" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "**Backup verification FAILED:** $(date -u +%FT%TZ)"
+            echo "- Backup timestamp: ${BACKUP_TIMESTAMP:-unavailable}"
+            echo "- Backup size (bytes): ${BACKUP_SIZE_BYTES:-unavailable}"
+            echo "- Restore start: ${RESTORE_START:-unavailable}"
+            echo "- Restore completion: ${RESTORE_END:-unavailable}"
+            echo "- Validation result: ${VALIDATION_RESULT:-fail}"
+            echo "- Drill result: fail"
+          } >> "$GITHUB_STEP_SUMMARY"
           exit 1
