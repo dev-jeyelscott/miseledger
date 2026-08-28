@@ -1,7 +1,7 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
-import InventoryProductController from '@/actions/App/Http/Controllers/Inventory/InventoryProductController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
+import InventoryProductController from '@/actions/App/Http/Controllers/Inventory/InventoryProductController';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -108,13 +108,22 @@ export default function ProductFamiliesIndex({
                             </caption>
                             <thead className="bg-muted/40 text-left text-muted-foreground">
                                 <tr>
-                                    <th scope="col" className="px-4 py-3 font-medium">
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium"
+                                    >
                                         Product family
                                     </th>
-                                    <th scope="col" className="px-4 py-3 font-medium">
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium"
+                                    >
                                         Variants
                                     </th>
-                                    <th scope="col" className="px-4 py-3 font-medium">
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium"
+                                    >
                                         Status
                                     </th>
                                 </tr>

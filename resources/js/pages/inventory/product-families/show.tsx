@@ -62,7 +62,9 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
 
                 {canManage && (
                     <section className="rounded-xl border border-sidebar-border/70 bg-card p-5 dark:border-sidebar-border">
-                        <h2 className="text-sm font-semibold">Family details</h2>
+                        <h2 className="text-sm font-semibold">
+                            Family details
+                        </h2>
                         <Form
                             {...InventoryProductController.update.form(
                                 productFamily.id,
@@ -101,7 +103,9 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                         <InputError message={errors.active} />
                                     </div>
                                     <Button type="submit" disabled={processing}>
-                                        {processing ? 'Saving...' : 'Save family'}
+                                        {processing
+                                            ? 'Saving...'
+                                            : 'Save family'}
                                     </Button>
                                 </>
                             )}
@@ -111,7 +115,9 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
 
                 <section className="rounded-xl border border-sidebar-border/70 bg-card dark:border-sidebar-border">
                     <div className="border-b border-sidebar-border/70 px-4 py-3 dark:border-sidebar-border">
-                        <h2 className="text-sm font-semibold">Controlled options</h2>
+                        <h2 className="text-sm font-semibold">
+                            Controlled options
+                        </h2>
                         <p className="mt-1 text-xs text-muted-foreground">
                             Define the allowed dimensions and values used to
                             describe variants in this family.
@@ -144,9 +150,17 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                             />
                                             <InputError message={errors.name} />
                                         </div>
-                                        <Button type="submit" disabled={processing}>
-                                            <Plus className="size-4" aria-hidden="true" />
-                                            {processing ? 'Adding...' : 'Add option'}
+                                        <Button
+                                            type="submit"
+                                            disabled={processing}
+                                        >
+                                            <Plus
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            {processing
+                                                ? 'Adding...'
+                                                : 'Add option'}
                                         </Button>
                                     </>
                                 )}
@@ -170,94 +184,218 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                 >
                                     <div className="flex flex-wrap items-center justify-between gap-3">
                                         <div className="flex items-center gap-2">
-                                            <h3 className="font-semibold">{option.name}</h3>
-                                            <Badge variant={option.active ? 'default' : 'secondary'}>
-                                                {option.active ? 'Active' : 'Inactive'}
+                                            <h3 className="font-semibold">
+                                                {option.name}
+                                            </h3>
+                                            <Badge
+                                                variant={
+                                                    option.active
+                                                        ? 'default'
+                                                        : 'secondary'
+                                                }
+                                            >
+                                                {option.active
+                                                    ? 'Active'
+                                                    : 'Inactive'}
                                             </Badge>
                                         </div>
                                         {canManage && (
                                             <Form
-                                                {...InventoryProductOptionController.update.form([
-                                                    productFamily.id,
-                                                    option.id,
-                                                ])}
+                                                {...InventoryProductOptionController.update.form(
+                                                    [
+                                                        productFamily.id,
+                                                        option.id,
+                                                    ],
+                                                )}
                                                 className="flex flex-wrap items-end gap-2"
                                             >
                                                 {({ processing, errors }) => (
                                                     <>
                                                         <div className="grid gap-1">
-                                                            <Label className="sr-only" htmlFor={`option-name-${option.id}`}>
+                                                            <Label
+                                                                className="sr-only"
+                                                                htmlFor={`option-name-${option.id}`}
+                                                            >
                                                                 Option name
                                                             </Label>
-                                                            <Input id={`option-name-${option.id}`} name="name" defaultValue={option.name} required />
-                                                            <InputError message={errors.name} />
+                                                            <Input
+                                                                id={`option-name-${option.id}`}
+                                                                name="name"
+                                                                defaultValue={
+                                                                    option.name
+                                                                }
+                                                                required
+                                                            />
+                                                            <InputError
+                                                                message={
+                                                                    errors.name
+                                                                }
+                                                            />
                                                         </div>
-                                                        <select name="active" defaultValue={option.active ? '1' : '0'} className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50">
-                                                            <option value="1">Active</option>
-                                                            <option value="0">Inactive</option>
+                                                        <select
+                                                            name="active"
+                                                            defaultValue={
+                                                                option.active
+                                                                    ? '1'
+                                                                    : '0'
+                                                            }
+                                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                                        >
+                                                            <option value="1">
+                                                                Active
+                                                            </option>
+                                                            <option value="0">
+                                                                Inactive
+                                                            </option>
                                                         </select>
-                                                        <Button type="submit" variant="outline" disabled={processing}>Save</Button>
+                                                        <Button
+                                                            type="submit"
+                                                            variant="outline"
+                                                            disabled={
+                                                                processing
+                                                            }
+                                                        >
+                                                            Save
+                                                        </Button>
                                                     </>
                                                 )}
                                             </Form>
                                         )}
                                     </div>
-                                    <div className="mt-4 flex flex-wrap gap-2" aria-label={`${option.name} values`}>
+                                    <div
+                                        className="mt-4 flex flex-wrap gap-2"
+                                        aria-label={`${option.name} values`}
+                                    >
                                         {option.values.map((value) =>
                                             canManage ? (
                                                 <Form
                                                     key={value.id}
-                                                    {...InventoryProductOptionValueController.update.form([
-                                                        productFamily.id,
-                                                        option.id,
-                                                        value.id,
-                                                    ])}
+                                                    {...InventoryProductOptionValueController.update.form(
+                                                        [
+                                                            productFamily.id,
+                                                            option.id,
+                                                            value.id,
+                                                        ],
+                                                    )}
                                                     className="flex items-end gap-1"
                                                 >
-                                                    {({ processing, errors }) => (
+                                                    {({
+                                                        processing,
+                                                        errors,
+                                                    }) => (
                                                         <>
                                                             <div className="grid gap-1">
-                                                                <Label className="sr-only" htmlFor={`option-value-name-${value.id}`}>
-                                                                    {option.name} value
+                                                                <Label
+                                                                    className="sr-only"
+                                                                    htmlFor={`option-value-name-${value.id}`}
+                                                                >
+                                                                    {
+                                                                        option.name
+                                                                    }{' '}
+                                                                    value
                                                                 </Label>
-                                                                <Input id={`option-value-name-${value.id}`} name="value" defaultValue={value.value} required className="h-8 w-28" />
-                                                                <InputError message={errors.value} />
+                                                                <Input
+                                                                    id={`option-value-name-${value.id}`}
+                                                                    name="value"
+                                                                    defaultValue={
+                                                                        value.value
+                                                                    }
+                                                                    required
+                                                                    className="h-8 w-28"
+                                                                />
+                                                                <InputError
+                                                                    message={
+                                                                        errors.value
+                                                                    }
+                                                                />
                                                             </div>
-                                                            <select aria-label={`${value.value} status`} name="active" defaultValue={value.active ? '1' : '0'} className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50">
-                                                                <option value="1">Active</option>
-                                                                <option value="0">Inactive</option>
+                                                            <select
+                                                                aria-label={`${value.value} status`}
+                                                                name="active"
+                                                                defaultValue={
+                                                                    value.active
+                                                                        ? '1'
+                                                                        : '0'
+                                                                }
+                                                                className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                                            >
+                                                                <option value="1">
+                                                                    Active
+                                                                </option>
+                                                                <option value="0">
+                                                                    Inactive
+                                                                </option>
                                                             </select>
-                                                            <Button type="submit" variant="ghost" size="sm" disabled={processing}>Save</Button>
+                                                            <Button
+                                                                type="submit"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                disabled={
+                                                                    processing
+                                                                }
+                                                            >
+                                                                Save
+                                                            </Button>
                                                         </>
                                                     )}
                                                 </Form>
                                             ) : (
-                                                <Badge key={value.id} variant={value.active ? 'outline' : 'secondary'}>
-                                                    {value.value}{!value.active ? ' (inactive)' : ''}
+                                                <Badge
+                                                    key={value.id}
+                                                    variant={
+                                                        value.active
+                                                            ? 'outline'
+                                                            : 'secondary'
+                                                    }
+                                                >
+                                                    {value.value}
+                                                    {!value.active
+                                                        ? ' (inactive)'
+                                                        : ''}
                                                 </Badge>
                                             ),
                                         )}
                                     </div>
                                     {canManage && (
                                         <Form
-                                            {...InventoryProductOptionValueController.store.form([
-                                                productFamily.id,
-                                                option.id,
-                                            ])}
+                                            {...InventoryProductOptionValueController.store.form(
+                                                [productFamily.id, option.id],
+                                            )}
                                             className="mt-4 flex flex-wrap items-end gap-2"
                                         >
                                             {({ processing, errors }) => (
                                                 <>
                                                     <div className="grid gap-1">
-                                                        <Label htmlFor={`option-value-${option.id}`}>
+                                                        <Label
+                                                            htmlFor={`option-value-${option.id}`}
+                                                        >
                                                             Add value
                                                         </Label>
-                                                        <Input id={`option-value-${option.id}`} name="value" required placeholder="e.g., Small" />
-                                                        <InputError message={errors.value} />
+                                                        <Input
+                                                            id={`option-value-${option.id}`}
+                                                            name="value"
+                                                            required
+                                                            placeholder="e.g., Small"
+                                                        />
+                                                        <InputError
+                                                            message={
+                                                                errors.value
+                                                            }
+                                                        />
                                                     </div>
-                                                    <input type="hidden" name="active" value="1" />
-                                                    <Button type="submit" variant="outline" disabled={processing}>
-                                                        {processing ? 'Adding...' : 'Add value'}
+                                                    <input
+                                                        type="hidden"
+                                                        name="active"
+                                                        value="1"
+                                                    />
+                                                    <Button
+                                                        type="submit"
+                                                        variant="outline"
+                                                        disabled={processing}
+                                                    >
+                                                        {processing
+                                                            ? 'Adding...'
+                                                            : 'Add value'}
                                                     </Button>
                                                 </>
                                             )}
@@ -273,35 +411,125 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                     <div className="border-b border-sidebar-border/70 px-4 py-3 dark:border-sidebar-border">
                         <h2 className="text-sm font-semibold">Variants</h2>
                         <p className="mt-1 text-xs text-muted-foreground">
-                            Item details remain owned and edited in the inventory item record.
+                            Item details remain owned and edited in the
+                            inventory item record.
                         </p>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-[56rem] text-sm">
-                            <caption className="sr-only">Inventory item variants for {productFamily.name}</caption>
+                            <caption className="sr-only">
+                                Inventory item variants for {productFamily.name}
+                            </caption>
                             <thead className="bg-muted/40 text-left text-muted-foreground">
                                 <tr>
-                                    <th scope="col" className="px-4 py-3 font-medium">Variant description</th>
-                                    <th scope="col" className="px-4 py-3 font-medium">Brand</th>
-                                    <th scope="col" className="px-4 py-3 font-medium">SKU</th>
-                                    <th scope="col" className="px-4 py-3 font-medium">Barcode</th>
-                                    <th scope="col" className="px-4 py-3 font-medium">Base unit</th>
-                                    <th scope="col" className="px-4 py-3 font-medium">Status</th>
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium"
+                                    >
+                                        Variant description
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium"
+                                    >
+                                        Brand
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium"
+                                    >
+                                        SKU
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium"
+                                    >
+                                        Barcode
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium"
+                                    >
+                                        Base unit
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium"
+                                    >
+                                        Status
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {productFamily.variants.length === 0 ? (
-                                    <tr><td colSpan={6} className="px-4 py-10 text-center"><p className="font-medium">No variants yet</p><p className="mt-1 text-sm text-muted-foreground">Associate an existing inventory item with this product family from its item form.</p></td></tr>
-                                ) : productFamily.variants.map((variant) => (
-                                    <tr key={variant.id} className="border-t border-sidebar-border/70 hover:bg-muted/30 dark:border-sidebar-border">
-                                        <td className="px-4 py-3"><Link href={InventoryItemController.edit(variant.id)} className="font-medium focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">{variant.description}</Link><p className="mt-1 text-xs text-muted-foreground">{variant.name}</p></td>
-                                        <td className="px-4 py-3">{variant.brand?.name ?? '—'}</td>
-                                        <td className="px-4 py-3 font-mono text-xs">{variant.sku}</td>
-                                        <td className="px-4 py-3 font-mono text-xs">{variant.barcode ?? '—'}</td>
-                                        <td className="px-4 py-3">{variant.baseUnitOfMeasure.name} ({variant.baseUnitOfMeasure.symbol})</td>
-                                        <td className="px-4 py-3"><Badge variant={variant.active ? 'default' : 'secondary'}>{variant.active ? 'Active' : 'Inactive'}</Badge></td>
+                                    <tr>
+                                        <td
+                                            colSpan={6}
+                                            className="px-4 py-10 text-center"
+                                        >
+                                            <p className="font-medium">
+                                                No variants yet
+                                            </p>
+                                            <p className="mt-1 text-sm text-muted-foreground">
+                                                Associate an existing inventory
+                                                item with this product family
+                                                from its item form.
+                                            </p>
+                                        </td>
                                     </tr>
-                                ))}
+                                ) : (
+                                    productFamily.variants.map((variant) => (
+                                        <tr
+                                            key={variant.id}
+                                            className="border-t border-sidebar-border/70 hover:bg-muted/30 dark:border-sidebar-border"
+                                        >
+                                            <td className="px-4 py-3">
+                                                <Link
+                                                    href={InventoryItemController.edit(
+                                                        variant.id,
+                                                    )}
+                                                    className="font-medium focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                >
+                                                    {variant.description}
+                                                </Link>
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    {variant.name}
+                                                </p>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                {variant.brand?.name ?? '—'}
+                                            </td>
+                                            <td className="px-4 py-3 font-mono text-xs">
+                                                {variant.sku}
+                                            </td>
+                                            <td className="px-4 py-3 font-mono text-xs">
+                                                {variant.barcode ?? '—'}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                {variant.baseUnitOfMeasure.name}{' '}
+                                                (
+                                                {
+                                                    variant.baseUnitOfMeasure
+                                                        .symbol
+                                                }
+                                                )
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <Badge
+                                                    variant={
+                                                        variant.active
+                                                            ? 'default'
+                                                            : 'secondary'
+                                                    }
+                                                >
+                                                    {variant.active
+                                                        ? 'Active'
+                                                        : 'Inactive'}
+                                                </Badge>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
                     </div>
