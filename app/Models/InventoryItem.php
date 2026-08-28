@@ -135,6 +135,16 @@ class InventoryItem extends Model
     }
 
     /**
+     * Get controlled option value associations for this variant item.
+     *
+     * @return HasMany<InventoryItemOptionValue, $this>
+     */
+    public function optionValueAssociations(): HasMany
+    {
+        return $this->hasMany(InventoryItemOptionValue::class);
+    }
+
+    /**
      * Cast persisted item state.
      *
      * @return array<string, string>
