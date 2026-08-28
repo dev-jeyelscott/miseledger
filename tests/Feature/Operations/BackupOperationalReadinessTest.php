@@ -288,6 +288,34 @@ test('the backup command fails safely without executing pg_dump or restic when b
         ->assertFailed();
 });
 
+test('the backup command fails safely when an approved-scheme repository host resolves to the application host or localhost', function (string $repository) {
+    config()->set('backup.restic_repository', $repository);
+    config()->set('backup.restic_password', 'a-repository-password');
+    config()->set('backup.alert_webhook_url', 'https://hooks.example.com/backup-alerts');
+
+    $this->artisan('backup:database')
+        ->assertFailed();
+})->with([
+    'rest over localhost' => ['rest:http://localhost:8000/miseledger'],
+    'rest over the app service name' => ['rest:http://app:8000/miseledger'],
+    'sftp over the pgsql service name' => ['sftp:backup@pgsql:/miseledger'],
+    's3 endpoint over loopback' => ['s3:http://127.0.0.1:9000/miseledger-backups'],
+    's3 bare endpoint over host.docker.internal' => ['s3:host.docker.internal/miseledger-backups'],
+]);
+
+test('the backup command fails safely when the alert webhook resolves to the application host or localhost', function (string $webhookUrl) {
+    config()->set('backup.restic_repository', 's3:https://s3.example.com/miseledger-backups');
+    config()->set('backup.restic_password', 'a-repository-password');
+    config()->set('backup.alert_webhook_url', $webhookUrl);
+
+    $this->artisan('backup:database')
+        ->assertFailed();
+})->with([
+    'localhost' => ['http://localhost:8080/alerts'],
+    'the app service name' => ['http://app/alerts'],
+    'loopback address' => ['http://127.0.0.1/alerts'],
+]);
+
 test('the backup command source enforces an approved off-host encrypted destination, required alerting, and never hardcodes credentials', function () {
     $command = file_get_contents(app_path('Console/Commands/BackupDatabase.php'));
 

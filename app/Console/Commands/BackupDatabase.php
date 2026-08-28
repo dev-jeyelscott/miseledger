@@ -22,6 +22,19 @@ final class BackupDatabase extends Command
      */
     private const OFF_HOST_SCHEMES = ['s3:', 'b2:', 'azure:', 'gs:', 'sftp:', 'rest:'];
 
+    /**
+     * Hostnames that are never a legitimate off-host backup or alert
+     * destination: loopback addresses and the application's own Compose
+     * service names. A restic repository or alert webhook resolving to one
+     * of these still passes an approved-scheme prefix check, so the host
+     * itself must also be rejected to guarantee genuine off-host storage
+     * and alerting.
+     */
+    private const DISALLOWED_HOSTS = [
+        'localhost', '127.0.0.1', '0.0.0.0', '::1', 'host.docker.internal',
+        'app', 'pgsql', 'redis', 'scheduler', 'worker', 'vite',
+    ];
+
     public function handle(): int
     {
         $repository = config('backup.restic_repository');
@@ -40,10 +53,22 @@ final class BackupDatabase extends Command
             return self::FAILURE;
         }
 
+        if ($this->isDisallowedHost($this->extractRepositoryHost($repository))) {
+            $this->error('RESTIC_REPOSITORY resolves to a local or application-host address, which is not permitted. The repository must be a genuinely off-host destination.');
+
+            return self::FAILURE;
+        }
+
         $alertWebhookUrl = config('backup.alert_webhook_url');
 
         if (! is_string($alertWebhookUrl) || $alertWebhookUrl === '') {
             $this->error('Backup failure alerting is not configured. Set BACKUP_ALERT_WEBHOOK_URL at runtime before scheduling backups.');
+
+            return self::FAILURE;
+        }
+
+        if ($this->isDisallowedHost(parse_url($alertWebhookUrl, PHP_URL_HOST) ?: null)) {
+            $this->error('BACKUP_ALERT_WEBHOOK_URL resolves to a local or application-host address, which is not permitted. The alert destination must be off-host.');
 
             return self::FAILURE;
         }
@@ -119,6 +144,36 @@ final class BackupDatabase extends Command
         $this->info('PostgreSQL backup and retention pruning completed: '.$snapshotName);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Extract the network host embedded in a restic repository string, for
+     * the backends whose syntax carries one (s3, sftp, rest). B2, Azure, and
+     * GCS repositories only carry an account-scoped bucket/container name,
+     * never a network host, so no host is extracted for them.
+     */
+    private function extractRepositoryHost(string $repository): ?string
+    {
+        [$scheme, $rest] = array_pad(explode(':', $repository, 2), 2, '');
+        $scheme = Str::lower($scheme).':';
+
+        return match ($scheme) {
+            'rest:' => parse_url($rest, PHP_URL_HOST) ?: null,
+            's3:' => Str::startsWith(Str::lower($rest), ['http://', 'https://'])
+                ? (parse_url($rest, PHP_URL_HOST) ?: null)
+                : (Str::before($rest, '/') ?: null),
+            'sftp:' => Str::of($rest)->after('@')->before(':')->toString() ?: null,
+            default => null,
+        };
+    }
+
+    private function isDisallowedHost(?string $host): bool
+    {
+        if ($host === null || $host === '') {
+            return false;
+        }
+
+        return in_array(Str::lower($host), self::DISALLOWED_HOSTS, true);
     }
 
     private function reportFailure(string $message): void
