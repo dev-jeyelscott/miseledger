@@ -6,6 +6,10 @@ use App\Actions\Inventory\SaveInventoryProduct;
 use App\Enums\OrganizationPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Inventory\SaveInventoryProductRequest;
+use App\Models\InventoryItem;
+use App\Models\InventoryProduct;
+use App\Models\InventoryProductOption;
+use App\Models\InventoryProductOptionValue;
 use App\Models\Organization;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,6 +19,9 @@ use Inertia\Response;
 
 class InventoryProductController extends Controller
 {
+    /**
+     * Show product families for the active organization.
+     */
     public function index(Request $request): Response
     {
         $organization = $this->activeOrganization($request);
@@ -27,7 +34,7 @@ class InventoryProductController extends Controller
                 ->orderByDesc('active')
                 ->orderBy('name')
                 ->get()
-                ->map(static fn ($product): array => [
+                ->map(static fn (InventoryProduct $product): array => [
                     'id' => $product->id,
                     'name' => $product->name,
                     'active' => $product->active,
@@ -39,6 +46,9 @@ class InventoryProductController extends Controller
         ]);
     }
 
+    /**
+     * Show one product family with its controlled options and variants.
+     */
     public function show(Request $request, string $inventoryProduct): Response
     {
         $organization = $this->activeOrganization($request);
@@ -64,17 +74,22 @@ class InventoryProductController extends Controller
                 'id' => $product->id,
                 'name' => $product->name,
                 'active' => $product->active,
-                'options' => $product->options->map(static fn ($option): array => [
+                'options' => $product->options->map(static fn (InventoryProductOption $option): array => [
                     'id' => $option->id,
                     'name' => $option->name,
                     'active' => $option->active,
-                    'values' => $option->values->sortBy('value')->map(static fn ($value): array => [
-                        'id' => $value->id,
-                        'value' => $value->value,
-                        'active' => $value->active,
-                    ])->values()->all(),
+                    'values' => array_values(
+                        $option->values
+                            ->sortBy('value')
+                            ->map(static fn (InventoryProductOptionValue $value): array => [
+                                'id' => $value->id,
+                                'value' => $value->value,
+                                'active' => $value->active,
+                            ])
+                            ->all(),
+                    ),
                 ])->values()->all(),
-                'variants' => $product->inventoryItems->map(static fn ($item): array => [
+                'variants' => $product->inventoryItems->map(static fn (InventoryItem $item): array => [
                     'id' => $item->id,
                     'description' => $item->description ?? $item->name,
                     'name' => $item->name,
@@ -96,6 +111,9 @@ class InventoryProductController extends Controller
         ]);
     }
 
+    /**
+     * Create a product family in the active organization.
+     */
     public function store(
         SaveInventoryProductRequest $request,
         SaveInventoryProduct $saveInventoryProduct,
@@ -119,6 +137,9 @@ class InventoryProductController extends Controller
         return back();
     }
 
+    /**
+     * Update a product family owned by the active organization.
+     */
     public function update(
         SaveInventoryProductRequest $request,
         string $inventoryProduct,
@@ -148,6 +169,9 @@ class InventoryProductController extends Controller
         return back();
     }
 
+    /**
+     * Return the active organization resolved by tenancy middleware.
+     */
     private function activeOrganization(Request $request): Organization
     {
         $organization = $request->attributes->get(

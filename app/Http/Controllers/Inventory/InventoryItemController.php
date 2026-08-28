@@ -692,7 +692,7 @@ class InventoryItemController extends Controller
      */
     private function activeProductOptions(Organization $organization): array
     {
-        return $organization
+        $products = $organization
             ->inventoryProducts()
             ->where('active', true)
             ->orderBy('name')
@@ -702,8 +702,9 @@ class InventoryItemController extends Controller
                 'name' => $product->name,
                 'active' => $product->active,
             ])
-            ->values()
             ->all();
+
+        return array_values($products);
     }
 
     /**

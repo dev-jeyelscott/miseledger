@@ -16,6 +16,9 @@ use Illuminate\Validation\Rule;
 
 class SaveInventoryProductOptionValueRequest extends FormRequest
 {
+    /**
+     * Authorize option-value mutations within the active organization and option.
+     */
     public function authorize(): bool
     {
         $user = $this->user();
@@ -29,7 +32,11 @@ class SaveInventoryProductOptionValueRequest extends FormRequest
             && ($this->route('inventoryProductOptionValue') === null || $this->inventoryProductOptionValue() !== null);
     }
 
-    /** @return array<string, list<mixed>> */
+    /**
+     * Get validation rules for a controlled product option value.
+     *
+     * @return array<string, list<mixed>>
+     */
     public function rules(): array
     {
         return [
@@ -38,13 +45,19 @@ class SaveInventoryProductOptionValueRequest extends FormRequest
                 'string',
                 'max:100',
                 Rule::unique('inventory_product_option_values', 'value')
-                    ->where(fn (Builder $query): Builder => $query->where('inventory_product_option_id', $this->inventoryProductOption()?->id ?? 0))
+                    ->where(fn (Builder $query): Builder => $query->where(
+                        'inventory_product_option_id',
+                        $this->inventoryProductOption()->id ?? 0,
+                    ))
                     ->ignore($this->inventoryProductOptionValue()),
             ],
             'active' => ['required', 'boolean'],
         ];
     }
 
+    /**
+     * Return the active organization resolved by tenancy middleware.
+     */
     public function organization(): ?Organization
     {
         $organization = $this->attributes->get('activeOrganization');
@@ -52,6 +65,9 @@ class SaveInventoryProductOptionValueRequest extends FormRequest
         return $organization instanceof Organization ? $organization : null;
     }
 
+    /**
+     * Resolve the routed product family inside the active organization.
+     */
     public function inventoryProduct(): ?InventoryProduct
     {
         $organization = $this->organization();
@@ -64,6 +80,9 @@ class SaveInventoryProductOptionValueRequest extends FormRequest
         return $organization->inventoryProducts()->find((int) $routeId);
     }
 
+    /**
+     * Resolve the routed option inside the active product family.
+     */
     public function inventoryProductOption(): ?InventoryProductOption
     {
         $product = $this->inventoryProduct();
@@ -76,6 +95,9 @@ class SaveInventoryProductOptionValueRequest extends FormRequest
         return $product->options()->find((int) $routeId);
     }
 
+    /**
+     * Resolve the routed option value inside the active option.
+     */
     public function inventoryProductOptionValue(): ?InventoryProductOptionValue
     {
         $option = $this->inventoryProductOption();
@@ -88,6 +110,9 @@ class SaveInventoryProductOptionValueRequest extends FormRequest
         return $option->values()->find((int) $routeId);
     }
 
+    /**
+     * Normalize option-value input before authorization and validation complete.
+     */
     protected function prepareForValidation(): void
     {
         $value = $this->input('value');

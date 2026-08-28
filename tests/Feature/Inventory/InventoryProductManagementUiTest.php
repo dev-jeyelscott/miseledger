@@ -95,7 +95,8 @@ test('option and value mutations are limited to inventory managers and their act
             'name' => 'Size',
             'active' => true,
         ])
-        ->assertRedirect();
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
 
     $option = $product->options()->sole();
 
@@ -105,7 +106,8 @@ test('option and value mutations are limited to inventory managers and their act
             'value' => 'Small',
             'active' => true,
         ])
-        ->assertRedirect();
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
 
     expect($option->values()->value('value'))->toBe('Small');
 });
