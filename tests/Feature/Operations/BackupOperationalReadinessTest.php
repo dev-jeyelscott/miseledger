@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Support\Facades\Process;
+
 test('the deployment guide documents PostgreSQL as the sole authoritative backup source and enumerates the covered business domains', function () {
     $docs = file_get_contents(base_path('docs/deployment.md'));
 
@@ -301,7 +303,25 @@ test('the backup command fails safely when an approved-scheme repository host re
     'sftp over the pgsql service name' => ['sftp:backup@pgsql:/miseledger'],
     's3 endpoint over loopback' => ['s3:http://127.0.0.1:9000/miseledger-backups'],
     's3 bare endpoint over host.docker.internal' => ['s3:host.docker.internal/miseledger-backups'],
+    'rest over bracketed IPv6 loopback' => ['rest:http://[::1]:8000/miseledger'],
+    'rest over a non-canonical loopback address' => ['rest:http://127.0.0.2:8000/miseledger'],
+    's3 endpoint over a trailing-dot localhost alias' => ['s3:http://localhost./miseledger-backups'],
 ]);
+
+test('the backup command passes host validation and proceeds to the pg_dump stage for a genuinely off-host repository', function () {
+    Process::fake();
+
+    config()->set('backup.restic_repository', 's3:http://198.51.100.10:9000/miseledger-backups');
+    config()->set('backup.restic_password', 'a-repository-password');
+    config()->set('backup.alert_webhook_url', 'https://hooks.example.com/backup-alerts');
+
+    // A non-loopback, non-application-service host clears repository/webhook
+    // validation, so the fake pg_dump process (which produces no file) is
+    // what fails the run, not the earlier off-host address checks.
+    $this->artisan('backup:database')
+        ->expectsOutputToContain('pg_dump failed to produce a non-empty archive.')
+        ->assertFailed();
+});
 
 test('the backup command fails safely when the alert webhook resolves to the application host or localhost', function (string $webhookUrl) {
     config()->set('backup.restic_repository', 's3:https://s3.example.com/miseledger-backups');

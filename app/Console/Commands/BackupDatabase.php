@@ -24,14 +24,16 @@ final class BackupDatabase extends Command
 
     /**
      * Hostnames that are never a legitimate off-host backup or alert
-     * destination: loopback addresses and the application's own Compose
+     * destination: localhost aliases and the application's own Compose
      * service names. A restic repository or alert webhook resolving to one
      * of these still passes an approved-scheme prefix check, so the host
      * itself must also be rejected to guarantee genuine off-host storage
-     * and alerting.
+     * and alerting. Loopback and other reserved IP ranges (127.0.0.0/8,
+     * ::1, link-local, etc.) are rejected separately via filter_var, since
+     * they cannot be fully enumerated as literal strings.
      */
     private const DISALLOWED_HOSTS = [
-        'localhost', '127.0.0.1', '0.0.0.0', '::1', 'host.docker.internal',
+        'localhost', 'host.docker.internal',
         'app', 'pgsql', 'redis', 'scheduler', 'worker', 'vite',
     ];
 
@@ -167,13 +169,41 @@ final class BackupDatabase extends Command
         };
     }
 
-    private function isDisallowedHost(?string $host): bool
+    /**
+     * Normalize a repository or webhook host for comparison: lowercase,
+     * strip IPv6 brackets (parse_url() keeps them, e.g. "[::1]"), and strip
+     * a trailing dot (a valid DNS root-label alias for "localhost").
+     */
+    private function normalizeHost(?string $host): ?string
     {
         if ($host === null || $host === '') {
+            return null;
+        }
+
+        return rtrim(trim(Str::lower($host), '[]'), '.') ?: null;
+    }
+
+    private function isDisallowedHost(?string $host): bool
+    {
+        $host = $this->normalizeHost($host);
+
+        if ($host === null) {
             return false;
         }
 
-        return in_array(Str::lower($host), self::DISALLOWED_HOSTS, true);
+        if (in_array($host, self::DISALLOWED_HOSTS, true)) {
+            return true;
+        }
+
+        // Reject loopback and other reserved/non-routable IP ranges
+        // (127.0.0.0/8, ::1, 0.0.0.0/8, link-local, etc.): any literal IP
+        // that fails FILTER_FLAG_NO_RES_RANGE is not a genuine off-host
+        // network address.
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_RES_RANGE) === false;
+        }
+
+        return false;
     }
 
     private function reportFailure(string $message): void
