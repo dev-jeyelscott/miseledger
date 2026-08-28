@@ -27,6 +27,9 @@ use Illuminate\Support\Carbon;
  * @property string $yield_percentage
  * @property bool $active
  * @property int|null $unit_conversions_count
+ * @property bool|null $unit_conversions_exists
+ * @property bool|null $stock_movements_exists
+ * @property bool|null $option_value_associations_exists
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read UnitOfMeasure $baseUnitOfMeasure

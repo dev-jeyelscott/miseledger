@@ -44,6 +44,7 @@ class StockOnHandReportController extends Controller
         $balances = (clone $query)
             ->orderBy('location_id')
             ->orderBy('storage_location_id')
+            ->orderBy('inventory_item_id')
             ->get();
 
         $rows = $balances
@@ -105,6 +106,7 @@ class StockOnHandReportController extends Controller
                 $query
                     ->orderBy('location_id')
                     ->orderBy('storage_location_id')
+                    ->orderBy('inventory_item_id')
                     ->cursor() as $balance
             ) {
                 $data = $this->rowData($balance, $canViewCosts);
