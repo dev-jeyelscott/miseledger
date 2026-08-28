@@ -3,14 +3,14 @@
 namespace Database\Factories;
 
 use App\Enums\BarcodeSymbology;
-use App\Models\Barcode;
 use App\Models\InventoryItem;
+use App\Models\InventoryItemBarcode;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<Barcode>
+ * @extends Factory<InventoryItemBarcode>
  */
-class BarcodeFactory extends Factory
+class InventoryItemBarcodeFactory extends Factory
 {
     /**
      * Define a barcode owned by the same organization as its item.
@@ -21,17 +21,19 @@ class BarcodeFactory extends Factory
     {
         return [
             'inventory_item_id' => InventoryItem::factory(),
-            'organization_id' => function (
-                array $attributes,
-            ): int {
+            'organization_id' => function (array $attributes): int {
                 return InventoryItem::query()
-                    ->findOrFail((int) $attributes['inventory_item_id'])
+                    ->findOrFail(
+                        (int) $attributes['inventory_item_id'],
+                    )
                     ->organization_id;
             },
             'inventory_item_unit_id' => null,
-            'value' => fake()->unique()->numerify('###############'),
+            'barcode' => fake()
+                ->unique()
+                ->numerify('#############'),
             'symbology' => BarcodeSymbology::Ean13,
-            'is_primary' => false,
+            'primary' => false,
             'active' => true,
         ];
     }

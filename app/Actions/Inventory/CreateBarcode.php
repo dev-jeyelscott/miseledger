@@ -3,15 +3,15 @@
 namespace App\Actions\Inventory;
 
 use App\Enums\BarcodeSymbology;
-use App\Models\Barcode;
 use App\Models\InventoryItem;
+use App\Models\InventoryItemBarcode;
 use App\Models\Organization;
 use Illuminate\Support\Facades\DB;
 
 final class CreateBarcode
 {
     /**
-     * Register a barcode identity for an item or one of its alternate units.
+     * Register a barcode identity for an item or alternate unit.
      */
     public function handle(
         Organization $organization,
@@ -21,7 +21,7 @@ final class CreateBarcode
         ?int $inventoryItemUnitId,
         bool $isPrimary,
         bool $active,
-    ): Barcode {
+    ): InventoryItemBarcode {
         return DB::transaction(function () use (
             $organization,
             $inventoryItem,
@@ -30,9 +30,12 @@ final class CreateBarcode
             $inventoryItemUnitId,
             $isPrimary,
             $active,
-        ): Barcode {
+        ): InventoryItemBarcode {
             $lockedItem = InventoryItem::query()
-                ->where('organization_id', $organization->getKey())
+                ->where(
+                    'organization_id',
+                    $organization->getKey(),
+                )
                 ->whereKey($inventoryItem->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -40,18 +43,18 @@ final class CreateBarcode
             if ($isPrimary) {
                 $lockedItem
                     ->barcodes()
-                    ->where('is_primary', true)
-                    ->update(['is_primary' => false]);
+                    ->where('primary', true)
+                    ->update(['primary' => false]);
             }
 
             return $lockedItem->barcodes()->create([
                 'organization_id' => $organization->getKey(),
                 'inventory_item_unit_id' => $inventoryItemUnitId,
-                'value' => $value,
+                'barcode' => $value,
                 'symbology' => $symbology,
-                'is_primary' => $isPrimary,
+                'primary' => $isPrimary,
                 'active' => $active,
             ]);
-        });
+        }, attempts: 3);
     }
 }

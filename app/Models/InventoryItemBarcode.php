@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Enums\BarcodeSymbology;
-use Database\Factories\BarcodeFactory;
+use Database\Factories\InventoryItemBarcodeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,9 +15,9 @@ use Illuminate\Support\Carbon;
  * @property int $organization_id
  * @property int $inventory_item_id
  * @property int|null $inventory_item_unit_id
- * @property string $value
+ * @property string $barcode
  * @property BarcodeSymbology $symbology
- * @property bool $is_primary
+ * @property bool $primary
  * @property bool $active
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -29,14 +29,14 @@ use Illuminate\Support\Carbon;
     'organization_id',
     'inventory_item_id',
     'inventory_item_unit_id',
-    'value',
+    'barcode',
     'symbology',
-    'is_primary',
+    'primary',
     'active',
 ])]
-class Barcode extends Model
+class InventoryItemBarcode extends Model
 {
-    /** @use HasFactory<BarcodeFactory> */
+    /** @use HasFactory<InventoryItemBarcodeFactory> */
     use HasFactory;
 
     /**
@@ -60,7 +60,7 @@ class Barcode extends Model
     }
 
     /**
-     * Get the optional alternate UOM this barcode identifies.
+     * Get the optional alternate item unit identified by this barcode.
      *
      * @return BelongsTo<InventoryItemUnit, $this>
      */
@@ -70,7 +70,7 @@ class Barcode extends Model
     }
 
     /**
-     * Cast persisted barcode state.
+     * Cast persisted barcode state to stable application types.
      *
      * @return array<string, string>
      */
@@ -78,7 +78,7 @@ class Barcode extends Model
     {
         return [
             'symbology' => BarcodeSymbology::class,
-            'is_primary' => 'boolean',
+            'primary' => 'boolean',
             'active' => 'boolean',
         ];
     }

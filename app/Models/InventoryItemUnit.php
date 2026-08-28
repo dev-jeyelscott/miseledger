@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -49,6 +50,16 @@ class InventoryItemUnit extends Model
     public function unitOfMeasure(): BelongsTo
     {
         return $this->belongsTo(UnitOfMeasure::class);
+    }
+
+    /**
+     * Get barcodes specifically identifying this alternate item unit.
+     *
+     * @return HasMany<InventoryItemBarcode, $this>
+     */
+    public function barcodes(): HasMany
+    {
+        return $this->hasMany(InventoryItemBarcode::class);
     }
 
     /**

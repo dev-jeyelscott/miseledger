@@ -3,26 +3,26 @@
 namespace App\Actions\Inventory;
 
 use App\Enums\BarcodeSymbology;
-use App\Models\Barcode;
 use App\Models\InventoryItem;
+use App\Models\InventoryItemBarcode;
 use App\Models\Organization;
 use Illuminate\Support\Facades\DB;
 
 final class UpdateBarcode
 {
     /**
-     * Update a barcode's identity, association, and activation state.
+     * Update a barcode's identity, unit association, and state.
      */
     public function handle(
         Organization $organization,
         InventoryItem $inventoryItem,
-        Barcode $barcode,
+        InventoryItemBarcode $barcode,
         string $value,
         BarcodeSymbology $symbology,
         ?int $inventoryItemUnitId,
         bool $isPrimary,
         bool $active,
-    ): Barcode {
+    ): InventoryItemBarcode {
         return DB::transaction(function () use (
             $organization,
             $inventoryItem,
@@ -32,9 +32,12 @@ final class UpdateBarcode
             $inventoryItemUnitId,
             $isPrimary,
             $active,
-        ): Barcode {
+        ): InventoryItemBarcode {
             $lockedItem = InventoryItem::query()
-                ->where('organization_id', $organization->getKey())
+                ->where(
+                    'organization_id',
+                    $organization->getKey(),
+                )
                 ->whereKey($inventoryItem->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -48,20 +51,20 @@ final class UpdateBarcode
             if ($isPrimary) {
                 $lockedItem
                     ->barcodes()
-                    ->where('is_primary', true)
+                    ->where('primary', true)
                     ->whereKeyNot($lockedBarcode->getKey())
-                    ->update(['is_primary' => false]);
+                    ->update(['primary' => false]);
             }
 
             $lockedBarcode->update([
                 'inventory_item_unit_id' => $inventoryItemUnitId,
-                'value' => $value,
+                'barcode' => $value,
                 'symbology' => $symbology,
-                'is_primary' => $isPrimary,
+                'primary' => $isPrimary,
                 'active' => $active,
             ]);
 
             return $lockedBarcode;
-        });
+        }, attempts: 3);
     }
 }
