@@ -64,9 +64,16 @@ type CategoryOption = {
     active: boolean;
 };
 
+type BrandOption = {
+    id: number;
+    name: string;
+    active: boolean;
+};
+
 type Filters = {
     search: string;
     categoryId: number | null;
+    brandId: number | null;
     type: InventoryItemType | null;
     status: ItemStatus | null;
     sort: SortKey | null;
@@ -81,6 +88,7 @@ type Props = {
         active: number;
     };
     categoryOptions: CategoryOption[];
+    brandOptions: BrandOption[];
     createUnitOptions: UnitOfMeasureData[];
     filters: Filters;
     canManage: boolean;
@@ -370,6 +378,7 @@ export default function InventoryItemsIndex({
     pagination,
     summary,
     categoryOptions,
+    brandOptions,
     createUnitOptions,
     filters,
     canManage,
@@ -377,6 +386,7 @@ export default function InventoryItemsIndex({
     const hasQueryState =
         filters.search !== '' ||
         filters.categoryId !== null ||
+        filters.brandId !== null ||
         filters.type !== null ||
         filters.status !== null ||
         filters.sort !== null;
@@ -394,6 +404,7 @@ export default function InventoryItemsIndex({
             query: {
                 search: filters.search || undefined,
                 category: filters.categoryId ?? undefined,
+                brand: filters.brandId ?? undefined,
                 type: filters.type ?? undefined,
                 status: filters.status ?? undefined,
                 sort,
@@ -534,14 +545,15 @@ export default function InventoryItemsIndex({
                         method="get"
                     >
                         {({ processing }) => (
-                            <div className="grid gap-3 border-b border-sidebar-border/70 p-4 md:grid-cols-2 xl:grid-cols-[minmax(18rem,1fr)_minmax(10rem,14rem)_minmax(10rem,13rem)_minmax(9rem,11rem)_auto] dark:border-sidebar-border">
+                            <div className="grid gap-3 border-b border-sidebar-border/70 p-4 md:grid-cols-2 xl:grid-cols-[minmax(18rem,1fr)_minmax(10rem,14rem)_minmax(10rem,13rem)_minmax(10rem,13rem)_minmax(9rem,11rem)_auto] dark:border-sidebar-border">
                                 <div className="relative md:col-span-2 xl:col-span-1">
                                     <label
                                         htmlFor="inventory-search"
                                         className="sr-only"
                                     >
-                                        Search inventory items by name, SKU, or
-                                        barcode
+                                        Search inventory items by name, SKU,
+                                        barcode, model number, or manufacturer
+                                        part number
                                     </label>
                                     <Search
                                         className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
@@ -552,7 +564,7 @@ export default function InventoryItemsIndex({
                                         name="search"
                                         type="search"
                                         defaultValue={filters.search}
-                                        placeholder="Search or scan by item name, SKU, or barcode..."
+                                        placeholder="Search or scan by name, SKU, barcode, model, or part number..."
                                         className="pl-9"
                                     />
                                 </div>
@@ -581,6 +593,37 @@ export default function InventoryItemsIndex({
                                             >
                                                 {category.name}
                                                 {category.active
+                                                    ? ''
+                                                    : ' (inactive)'}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label
+                                        htmlFor="inventory-brand"
+                                        className="sr-only"
+                                    >
+                                        Brand
+                                    </label>
+                                    <select
+                                        id="inventory-brand"
+                                        name="brand"
+                                        defaultValue={
+                                            filters.brandId?.toString() ?? ''
+                                        }
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    >
+                                        <option value="">All brands</option>
+
+                                        {brandOptions.map((brand) => (
+                                            <option
+                                                key={brand.id}
+                                                value={brand.id}
+                                            >
+                                                {brand.name}
+                                                {brand.active
                                                     ? ''
                                                     : ' (inactive)'}
                                             </option>
@@ -705,6 +748,10 @@ export default function InventoryItemsIndex({
                                         Category
                                     </th>
 
+                                    <th scope="col" className="px-4 py-3">
+                                        Brand
+                                    </th>
+
                                     <th
                                         scope="col"
                                         className="px-4 py-3"
@@ -773,7 +820,7 @@ export default function InventoryItemsIndex({
                                 {items.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan={canManage ? 8 : 7}
+                                            colSpan={canManage ? 9 : 8}
                                             className="px-4 py-12 text-center"
                                         >
                                             <div className="mx-auto max-w-sm">
@@ -820,6 +867,11 @@ export default function InventoryItemsIndex({
                                             <td className="px-4 py-3">
                                                 {item.inventoryCategory?.name ??
                                                     'Uncategorized'}
+                                            </td>
+
+                                            <td className="px-4 py-3">
+                                                {item.inventoryBrand?.name ??
+                                                    'Unbranded'}
                                             </td>
 
                                             <td className="px-4 py-3">

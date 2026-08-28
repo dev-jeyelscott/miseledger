@@ -40,6 +40,7 @@ export type InventoryItemListItem = {
     conversionCount: number;
     baseUnitOfMeasure: UnitOfMeasureData;
     inventoryCategory: InventoryCategoryData | null;
+    inventoryBrand: InventoryBrandData | null;
 };
 
 export type InventoryItemUnitData = {

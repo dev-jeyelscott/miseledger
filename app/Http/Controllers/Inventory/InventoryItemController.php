@@ -39,6 +39,7 @@ class InventoryItemController extends Controller
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:120'],
             'category' => ['nullable', 'integer', 'min:1'],
+            'brand' => ['nullable', 'integer', 'min:1'],
             'type' => ['nullable', Rule::enum(InventoryItemType::class)],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
             'sort' => ['nullable', Rule::in(['name', 'sku', 'type', 'status'])],
@@ -48,6 +49,9 @@ class InventoryItemController extends Controller
         $search = trim((string) ($validated['search'] ?? ''));
         $categoryId = isset($validated['category'])
             ? (int) $validated['category']
+            : null;
+        $brandId = isset($validated['brand'])
+            ? (int) $validated['brand']
             : null;
         $type = isset($validated['type'])
             ? (string) $validated['type']
@@ -67,6 +71,7 @@ class InventoryItemController extends Controller
             ->with([
                 'baseUnitOfMeasure:id,name,symbol,active',
                 'inventoryCategory:id,name,active',
+                'inventoryBrand:id,name,active',
             ])
             ->withCount('unitConversions');
 
@@ -78,6 +83,8 @@ class InventoryItemController extends Controller
                     $query
                         ->whereLike('name', $searchPattern)
                         ->orWhereLike('sku', $searchPattern)
+                        ->orWhereLike('model_number', $searchPattern)
+                        ->orWhereLike('manufacturer_part_number', $searchPattern)
                         ->orWhereHas(
                             'barcodes',
                             static function (Builder $barcodes) use ($searchPattern): void {
@@ -90,6 +97,10 @@ class InventoryItemController extends Controller
 
         if ($categoryId !== null) {
             $itemsQuery->where('inventory_category_id', $categoryId);
+        }
+
+        if ($brandId !== null) {
+            $itemsQuery->where('inventory_brand_id', $brandId);
         }
 
         if ($type !== null) {
@@ -149,6 +160,13 @@ class InventoryItemController extends Controller
                             'name' => $item->inventoryCategory->name,
                             'active' => $item->inventoryCategory->active,
                         ],
+                    'inventoryBrand' => $item->inventoryBrand === null
+                        ? null
+                        : [
+                            'id' => $item->inventoryBrand->id,
+                            'name' => $item->inventoryBrand->name,
+                            'active' => $item->inventoryBrand->active,
+                        ],
                 ],
             );
 
@@ -166,6 +184,25 @@ class InventoryItemController extends Controller
                     'id' => $category->id,
                     'name' => $category->name,
                     'active' => $category->active,
+                ],
+            )
+            ->values()
+            ->all();
+
+        $brandOptions = $organization
+            ->inventoryBrands()
+            ->orderByDesc('active')
+            ->orderBy('name')
+            ->get([
+                'id',
+                'name',
+                'active',
+            ])
+            ->map(
+                static fn (InventoryBrand $brand): array => [
+                    'id' => $brand->id,
+                    'name' => $brand->name,
+                    'active' => $brand->active,
                 ],
             )
             ->values()
@@ -196,12 +233,14 @@ class InventoryItemController extends Controller
                     ->count(),
             ],
             'categoryOptions' => $categoryOptions,
+            'brandOptions' => $brandOptions,
             'createUnitOptions' => $canManage
                 ? $this->activeUnitOptions($organization)
                 : [],
             'filters' => [
                 'search' => $search,
                 'categoryId' => $categoryId,
+                'brandId' => $brandId,
                 'type' => $type,
                 'status' => $status,
                 'sort' => $sort,

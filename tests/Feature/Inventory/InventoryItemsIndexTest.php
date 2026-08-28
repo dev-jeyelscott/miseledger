@@ -3,6 +3,7 @@
 use App\Enums\InventoryItemType;
 use App\Enums\OrganizationRole;
 use App\Models\Barcode;
+use App\Models\InventoryBrand;
 use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
 use App\Models\InventoryItemUnit;
@@ -348,6 +349,176 @@ test('inventory item search does not resolve a barcode from another organization
             fn (Assert $page): Assert => $page
                 ->component('inventory/items/index')
                 ->has('items', 0),
+        );
+});
+
+test('inventory item filters by brand and never leaks another organization brand', function () {
+    [$user, $organization, $unit] = inventoryItemsIndexContext();
+
+    $acme = InventoryBrand::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Acme',
+        ]);
+
+    $globex = InventoryBrand::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Globex',
+        ]);
+
+    $target = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_brand_id' => $acme->id,
+            'name' => 'Acme Widget',
+        ]);
+
+    InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_brand_id' => $globex->id,
+            'name' => 'Globex Widget',
+        ]);
+
+    InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_brand_id' => null,
+            'name' => 'Unbranded Widget',
+        ]);
+
+    $otherOrganization = Organization::factory()->create();
+
+    $otherBrand = InventoryBrand::factory()
+        ->for($otherOrganization)
+        ->create([
+            'name' => 'Acme',
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'brand' => $acme->id,
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/items/index')
+                ->has('items', 1)
+                ->where('items.0.id', $target->id)
+                ->where('filters.brandId', $acme->id)
+                ->has('brandOptions', 2),
+        );
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'brand' => $otherBrand->id,
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/items/index')
+                ->has('items', 0),
+        );
+});
+
+test('inventory item search matches model number and manufacturer part number', function () {
+    [$user, $organization, $unit] = inventoryItemsIndexContext();
+
+    $modelMatch = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Convection Oven',
+            'model_number' => 'MDL-9000',
+            'manufacturer_part_number' => null,
+        ]);
+
+    $partMatch = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Mixer Bowl',
+            'model_number' => null,
+            'manufacturer_part_number' => 'MPN-1234',
+        ]);
+
+    InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Unrelated Item',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'search' => 'MDL-9000',
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->has('items', 1)
+                ->where('items.0.id', $modelMatch->id),
+        );
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'search' => 'MPN-1234',
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->has('items', 1)
+                ->where('items.0.id', $partMatch->id),
+        );
+});
+
+test('inventory item filters return an empty result for a no-match filter combination', function () {
+    [$user, $organization, $unit] = inventoryItemsIndexContext();
+
+    InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Fresh Tomato',
+            'sku' => 'TOM-001',
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'search' => 'no-such-item-identifier',
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/items/index')
+                ->has('items', 0)
+                ->where('pagination.total', 0),
         );
 });
 
