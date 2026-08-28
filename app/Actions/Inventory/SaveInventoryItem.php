@@ -199,6 +199,33 @@ final class SaveInventoryItem
                 ]);
             }
 
+            $productFamilyChanged = (
+                $lockedItem->inventory_product_id
+                !== $attributes['inventory_product_id']
+            );
+
+            if (
+                $productFamilyChanged
+                && $lockedItem->optionValueAssociations()
+                    ->when(
+                        $attributes['inventory_product_id'] !== null,
+                        fn ($query) => $query->whereDoesntHave(
+                            'inventoryProductOptionValue.inventoryProductOption',
+                            fn ($query) => $query->where(
+                                'inventory_product_id',
+                                $attributes['inventory_product_id'],
+                            ),
+                        ),
+                    )
+                    ->exists()
+            ) {
+                throw ValidationException::withMessages([
+                    'inventory_product_id' => __(
+                        'The product family cannot be changed while this item has assigned option values.',
+                    ),
+                ]);
+            }
+
             $lockedItem->update($attributes);
 
             return $lockedItem;

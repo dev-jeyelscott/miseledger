@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Inventory\RecordStockMovement;
+use App\Actions\Inventory\SaveInventoryItem;
 use App\Actions\Inventory\SyncInventoryItemOptionValues;
 use App\Enums\StockMovementType;
 use App\Models\InventoryItem;
@@ -158,6 +159,58 @@ test('an item without a product family cannot be assigned option values', functi
             [$value->id],
         ),
     )->toThrow(ValidationException::class);
+});
+
+test('an item with option values cannot change or clear its product family', function () {
+    $organization = Organization::factory()->create();
+    $product = InventoryProduct::factory()->for($organization)->create();
+    $option = InventoryProductOption::factory()->for($organization)->create([
+        'inventory_product_id' => $product->id,
+    ]);
+    $value = InventoryProductOptionValue::factory()->for($organization)->create([
+        'inventory_product_option_id' => $option->id,
+    ]);
+    $item = createVariantItem($organization, $product, 'SKU-VAR-5');
+    $otherProduct = InventoryProduct::factory()->for($organization)->create();
+
+    app(SyncInventoryItemOptionValues::class)->handle($organization, $item, [$value->id]);
+
+    $attributes = fn (?int $inventoryProductId): array => [
+        'name' => $item->name,
+        'sku' => $item->sku,
+        'base_unit_of_measure_id' => $item->base_unit_of_measure_id,
+        'inventory_category_id' => $item->inventory_category_id,
+        'inventory_brand_id' => $item->inventory_brand_id,
+        'inventory_product_id' => $inventoryProductId,
+        'model_number' => $item->model_number,
+        'manufacturer_part_number' => $item->manufacturer_part_number,
+        'description' => $item->description,
+        'type' => $item->type,
+        'yield_percentage' => $item->yield_percentage,
+        'active' => $item->active,
+    ];
+
+    expect(
+        fn () => app(SaveInventoryItem::class)->handle(
+            $organization,
+            $attributes($otherProduct->id),
+            $item,
+        ),
+    )->toThrow(ValidationException::class)
+        ->and($item->fresh()->inventory_product_id)->toBe($product->id)
+        ->and($item->fresh()->optionValueAssociations()->pluck('inventory_product_option_value_id')->all())
+        ->toBe([$value->id]);
+
+    expect(
+        fn () => app(SaveInventoryItem::class)->handle(
+            $organization,
+            $attributes(null),
+            $item,
+        ),
+    )->toThrow(ValidationException::class)
+        ->and($item->fresh()->inventory_product_id)->toBe($product->id)
+        ->and($item->fresh()->optionValueAssociations()->pluck('inventory_product_option_value_id')->all())
+        ->toBe([$value->id]);
 });
 
 test('each associated variant item retains its own sku and independent stock balance', function () {

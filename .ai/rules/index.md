@@ -5,3 +5,4 @@ Before planning or editing, find the row whose globs match the file's path and r
 | Applies to | Rule file |
 | --- | --- |
 | app/Http/Controllers/Billing/** | .ai/rules/billing.md |
+| app/Actions/Inventory/** | .ai/rules/inventory.md |
