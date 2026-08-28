@@ -14,6 +14,8 @@ import {
     SlidersHorizontal,
     Tags,
 } from 'lucide-react';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
 import InventoryAdjustmentController from '@/actions/App/Http/Controllers/Inventory/InventoryAdjustmentController';
 import InventoryBrandController from '@/actions/App/Http/Controllers/Inventory/InventoryBrandController';
 import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
@@ -34,6 +36,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type {
@@ -97,15 +100,21 @@ type Props = {
 
 type SortableHeadingProps = {
     active: boolean;
-    children: React.ReactNode;
+    children: ReactNode;
     direction: SortDirection;
     href: string;
 };
 
 type CreateInventoryItemDialogProps = {
     categories: CategoryOption[];
-    trigger: React.ReactNode;
+    trigger: ReactNode;
     units: UnitOfMeasureData[];
+};
+
+type InventoryItemDetailsDialogProps = {
+    canManage: boolean;
+    item: InventoryItemListItem | null;
+    onOpenChange: (open: boolean) => void;
 };
 
 const itemTypeLabels: Record<InventoryItemType, string> = {
@@ -124,9 +133,7 @@ const itemTypeOptions: InventoryItemType[] = [
     'consumable',
 ];
 
-/**
- * Render a stable sortable table heading without recreating components per render.
- */
+/** Render a stable sortable table heading without recreating route behavior. */
 function SortableHeading({
     active,
     children,
@@ -157,7 +164,153 @@ function SortableHeading({
     );
 }
 
-/** Create a compact inventory master record without leaving index context. */
+/** Render active and inactive states using canonical semantic status tokens. */
+function InventoryItemStatus({ active }: { active: boolean }) {
+    return (
+        <Badge
+            variant="outline"
+            className={
+                active
+                    ? 'border-success-border bg-success-subtle text-success-foreground'
+                    : 'border-border bg-muted text-muted-foreground'
+            }
+        >
+            {active ? 'Active' : 'Inactive'}
+        </Badge>
+    );
+}
+
+/** Render the appropriate empty-state copy for an empty inventory result. */
+function InventoryEmptyState({ hasQueryState }: { hasQueryState: boolean }) {
+    return (
+        <div className="mx-auto max-w-sm text-center">
+            <p className="font-medium">
+                {hasQueryState
+                    ? 'No inventory items match these filters.'
+                    : 'No inventory items have been created.'}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+                {hasQueryState
+                    ? 'Adjust or reset the filters to see more items.'
+                    : 'Create an inventory item to begin managing stock master data.'}
+            </p>
+        </div>
+    );
+}
+
+/** Show an inventory-view-safe read-only summary without exposing mutation controls. */
+function InventoryItemDetailsDialog({
+    canManage,
+    item,
+    onOpenChange,
+}: InventoryItemDetailsDialogProps) {
+    if (item === null) {
+        return null;
+    }
+
+    return (
+        <Dialog open onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>{item.name}</DialogTitle>
+                    <DialogDescription>
+                        Read-only inventory item details.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <dl className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <dt className="text-xs font-medium text-muted-foreground">
+                            SKU
+                        </dt>
+                        <dd className="mt-1 font-mono text-sm">{item.sku}</dd>
+                    </div>
+
+                    <div>
+                        <dt className="text-xs font-medium text-muted-foreground">
+                            Status
+                        </dt>
+                        <dd className="mt-1">
+                            <InventoryItemStatus active={item.active} />
+                        </dd>
+                    </div>
+
+                    <div>
+                        <dt className="text-xs font-medium text-muted-foreground">
+                            Item type
+                        </dt>
+                        <dd className="mt-1 text-sm">
+                            {itemTypeLabels[item.type]}
+                        </dd>
+                    </div>
+
+                    <div>
+                        <dt className="text-xs font-medium text-muted-foreground">
+                            Category
+                        </dt>
+                        <dd className="mt-1 text-sm">
+                            {item.inventoryCategory?.name ?? 'Uncategorized'}
+                        </dd>
+                    </div>
+
+                    <div>
+                        <dt className="text-xs font-medium text-muted-foreground">
+                            Brand
+                        </dt>
+                        <dd className="mt-1 text-sm">
+                            {item.inventoryBrand?.name ?? 'Unbranded'}
+                        </dd>
+                    </div>
+
+                    <div>
+                        <dt className="text-xs font-medium text-muted-foreground">
+                            Base unit
+                        </dt>
+                        <dd className="mt-1 text-sm">
+                            <span className="font-medium">
+                                {item.baseUnitOfMeasure.symbol}
+                            </span>{' '}
+                            <span className="text-muted-foreground">
+                                {item.baseUnitOfMeasure.name}
+                            </span>
+                        </dd>
+                    </div>
+
+                    <div>
+                        <dt className="text-xs font-medium text-muted-foreground">
+                            Yield
+                        </dt>
+                        <dd className="mt-1 text-sm tabular-nums">
+                            {item.yieldPercentage}%
+                        </dd>
+                    </div>
+
+                    <div>
+                        <dt className="text-xs font-medium text-muted-foreground">
+                            Unit conversions
+                        </dt>
+                        <dd className="mt-1 text-sm tabular-nums">
+                            {item.conversionCount}
+                        </dd>
+                    </div>
+                </dl>
+
+                {canManage && (
+                    <div className="flex justify-end border-t border-border pt-4">
+                        <Button asChild>
+                            <Link href={InventoryItemController.edit(item.id)}>
+                                <Pencil className="size-4" aria-hidden="true" />
+                                Edit item
+                            </Link>
+                        </Button>
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/** Create only the essential inventory master fields without leaving index context. */
 function CreateInventoryItemDialog({
     categories,
     trigger,
@@ -174,10 +327,12 @@ function CreateInventoryItemDialog({
 
             <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-xl">
                 <DialogHeader>
-                    <DialogTitle>Create inventory item</DialogTitle>
+                    <DialogTitle>Quick add inventory item</DialogTitle>
                     <DialogDescription>
-                        Create the master record and select the base unit used
-                        to store stock.
+                        Add the essential inventory fields without leaving this
+                        page. Use Create with full details when you also need
+                        brand, product-family, model, part-number, or
+                        description metadata.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -226,8 +381,19 @@ function CreateInventoryItemDialog({
                                             required
                                             autoFocus
                                             placeholder="All-purpose flour"
+                                            aria-invalid={
+                                                errors.name ? true : undefined
+                                            }
+                                            aria-describedby={
+                                                errors.name
+                                                    ? 'modal-item-name-error'
+                                                    : undefined
+                                            }
                                         />
-                                        <InputError message={errors.name} />
+                                        <InputError
+                                            id="modal-item-name-error"
+                                            message={errors.name}
+                                        />
                                     </div>
 
                                     <div className="grid gap-2">
@@ -240,39 +406,69 @@ function CreateInventoryItemDialog({
                                             required
                                             autoComplete="off"
                                             placeholder="FLOUR-001"
+                                            aria-invalid={
+                                                errors.sku ? true : undefined
+                                            }
+                                            aria-describedby={
+                                                errors.sku
+                                                    ? 'modal-item-sku-error'
+                                                    : undefined
+                                            }
                                         />
-                                        <InputError message={errors.sku} />
+                                        <InputError
+                                            id="modal-item-sku-error"
+                                            message={errors.sku}
+                                        />
                                     </div>
 
                                     <div className="grid gap-2">
                                         <Label htmlFor="modal-item-type">
                                             Item type
                                         </Label>
-                                        <select
+                                        <NativeSelect
                                             id="modal-item-type"
                                             name="type"
                                             defaultValue="ingredient"
                                             required
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                            aria-invalid={
+                                                errors.type ? true : undefined
+                                            }
+                                            aria-describedby={
+                                                errors.type
+                                                    ? 'modal-item-type-error'
+                                                    : undefined
+                                            }
                                         >
                                             {itemTypeOptions.map((type) => (
                                                 <option key={type} value={type}>
                                                     {itemTypeLabels[type]}
                                                 </option>
                                             ))}
-                                        </select>
-                                        <InputError message={errors.type} />
+                                        </NativeSelect>
+                                        <InputError
+                                            id="modal-item-type-error"
+                                            message={errors.type}
+                                        />
                                     </div>
 
                                     <div className="grid gap-2">
                                         <Label htmlFor="modal-item-category">
                                             Category
                                         </Label>
-                                        <select
+                                        <NativeSelect
                                             id="modal-item-category"
                                             name="inventory_category_id"
                                             defaultValue=""
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                            aria-invalid={
+                                                errors.inventory_category_id
+                                                    ? true
+                                                    : undefined
+                                            }
+                                            aria-describedby={
+                                                errors.inventory_category_id
+                                                    ? 'modal-item-category-error'
+                                                    : undefined
+                                            }
                                         >
                                             <option value="">
                                                 Uncategorized
@@ -287,8 +483,9 @@ function CreateInventoryItemDialog({
                                                     </option>
                                                 ),
                                             )}
-                                        </select>
+                                        </NativeSelect>
                                         <InputError
+                                            id="modal-item-category-error"
                                             message={
                                                 errors.inventory_category_id
                                             }
@@ -308,8 +505,19 @@ function CreateInventoryItemDialog({
                                             step="0.01"
                                             defaultValue="100.00"
                                             required
+                                            aria-invalid={
+                                                errors.yield_percentage
+                                                    ? true
+                                                    : undefined
+                                            }
+                                            aria-describedby={
+                                                errors.yield_percentage
+                                                    ? 'modal-item-yield-error'
+                                                    : undefined
+                                            }
                                         />
                                         <InputError
+                                            id="modal-item-yield-error"
                                             message={errors.yield_percentage}
                                         />
                                     </div>
@@ -318,12 +526,21 @@ function CreateInventoryItemDialog({
                                         <Label htmlFor="modal-item-base-unit">
                                             Base unit
                                         </Label>
-                                        <select
+                                        <NativeSelect
                                             id="modal-item-base-unit"
                                             name="base_unit_of_measure_id"
                                             required
                                             defaultValue=""
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                            aria-invalid={
+                                                errors.base_unit_of_measure_id
+                                                    ? true
+                                                    : undefined
+                                            }
+                                            aria-describedby={
+                                                errors.base_unit_of_measure_id
+                                                    ? 'modal-item-base-unit-error'
+                                                    : undefined
+                                            }
                                         >
                                             <option value="" disabled>
                                                 Select unit
@@ -336,8 +553,9 @@ function CreateInventoryItemDialog({
                                                     {unit.name} ({unit.symbol})
                                                 </option>
                                             ))}
-                                        </select>
+                                        </NativeSelect>
                                         <InputError
+                                            id="modal-item-base-unit-error"
                                             message={
                                                 errors.base_unit_of_measure_id
                                             }
@@ -350,8 +568,8 @@ function CreateInventoryItemDialog({
                                             disabled={processing}
                                         >
                                             {processing
-                                                ? 'Creating...'
-                                                : 'Create item'}
+                                                ? 'Creating…'
+                                                : 'Quick add item'}
                                         </Button>
                                         <Button
                                             type="button"
@@ -374,6 +592,7 @@ function CreateInventoryItemDialog({
     );
 }
 
+/** Render the organization-scoped searchable inventory item directory. */
 export default function InventoryItemsIndex({
     items,
     pagination,
@@ -384,6 +603,9 @@ export default function InventoryItemsIndex({
     filters,
     canManage,
 }: Props) {
+    const [selectedItem, setSelectedItem] =
+        useState<InventoryItemListItem | null>(null);
+
     const hasQueryState =
         filters.search !== '' ||
         filters.categoryId !== null ||
@@ -392,9 +614,7 @@ export default function InventoryItemsIndex({
         filters.status !== null ||
         filters.sort !== null;
 
-    /**
-     * Preserve active filters while changing only the requested sort.
-     */
+    /** Preserve active filters while changing only the requested sort. */
     const sortUrl = (sort: SortKey): string => {
         const direction: SortDirection =
             filters.sort === sort && filters.direction === 'asc'
@@ -430,84 +650,141 @@ export default function InventoryItemsIndex({
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                        <Button variant="outline" asChild>
-                            <Link href={UnitOfMeasureController.index()}>
-                                <Ruler className="size-4" aria-hidden="true" />
-                                Units of measure
-                            </Link>
-                        </Button>
+                    {canManage && (
+                        <div className="flex flex-wrap gap-2">
+                            <Button variant="outline" asChild>
+                                <Link href={InventoryItemController.create()}>
+                                    Create with full details
+                                </Link>
+                            </Button>
 
-                        <Button variant="outline" asChild>
-                            <Link href={InventoryCategoryController.index()}>
-                                <Tags className="size-4" aria-hidden="true" />
-                                Categories
-                            </Link>
-                        </Button>
+                            <CreateInventoryItemDialog
+                                categories={categoryOptions}
+                                units={createUnitOptions}
+                                trigger={
+                                    <Button>
+                                        <Plus
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        Quick add
+                                    </Button>
+                                }
+                            />
+                        </div>
+                    )}
+                </div>
 
-                        <Button variant="outline" asChild>
-                            <Link href={InventoryBrandController.index()}>
-                                <Award className="size-4" aria-hidden="true" />
-                                Brands
-                            </Link>
-                        </Button>
+                <nav
+                    aria-label="Related inventory actions"
+                    className="rounded-xl border border-border bg-card p-3"
+                >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div
+                            role="group"
+                            aria-label="Inventory master data"
+                            className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                        >
+                            <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                Master data
+                            </span>
 
-                        <Button variant="outline" asChild>
-                            <Link href={InventoryProductController.index()}>
-                                <Boxes className="size-4" aria-hidden="true" />
-                                Product families
-                            </Link>
-                        </Button>
+                            <div className="flex flex-wrap gap-1">
+                                <Button variant="ghost" size="sm" asChild>
+                                    <Link
+                                        href={UnitOfMeasureController.index()}
+                                    >
+                                        <Ruler
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        Units of measure
+                                    </Link>
+                                </Button>
+
+                                <Button variant="ghost" size="sm" asChild>
+                                    <Link
+                                        href={InventoryCategoryController.index()}
+                                    >
+                                        <Tags
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        Categories
+                                    </Link>
+                                </Button>
+
+                                <Button variant="ghost" size="sm" asChild>
+                                    <Link
+                                        href={InventoryBrandController.index()}
+                                    >
+                                        <Award
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        Brands
+                                    </Link>
+                                </Button>
+
+                                <Button variant="ghost" size="sm" asChild>
+                                    <Link
+                                        href={InventoryProductController.index()}
+                                    >
+                                        <Boxes
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        Product families
+                                    </Link>
+                                </Button>
+                            </div>
+                        </div>
 
                         {canManage && (
-                            <>
-                                <Button variant="outline" asChild>
-                                    <Link
-                                        href={OpeningBalanceController.create()}
-                                    >
-                                        <Scale
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                        Opening balance
-                                    </Link>
-                                </Button>
+                            <div
+                                role="group"
+                                aria-label="Inventory stock actions"
+                                className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                            >
+                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                    Stock actions
+                                </span>
 
-                                <Button variant="outline" asChild>
-                                    <Link
-                                        href={InventoryAdjustmentController.create()}
-                                    >
-                                        <SlidersHorizontal
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                        Adjust inventory
-                                    </Link>
-                                </Button>
-
-                                <CreateInventoryItemDialog
-                                    categories={categoryOptions}
-                                    units={createUnitOptions}
-                                    trigger={
-                                        <Button>
-                                            <Plus
+                                <div className="flex flex-wrap gap-1">
+                                    <Button variant="ghost" size="sm" asChild>
+                                        <Link
+                                            href={OpeningBalanceController.create()}
+                                        >
+                                            <Scale
                                                 className="size-4"
                                                 aria-hidden="true"
                                             />
-                                            New item
-                                        </Button>
-                                    }
-                                />
-                            </>
+                                            Opening balance
+                                        </Link>
+                                    </Button>
+
+                                    <Button variant="ghost" size="sm" asChild>
+                                        <Link
+                                            href={InventoryAdjustmentController.create()}
+                                        >
+                                            <SlidersHorizontal
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            Adjust inventory
+                                        </Link>
+                                    </Button>
+                                </div>
+                            </div>
                         )}
                     </div>
-                </div>
+                </nav>
 
                 <section
                     aria-label="Inventory summary"
                     className="grid gap-3 sm:grid-cols-2 lg:max-w-2xl"
                 >
-                    <div className="flex items-center justify-between gap-4 rounded-xl border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                    <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4">
                         <div>
                             <p className="text-sm font-medium text-muted-foreground">
                                 Total items
@@ -525,7 +802,7 @@ export default function InventoryItemsIndex({
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-between gap-4 rounded-xl border border-sidebar-border/70 bg-card p-4 dark:border-sidebar-border">
+                    <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4">
                         <div>
                             <p className="text-sm font-medium text-muted-foreground">
                                 Active items
@@ -547,13 +824,13 @@ export default function InventoryItemsIndex({
                     </div>
                 </section>
 
-                <section className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card dark:border-sidebar-border">
+                <section className="overflow-hidden rounded-xl border border-border bg-card">
                     <Form
                         action={InventoryItemController.index().url}
                         method="get"
                     >
                         {({ processing }) => (
-                            <div className="grid gap-3 border-b border-sidebar-border/70 p-4 md:grid-cols-2 xl:grid-cols-[minmax(18rem,1fr)_minmax(10rem,14rem)_minmax(10rem,13rem)_minmax(10rem,13rem)_minmax(9rem,11rem)_auto] dark:border-sidebar-border">
+                            <div className="grid gap-3 border-b border-border p-4 md:grid-cols-2 xl:grid-cols-[minmax(18rem,1fr)_minmax(10rem,14rem)_minmax(10rem,13rem)_minmax(10rem,13rem)_minmax(9rem,11rem)_auto]">
                                 <div className="relative md:col-span-2 xl:col-span-1">
                                     <label
                                         htmlFor="inventory-search"
@@ -584,13 +861,12 @@ export default function InventoryItemsIndex({
                                     >
                                         Category
                                     </label>
-                                    <select
+                                    <NativeSelect
                                         id="inventory-category"
                                         name="category"
                                         defaultValue={
                                             filters.categoryId?.toString() ?? ''
                                         }
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="">All categories</option>
 
@@ -605,7 +881,7 @@ export default function InventoryItemsIndex({
                                                     : ' (inactive)'}
                                             </option>
                                         ))}
-                                    </select>
+                                    </NativeSelect>
                                 </div>
 
                                 <div>
@@ -615,13 +891,12 @@ export default function InventoryItemsIndex({
                                     >
                                         Brand
                                     </label>
-                                    <select
+                                    <NativeSelect
                                         id="inventory-brand"
                                         name="brand"
                                         defaultValue={
                                             filters.brandId?.toString() ?? ''
                                         }
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="">All brands</option>
 
@@ -636,7 +911,7 @@ export default function InventoryItemsIndex({
                                                     : ' (inactive)'}
                                             </option>
                                         ))}
-                                    </select>
+                                    </NativeSelect>
                                 </div>
 
                                 <div>
@@ -646,11 +921,10 @@ export default function InventoryItemsIndex({
                                     >
                                         Type
                                     </label>
-                                    <select
+                                    <NativeSelect
                                         id="inventory-type"
                                         name="type"
                                         defaultValue={filters.type ?? ''}
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="">All types</option>
 
@@ -659,7 +933,7 @@ export default function InventoryItemsIndex({
                                                 {itemTypeLabels[type]}
                                             </option>
                                         ))}
-                                    </select>
+                                    </NativeSelect>
                                 </div>
 
                                 <div>
@@ -669,24 +943,23 @@ export default function InventoryItemsIndex({
                                     >
                                         Status
                                     </label>
-                                    <select
+                                    <NativeSelect
                                         id="inventory-status"
                                         name="status"
                                         defaultValue={filters.status ?? ''}
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="">All statuses</option>
                                         <option value="active">Active</option>
                                         <option value="inactive">
                                             Inactive
                                         </option>
-                                    </select>
+                                    </NativeSelect>
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2 md:col-span-2 xl:col-span-1 xl:justify-end">
                                     <Button type="submit" disabled={processing}>
                                         {processing
-                                            ? 'Applying...'
+                                            ? 'Applying…'
                                             : 'Apply filters'}
                                     </Button>
 
@@ -708,10 +981,130 @@ export default function InventoryItemsIndex({
                         )}
                     </Form>
 
-                    <div className="overflow-x-auto">
+                    {items.length === 0 ? (
+                        <div className="px-4 py-12 md:hidden">
+                            <InventoryEmptyState
+                                hasQueryState={hasQueryState}
+                            />
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-border md:hidden">
+                            {items.map((item) => (
+                                <article
+                                    key={item.id}
+                                    className="space-y-4 p-4"
+                                    aria-labelledby={`inventory-item-${item.id}-name`}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <h2
+                                                id={`inventory-item-${item.id}-name`}
+                                                className="font-medium"
+                                            >
+                                                {item.name}
+                                            </h2>
+                                            <p className="mt-1 font-mono text-xs text-muted-foreground">
+                                                {item.sku}
+                                            </p>
+                                        </div>
+
+                                        <InventoryItemStatus
+                                            active={item.active}
+                                        />
+                                    </div>
+
+                                    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">
+                                                Category
+                                            </dt>
+                                            <dd className="mt-0.5">
+                                                {item.inventoryCategory?.name ??
+                                                    'Uncategorized'}
+                                            </dd>
+                                        </div>
+
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">
+                                                Brand
+                                            </dt>
+                                            <dd className="mt-0.5">
+                                                {item.inventoryBrand?.name ??
+                                                    'Unbranded'}
+                                            </dd>
+                                        </div>
+
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">
+                                                Type
+                                            </dt>
+                                            <dd className="mt-0.5">
+                                                {itemTypeLabels[item.type]}
+                                            </dd>
+                                        </div>
+
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">
+                                                Base UOM
+                                            </dt>
+                                            <dd className="mt-0.5">
+                                                <span className="font-medium">
+                                                    {
+                                                        item.baseUnitOfMeasure
+                                                            .symbol
+                                                    }
+                                                </span>{' '}
+                                                <span className="text-muted-foreground">
+                                                    {
+                                                        item.baseUnitOfMeasure
+                                                            .name
+                                                    }
+                                                </span>
+                                            </dd>
+                                        </div>
+                                    </dl>
+
+                                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() =>
+                                                setSelectedItem(item)
+                                            }
+                                        >
+                                            View details
+                                        </Button>
+
+                                        {canManage && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                asChild
+                                            >
+                                                <Link
+                                                    href={InventoryItemController.edit(
+                                                        item.id,
+                                                    )}
+                                                >
+                                                    <Pencil
+                                                        className="size-4"
+                                                        aria-hidden="true"
+                                                    />
+                                                    Edit
+                                                </Link>
+                                            </Button>
+                                        )}
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="hidden overflow-x-auto md:block">
                         <table className="w-full min-w-[880px] text-sm">
                             <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-                                <tr className="border-b border-sidebar-border/70 dark:border-sidebar-border">
+                                <tr className="border-b border-border">
                                     <th
                                         scope="col"
                                         className="px-4 py-3"
@@ -829,43 +1222,30 @@ export default function InventoryItemsIndex({
                                     <tr>
                                         <td
                                             colSpan={canManage ? 9 : 8}
-                                            className="px-4 py-12 text-center"
+                                            className="px-4 py-12"
                                         >
-                                            <div className="mx-auto max-w-sm">
-                                                <p className="font-medium">
-                                                    {hasQueryState
-                                                        ? 'No inventory items match these filters.'
-                                                        : 'No inventory items have been created.'}
-                                                </p>
-                                                <p className="mt-1 text-sm text-muted-foreground">
-                                                    {hasQueryState
-                                                        ? 'Adjust or reset the filters to see more items.'
-                                                        : 'Create an inventory item to begin managing stock master data.'}
-                                                </p>
-                                            </div>
+                                            <InventoryEmptyState
+                                                hasQueryState={hasQueryState}
+                                            />
                                         </td>
                                     </tr>
                                 ) : (
                                     items.map((item) => (
                                         <tr
                                             key={item.id}
-                                            className="border-b border-sidebar-border/70 transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
+                                            className="border-b border-border transition-colors last:border-b-0 hover:bg-muted/30"
                                         >
                                             <td className="px-4 py-3">
-                                                {canManage ? (
-                                                    <Link
-                                                        href={InventoryItemController.edit(
-                                                            item.id,
-                                                        )}
-                                                        className="font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                                    >
-                                                        {item.name}
-                                                    </Link>
-                                                ) : (
-                                                    <span className="font-medium">
-                                                        {item.name}
-                                                    </span>
-                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setSelectedItem(item)
+                                                    }
+                                                    aria-label={`View ${item.name} details`}
+                                                    className="font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                >
+                                                    {item.name}
+                                                </button>
                                             </td>
 
                                             <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
@@ -906,17 +1286,9 @@ export default function InventoryItemsIndex({
                                             </td>
 
                                             <td className="px-4 py-3">
-                                                <Badge
-                                                    variant={
-                                                        item.active
-                                                            ? 'secondary'
-                                                            : 'outline'
-                                                    }
-                                                >
-                                                    {item.active
-                                                        ? 'Active'
-                                                        : 'Inactive'}
-                                                </Badge>
+                                                <InventoryItemStatus
+                                                    active={item.active}
+                                                />
                                             </td>
 
                                             {canManage && (
@@ -948,7 +1320,7 @@ export default function InventoryItemsIndex({
                     </div>
 
                     {pagination.total > 0 && (
-                        <div className="flex flex-col gap-3 border-t border-sidebar-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-sidebar-border">
+                        <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                             <p className="text-sm text-muted-foreground">
                                 Showing {pagination.from ?? 0} to{' '}
                                 {pagination.to ?? 0} of{' '}
@@ -1017,6 +1389,16 @@ export default function InventoryItemsIndex({
                     )}
                 </section>
             </div>
+
+            <InventoryItemDetailsDialog
+                item={selectedItem}
+                canManage={canManage}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setSelectedItem(null);
+                    }
+                }}
+            />
         </>
     );
 }
@@ -1026,6 +1408,10 @@ InventoryItemsIndex.layout = {
         {
             title: 'Dashboard',
             href: dashboard(),
+        },
+        {
+            title: 'Inventory items',
+            href: InventoryItemController.index(),
         },
     ],
 };
