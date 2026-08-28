@@ -11,6 +11,7 @@ import { dashboard } from '@/routes';
 import type {
     InventoryBrandData,
     InventoryCategoryData,
+    InventoryProductData,
     UnitOfMeasureData,
 } from '@/types';
 
@@ -21,12 +22,14 @@ type Props = {
     units: UnitOfMeasureData[];
     categories: InventoryCategoryData[];
     brands: InventoryBrandData[];
+    productFamilies: InventoryProductData[];
 };
 
 export default function CreateInventoryItem({
     units,
     categories,
     brands,
+    productFamilies,
 }: Props) {
     return (
         <>
@@ -177,6 +180,35 @@ export default function CreateInventoryItem({
                                         </select>
                                         <InputError
                                             message={errors.inventory_brand_id}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="inventory_product_id">
+                                            Product family
+                                        </Label>
+                                        <select
+                                            id="inventory_product_id"
+                                            name="inventory_product_id"
+                                            defaultValue=""
+                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        >
+                                            <option value="">
+                                                No product family
+                                            </option>
+                                            {productFamilies.map((product) => (
+                                                <option
+                                                    key={product.id}
+                                                    value={product.id}
+                                                >
+                                                    {product.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <InputError
+                                            message={
+                                                errors.inventory_product_id
+                                            }
                                         />
                                     </div>
 

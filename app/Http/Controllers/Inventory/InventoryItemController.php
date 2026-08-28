@@ -12,6 +12,7 @@ use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
 use App\Models\InventoryItemBarcode;
 use App\Models\InventoryItemUnit;
+use App\Models\InventoryProduct;
 use App\Models\Organization;
 use App\Models\UnitOfMeasure;
 use Illuminate\Database\Eloquent\Builder;
@@ -268,6 +269,7 @@ class InventoryItemController extends Controller
             'units' => $this->activeUnitOptions($organization),
             'categories' => $this->activeCategoryOptions($organization),
             'brands' => $this->activeBrandOptions($organization),
+            'productFamilies' => $this->activeProductOptions($organization),
         ]);
     }
 
@@ -348,6 +350,7 @@ class InventoryItemController extends Controller
                 'baseUnitOfMeasure:id,name,symbol,active',
                 'inventoryCategory:id,name,active',
                 'inventoryBrand:id,name,active',
+                'inventoryProduct:id,name,active',
                 'unitConversions' => fn ($query) => $query
                     ->with('unitOfMeasure:id,name,symbol,active')
                     ->orderBy('id'),
@@ -417,6 +420,13 @@ class InventoryItemController extends Controller
                         'id' => $item->inventoryBrand->id,
                         'name' => $item->inventoryBrand->name,
                         'active' => $item->inventoryBrand->active,
+                    ],
+                'inventoryProduct' => $item->inventoryProduct === null
+                    ? null
+                    : [
+                        'id' => $item->inventoryProduct->id,
+                        'name' => $item->inventoryProduct->name,
+                        'active' => $item->inventoryProduct->active,
                     ],
                 'unitConversions' => $item
                     ->unitConversions
@@ -501,6 +511,10 @@ class InventoryItemController extends Controller
                 $item,
             ),
             'brands' => $this->brandOptionsForItem(
+                $organization,
+                $item,
+            ),
+            'productFamilies' => $this->productOptionsForItem(
                 $organization,
                 $item,
             ),
@@ -669,6 +683,50 @@ class InventoryItemController extends Controller
             ->all();
 
         return array_values($brands);
+    }
+
+    /**
+     * Build active product-family choices for item forms.
+     *
+     * @return list<array{id: int, name: string, active: bool}>
+     */
+    private function activeProductOptions(Organization $organization): array
+    {
+        return $organization
+            ->inventoryProducts()
+            ->where('active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'active'])
+            ->map(static fn (InventoryProduct $product): array => [
+                'id' => $product->id,
+                'name' => $product->name,
+                'active' => $product->active,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Include an item's assigned inactive product family as a retainable choice.
+     *
+     * @return list<array{id: int, name: string, active: bool}>
+     */
+    private function productOptionsForItem(
+        Organization $organization,
+        InventoryItem $inventoryItem,
+    ): array {
+        $products = $this->activeProductOptions($organization);
+        $currentProduct = $inventoryItem->inventoryProduct;
+
+        if ($currentProduct !== null && ! $currentProduct->active) {
+            $products[] = [
+                'id' => $currentProduct->id,
+                'name' => $currentProduct->name,
+                'active' => $currentProduct->active,
+            ];
+        }
+
+        return $products;
     }
 
     /**

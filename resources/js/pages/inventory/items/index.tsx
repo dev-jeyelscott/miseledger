@@ -18,6 +18,7 @@ import InventoryAdjustmentController from '@/actions/App/Http/Controllers/Invent
 import InventoryBrandController from '@/actions/App/Http/Controllers/Inventory/InventoryBrandController';
 import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
+import InventoryProductController from '@/actions/App/Http/Controllers/Inventory/InventoryProductController';
 import OpeningBalanceController from '@/actions/App/Http/Controllers/Inventory/OpeningBalanceController';
 import UnitOfMeasureController from '@/actions/App/Http/Controllers/Inventory/UnitOfMeasureController';
 import InputError from '@/components/input-error';
@@ -448,6 +449,13 @@ export default function InventoryItemsIndex({
                             <Link href={InventoryBrandController.index()}>
                                 <Award className="size-4" aria-hidden="true" />
                                 Brands
+                            </Link>
+                        </Button>
+
+                        <Button variant="outline" asChild>
+                            <Link href={InventoryProductController.index()}>
+                                <Boxes className="size-4" aria-hidden="true" />
+                                Product families
                             </Link>
                         </Button>
 

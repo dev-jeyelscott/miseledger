@@ -19,6 +19,8 @@ use App\Http\Controllers\Inventory\InventoryItemBarcodeController;
 use App\Http\Controllers\Inventory\InventoryItemController;
 use App\Http\Controllers\Inventory\InventoryItemUnitController;
 use App\Http\Controllers\Inventory\InventoryProductController;
+use App\Http\Controllers\Inventory\InventoryProductOptionController;
+use App\Http\Controllers\Inventory\InventoryProductOptionValueController;
 use App\Http\Controllers\Inventory\InventoryValuationReportController;
 use App\Http\Controllers\Inventory\LowStockReportController;
 use App\Http\Controllers\Inventory\OpeningBalanceController;
@@ -324,6 +326,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             )->name('brands.update');
 
             Route::get(
+                'product-families',
+                [InventoryProductController::class, 'index'],
+            )->name('product-families.index');
+
+            Route::get(
                 'product-families/{inventoryProduct}',
                 [InventoryProductController::class, 'show'],
             )->name('product-families.show');
@@ -337,6 +344,26 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 'product-families/{inventoryProduct}',
                 [InventoryProductController::class, 'update'],
             )->name('product-families.update');
+
+            Route::post(
+                'product-families/{inventoryProduct}/options',
+                [InventoryProductOptionController::class, 'store'],
+            )->name('product-families.options.store');
+
+            Route::put(
+                'product-families/{inventoryProduct}/options/{inventoryProductOption}',
+                [InventoryProductOptionController::class, 'update'],
+            )->name('product-families.options.update');
+
+            Route::post(
+                'product-families/{inventoryProduct}/options/{inventoryProductOption}/values',
+                [InventoryProductOptionValueController::class, 'store'],
+            )->name('product-families.options.values.store');
+
+            Route::put(
+                'product-families/{inventoryProduct}/options/{inventoryProductOption}/values/{inventoryProductOptionValue}',
+                [InventoryProductOptionValueController::class, 'update'],
+            )->name('product-families.options.values.update');
 
             Route::post(
                 'items/{inventoryItem}/units',

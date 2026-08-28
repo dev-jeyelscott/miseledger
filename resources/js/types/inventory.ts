@@ -12,6 +12,12 @@ export type InventoryBrandData = {
     active: boolean;
 };
 
+export type InventoryProductData = {
+    id: number;
+    name: string;
+    active: boolean;
+};
+
 export type InventoryItemType =
     | 'ingredient'
     | 'finished_item'
@@ -41,6 +47,7 @@ export type InventoryItemListItem = {
     baseUnitOfMeasure: UnitOfMeasureData;
     inventoryCategory: InventoryCategoryData | null;
     inventoryBrand: InventoryBrandData | null;
+    inventoryProduct: InventoryProductData | null;
 };
 
 export type InventoryItemUnitData = {

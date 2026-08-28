@@ -8,7 +8,7 @@ use App\Models\OrganizationMembership;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
 
-test('an owner can create, update, and retrieve a product family', function () {
+test('an owner can create, update, and view a product family', function () {
     $user = User::factory()->create();
     $organization = Organization::factory()->create();
 
@@ -53,11 +53,11 @@ test('an owner can create, update, and retrieve a product family', function () {
         ->actingAs($user)
         ->get(route('inventory.product-families.show', $product))
         ->assertOk()
-        ->assertJson([
-            'id' => $product->id,
-            'name' => 'Stand Mixers',
-            'active' => false,
-        ]);
+        ->assertInertia(fn ($page) => $page
+            ->component('inventory/product-families/show')
+            ->where('productFamily.id', $product->id)
+            ->where('productFamily.name', 'Stand Mixers')
+            ->where('productFamily.active', false));
 });
 
 test('product family names are unique within an organization but reusable elsewhere', function () {
