@@ -85,6 +85,7 @@ export type InventoryItemDetail = {
     baseUnitOfMeasure: UnitOfMeasureData;
     inventoryCategory: InventoryCategoryData | null;
     inventoryBrand: InventoryBrandData | null;
+    inventoryProduct: InventoryProductData | null;
     unitConversions: InventoryItemUnitData[];
     barcodes: BarcodeData[];
 };

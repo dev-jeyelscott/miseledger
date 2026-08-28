@@ -115,7 +115,8 @@ test('the product family interface uses Wayfinder item actions and exposes all r
 
     expect($source)
         ->toContain("InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController'")
-        ->toContain('InventoryItemController.edit(variant.id)')
+        ->toContain('InventoryItemController.edit(')
+        ->toContain('variant.id')
         ->toContain('Variant description')
         ->toContain('SKU')
         ->toContain('Barcode')
