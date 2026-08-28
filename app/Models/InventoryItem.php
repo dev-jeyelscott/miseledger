@@ -95,6 +95,16 @@ class InventoryItem extends Model
     }
 
     /**
+     * Get the barcode identities registered for this item.
+     *
+     * @return HasMany<Barcode, $this>
+     */
+    public function barcodes(): HasMany
+    {
+        return $this->hasMany(Barcode::class);
+    }
+
+    /**
      * Cast persisted item state.
      *
      * @return array<string, string>
