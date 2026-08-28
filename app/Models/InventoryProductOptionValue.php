@@ -2,30 +2,32 @@
 
 namespace App\Models;
 
-use Database\Factories\InventoryProductFactory;
+use Database\Factories\InventoryProductOptionValueFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
  * @property int $organization_id
- * @property string $name
+ * @property int $inventory_product_option_id
+ * @property string $value
  * @property bool $active
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read Organization $organization
+ * @property-read InventoryProductOption $inventoryProductOption
  */
-#[Fillable(['organization_id', 'name', 'active'])]
-class InventoryProduct extends Model
+#[Fillable(['organization_id', 'inventory_product_option_id', 'value', 'active'])]
+class InventoryProductOptionValue extends Model
 {
-    /** @use HasFactory<InventoryProductFactory> */
+    /** @use HasFactory<InventoryProductOptionValueFactory> */
     use HasFactory;
 
     /**
-     * Get the organization owning this product family.
+     * Get the organization owning this option value.
      *
      * @return BelongsTo<Organization, $this>
      */
@@ -35,27 +37,17 @@ class InventoryProduct extends Model
     }
 
     /**
-     * Get inventory items grouped under this product family.
+     * Get the option dimension owning this value.
      *
-     * @return HasMany<InventoryItem, $this>
+     * @return BelongsTo<InventoryProductOption, $this>
      */
-    public function inventoryItems(): HasMany
+    public function inventoryProductOption(): BelongsTo
     {
-        return $this->hasMany(InventoryItem::class);
+        return $this->belongsTo(InventoryProductOption::class);
     }
 
     /**
-     * Get controlled option dimensions scoped to this product family.
-     *
-     * @return HasMany<InventoryProductOption, $this>
-     */
-    public function options(): HasMany
-    {
-        return $this->hasMany(InventoryProductOption::class);
-    }
-
-    /**
-     * Cast persisted product family state.
+     * Cast persisted option value state.
      *
      * @return array<string, string>
      */
