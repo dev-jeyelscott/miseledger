@@ -32,16 +32,28 @@ FROM composer:2 AS composer
 # Runtime shared by the production web, queue-worker, and scheduler processes.
 FROM php:${PHP_VERSION}-apache-bookworm AS runtime-base
 
+# The pg_dump client must match the production PostgreSQL 18 server; Debian
+# bookworm only ships PostgreSQL 15 client tools, so the PGDG apt repository
+# is required for a compatible postgresql-client-18.
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        gnupg \
         libcurl4 \
         libonig5 \
         libpq5 \
-        libxml2; \
-    apt-get purge -y --auto-remove ${PHPIZE_DEPS}; \
+        libxml2 \
+        restic; \
+    install -d /usr/share/postgresql-common/pgdg; \
+    curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+        --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc; \
+    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends postgresql-client-18; \
+    apt-get purge -y --auto-remove ${PHPIZE_DEPS} gnupg; \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=php-extensions /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/

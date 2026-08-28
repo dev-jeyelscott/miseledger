@@ -19,3 +19,9 @@ Schedule::command('billing:send-renewal-reminders')
     ->withoutOverlapping(30)
     ->onOneServer()
     ->runInBackground();
+
+Schedule::command('backup:database')
+    ->dailyAt((string) config('backup.schedule_time'))
+    ->withoutOverlapping(120)
+    ->onOneServer()
+    ->runInBackground();

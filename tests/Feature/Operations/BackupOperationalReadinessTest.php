@@ -204,6 +204,114 @@ test('the restore drill workflow targets a maximum RPO of 24 hours and RTO of 4 
         ->toContain('exit 1');
 });
 
+test('the backup configuration contract exposes the repository-controlled retention and off-host destination shape without committed credentials', function () {
+    expect(config('backup'))
+        ->toHaveKeys([
+            'restic_repository',
+            'restic_password',
+            'retention',
+            'schedule_time',
+            'alert_webhook_url',
+        ])
+        ->and(config('backup.retention'))
+        ->toHaveKeys(['daily', 'weekly', 'monthly'])
+        ->and(config('backup.retention.daily'))->toBe(7)
+        ->and(config('backup.retention.weekly'))->toBe(4)
+        ->and(config('backup.retention.monthly'))->toBe(12)
+        ->and(config('backup.schedule_time'))->toBe('02:00')
+        ->and(config('backup.restic_repository'))->toBeNull()
+        ->and(config('backup.restic_password'))->toBeNull();
+
+    $configuration = file_get_contents(config_path('backup.php'));
+
+    expect($configuration)
+        ->toContain("env('RESTIC_REPOSITORY')")
+        ->toContain("env('RESTIC_PASSWORD')")
+        ->not->toContain('s3:')
+        ->not->toContain('backblaze')
+        ->not->toContain('wasabi');
+});
+
+test('the daily production backup command is scheduled with repository-owned overlap and single-server protection', function () {
+    $console = file_get_contents(base_path('routes/console.php'));
+
+    expect($console)
+        ->toContain("Schedule::command('backup:database')")
+        ->toContain("->dailyAt((string) config('backup.schedule_time'))")
+        ->toContain('->withoutOverlapping(120)')
+        ->toContain('->onOneServer()')
+        ->toContain('->runInBackground();');
+});
+
+test('the backup command fails safely without executing pg_dump or restic when the off-host repository is not configured', function () {
+    config()->set('backup.restic_repository', null);
+    config()->set('backup.restic_password', null);
+
+    $this->artisan('backup:database')
+        ->assertFailed();
+});
+
+test('the backup command source enforces an off-host encrypted destination and never hardcodes credentials', function () {
+    $command = file_get_contents(app_path('Console/Commands/BackupDatabase.php'));
+
+    expect($command)
+        ->toContain("config('backup.restic_repository')")
+        ->toContain("config('backup.restic_password')")
+        ->toContain('restic')
+        ->toContain('pg_dump')
+        ->toContain('--keep-daily')
+        ->toContain('--keep-weekly')
+        ->toContain('--keep-monthly')
+        ->toContain('--prune')
+        ->not->toContain('s3:')
+        ->not->toContain('AKIA')
+        ->not->toContain('password123');
+
+    expect($command)->not->toMatch('/[\'"](?:RESTIC_PASSWORD|AWS_SECRET_ACCESS_KEY)[\'"]\s*=>\s*[\'"][^\'"]+[\'"]/');
+});
+
+test('the Dockerfile installs a PostgreSQL 18-compatible client and restic for the scheduled backup command', function () {
+    $dockerfile = file_get_contents(base_path('Dockerfile'));
+
+    expect($dockerfile)
+        ->toContain('postgresql-client-18')
+        ->toContain('restic');
+});
+
+test('the environment example documents backup placeholders without committed credentials', function () {
+    $example = file_get_contents(base_path('.env.example'));
+
+    expect($example)
+        ->toContain('RESTIC_REPOSITORY=')
+        ->toContain('RESTIC_PASSWORD=')
+        ->toContain('BACKUP_RETENTION_DAILY=7')
+        ->toContain('BACKUP_RETENTION_WEEKLY=4')
+        ->toContain('BACKUP_RETENTION_MONTHLY=12')
+        ->toContain('BACKUP_SCHEDULE_TIME=02:00')
+        ->toContain('BACKUP_ALERT_WEBHOOK_URL=')
+        ->not->toContain('RESTIC_PASSWORD=miseledger')
+        ->not->toContain('AKIA');
+});
+
+test('the deployment guide documents the required operator-managed off-host backup provider configuration and operational ownership', function () {
+    $docs = file_get_contents(base_path('docs/deployment.md'));
+
+    expect($docs)
+        ->toContain('## Production Backup Automation')
+        ->toContain('php artisan backup:database')
+        ->toContain('never into a Compose volume or `storage/app`')
+        ->toContain('This mechanism never uses Redis and never treats application-container filesystem storage as the backup destination')
+        ->toContain('### Required operator-managed configuration')
+        ->toContain('`RESTIC_REPOSITORY`')
+        ->toContain('`RESTIC_PASSWORD`')
+        ->toContain('encryption at rest is guaranteed by the integration itself')
+        ->toContain('`BACKUP_RETENTION_DAILY` / `BACKUP_RETENTION_WEEKLY` / `BACKUP_RETENTION_MONTHLY`')
+        ->toContain('restic forget --keep-daily --keep-weekly --keep-monthly')
+        ->toContain('`BACKUP_ALERT_WEBHOOK_URL`')
+        ->toContain('None of these values are committed')
+        ->toContain('Operational ownership:');
+});
+
 test('the deployment guide documents the restore drill evidence contract and its initial RPO/RTO targets', function () {
     $docs = file_get_contents(base_path('docs/deployment.md'));
 

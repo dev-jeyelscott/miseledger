@@ -207,6 +207,32 @@ StockMovement is authoritative ledger history. StockBalance is a derived project
 
 No current MiseLedger feature generates durable user-uploaded or user-generated files (see [Application Filesystem](#application-filesystem)), so no such files are in current backup scope. Before any future durable-file feature ships, that feature's PR must include an explicit persistence-and-backup review covering: where the files are stored, whether they are included in the PostgreSQL backup boundary or require a separate backup mechanism, and their retention and restore-verification plan. A scope document alone is not a backup: do not treat this documentation as evidence that durable-file backup is implemented, only that PostgreSQL backup coverage is.
 
+## Production Backup Automation
+
+The scheduler resource (see [Coolify Scheduler Resource](#coolify-scheduler-resource)) runs `php artisan backup:database` daily. The command:
+
+1. runs `pg_dump --format=custom` against the production database into a transient `/tmp` path inside the scheduler container only, never into a Compose volume or `storage/app`;
+2. uploads that archive with `restic backup`, which encrypts the archive client-side before it leaves the container, to the operator-configured off-host repository;
+3. deletes the transient `/tmp` archive immediately after upload, whether the upload succeeded or failed;
+4. runs `restic forget --prune` to apply the retention policy.
+
+This mechanism never uses Redis and never treats application-container filesystem storage as the backup destination; the `/tmp` archive is a transient handoff to the off-host, encrypted repository, not a persistence layer.
+
+### Required operator-managed configuration
+
+The repository is deliberately provider-agnostic: it targets any restic-supported, off-host, encrypted repository (S3-compatible object storage, B2, Azure, GCS, SFTP, or a REST server). The operator selects and configures the actual provider before enabling the schedule, entirely through Coolify runtime secrets:
+
+- `RESTIC_REPOSITORY`: the operator-chosen off-host repository target (for example an S3-compatible bucket URL);
+- `RESTIC_PASSWORD`: the repository encryption password; restic uses it to encrypt every archive at rest independently of the storage provider's own encryption, so encryption at rest is guaranteed by the integration itself, not merely by provider configuration;
+- S3-compatible backends reuse the existing `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_DEFAULT_REGION` runtime secrets; the operator must provision a least-privileged credential scoped only to the dedicated backup bucket, never the application's own credentials;
+- `BACKUP_RETENTION_DAILY` / `BACKUP_RETENTION_WEEKLY` / `BACKUP_RETENTION_MONTHLY`: retention counts passed to `restic forget --keep-daily --keep-weekly --keep-monthly` (defaults `7`/`4`/`12`);
+- `BACKUP_SCHEDULE_TIME`: the daily run time (default `02:00`);
+- `BACKUP_ALERT_WEBHOOK_URL`: an optional operator-provisioned generic HTTP webhook; the command posts a failure notification to it whenever `pg_dump`, `restic backup`, or `restic forget` fails, in addition to its own non-zero exit code and Coolify's process/log observability.
+
+None of these values are committed; `.env.example` only documents the placeholder keys. `RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, and the S3-compatible credentials are Coolify secrets injected only at container runtime, never build arguments, Compose source, or a committed `.env`.
+
+Operational ownership: the application operator provisions and rotates the backup repository credentials and confirms the schedule is active; the database operator remains responsible for restore execution (see [Restore Runbook](#restore-runbook)) and for periodically confirming retained snapshot counts match the configured policy.
+
 ## Backup Verification
 
 Backup success is never inferred from a file's presence alone. Verification is exercised by the scheduled `billing restore readiness` workflow (`.github/workflows/billing-restore-readiness.yml`), which runs monthly and on demand, entirely against an isolated, CI-provisioned PostgreSQL instance.
