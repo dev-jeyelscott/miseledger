@@ -33,7 +33,7 @@ class DemoDataSeeder extends Seeder
             return;
         }
 
-        $this->callOnce(
+        $this->seedDemoScenarioOnce(
             DemoOrganizationSeeder::class,
             static fn (): bool => Organization::query()
                 ->where('name', self::DEMO_ORGANIZATION_NAME)
@@ -44,7 +44,7 @@ class DemoDataSeeder extends Seeder
             ->where('name', self::DEMO_ORGANIZATION_NAME)
             ->sole();
 
-        $this->callOnce(
+        $this->seedDemoScenarioOnce(
             DemoInventorySeeder::class,
             static fn (): bool => InventoryItem::query()
                 ->where('organization_id', $organization->id)
@@ -52,7 +52,7 @@ class DemoDataSeeder extends Seeder
                 ->exists(),
         );
 
-        $this->callOnce(
+        $this->seedDemoScenarioOnce(
             DemoInventoryCatalogSeeder::class,
             static fn (): bool => InventoryItem::query()
                 ->where('organization_id', $organization->id)
@@ -64,7 +64,7 @@ class DemoDataSeeder extends Seeder
                     ->exists(),
         );
 
-        $this->callOnce(
+        $this->seedDemoScenarioOnce(
             DemoBarcodeSeeder::class,
             static fn (): bool => InventoryItemBarcode::query()
                 ->where('organization_id', $organization->id)
@@ -72,7 +72,7 @@ class DemoDataSeeder extends Seeder
                 ->exists(),
         );
 
-        $this->callOnce(
+        $this->seedDemoScenarioOnce(
             DemoSupplierSeeder::class,
             static fn (): bool => SupplierItem::query()
                 ->where('organization_id', $organization->id)
@@ -80,7 +80,7 @@ class DemoDataSeeder extends Seeder
                 ->exists(),
         );
 
-        $this->callOnce(
+        $this->seedDemoScenarioOnce(
             DemoStockLedgerSeeder::class,
             static fn (): bool => StockMovement::query()
                 ->where('organization_id', $organization->id)
@@ -91,7 +91,7 @@ class DemoDataSeeder extends Seeder
                 ->exists(),
         );
 
-        $this->callOnce(
+        $this->seedDemoScenarioOnce(
             DemoPurchasingSeeder::class,
             static fn (): bool => PurchaseOrder::query()
                 ->where('organization_id', $organization->id)
@@ -103,7 +103,7 @@ class DemoDataSeeder extends Seeder
                     ->exists(),
         );
 
-        $this->callOnce(
+        $this->seedDemoScenarioOnce(
             DemoWasteSeeder::class,
             static fn (): bool => WasteRecord::query()
                 ->where('organization_id', $organization->id)
@@ -114,7 +114,7 @@ class DemoDataSeeder extends Seeder
                 ->exists(),
         );
 
-        $this->callOnce(
+        $this->seedDemoScenarioOnce(
             DemoStockTransferSeeder::class,
             static fn (): bool => StockTransfer::query()
                 ->where('organization_id', $organization->id)
@@ -122,7 +122,7 @@ class DemoDataSeeder extends Seeder
                 ->exists(),
         );
 
-        $this->callOnce(
+        $this->seedDemoScenarioOnce(
             DemoStockCountSeeder::class,
             static fn (): bool => StockCount::query()
                 ->where('organization_id', $organization->id)
@@ -130,7 +130,7 @@ class DemoDataSeeder extends Seeder
                 ->exists(),
         );
 
-        $this->callOnce(
+        $this->seedDemoScenarioOnce(
             DemoRecipeSeeder::class,
             static fn (): bool => Recipe::query()
                 ->where('organization_id', $organization->id)
@@ -140,13 +140,12 @@ class DemoDataSeeder extends Seeder
     }
 
     /**
-     * Execute one internal scenario seeder only when its completion marker is
-     * absent, and roll back the whole scenario if it cannot finish cleanly.
+     * Execute one demo scenario only when its completion marker is absent.
      *
      * @param  class-string<Seeder>  $seederClass
      * @param  Closure(): bool  $isComplete
      */
-    private function callOnce(
+    private function seedDemoScenarioOnce(
         string $seederClass,
         Closure $isComplete,
     ): void {
