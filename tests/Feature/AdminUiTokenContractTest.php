@@ -86,6 +86,55 @@ test('native select preserves the canonical native form control contract', funct
         ->toContain('disabled:opacity-50');
 });
 
+test('shared inventory UI primitives follow the canonical admin contract', function () {
+    $field = File::get(resource_path('js/components/ui/field.tsx'));
+    $statusBadge = File::get(resource_path('js/components/status-badge.tsx'));
+    $pageHeader = File::get(resource_path('js/components/page-header.tsx'));
+    $filterToolbar = File::get(resource_path('js/components/filter-toolbar.tsx'));
+    $paginationControls = File::get(
+        resource_path('js/components/pagination-controls.tsx'),
+    );
+
+    expect($field)
+        ->toContain('data-slot="field"')
+        ->toContain('htmlFor={controlId}')
+        ->toContain("'aria-invalid': error ? true")
+        ->toContain("'aria-describedby': describedBy")
+        ->toContain('id={resolvedHelperId}')
+        ->toContain('id={resolvedErrorId}')
+        ->toContain('message={error}');
+
+    expect($statusBadge)
+        ->toContain("'neutral' | 'success' | 'warning' | 'info' | 'danger'")
+        ->toContain('label: string;')
+        ->toContain('border-success-border bg-success-subtle text-success-foreground')
+        ->toContain('border-warning-border bg-warning-subtle text-warning-foreground')
+        ->toContain('border-info-border bg-info-subtle text-info-foreground')
+        ->toContain('border-destructive/30 bg-destructive/10 text-destructive')
+        ->not->toContain('sidebar-border');
+
+    expect($pageHeader)
+        ->toContain('data-slot="page-header"')
+        ->toContain('text-2xl font-semibold tracking-tight')
+        ->toContain('mt-1 text-sm text-muted-foreground')
+        ->toContain('flex flex-wrap gap-2')
+        ->not->toContain('sidebar-border');
+
+    expect($filterToolbar)
+        ->toContain('data-slot="filter-toolbar"')
+        ->toContain('rounded-xl border border-border bg-card')
+        ->not->toContain('sidebar-border');
+
+    expect($paginationControls)
+        ->toContain('data-slot="pagination-controls"')
+        ->toContain('border-t border-border')
+        ->toContain("InertiaLinkProps['href'] | null")
+        ->toContain('preserveScroll={preserveScroll}')
+        ->toContain('preserveState={preserveState}')
+        ->toContain('Page {currentPage} of {lastPage}')
+        ->not->toContain('sidebar-border');
+});
+
 test('dashboard follows the canonical operational UI contract', function () {
     $dashboard = File::get(resource_path('js/pages/dashboard.tsx'));
 
