@@ -181,6 +181,32 @@ If a future feature stores durable business files on the local filesystem, eithe
 
 Do not persist the entire application directory.
 
+## Backup Scope and Recovery Boundary
+
+PostgreSQL is the sole authoritative backup source for MiseLedger business data. Scheduled off-host backups and periodic restore verification (see [Production Data Services](#production-data-services)) cover exactly this data.
+
+The authoritative business domains recovered from a PostgreSQL backup are:
+
+- organizations;
+- memberships;
+- inventory master;
+- stock movements;
+- stock balances;
+- purchasing;
+- suppliers;
+- stock counts;
+- transfers;
+- waste;
+- recipes;
+- billing;
+- audit records.
+
+Redis is explicitly excluded from authoritative business-data recovery. Its runtime role (sessions, cache, queues, distributed scheduler locks, maintenance-mode state; see [Redis](#redis)) is operational, not a system of record: nothing durable is recovered from Redis, and a Redis loss is remediated by cache/session rebuild, not by a backup restore.
+
+StockMovement is authoritative ledger history. StockBalance is a derived projection maintained from StockMovement. Do not rebuild or repair StockMovement from StockBalance; a divergence must be corrected by replaying or reconciling movements, never by reverse-deriving history from the balance snapshot.
+
+No current MiseLedger feature generates durable user-uploaded or user-generated files (see [Application Filesystem](#application-filesystem)), so no such files are in current backup scope. Before any future durable-file feature ships, that feature's PR must include an explicit persistence-and-backup review covering: where the files are stored, whether they are included in the PostgreSQL backup boundary or require a separate backup mechanism, and their retention and restore-verification plan. A scope document alone is not a backup: do not treat this documentation as evidence that durable-file backup is implemented, only that PostgreSQL backup coverage is.
+
 ## Coolify Web Resource
 
 Create a Git-based application using this repository and the root `Dockerfile`.
