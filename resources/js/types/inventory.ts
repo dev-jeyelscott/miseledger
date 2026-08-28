@@ -70,9 +70,13 @@ export type InventoryItemDetail = {
     sku: string;
     type: InventoryItemType;
     yieldPercentage: string;
+    modelNumber: string | null;
+    manufacturerPartNumber: string | null;
+    description: string | null;
     active: boolean;
     baseUnitOfMeasure: UnitOfMeasureData;
     inventoryCategory: InventoryCategoryData | null;
+    inventoryBrand: InventoryBrandData | null;
     unitConversions: InventoryItemUnitData[];
     barcodes: BarcodeData[];
 };

@@ -16,8 +16,12 @@ use Illuminate\Support\Carbon;
  * @property int $organization_id
  * @property int $base_unit_of_measure_id
  * @property int|null $inventory_category_id
+ * @property int|null $inventory_brand_id
  * @property string $name
  * @property string $sku
+ * @property string|null $model_number
+ * @property string|null $manufacturer_part_number
+ * @property string|null $description
  * @property InventoryItemType $type
  * @property string $yield_percentage
  * @property bool $active
@@ -30,8 +34,12 @@ use Illuminate\Support\Carbon;
     'organization_id',
     'base_unit_of_measure_id',
     'inventory_category_id',
+    'inventory_brand_id',
     'name',
     'sku',
+    'model_number',
+    'manufacturer_part_number',
+    'description',
     'type',
     'yield_percentage',
     'active',
@@ -72,6 +80,16 @@ class InventoryItem extends Model
     public function inventoryCategory(): BelongsTo
     {
         return $this->belongsTo(InventoryCategory::class);
+    }
+
+    /**
+     * Get the optional brand assigned to this item.
+     *
+     * @return BelongsTo<InventoryBrand, $this>
+     */
+    public function inventoryBrand(): BelongsTo
+    {
+        return $this->belongsTo(InventoryBrand::class);
     }
 
     /**

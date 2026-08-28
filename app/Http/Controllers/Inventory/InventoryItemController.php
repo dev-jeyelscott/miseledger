@@ -8,6 +8,7 @@ use App\Enums\OrganizationPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Inventory\SaveInventoryItemRequest;
 use App\Models\Barcode;
+use App\Models\InventoryBrand;
 use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
 use App\Models\InventoryItemUnit;
@@ -225,6 +226,7 @@ class InventoryItemController extends Controller
         return Inertia::render('inventory/items/create', [
             'units' => $this->activeUnitOptions($organization),
             'categories' => $this->activeCategoryOptions($organization),
+            'brands' => $this->activeBrandOptions($organization),
         ]);
     }
 
@@ -252,6 +254,14 @@ class InventoryItemController extends Controller
                 'inventory_category_id' => $request->validated(
                     'inventory_category_id',
                 ),
+                'inventory_brand_id' => $request->validated(
+                    'inventory_brand_id',
+                ),
+                'model_number' => $request->validated('model_number'),
+                'manufacturer_part_number' => $request->validated(
+                    'manufacturer_part_number',
+                ),
+                'description' => $request->validated('description'),
                 'type' => InventoryItemType::from((string) $request->validated(
                     'type',
                 )),
@@ -293,6 +303,7 @@ class InventoryItemController extends Controller
             ->with([
                 'baseUnitOfMeasure:id,name,symbol,active',
                 'inventoryCategory:id,name,active',
+                'inventoryBrand:id,name,active',
                 'unitConversions' => fn ($query) => $query
                     ->with('unitOfMeasure:id,name,symbol,active')
                     ->orderBy('id'),
@@ -339,6 +350,9 @@ class InventoryItemController extends Controller
                 'sku' => $item->sku,
                 'type' => $item->type->value,
                 'yieldPercentage' => $item->yield_percentage,
+                'modelNumber' => $item->model_number,
+                'manufacturerPartNumber' => $item->manufacturer_part_number,
+                'description' => $item->description,
                 'active' => $item->active,
                 'baseUnitOfMeasure' => [
                     'id' => $item->baseUnitOfMeasure->id,
@@ -352,6 +366,13 @@ class InventoryItemController extends Controller
                         'id' => $item->inventoryCategory->id,
                         'name' => $item->inventoryCategory->name,
                         'active' => $item->inventoryCategory->active,
+                    ],
+                'inventoryBrand' => $item->inventoryBrand === null
+                    ? null
+                    : [
+                        'id' => $item->inventoryBrand->id,
+                        'name' => $item->inventoryBrand->name,
+                        'active' => $item->inventoryBrand->active,
                     ],
                 'unitConversions' => $item
                     ->unitConversions
@@ -433,6 +454,10 @@ class InventoryItemController extends Controller
                 $organization,
                 $item,
             ),
+            'brands' => $this->brandOptionsForItem(
+                $organization,
+                $item,
+            ),
             'availableConversionUnits' => (
                 $availableConversionUnits
             ),
@@ -465,6 +490,14 @@ class InventoryItemController extends Controller
                 'inventory_category_id' => $request->validated(
                     'inventory_category_id',
                 ),
+                'inventory_brand_id' => $request->validated(
+                    'inventory_brand_id',
+                ),
+                'model_number' => $request->validated('model_number'),
+                'manufacturer_part_number' => $request->validated(
+                    'manufacturer_part_number',
+                ),
+                'description' => $request->validated('description'),
                 'type' => InventoryItemType::from((string) $request->validated(
                     'type',
                 )),
@@ -563,6 +596,53 @@ class InventoryItemController extends Controller
         }
 
         return $categories;
+    }
+
+    /**
+     * Build active brand choices for item forms.
+     *
+     * @return list<array{id: int, name: string, active: bool}>
+     */
+    private function activeBrandOptions(Organization $organization): array
+    {
+        $brands = $organization
+            ->inventoryBrands()
+            ->where('active', true)
+            ->orderBy('name')
+            ->get()
+            ->map(
+                static fn (InventoryBrand $brand): array => [
+                    'id' => $brand->id,
+                    'name' => $brand->name,
+                    'active' => $brand->active,
+                ],
+            )
+            ->all();
+
+        return array_values($brands);
+    }
+
+    /**
+     * Include an item's assigned inactive brand as a retainable choice.
+     *
+     * @return list<array{id: int, name: string, active: bool}>
+     */
+    private function brandOptionsForItem(
+        Organization $organization,
+        InventoryItem $inventoryItem,
+    ): array {
+        $brands = $this->activeBrandOptions($organization);
+        $currentBrand = $inventoryItem->inventoryBrand;
+
+        if ($currentBrand !== null && ! $currentBrand->active) {
+            $brands[] = [
+                'id' => $currentBrand->id,
+                'name' => $currentBrand->name,
+                'active' => $currentBrand->active,
+            ];
+        }
+
+        return $brands;
     }
 
     /**

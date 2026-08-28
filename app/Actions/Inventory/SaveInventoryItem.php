@@ -3,6 +3,7 @@
 namespace App\Actions\Inventory;
 
 use App\Enums\InventoryItemType;
+use App\Models\InventoryBrand;
 use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
 use App\Models\Organization;
@@ -26,6 +27,10 @@ final class SaveInventoryItem
      *     sku: string,
      *     base_unit_of_measure_id: int,
      *     inventory_category_id: int|null,
+     *     inventory_brand_id: int|null,
+     *     model_number: string|null,
+     *     manufacturer_part_number: string|null,
+     *     description: string|null,
      *     type: InventoryItemType,
      *     yield_percentage: string,
      *     active: bool
@@ -99,6 +104,30 @@ final class SaveInventoryItem
                 }
 
                 $attributes['inventory_category_id'] = $category->id;
+            }
+
+            if ($attributes['inventory_brand_id'] !== null) {
+                $brand = InventoryBrand::query()
+                    ->where('organization_id', $organization->getKey())
+                    ->whereKey($attributes['inventory_brand_id'])
+                    ->lockForUpdate()
+                    ->first();
+
+                $retainsCurrentBrand = $lockedItem !== null
+                    && $lockedItem->inventory_brand_id === $brand?->id;
+
+                if (
+                    $brand === null
+                    || (! $brand->active && ! $retainsCurrentBrand)
+                ) {
+                    throw ValidationException::withMessages([
+                        'inventory_brand_id' => __(
+                            'Select an active brand from the current organization.',
+                        ),
+                    ]);
+                }
+
+                $attributes['inventory_brand_id'] = $brand->id;
             }
 
             if ($lockedItem === null) {

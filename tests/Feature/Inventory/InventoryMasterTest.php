@@ -3,6 +3,7 @@
 use App\Actions\Inventory\RecordStockMovement;
 use App\Enums\OrganizationRole;
 use App\Enums\StockMovementType;
+use App\Models\InventoryBrand;
 use App\Models\InventoryItem;
 use App\Models\InventoryItemUnit;
 use App\Models\Location;
@@ -626,4 +627,169 @@ test('cross organization inventory item editing is not exposed', function () {
         ->actingAs($user)
         ->get(route('inventory.items.edit', $otherItem))
         ->assertNotFound();
+});
+
+test('an inventory item remains valid without brand or item-master metadata', function () {
+    $organization = Organization::factory()->create();
+    $unit = UnitOfMeasure::factory()->for($organization)->create();
+
+    $item = InventoryItem::factory()
+        ->for($organization)
+        ->create(['base_unit_of_measure_id' => $unit->id]);
+
+    expect($item->inventory_brand_id)->toBeNull()
+        ->and($item->model_number)->toBeNull()
+        ->and($item->manufacturer_part_number)->toBeNull()
+        ->and($item->description)->toBeNull();
+});
+
+test('an owner can assign an active brand and item-master metadata to an item', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create(['role' => OrganizationRole::Owner]);
+
+    $unit = UnitOfMeasure::factory()->for($organization)->create();
+    $brand = InventoryBrand::factory()->for($organization)->create();
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->post(route('inventory.items.store'), [
+            'name' => 'Flour',
+            'sku' => 'FLOUR-001',
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_brand_id' => $brand->id,
+            'model_number' => 'MDL-1',
+            'manufacturer_part_number' => 'MPN-1',
+            'description' => 'All-purpose baking flour.',
+            'active' => true,
+        ])
+        ->assertRedirect();
+
+    $item = InventoryItem::query()->sole();
+
+    expect($item->inventory_brand_id)->toBe($brand->id)
+        ->and($item->model_number)->toBe('MDL-1')
+        ->and($item->manufacturer_part_number)->toBe('MPN-1')
+        ->and($item->description)->toBe('All-purpose baking flour.');
+});
+
+test('an inventory item rejects a brand owned by another organization', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+    $otherOrganization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create(['role' => OrganizationRole::Owner]);
+
+    $unit = UnitOfMeasure::factory()->for($organization)->create();
+    $otherBrand = InventoryBrand::factory()->for($otherOrganization)->create();
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->post(route('inventory.items.store'), [
+            'name' => 'Flour',
+            'sku' => 'FLOUR-001',
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_brand_id' => $otherBrand->id,
+            'active' => true,
+        ])
+        ->assertSessionHasErrors('inventory_brand_id');
+
+    $this->assertDatabaseCount('inventory_items', 0);
+});
+
+test('an assigned inactive brand can be retained but not newly assigned', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create(['role' => OrganizationRole::Owner]);
+
+    $unit = UnitOfMeasure::factory()->for($organization)->create();
+    $brand = InventoryBrand::factory()->for($organization)->create();
+    $assignedItem = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_brand_id' => $brand->id,
+        ]);
+    $otherItem = InventoryItem::factory()
+        ->for($organization)
+        ->create(['base_unit_of_measure_id' => $unit->id]);
+
+    $brand->update(['active' => false]);
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->get(route('inventory.items.edit', $assignedItem))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page) => $page
+                ->component('inventory/items/edit')
+                ->has('brands', 1)
+                ->where('brands.0.id', $brand->id)
+                ->where('brands.0.active', false),
+        );
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->put(route('inventory.items.update', $assignedItem), [
+            'name' => 'Updated item name',
+            'sku' => $assignedItem->sku,
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_brand_id' => $brand->id,
+            'active' => true,
+        ])
+        ->assertRedirect(route('inventory.items.edit', $assignedItem));
+
+    expect($assignedItem->refresh()->inventory_brand_id)
+        ->toBe($brand->id)
+        ->and($assignedItem->name)->toBe('Updated item name');
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->put(route('inventory.items.update', $otherItem), [
+            'name' => $otherItem->name,
+            'sku' => $otherItem->sku,
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_brand_id' => $brand->id,
+            'active' => true,
+        ])
+        ->assertSessionHasErrors('inventory_brand_id');
+
+    expect($otherItem->refresh()->inventory_brand_id)->toBeNull();
+});
+
+test('an auditor cannot assign a brand to an inventory item', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create(['role' => OrganizationRole::Auditor]);
+
+    $unit = UnitOfMeasure::factory()->for($organization)->create();
+    $brand = InventoryBrand::factory()->for($organization)->create();
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->post(route('inventory.items.store'), [
+            'name' => 'Flour',
+            'sku' => 'FLOUR-001',
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_brand_id' => $brand->id,
+            'active' => true,
+        ])
+        ->assertForbidden();
+
+    $this->assertDatabaseCount('inventory_items', 0);
 });

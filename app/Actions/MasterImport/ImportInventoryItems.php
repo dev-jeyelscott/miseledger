@@ -122,6 +122,10 @@ final class ImportInventoryItems
                         'sku' => $sku,
                         'base_unit_of_measure_id' => $baseUnit->id,
                         'inventory_category_id' => $categoryId,
+                        'inventory_brand_id' => null,
+                        'model_number' => null,
+                        'manufacturer_part_number' => null,
+                        'description' => null,
                         'type' => InventoryItemType::from($type),
                         'yield_percentage' => $yieldPercentage,
                         'active' => CsvTable::parseBoolean(

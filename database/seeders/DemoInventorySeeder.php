@@ -109,6 +109,10 @@ class DemoInventorySeeder extends Seeder
                     'inventory_category_id' => $categories[
                         $definition['category']
                     ]->id,
+                    'inventory_brand_id' => null,
+                    'model_number' => null,
+                    'manufacturer_part_number' => null,
+                    'description' => null,
                     'type' => $definition['type'],
                     'yield_percentage' => $definition['yield'],
                     'active' => $definition['active'],

@@ -8,14 +8,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { UsageLimitNotice } from '@/components/usage-limit-notice';
 import { dashboard } from '@/routes';
-import type { InventoryCategoryData, UnitOfMeasureData } from '@/types';
+import type {
+    InventoryBrandData,
+    InventoryCategoryData,
+    UnitOfMeasureData,
+} from '@/types';
+
+const textareaClassName =
+    'min-h-24 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50';
 
 type Props = {
     units: UnitOfMeasureData[];
     categories: InventoryCategoryData[];
+    brands: InventoryBrandData[];
 };
 
-export default function CreateInventoryItem({ units, categories }: Props) {
+export default function CreateInventoryItem({
+    units,
+    categories,
+    brands,
+}: Props) {
     return (
         <>
             <Head title="Create inventory item" />
@@ -140,6 +152,83 @@ export default function CreateInventoryItem({ units, categories }: Props) {
                                             message={
                                                 errors.inventory_category_id
                                             }
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="inventory_brand_id">
+                                            Brand
+                                        </Label>
+                                        <select
+                                            id="inventory_brand_id"
+                                            name="inventory_brand_id"
+                                            defaultValue=""
+                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        >
+                                            <option value="">No brand</option>
+                                            {brands.map((brand) => (
+                                                <option
+                                                    key={brand.id}
+                                                    value={brand.id}
+                                                >
+                                                    {brand.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <InputError
+                                            message={errors.inventory_brand_id}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="model_number">
+                                            Model number
+                                        </Label>
+                                        <Input
+                                            id="model_number"
+                                            name="model_number"
+                                            placeholder="Optional"
+                                        />
+                                        <InputError
+                                            message={errors.model_number}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="manufacturer_part_number">
+                                            Manufacturer part number
+                                        </Label>
+                                        <Input
+                                            id="manufacturer_part_number"
+                                            name="manufacturer_part_number"
+                                            placeholder="Optional"
+                                        />
+                                        <InputError
+                                            message={
+                                                errors.manufacturer_part_number
+                                            }
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="description">
+                                            Description
+                                        </Label>
+                                        <textarea
+                                            id="description"
+                                            name="description"
+                                            rows={3}
+                                            maxLength={10000}
+                                            placeholder="Optional"
+                                            aria-invalid={
+                                                errors.description
+                                                    ? true
+                                                    : undefined
+                                            }
+                                            className={textareaClassName}
+                                        />
+                                        <InputError
+                                            message={errors.description}
                                         />
                                     </div>
 
