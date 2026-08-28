@@ -102,6 +102,25 @@ test('the deployment guide restore runbook specifies the stop-writes through res
         ->toContain('**Resume writes**');
 });
 
+test('the deployment guide restore runbook retrieves the verified restic snapshot into a transient path before restoring into the clean target', function () {
+    $docs = file_get_contents(base_path('docs/deployment.md'));
+
+    expect($docs)
+        ->toContain('restic snapshots --tag miseledger-postgresql')
+        ->toContain('retrieves only that snapshot into a transient, non-persistent path')
+        ->toContain('never into a Compose volume, `storage/app`, or any tracked location')
+        ->toContain('restores the retrieved archive into the clean target only, using `pg_restore`')
+        ->toContain('deletes the transient retrieved archive immediately after the restore completes');
+
+    $runbook = substr(
+        $docs,
+        strpos($docs, '## Restore Runbook'),
+        strpos($docs, '## Coolify Web Resource') - strpos($docs, '## Restore Runbook')
+    );
+
+    expect($runbook)->not->toContain('RESTIC_PASSWORD=');
+});
+
 test('the deployment guide restore runbook enumerates every required post-restore check', function () {
     $docs = file_get_contents(base_path('docs/deployment.md'));
 
@@ -251,19 +270,38 @@ test('the backup command fails safely without executing pg_dump or restic when t
         ->assertFailed();
 });
 
-test('the backup command source enforces an off-host encrypted destination and never hardcodes credentials', function () {
+test('the backup command fails safely without executing pg_dump or restic when the repository is a local or on-host path', function () {
+    config()->set('backup.restic_repository', '/var/backups/miseledger');
+    config()->set('backup.restic_password', 'a-repository-password');
+    config()->set('backup.alert_webhook_url', 'https://hooks.example.com/backup-alerts');
+
+    $this->artisan('backup:database')
+        ->assertFailed();
+});
+
+test('the backup command fails safely without executing pg_dump or restic when backup failure alerting is not configured', function () {
+    config()->set('backup.restic_repository', 's3:https://s3.example.com/miseledger-backups');
+    config()->set('backup.restic_password', 'a-repository-password');
+    config()->set('backup.alert_webhook_url', null);
+
+    $this->artisan('backup:database')
+        ->assertFailed();
+});
+
+test('the backup command source enforces an approved off-host encrypted destination, required alerting, and never hardcodes credentials', function () {
     $command = file_get_contents(app_path('Console/Commands/BackupDatabase.php'));
 
     expect($command)
         ->toContain("config('backup.restic_repository')")
         ->toContain("config('backup.restic_password')")
+        ->toContain("config('backup.alert_webhook_url')")
         ->toContain('restic')
         ->toContain('pg_dump')
         ->toContain('--keep-daily')
         ->toContain('--keep-weekly')
         ->toContain('--keep-monthly')
         ->toContain('--prune')
-        ->not->toContain('s3:')
+        ->toContain("'s3:', 'b2:', 'azure:', 'gs:', 'sftp:', 'rest:'")
         ->not->toContain('AKIA')
         ->not->toContain('password123');
 
@@ -308,6 +346,9 @@ test('the deployment guide documents the required operator-managed off-host back
         ->toContain('`BACKUP_RETENTION_DAILY` / `BACKUP_RETENTION_WEEKLY` / `BACKUP_RETENTION_MONTHLY`')
         ->toContain('restic forget --keep-daily --keep-weekly --keep-monthly')
         ->toContain('`BACKUP_ALERT_WEBHOOK_URL`')
+        ->toContain('a required operator-provisioned generic HTTP webhook; the command refuses to run if it is not set')
+        ->toContain('The command rejects any value that does not start with an approved off-host restic backend prefix')
+        ->toContain('a local or on-host filesystem path is refused')
         ->toContain('None of these values are committed')
         ->toContain('Operational ownership:');
 });

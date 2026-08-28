@@ -14,6 +14,14 @@ final class BackupDatabase extends Command
 
     protected $description = 'Create an encrypted, off-host PostgreSQL archive and apply the configured retention policy.';
 
+    /**
+     * Restic repository URL prefixes for the approved off-host, restic-supported
+     * backends (S3-compatible object storage, B2, Azure, GCS, SFTP, a REST
+     * server). A repository without one of these prefixes is a local or
+     * on-host path and is rejected: it cannot satisfy the off-host requirement.
+     */
+    private const OFF_HOST_SCHEMES = ['s3:', 'b2:', 'azure:', 'gs:', 'sftp:', 'rest:'];
+
     public function handle(): int
     {
         $repository = config('backup.restic_repository');
@@ -22,6 +30,20 @@ final class BackupDatabase extends Command
         if (! is_string($repository) || $repository === ''
             || ! is_string($password) || $password === '') {
             $this->error('Backup destination is not configured. Set RESTIC_REPOSITORY and RESTIC_PASSWORD at runtime before scheduling backups.');
+
+            return self::FAILURE;
+        }
+
+        if (! Str::startsWith(Str::lower($repository), self::OFF_HOST_SCHEMES)) {
+            $this->error('RESTIC_REPOSITORY must target an approved off-host backend (s3:, b2:, azure:, gs:, sftp:, or rest:). Local or on-host repository paths are not permitted.');
+
+            return self::FAILURE;
+        }
+
+        $alertWebhookUrl = config('backup.alert_webhook_url');
+
+        if (! is_string($alertWebhookUrl) || $alertWebhookUrl === '') {
+            $this->error('Backup failure alerting is not configured. Set BACKUP_ALERT_WEBHOOK_URL at runtime before scheduling backups.');
 
             return self::FAILURE;
         }

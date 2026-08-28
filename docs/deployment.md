@@ -222,12 +222,12 @@ This mechanism never uses Redis and never treats application-container filesyste
 
 The repository is deliberately provider-agnostic: it targets any restic-supported, off-host, encrypted repository (S3-compatible object storage, B2, Azure, GCS, SFTP, or a REST server). The operator selects and configures the actual provider before enabling the schedule, entirely through Coolify runtime secrets:
 
-- `RESTIC_REPOSITORY`: the operator-chosen off-host repository target (for example an S3-compatible bucket URL);
+- `RESTIC_REPOSITORY`: the operator-chosen off-host repository target (for example an S3-compatible bucket URL). The command rejects any value that does not start with an approved off-host restic backend prefix (`s3:`, `b2:`, `azure:`, `gs:`, `sftp:`, or `rest:`); a local or on-host filesystem path is refused, so a backup can never be created without a genuinely off-host destination;
 - `RESTIC_PASSWORD`: the repository encryption password; restic uses it to encrypt every archive at rest independently of the storage provider's own encryption, so encryption at rest is guaranteed by the integration itself, not merely by provider configuration;
 - S3-compatible backends reuse the existing `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_DEFAULT_REGION` runtime secrets; the operator must provision a least-privileged credential scoped only to the dedicated backup bucket, never the application's own credentials;
 - `BACKUP_RETENTION_DAILY` / `BACKUP_RETENTION_WEEKLY` / `BACKUP_RETENTION_MONTHLY`: retention counts passed to `restic forget --keep-daily --keep-weekly --keep-monthly` (defaults `7`/`4`/`12`);
 - `BACKUP_SCHEDULE_TIME`: the daily run time (default `02:00`);
-- `BACKUP_ALERT_WEBHOOK_URL`: an optional operator-provisioned generic HTTP webhook; the command posts a failure notification to it whenever `pg_dump`, `restic backup`, or `restic forget` fails, in addition to its own non-zero exit code and Coolify's process/log observability.
+- `BACKUP_ALERT_WEBHOOK_URL`: a required operator-provisioned generic HTTP webhook; the command refuses to run if it is not set, and otherwise posts a failure notification to it whenever `pg_dump`, `restic backup`, or `restic forget` fails, in addition to its own non-zero exit code and Coolify's process/log observability.
 
 None of these values are committed; `.env.example` only documents the placeholder keys. `RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, and the S3-compatible credentials are Coolify secrets injected only at container runtime, never build arguments, Compose source, or a committed `.env`.
 
@@ -290,7 +290,11 @@ This runbook recovers MiseLedger from a verified PostgreSQL backup after data lo
 
 1. **Stop writes.** Put MiseLedger in maintenance mode (`php artisan down --retry=60`) and stop or pause the worker and scheduler resources so no queued job or scheduled command writes during the restore.
 2. **Provision a clean PostgreSQL target.** Create a new, isolated PostgreSQL database dedicated to the restore. Never restore in place over the existing database; a clean target ensures a partial or failed restore never leaves the prior database in a torn state.
-3. **Restore the verified backup.** Restore the identified, verified backup archive into the clean target only, using `pg_restore`.
+3. **Restore the verified backup.** Using the `RESTIC_REPOSITORY` and `RESTIC_PASSWORD` runtime secrets obtained from the Coolify secret store (never recorded in this document), the database operator:
+   - lists candidate snapshots with `restic snapshots --tag miseledger-postgresql` and selects the snapshot matching the required point in time and its noted verification timestamp;
+   - retrieves only that snapshot into a transient, non-persistent path (for example `restic dump <snapshot-id> <archive-path> > /tmp/miseledger-restore.dump`), never into a Compose volume, `storage/app`, or any tracked location;
+   - restores the retrieved archive into the clean target only, using `pg_restore`;
+   - deletes the transient retrieved archive immediately after the restore completes, whether it succeeded or failed.
 4. **Validate the application** against the restored database:
    - update the private PostgreSQL connection configuration in Coolify secrets to point at the restored target;
    - deploy or restart the web, worker, and scheduler resources on the same application image commit;
