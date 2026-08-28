@@ -531,7 +531,8 @@ export default function InventoryItemsIndex({
                                         htmlFor="inventory-search"
                                         className="sr-only"
                                     >
-                                        Search inventory items
+                                        Search inventory items by name, SKU, or
+                                        barcode
                                     </label>
                                     <Search
                                         className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
@@ -542,7 +543,7 @@ export default function InventoryItemsIndex({
                                         name="search"
                                         type="search"
                                         defaultValue={filters.search}
-                                        placeholder="Search by item name or SKU..."
+                                        placeholder="Search or scan by item name, SKU, or barcode..."
                                         className="pl-9"
                                     />
                                 </div>

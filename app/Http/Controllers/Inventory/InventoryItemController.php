@@ -76,7 +76,13 @@ class InventoryItemController extends Controller
                 static function (Builder $query) use ($searchPattern): void {
                     $query
                         ->whereLike('name', $searchPattern)
-                        ->orWhereLike('sku', $searchPattern);
+                        ->orWhereLike('sku', $searchPattern)
+                        ->orWhereHas(
+                            'barcodes',
+                            static function (Builder $barcodes) use ($searchPattern): void {
+                                $barcodes->whereLike('value', $searchPattern);
+                            },
+                        );
                 },
             );
         }

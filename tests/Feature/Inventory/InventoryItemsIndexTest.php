@@ -2,8 +2,10 @@
 
 use App\Enums\InventoryItemType;
 use App\Enums\OrganizationRole;
+use App\Models\Barcode;
 use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
+use App\Models\InventoryItemUnit;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\UnitOfMeasure;
@@ -188,6 +190,127 @@ test('inventory item filters combine search category type and status', function 
                     InventoryItemType::Ingredient->value,
                 )
                 ->where('filters.status', 'active'),
+        );
+});
+
+test('inventory item search matches a base-item barcode value', function () {
+    [$user, $organization, $unit] = inventoryItemsIndexContext();
+
+    $target = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Fresh Tomato',
+            'sku' => 'TOM-001',
+        ]);
+
+    Barcode::factory()
+        ->for($target)
+        ->create([
+            'organization_id' => $organization->id,
+            'value' => '0123456789012',
+        ]);
+
+    InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Other Item',
+            'sku' => 'OTHER-001',
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'search' => '0123456789012',
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/items/index')
+                ->has('items', 1)
+                ->where('items.0.id', $target->id)
+                ->where('filters.search', '0123456789012'),
+        );
+});
+
+test('inventory item search matches an alternate-unit barcode value', function () {
+    [$user, $organization, $unit] = inventoryItemsIndexContext();
+
+    $target = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Case Of Flour',
+            'sku' => 'FLOUR-001',
+        ]);
+
+    $alternateUnit = InventoryItemUnit::factory()
+        ->for($target)
+        ->create();
+
+    Barcode::factory()
+        ->for($target)
+        ->create([
+            'organization_id' => $organization->id,
+            'inventory_item_unit_id' => $alternateUnit->id,
+            'value' => '1111111111111',
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'search' => '1111111111111',
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/items/index')
+                ->has('items', 1)
+                ->where('items.0.id', $target->id),
+        );
+});
+
+test('inventory item search does not resolve a barcode from another organization', function () {
+    [$user, $organization] = inventoryItemsIndexContext();
+
+    $otherOrganization = Organization::factory()->create();
+    $otherUnit = UnitOfMeasure::factory()
+        ->for($otherOrganization)
+        ->create();
+
+    $otherItem = InventoryItem::factory()
+        ->for($otherOrganization)
+        ->create([
+            'base_unit_of_measure_id' => $otherUnit->id,
+        ]);
+
+    Barcode::factory()
+        ->for($otherItem)
+        ->create([
+            'organization_id' => $otherOrganization->id,
+            'value' => '2222222222222',
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'search' => '2222222222222',
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/items/index')
+                ->has('items', 0),
         );
 });
 
