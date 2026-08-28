@@ -17,6 +17,7 @@ const controlStatements = [
     'try',
     'throw',
 ];
+
 const paddingAroundControl = [
     ...controlStatements.flatMap((stmt) => [
         { blankLine: 'always', prev: '*', next: stmt },
@@ -81,7 +82,10 @@ export default [
                         'sibling',
                         'index',
                     ],
-                    alphabetize: { order: 'asc', caseInsensitive: true },
+                    alphabetize: {
+                        order: 'asc',
+                        caseInsensitive: true,
+                    },
                 },
             ],
             'import/consistent-type-specifier-style': [
@@ -95,7 +99,13 @@ export default [
             '@stylistic': stylistic,
         },
         rules: {
-            '@stylistic/brace-style': ['error', '1tbs', { allowSingleLine: false }],
+            '@stylistic/brace-style': [
+                'error',
+                '1tbs',
+                {
+                    allowSingleLine: false,
+                },
+            ],
             '@stylistic/padding-line-between-statements': [
                 'error',
                 ...paddingAroundControl,
@@ -104,6 +114,8 @@ export default [
     },
     {
         ignores: [
+            '.agents/**',
+            '.claude/**',
             'vendor',
             'node_modules',
             'public',
@@ -123,7 +135,13 @@ export default [
         },
         rules: {
             curly: ['error', 'all'],
-            '@stylistic/brace-style': ['error', '1tbs', { allowSingleLine: false }],
+            '@stylistic/brace-style': [
+                'error',
+                '1tbs',
+                {
+                    allowSingleLine: false,
+                },
+            ],
         },
     },
 ];
