@@ -106,6 +106,16 @@ class Organization extends Model
     }
 
     /**
+     * Get barcode identities owned by this organization.
+     *
+     * @return HasMany<InventoryItemBarcode, $this>
+     */
+    public function inventoryItemBarcodes(): HasMany
+    {
+        return $this->hasMany(InventoryItemBarcode::class);
+    }
+
+    /**
      * Get organization-scoped inventory categories.
      *
      * @return HasMany<InventoryCategory, $this>

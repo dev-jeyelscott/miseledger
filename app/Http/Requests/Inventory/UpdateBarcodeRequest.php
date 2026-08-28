@@ -4,8 +4,8 @@ namespace App\Http\Requests\Inventory;
 
 use App\Enums\BarcodeSymbology;
 use App\Enums\OrganizationPermission;
-use App\Models\Barcode;
 use App\Models\InventoryItem;
+use App\Models\InventoryItemBarcode;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Database\Query\Builder;
@@ -55,7 +55,7 @@ class UpdateBarcodeRequest extends FormRequest
                 'string',
                 'max:64',
                 'regex:/^[A-Z0-9\-]+$/',
-                Rule::unique('barcodes', 'value')
+                Rule::unique('inventory_item_barcodes', 'barcode')
                     ->where(
                         fn (Builder $query): Builder => $query->where(
                             'organization_id',
@@ -125,7 +125,7 @@ class UpdateBarcodeRequest extends FormRequest
     /**
      * Resolve the barcode only through the tenant-scoped parent item.
      */
-    public function barcode(): ?Barcode
+    public function barcode(): ?InventoryItemBarcode
     {
         $inventoryItem = $this->inventoryItem();
         $routeId = $this->route('barcode');

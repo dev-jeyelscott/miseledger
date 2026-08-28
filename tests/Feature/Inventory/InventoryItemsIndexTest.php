@@ -2,10 +2,10 @@
 
 use App\Enums\InventoryItemType;
 use App\Enums\OrganizationRole;
-use App\Models\Barcode;
 use App\Models\InventoryBrand;
 use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
+use App\Models\InventoryItemBarcode;
 use App\Models\InventoryItemUnit;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
@@ -242,11 +242,11 @@ test('inventory item search matches a base-item barcode value', function () {
             'sku' => 'TOM-001',
         ]);
 
-    Barcode::factory()
+    InventoryItemBarcode::factory()
         ->for($target)
         ->create([
             'organization_id' => $organization->id,
-            'value' => '0123456789012',
+            'barcode' => '0123456789012',
         ]);
 
     InventoryItem::factory()
@@ -290,12 +290,12 @@ test('inventory item search matches an alternate-unit barcode value', function (
         ->for($target)
         ->create();
 
-    Barcode::factory()
+    InventoryItemBarcode::factory()
         ->for($target)
         ->create([
             'organization_id' => $organization->id,
             'inventory_item_unit_id' => $alternateUnit->id,
-            'value' => '1111111111111',
+            'barcode' => '1111111111111',
         ]);
 
     $this
@@ -329,11 +329,11 @@ test('inventory item search does not resolve a barcode from another organization
             'base_unit_of_measure_id' => $otherUnit->id,
         ]);
 
-    Barcode::factory()
+    InventoryItemBarcode::factory()
         ->for($otherItem)
         ->create([
             'organization_id' => $otherOrganization->id,
-            'value' => '2222222222222',
+            'barcode' => '2222222222222',
         ]);
 
     $this

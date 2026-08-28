@@ -53,7 +53,7 @@ class StoreBarcodeRequest extends FormRequest
                 'string',
                 'max:64',
                 'regex:/^[A-Z0-9\-]+$/',
-                Rule::unique('barcodes', 'value')
+                Rule::unique('inventory_item_barcodes', 'barcode')
                     ->where(
                         fn (Builder $query): Builder => $query->where(
                             'organization_id',

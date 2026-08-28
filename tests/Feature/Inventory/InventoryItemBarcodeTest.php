@@ -2,8 +2,8 @@
 
 use App\Enums\BarcodeSymbology;
 use App\Enums\OrganizationRole;
-use App\Models\Barcode;
 use App\Models\InventoryItem;
+use App\Models\InventoryItemBarcode;
 use App\Models\InventoryItemUnit;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
@@ -18,12 +18,12 @@ test('an inventory item can have multiple barcodes across supported symbologies'
         ->create();
 
     foreach (BarcodeSymbology::cases() as $symbology) {
-        Barcode::factory()
+        InventoryItemBarcode::factory()
             ->for($item)
             ->create([
                 'organization_id' => $organization->id,
                 'symbology' => $symbology,
-                'value' => $symbology->value.'-value',
+                'barcode' => $symbology->value.'-value',
             ]);
     }
 
@@ -43,28 +43,28 @@ test('a barcode value is unique within its organization but reusable by another 
         ->for($otherOrganization)
         ->create();
 
-    Barcode::factory()
+    InventoryItemBarcode::factory()
         ->for($item)
         ->create([
             'organization_id' => $organization->id,
-            'value' => '0123456789012',
+            'barcode' => '0123456789012',
         ]);
 
-    Barcode::factory()
+    InventoryItemBarcode::factory()
         ->for($otherItem)
         ->create([
             'organization_id' => $otherOrganization->id,
-            'value' => '0123456789012',
+            'barcode' => '0123456789012',
         ]);
 
-    expect(Barcode::query()->count())->toBe(2);
+    expect(InventoryItemBarcode::query()->count())->toBe(2);
 
     expect(function () use ($organization, $item): void {
-        Barcode::factory()
+        InventoryItemBarcode::factory()
             ->for($item)
             ->create([
                 'organization_id' => $organization->id,
-                'value' => '0123456789012',
+                'barcode' => '0123456789012',
             ]);
     })->toThrow(QueryException::class);
 });
@@ -75,21 +75,21 @@ test('at most one barcode per item can be marked primary', function () {
         ->for($organization)
         ->create();
 
-    Barcode::factory()
+    InventoryItemBarcode::factory()
         ->for($item)
         ->create([
             'organization_id' => $organization->id,
-            'value' => '1111111111111',
-            'is_primary' => true,
+            'barcode' => '1111111111111',
+            'primary' => true,
         ]);
 
     expect(function () use ($organization, $item): void {
-        Barcode::factory()
+        InventoryItemBarcode::factory()
             ->for($item)
             ->create([
                 'organization_id' => $organization->id,
-                'value' => '2222222222222',
-                'is_primary' => true,
+                'barcode' => '2222222222222',
+                'primary' => true,
             ]);
     })->toThrow(QueryException::class);
 });
@@ -104,12 +104,12 @@ test('a barcode can be linked to an alternate unit belonging to the same item', 
         ->for($item)
         ->create();
 
-    $barcode = Barcode::factory()
+    $barcode = InventoryItemBarcode::factory()
         ->for($item)
         ->create([
             'organization_id' => $organization->id,
             'inventory_item_unit_id' => $unit->id,
-            'value' => '3333333333333',
+            'barcode' => '3333333333333',
         ]);
 
     expect($barcode->inventoryItemUnit->id)->toBe($unit->id);
@@ -131,12 +131,12 @@ test('a barcode cannot be linked to a unit belonging to a different item', funct
         ->create();
 
     expect(function () use ($organization, $item, $otherItemUnit): void {
-        Barcode::factory()
+        InventoryItemBarcode::factory()
             ->for($item)
             ->create([
                 'organization_id' => $organization->id,
                 'inventory_item_unit_id' => $otherItemUnit->id,
-                'value' => '4444444444444',
+                'barcode' => '4444444444444',
             ]);
     })->toThrow(QueryException::class);
 });
@@ -180,13 +180,13 @@ test('a manager can add a barcode to an inventory item', function () {
         ])
         ->assertRedirect(route('inventory.items.edit', $item));
 
-    $barcode = Barcode::query()->sole();
+    $barcode = InventoryItemBarcode::query()->sole();
 
     expect($barcode->inventory_item_id)
         ->toBe($item->id)
-        ->and($barcode->value)
+        ->and($barcode->barcode)
         ->toBe('0123456789012')
-        ->and($barcode->is_primary)
+        ->and($barcode->primary)
         ->toBeTrue();
 });
 
@@ -205,7 +205,7 @@ test('an auditor cannot add or edit barcodes', function () {
         ->for($organization)
         ->create();
 
-    $barcode = Barcode::factory()
+    $barcode = InventoryItemBarcode::factory()
         ->for($item)
         ->create([
             'organization_id' => $organization->id,
@@ -235,17 +235,17 @@ test('an auditor cannot add or edit barcodes', function () {
         ])
         ->assertForbidden();
 
-    expect(Barcode::query()->count())->toBe(1);
+    expect(InventoryItemBarcode::query()->count())->toBe(1);
 });
 
 test('creating a barcode rejects a duplicate value within the active organization', function () {
     [$user, $organization, $item] = inventoryItemBarcodeOwnerContext();
 
-    Barcode::factory()
+    InventoryItemBarcode::factory()
         ->for($item)
         ->create([
             'organization_id' => $organization->id,
-            'value' => '1111111111111',
+            'barcode' => '1111111111111',
         ]);
 
     $this->withSession([
@@ -260,7 +260,7 @@ test('creating a barcode rejects a duplicate value within the active organizatio
         ])
         ->assertSessionHasErrors('value');
 
-    expect(Barcode::query()->count())->toBe(1);
+    expect(InventoryItemBarcode::query()->count())->toBe(1);
 });
 
 test('creating a barcode rejects a malformed value', function () {
@@ -278,7 +278,7 @@ test('creating a barcode rejects a malformed value', function () {
         ])
         ->assertSessionHasErrors('value');
 
-    $this->assertDatabaseCount('barcodes', 0);
+    $this->assertDatabaseCount('inventory_item_barcodes', 0);
 });
 
 test('creating a barcode rejects an excessively long value', function () {
@@ -296,7 +296,7 @@ test('creating a barcode rejects an excessively long value', function () {
         ])
         ->assertSessionHasErrors('value');
 
-    $this->assertDatabaseCount('barcodes', 0);
+    $this->assertDatabaseCount('inventory_item_barcodes', 0);
 });
 
 test('creating a barcode rejects a unit belonging to a different item', function () {
@@ -323,7 +323,7 @@ test('creating a barcode rejects a unit belonging to a different item', function
         ])
         ->assertSessionHasErrors('inventory_item_unit_id');
 
-    $this->assertDatabaseCount('barcodes', 0);
+    $this->assertDatabaseCount('inventory_item_barcodes', 0);
 });
 
 test('a manager cannot manage barcodes for another organization\'s item', function () {
@@ -346,26 +346,26 @@ test('a manager cannot manage barcodes for another organization\'s item', functi
         ])
         ->assertForbidden();
 
-    $this->assertDatabaseCount('barcodes', 0);
+    $this->assertDatabaseCount('inventory_item_barcodes', 0);
 });
 
 test('updating a barcode as the primary demotes the current primary for the item', function () {
     [$user, $organization, $item] = inventoryItemBarcodeOwnerContext();
 
-    $currentPrimary = Barcode::factory()
+    $currentPrimary = InventoryItemBarcode::factory()
         ->for($item)
         ->create([
             'organization_id' => $organization->id,
-            'value' => '4444444444444',
-            'is_primary' => true,
+            'barcode' => '4444444444444',
+            'primary' => true,
         ]);
 
-    $challenger = Barcode::factory()
+    $challenger = InventoryItemBarcode::factory()
         ->for($item)
         ->create([
             'organization_id' => $organization->id,
-            'value' => '5555555555555',
-            'is_primary' => false,
+            'barcode' => '5555555555555',
+            'primary' => false,
         ]);
 
     $this->withSession([
@@ -378,7 +378,7 @@ test('updating a barcode as the primary demotes the current primary for the item
                 [$item, $challenger],
             ),
             [
-                'value' => $challenger->value,
+                'value' => $challenger->barcode,
                 'symbology' => BarcodeSymbology::Ean13->value,
                 'is_primary' => true,
                 'active' => true,
@@ -386,21 +386,21 @@ test('updating a barcode as the primary demotes the current primary for the item
         )
         ->assertRedirect(route('inventory.items.edit', $item));
 
-    expect($challenger->fresh()->is_primary)
+    expect($challenger->fresh()->primary)
         ->toBeTrue()
-        ->and($currentPrimary->fresh()->is_primary)
+        ->and($currentPrimary->fresh()->primary)
         ->toBeFalse();
 });
 
 test('inventory item edit exposes configured barcodes to Inertia', function () {
     [$user, $organization, $item] = inventoryItemBarcodeOwnerContext();
 
-    $barcode = Barcode::factory()
+    $barcode = InventoryItemBarcode::factory()
         ->for($item)
         ->create([
             'organization_id' => $organization->id,
-            'value' => '6666666666666',
-            'is_primary' => true,
+            'barcode' => '6666666666666',
+            'primary' => true,
         ]);
 
     $this->withSession([
@@ -412,7 +412,7 @@ test('inventory item edit exposes configured barcodes to Inertia', function () {
             fn (Assert $page) => $page
                 ->component('inventory/items/edit')
                 ->where('item.barcodes.0.id', $barcode->id)
-                ->where('item.barcodes.0.value', $barcode->value)
+                ->where('item.barcodes.0.value', $barcode->barcode)
                 ->where('item.barcodes.0.isPrimary', true),
         );
 });

@@ -2,8 +2,8 @@
 
 use App\Actions\Inventory\LookupBarcode;
 use App\Enums\BarcodeSymbology;
-use App\Models\Barcode;
 use App\Models\InventoryItem;
+use App\Models\InventoryItemBarcode;
 use App\Models\InventoryItemUnit;
 use App\Models\Organization;
 
@@ -13,11 +13,11 @@ test('a known base-item barcode resolves to its inventory item', function () {
         ->for($organization)
         ->create();
 
-    $barcode = Barcode::factory()
+    $barcode = InventoryItemBarcode::factory()
         ->for($item)
         ->create([
             'organization_id' => $organization->id,
-            'value' => '0123456789012',
+            'barcode' => '0123456789012',
             'symbology' => BarcodeSymbology::Ean13,
         ]);
 
@@ -41,12 +41,12 @@ test('a known alternate-unit barcode resolves with its unit information', functi
         ->for($item)
         ->create();
 
-    $barcode = Barcode::factory()
+    $barcode = InventoryItemBarcode::factory()
         ->for($item)
         ->create([
             'organization_id' => $organization->id,
             'inventory_item_unit_id' => $unit->id,
-            'value' => '1111111111111',
+            'barcode' => '1111111111111',
         ]);
 
     $result = (new LookupBarcode)->handle($organization, '1111111111111');
@@ -63,11 +63,11 @@ test('an inactive barcode does not resolve as a valid scanner match', function (
         ->for($organization)
         ->create();
 
-    Barcode::factory()
+    InventoryItemBarcode::factory()
         ->for($item)
         ->create([
             'organization_id' => $organization->id,
-            'value' => '2222222222222',
+            'barcode' => '2222222222222',
             'active' => false,
         ]);
 
@@ -94,11 +94,11 @@ test('a barcode belonging to another organization cannot be resolved', function 
         ->for($otherOrganization)
         ->create();
 
-    Barcode::factory()
+    InventoryItemBarcode::factory()
         ->for($otherItem)
         ->create([
             'organization_id' => $otherOrganization->id,
-            'value' => '3333333333333',
+            'barcode' => '3333333333333',
         ]);
 
     $result = (new LookupBarcode)->handle($organization, '3333333333333');

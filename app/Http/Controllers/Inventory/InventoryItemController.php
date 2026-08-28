@@ -7,10 +7,10 @@ use App\Enums\InventoryItemType;
 use App\Enums\OrganizationPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Inventory\SaveInventoryItemRequest;
-use App\Models\Barcode;
 use App\Models\InventoryBrand;
 use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
+use App\Models\InventoryItemBarcode;
 use App\Models\InventoryItemUnit;
 use App\Models\Organization;
 use App\Models\UnitOfMeasure;
@@ -88,7 +88,7 @@ class InventoryItemController extends Controller
                         ->orWhereHas(
                             'barcodes',
                             static function (Builder $barcodes) use ($searchPattern): void {
-                                $barcodes->whereLike('value', $searchPattern);
+                                $barcodes->whereLike('barcode', $searchPattern);
                             },
                         );
                 },
@@ -348,7 +348,7 @@ class InventoryItemController extends Controller
                     ->orderBy('id'),
                 'barcodes' => fn ($query) => $query
                     ->with('inventoryItemUnit.unitOfMeasure:id,name,symbol,active')
-                    ->orderByDesc('is_primary')
+                    ->orderByDesc('primary')
                     ->orderBy('id'),
             ])
             ->findOrFail($inventoryItem);
@@ -443,11 +443,13 @@ class InventoryItemController extends Controller
                 'barcodes' => $item
                     ->barcodes
                     ->map(
-                        static fn (Barcode $barcode): array => [
+                        static fn (
+                            InventoryItemBarcode $barcode,
+                        ): array => [
                             'id' => $barcode->id,
-                            'value' => $barcode->value,
+                            'value' => $barcode->barcode,
                             'symbology' => $barcode->symbology->value,
-                            'isPrimary' => $barcode->is_primary,
+                            'isPrimary' => $barcode->primary,
                             'active' => $barcode->active,
                             'inventoryItemUnit' => $barcode
                                 ->inventoryItemUnit === null
