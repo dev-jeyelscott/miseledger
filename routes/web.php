@@ -14,6 +14,7 @@ use App\Http\Controllers\Billing\StripeWebhookController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Inventory\InventoryAdjustmentController;
 use App\Http\Controllers\Inventory\InventoryCategoryController;
+use App\Http\Controllers\Inventory\InventoryItemBarcodeController;
 use App\Http\Controllers\Inventory\InventoryItemController;
 use App\Http\Controllers\Inventory\InventoryItemUnitController;
 use App\Http\Controllers\Inventory\InventoryValuationReportController;
@@ -314,6 +315,16 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 'items/{inventoryItem}/units/{inventoryItemUnit}',
                 [InventoryItemUnitController::class, 'update'],
             )->name('items.units.update');
+
+            Route::post(
+                'items/{inventoryItem}/barcodes',
+                [InventoryItemBarcodeController::class, 'store'],
+            )->name('items.barcodes.store');
+
+            Route::put(
+                'items/{inventoryItem}/barcodes/{barcode}',
+                [InventoryItemBarcodeController::class, 'update'],
+            )->name('items.barcodes.update');
 
             Route::get(
                 'units',

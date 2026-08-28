@@ -7,6 +7,7 @@ use App\Enums\InventoryItemType;
 use App\Enums\OrganizationPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Inventory\SaveInventoryItemRequest;
+use App\Models\Barcode;
 use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
 use App\Models\InventoryItemUnit;
@@ -289,6 +290,10 @@ class InventoryItemController extends Controller
                 'unitConversions' => fn ($query) => $query
                     ->with('unitOfMeasure:id,name,symbol,active')
                     ->orderBy('id'),
+                'barcodes' => fn ($query) => $query
+                    ->with('inventoryItemUnit.unitOfMeasure:id,name,symbol,active')
+                    ->orderByDesc('is_primary')
+                    ->orderBy('id'),
             ])
             ->findOrFail($inventoryItem);
 
@@ -365,6 +370,43 @@ class InventoryItemController extends Controller
                                     ->unitOfMeasure
                                     ->active,
                             ],
+                        ],
+                    )
+                    ->values()
+                    ->all(),
+                'barcodes' => $item
+                    ->barcodes
+                    ->map(
+                        static fn (Barcode $barcode): array => [
+                            'id' => $barcode->id,
+                            'value' => $barcode->value,
+                            'symbology' => $barcode->symbology->value,
+                            'isPrimary' => $barcode->is_primary,
+                            'active' => $barcode->active,
+                            'inventoryItemUnit' => $barcode
+                                ->inventoryItemUnit === null
+                                ? null
+                                : [
+                                    'id' => $barcode->inventoryItemUnit->id,
+                                    'unitOfMeasure' => [
+                                        'id' => $barcode
+                                            ->inventoryItemUnit
+                                            ->unitOfMeasure
+                                            ->id,
+                                        'name' => $barcode
+                                            ->inventoryItemUnit
+                                            ->unitOfMeasure
+                                            ->name,
+                                        'symbol' => $barcode
+                                            ->inventoryItemUnit
+                                            ->unitOfMeasure
+                                            ->symbol,
+                                        'active' => $barcode
+                                            ->inventoryItemUnit
+                                            ->unitOfMeasure
+                                            ->active,
+                                    ],
+                                ],
                         ],
                     )
                     ->values()

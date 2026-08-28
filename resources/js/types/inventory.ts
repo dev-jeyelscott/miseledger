@@ -43,6 +43,21 @@ export type InventoryItemUnitData = {
     unitOfMeasure: UnitOfMeasureData;
 };
 
+export type BarcodeSymbology =
+    'ean_13' | 'ean_8' | 'upc_a' | 'upc_e' | 'code_128' | 'code_39' | 'other';
+
+export type BarcodeData = {
+    id: number;
+    value: string;
+    symbology: BarcodeSymbology;
+    isPrimary: boolean;
+    active: boolean;
+    inventoryItemUnit: {
+        id: number;
+        unitOfMeasure: UnitOfMeasureData;
+    } | null;
+};
+
 export type InventoryItemDetail = {
     id: number;
     name: string;
@@ -53,4 +68,5 @@ export type InventoryItemDetail = {
     baseUnitOfMeasure: UnitOfMeasureData;
     inventoryCategory: InventoryCategoryData | null;
     unitConversions: InventoryItemUnitData[];
+    barcodes: BarcodeData[];
 };
