@@ -1,4 +1,5 @@
-import { Link, type InertiaLinkProps } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
+import type { InertiaLinkProps } from '@inertiajs/react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
