@@ -207,6 +207,24 @@ StockMovement is authoritative ledger history. StockBalance is a derived project
 
 No current MiseLedger feature generates durable user-uploaded or user-generated files (see [Application Filesystem](#application-filesystem)), so no such files are in current backup scope. Before any future durable-file feature ships, that feature's PR must include an explicit persistence-and-backup review covering: where the files are stored, whether they are included in the PostgreSQL backup boundary or require a separate backup mechanism, and their retention and restore-verification plan. A scope document alone is not a backup: do not treat this documentation as evidence that durable-file backup is implemented, only that PostgreSQL backup coverage is.
 
+## Backup Verification
+
+Backup success is never inferred from a file's presence alone. Verification is exercised by the scheduled `billing restore readiness` workflow (`.github/workflows/billing-restore-readiness.yml`), which runs monthly and on demand, entirely against an isolated, CI-provisioned PostgreSQL instance.
+
+A verified backup run confirms, in order:
+
+1. the backup command (`pg_dump`) completes without error;
+2. the resulting archive is non-empty;
+3. the archive is independently readable (`pg_restore --list`);
+4. the archive restores cleanly into a separate, disposable database;
+5. the restored billing and ledger records match the source data.
+
+Each successful run records the verification timestamp in the workflow run's GitHub Actions job summary. That job summary is the approved operational destination for the most recent verified-backup timestamp; there is no separate application-owned backup-verification record.
+
+Backup verification failures are detectable through the workflow's own failure state: a failed scheduled or on-demand run marks the run red in the Actions tab, writes a failure entry with the failure timestamp to the job summary, and triggers GitHub's default failed-scheduled-workflow notification to repository watchers. This is the operator-approved alerting path; no additional external alerting dependency is introduced.
+
+Backup verification always runs against an isolated CI-provisioned PostgreSQL instance and restores only into a separate, disposable database created for that run. It never connects to, restores into, or mutates the production database, and it never logs secrets, connection strings, or archive contents.
+
 ## Coolify Web Resource
 
 Create a Git-based application using this repository and the root `Dockerfile`.

@@ -88,12 +88,30 @@ jobs:
             app(App\Actions\Inventory\RecordStockMovement::class)->handle($organization, $location, $storageLocation, $item, App\Enums\StockMovementType::OpeningBalance, "10", $unit, "restore_readiness", $item->id, now(), null, "restore-readiness:opening", null, "4.0000");
           '
 
+      - name: Create and verify PostgreSQL backup artifact
+        run: |
+          set -euo pipefail
+          pg_dump --format=custom --no-owner --no-privileges --file=/tmp/miseledger-restore-readiness.dump --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" "$DB_DATABASE"
+          test -s /tmp/miseledger-restore-readiness.dump
+          pg_restore --list /tmp/miseledger-restore-readiness.dump > /dev/null
+
       - name: Restore PostgreSQL backup into a separate database
         run: |
-          pg_dump --format=custom --no-owner --no-privileges --file=/tmp/miseledger-restore-readiness.dump --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" "$DB_DATABASE"
+          set -euo pipefail
           createdb --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" miseledger_restore_target
           pg_restore --clean --if-exists --no-owner --no-privileges --dbname="postgresql://$DB_USERNAME:$DB_PASSWORD@$DB_HOST:$DB_PORT/miseledger_restore_target" /tmp/miseledger-restore-readiness.dump
 
       - name: Verify restored billing and ledger records
         run: |
           psql --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" --dbname=miseledger_restore_target --tuples-only --no-align --command="SELECT (SELECT count(*) FROM organizations WHERE stripe_id = 'cus_restore_readiness'), (SELECT count(*) FROM subscriptions WHERE stripe_id = 'sub_restore_readiness'), (SELECT count(*) FROM stock_movements WHERE idempotency_key = 'restore-readiness:opening');" | grep -Fx '1|1|1'
+
+      - name: Record backup verification timestamp
+        if: success()
+        run: |
+          echo "**Backup verification succeeded:** $(date -u +%FT%TZ)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report backup verification failure
+        if: failure()
+        run: |
+          echo "**Backup verification FAILED:** $(date -u +%FT%TZ)" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
