@@ -193,6 +193,43 @@ test('inventory item filters combine search category type and status', function 
         );
 });
 
+test('inventory item search matches a sku value independent of item name', function () {
+    [$user, $organization, $unit] = inventoryItemsIndexContext();
+
+    $target = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Fresh Tomato',
+            'sku' => 'TOM-001',
+        ]);
+
+    InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Other Item',
+            'sku' => 'OTHER-001',
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'search' => 'TOM-001',
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/items/index')
+                ->has('items', 1)
+                ->where('items.0.id', $target->id)
+                ->where('filters.search', 'TOM-001'),
+        );
+});
+
 test('inventory item search matches a base-item barcode value', function () {
     [$user, $organization, $unit] = inventoryItemsIndexContext();
 
