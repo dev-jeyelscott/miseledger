@@ -18,6 +18,8 @@ class DemoDataSeeder extends Seeder
         $this->call([
             DemoOrganizationSeeder::class,
             DemoInventorySeeder::class,
+            DemoInventoryCatalogSeeder::class,
+            DemoBarcodeSeeder::class,
             DemoSupplierSeeder::class,
             DemoStockLedgerSeeder::class,
             DemoPurchasingSeeder::class,

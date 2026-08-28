@@ -6,9 +6,9 @@ use App\Actions\Organizations\AddOrganizationMember;
 use App\Actions\Organizations\CreateOrganization;
 use App\Actions\Organizations\SaveStorageLocation;
 use App\Enums\OrganizationRole;
-use App\Models\Location;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Carbon;
 
 class DemoOrganizationSeeder extends Seeder
 {
@@ -24,15 +24,15 @@ class DemoOrganizationSeeder extends Seeder
             return;
         }
 
-        User::factory()->create([
-            'name' => 'MiseLedger Super Admin',
-            'email' => 'superadmin@miseledger.com',
-        ]);
+        $this->createVerifiedUser(
+            'MiseLedger Super Admin',
+            'superadmin@miseledger.com',
+        );
 
-        $owner = User::factory()->create([
-            'name' => 'Andrea Santos',
-            'email' => 'owner@miseledger.com',
-        ]);
+        $owner = $this->createVerifiedUser(
+            'Andrea Santos',
+            'owner@miseledger.com',
+        );
 
         $organization = $createOrganization->handle(
             $owner,
@@ -64,10 +64,10 @@ class DemoOrganizationSeeder extends Seeder
         ];
 
         foreach ($staff as $account) {
-            $user = User::factory()->create([
-                'name' => $account['name'],
-                'email' => $account['email'],
-            ]);
+            $user = $this->createVerifiedUser(
+                $account['name'],
+                $account['email'],
+            );
 
             $addOrganizationMember->handle(
                 $organization,
@@ -120,8 +120,7 @@ class DemoOrganizationSeeder extends Seeder
         ];
 
         foreach ($locations as $definition) {
-            $location = Location::factory()->create([
-                'organization_id' => $organization->id,
+            $location = $organization->locations()->create([
                 'name' => $definition['name'],
                 'code' => $definition['code'],
                 'active' => $definition['active'],
@@ -139,5 +138,28 @@ class DemoOrganizationSeeder extends Seeder
                 );
             }
         }
+    }
+
+    /**
+     * Create one deterministic, verified local demo account.
+     */
+    private function createVerifiedUser(
+        string $name,
+        string $email,
+    ): User {
+        $user = User::query()->create([
+            'name' => $name,
+            'email' => $email,
+            'password' => 'password',
+        ]);
+
+        $user->forceFill([
+            'email_verified_at' => Carbon::parse(
+                '2026-08-01 08:00:00',
+                'Asia/Manila',
+            ),
+        ])->save();
+
+        return $user;
     }
 }
