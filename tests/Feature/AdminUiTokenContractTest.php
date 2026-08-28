@@ -38,6 +38,8 @@ test('admin theme keeps generic content tokens separate from sidebar tokens', fu
     expect($metricCard)
         ->toContain('border-border')
         ->toContain('bg-card')
+        ->toContain('href?: InertiaLinkHref')
+        ->toContain('focus-visible:ring-[3px]')
         ->not->toContain('border-sidebar-border');
 
     expect($sidebar)
@@ -67,6 +69,23 @@ test('admin theme exposes the canonical operational status semantics', function 
         ->toContain('--info-subtle: oklch(0.282 0.091 267.935 / 0.4);');
 });
 
+test('native select preserves the canonical native form control contract', function () {
+    $nativeSelect = File::get(
+        resource_path('js/components/ui/native-select.tsx'),
+    );
+
+    expect($nativeSelect)
+        ->toContain("React.ComponentProps<'select'>")
+        ->toContain('data-slot="native-select"')
+        ->toContain('border-input')
+        ->toContain('bg-background')
+        ->toContain('h-9')
+        ->toContain('focus-visible:ring-[3px]')
+        ->toContain('focus-visible:ring-ring/50')
+        ->toContain('aria-invalid:border-destructive')
+        ->toContain('disabled:opacity-50');
+});
+
 test('dashboard follows the canonical operational UI contract', function () {
     $dashboard = File::get(resource_path('js/pages/dashboard.tsx'));
 
@@ -86,6 +105,23 @@ test('dashboard follows the canonical operational UI contract', function () {
         ->toContain('bg-destructive/10')
         ->toContain('text-destructive')
         ->toContain('focus-visible:ring-[3px]')
+        ->toContain("'Creating…'")
+        ->toContain("'Saving…'")
+        ->toContain("'Refreshing…'")
+        ->toContain('aria-live="polite"')
+        ->toContain('motion-reduce:animate-none')
+        ->toContain('Out of stock')
+        ->toContain('Negative stock')
+        ->toContain('Full access')
+        ->toContain('Read-only')
+        ->toContain('inventory_item_id')
+        ->toContain('md:hidden')
+        ->toContain('hidden overflow-x-auto md:block')
+        ->toContain("only: ['dashboard']")
+        ->toContain('NativeSelect')
+        ->not->toContain('tenant boundary for your restaurant inventory')
+        ->not->toContain("'Writable'")
+        ->not->toContain("? 'Critical'")
         ->not->toContain('border-sidebar-border')
         ->not->toContain('text-amber-600')
         ->not->toContain('dark:text-amber-400');

@@ -32,6 +32,11 @@ test('dashboard exposes active organization settings to an authorized owner', fu
         ->assertInertia(
             fn (Assert $page): Assert => $page
                 ->where(
+                    'dashboard.generatedAt',
+                    fn (mixed $value): bool => is_string($value)
+                        && $value !== '',
+                )
+                ->where(
                     'dashboard.organizationSettings.id',
                     $organization->id,
                 )
@@ -51,7 +56,20 @@ test('dashboard exposes active organization settings to an authorized owner', fu
                     'dashboard.organizationSettings.currency',
                     'PHP',
                 )
-                ->where('dashboard.organizationSettings.active', true),
+                ->where(
+                    'dashboard.organizationSettings.active',
+                    true,
+                )
+                ->where(
+                    'dashboard.organizationSettings.timezoneOptions',
+                    fn (mixed $options): bool => is_array($options)
+                        && in_array('Asia/Manila', $options, true),
+                )
+                ->where(
+                    'dashboard.organizationSettings.currencyOptions',
+                    fn (mixed $options): bool => is_array($options)
+                        && in_array('PHP', $options, true),
+                ),
         );
 });
 
@@ -74,6 +92,11 @@ test('dashboard withholds organization settings without organization manage perm
         ->assertOk()
         ->assertInertia(
             fn (Assert $page): Assert => $page
+                ->where(
+                    'dashboard.generatedAt',
+                    fn (mixed $value): bool => is_string($value)
+                        && $value !== '',
+                )
                 ->where('dashboard.organizationSettings', null),
         );
 });

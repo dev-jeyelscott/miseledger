@@ -1,4 +1,4 @@
-import { Form, Head, Link, usePage } from '@inertiajs/react';
+import { Form, Head, Link, router, usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
     ArrowDownRight,
@@ -10,6 +10,7 @@ import {
     MapPin,
     Plus,
     ReceiptText,
+    RefreshCw,
     Settings,
     ShoppingCart,
     Trash2,
@@ -18,9 +19,11 @@ import {
     WalletCards,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useState } from 'react';
 import type { ComponentProps, ReactNode } from 'react';
 
 import OrganizationBillingController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingController';
+import InventoryValuationReportController from '@/actions/App/Http/Controllers/Inventory/InventoryValuationReportController';
 import LowStockReportController from '@/actions/App/Http/Controllers/Inventory/LowStockReportController';
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
 import StockMovementLedgerReportController from '@/actions/App/Http/Controllers/Inventory/StockMovementLedgerReportController';
@@ -32,8 +35,10 @@ import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/Go
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
 import InputError from '@/components/input-error';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -44,6 +49,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
@@ -86,9 +92,12 @@ type OrganizationSettingsData = {
     timezone: string;
     currency: string;
     active: boolean;
+    timezoneOptions: string[];
+    currencyOptions: string[];
 };
 
 type DashboardData = {
+    generatedAt: string;
     currency: string;
     timezone: string;
     organizationSettings: OrganizationSettingsData | null;
@@ -274,8 +283,8 @@ function CreateOrganizationDialog({ trigger }: DialogTriggerProps) {
                 <DialogHeader>
                     <DialogTitle>Create organization</DialogTitle>
                     <DialogDescription>
-                        Create the tenant boundary for your restaurant inventory
-                        data.
+                        Create the organization workspace for your inventory and
+                        procurement data.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -299,7 +308,7 @@ function CreateOrganizationDialog({ trigger }: DialogTriggerProps) {
                                         maxLength={160}
                                         autoFocus
                                         autoComplete="organization"
-                                        placeholder="Example Restaurant Group"
+                                        placeholder="Example Business"
                                         aria-invalid={Boolean(errors.name)}
                                         aria-describedby={
                                             errors.name
@@ -315,7 +324,9 @@ function CreateOrganizationDialog({ trigger }: DialogTriggerProps) {
 
                                 <div className="flex flex-wrap gap-2">
                                     <Button type="submit" disabled={processing}>
-                                        Create organization
+                                        {processing
+                                            ? 'Creating…'
+                                            : 'Create organization'}
                                     </Button>
                                     <Button
                                         type="button"
@@ -337,7 +348,7 @@ function CreateOrganizationDialog({ trigger }: DialogTriggerProps) {
     );
 }
 
-/** Edit the existing active-organization configuration inside its guarded dialog. */
+/** Edit the active organization while surfacing configuration consequences before submission. */
 function OrganizationSettingsDialog({
     organization,
     trigger,
@@ -345,9 +356,44 @@ function OrganizationSettingsDialog({
     const dialog = useGuardedDialog(
         'Discard the organization setting changes you entered?',
     );
+    const [selectedCurrency, setSelectedCurrency] = useState(
+        organization.currency,
+    );
+    const [selectedActive, setSelectedActive] = useState(
+        organization.active ? '1' : '0',
+    );
+    const [currencyChangeConfirmed, setCurrencyChangeConfirmed] =
+        useState(false);
+    const [deactivationConfirmed, setDeactivationConfirmed] = useState(false);
+
+    const currencyChanged = selectedCurrency !== organization.currency;
+    const deactivationRequested = organization.active && selectedActive === '0';
+
+    const confirmationsComplete =
+        (!currencyChanged || currencyChangeConfirmed) &&
+        (!deactivationRequested || deactivationConfirmed);
+
+    /** Reset local safety acknowledgements each time a fresh dialog session starts. */
+    function handleDialogOpenChange(nextOpen: boolean): void {
+        if (nextOpen) {
+            setSelectedCurrency(organization.currency);
+            setSelectedActive(organization.active ? '1' : '0');
+            setCurrencyChangeConfirmed(false);
+            setDeactivationConfirmed(false);
+        }
+
+        dialog.onOpenChange(nextOpen);
+    }
+
+    /** Close the guarded dialog after the server accepts the settings update. */
+    function handleSettingsSuccess(): void {
+        setCurrencyChangeConfirmed(false);
+        setDeactivationConfirmed(false);
+        dialog.closeAfterSuccess();
+    }
 
     return (
-        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+        <Dialog open={dialog.open} onOpenChange={handleDialogOpenChange}>
             <DialogTrigger asChild>{trigger}</DialogTrigger>
 
             <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-xl">
@@ -363,7 +409,7 @@ function OrganizationSettingsDialog({
                         {...OrganizationController.update.form(organization.id)}
                         errorBag="organizationSettings"
                         className="space-y-5"
-                        onSuccess={dialog.closeAfterSuccess}
+                        onSuccess={handleSettingsSuccess}
                     >
                         {({ processing, errors }) => (
                             <>
@@ -371,6 +417,12 @@ function OrganizationSettingsDialog({
                                     <Label htmlFor="dashboard-settings-name">
                                         Name
                                     </Label>
+                                    <p
+                                        id="dashboard-settings-name-help"
+                                        className="text-xs leading-5 text-muted-foreground"
+                                    >
+                                        The name shown throughout MiseLedger.
+                                    </p>
                                     <Input
                                         id="dashboard-settings-name"
                                         name="name"
@@ -380,8 +432,8 @@ function OrganizationSettingsDialog({
                                         aria-invalid={Boolean(errors.name)}
                                         aria-describedby={
                                             errors.name
-                                                ? 'dashboard-settings-name-error'
-                                                : undefined
+                                                ? 'dashboard-settings-name-help dashboard-settings-name-error'
+                                                : 'dashboard-settings-name-help'
                                         }
                                     />
                                     <InputError
@@ -394,17 +446,25 @@ function OrganizationSettingsDialog({
                                     <Label htmlFor="dashboard-settings-slug">
                                         Slug
                                     </Label>
+                                    <p
+                                        id="dashboard-settings-slug-help"
+                                        className="text-xs leading-5 text-muted-foreground"
+                                    >
+                                        The unique URL-friendly identifier for
+                                        this organization.
+                                    </p>
                                     <Input
                                         id="dashboard-settings-slug"
                                         name="slug"
                                         defaultValue={organization.slug}
                                         required
                                         maxLength={160}
+                                        autoComplete="off"
                                         aria-invalid={Boolean(errors.slug)}
                                         aria-describedby={
                                             errors.slug
-                                                ? 'dashboard-settings-slug-error'
-                                                : undefined
+                                                ? 'dashboard-settings-slug-help dashboard-settings-slug-error'
+                                                : 'dashboard-settings-slug-help'
                                         }
                                     />
                                     <InputError
@@ -417,20 +477,36 @@ function OrganizationSettingsDialog({
                                     <Label htmlFor="dashboard-settings-timezone">
                                         Timezone
                                     </Label>
-                                    <Input
+                                    <p
+                                        id="dashboard-settings-timezone-help"
+                                        className="text-xs leading-5 text-muted-foreground"
+                                    >
+                                        Used for operational timestamps
+                                        displayed throughout the organization.
+                                    </p>
+                                    <NativeSelect
                                         id="dashboard-settings-timezone"
                                         name="timezone"
                                         defaultValue={organization.timezone}
                                         required
-                                        maxLength={64}
-                                        placeholder="Asia/Manila"
                                         aria-invalid={Boolean(errors.timezone)}
                                         aria-describedby={
                                             errors.timezone
-                                                ? 'dashboard-settings-timezone-error'
-                                                : undefined
+                                                ? 'dashboard-settings-timezone-help dashboard-settings-timezone-error'
+                                                : 'dashboard-settings-timezone-help'
                                         }
-                                    />
+                                    >
+                                        {organization.timezoneOptions.map(
+                                            (timezone) => (
+                                                <option
+                                                    key={timezone}
+                                                    value={timezone}
+                                                >
+                                                    {timezone}
+                                                </option>
+                                            ),
+                                        )}
+                                    </NativeSelect>
                                     <InputError
                                         id="dashboard-settings-timezone-error"
                                         message={errors.timezone}
@@ -441,63 +517,205 @@ function OrganizationSettingsDialog({
                                     <Label htmlFor="dashboard-settings-currency">
                                         Currency
                                     </Label>
-                                    <Input
+                                    <p
+                                        id="dashboard-settings-currency-help"
+                                        className="text-xs leading-5 text-muted-foreground"
+                                    >
+                                        The currency code used when displaying
+                                        organization monetary values.
+                                    </p>
+                                    <NativeSelect
                                         id="dashboard-settings-currency"
                                         name="currency"
                                         defaultValue={organization.currency}
                                         required
-                                        maxLength={3}
-                                        placeholder="PHP"
                                         aria-invalid={Boolean(errors.currency)}
                                         aria-describedby={
                                             errors.currency
-                                                ? 'dashboard-settings-currency-error'
-                                                : undefined
+                                                ? 'dashboard-settings-currency-help dashboard-settings-currency-error'
+                                                : 'dashboard-settings-currency-help'
                                         }
-                                    />
+                                        onChange={(event) => {
+                                            setSelectedCurrency(
+                                                event.currentTarget.value,
+                                            );
+                                            setCurrencyChangeConfirmed(false);
+                                        }}
+                                    >
+                                        {organization.currencyOptions.map(
+                                            (currency) => (
+                                                <option
+                                                    key={currency}
+                                                    value={currency}
+                                                >
+                                                    {currency}
+                                                </option>
+                                            ),
+                                        )}
+                                    </NativeSelect>
                                     <InputError
                                         id="dashboard-settings-currency-error"
                                         message={errors.currency}
                                     />
+
+                                    {currencyChanged && (
+                                        <Alert className="mt-1 border-warning-border bg-warning-subtle text-warning-foreground">
+                                            <AlertTriangle aria-hidden="true" />
+                                            <AlertTitle>
+                                                Existing values are not
+                                                converted
+                                            </AlertTitle>
+                                            <AlertDescription className="text-warning-foreground">
+                                                <p>
+                                                    Changing the organization
+                                                    currency does not run a
+                                                    currency conversion over
+                                                    existing persisted costs or
+                                                    inventory valuation values.
+                                                </p>
+
+                                                <div className="mt-2 flex items-start gap-2">
+                                                    <Checkbox
+                                                        id="dashboard-settings-currency-confirm"
+                                                        checked={
+                                                            currencyChangeConfirmed
+                                                        }
+                                                        onCheckedChange={(
+                                                            checked,
+                                                        ) =>
+                                                            setCurrencyChangeConfirmed(
+                                                                checked ===
+                                                                    true,
+                                                            )
+                                                        }
+                                                    />
+                                                    <Label
+                                                        htmlFor="dashboard-settings-currency-confirm"
+                                                        className="text-xs leading-5 font-normal"
+                                                    >
+                                                        I understand that
+                                                        existing monetary values
+                                                        will not be converted.
+                                                    </Label>
+                                                </div>
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="dashboard-settings-active">
-                                        Status
-                                    </Label>
-                                    <select
-                                        id="dashboard-settings-active"
-                                        name="active"
-                                        defaultValue={
-                                            organization.active ? '1' : '0'
-                                        }
-                                        aria-invalid={Boolean(errors.active)}
-                                        aria-describedby={
-                                            errors.active
-                                                ? 'dashboard-settings-active-error'
-                                                : undefined
-                                        }
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive"
-                                    >
-                                        <option value="1">Active</option>
-                                        <option value="0">Inactive</option>
-                                    </select>
-                                    <InputError
-                                        id="dashboard-settings-active-error"
-                                        message={errors.active}
-                                    />
+                                <div className="border-t border-border pt-5">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="dashboard-settings-active">
+                                            Organization status
+                                        </Label>
+                                        <p
+                                            id="dashboard-settings-active-help"
+                                            className="text-xs leading-5 text-muted-foreground"
+                                        >
+                                            Deactivating the organization
+                                            removes it from normal active
+                                            organization workflows until it is
+                                            reactivated.
+                                        </p>
+
+                                        <NativeSelect
+                                            id="dashboard-settings-active"
+                                            name="active"
+                                            defaultValue={
+                                                organization.active ? '1' : '0'
+                                            }
+                                            aria-invalid={Boolean(
+                                                errors.active,
+                                            )}
+                                            aria-describedby={
+                                                errors.active
+                                                    ? 'dashboard-settings-active-help dashboard-settings-active-error'
+                                                    : 'dashboard-settings-active-help'
+                                            }
+                                            onChange={(event) => {
+                                                setSelectedActive(
+                                                    event.currentTarget.value,
+                                                );
+                                                setDeactivationConfirmed(false);
+                                            }}
+                                        >
+                                            <option value="1">Active</option>
+                                            <option value="0">Inactive</option>
+                                        </NativeSelect>
+
+                                        <InputError
+                                            id="dashboard-settings-active-error"
+                                            message={errors.active}
+                                        />
+
+                                        {deactivationRequested && (
+                                            <Alert
+                                                variant="destructive"
+                                                className="mt-1 border-destructive/30 bg-destructive/10"
+                                            >
+                                                <AlertTriangle aria-hidden="true" />
+                                                <AlertTitle>
+                                                    Deactivate{' '}
+                                                    {organization.name}?
+                                                </AlertTitle>
+                                                <AlertDescription>
+                                                    <p>
+                                                        Members will no longer
+                                                        be able to use this
+                                                        organization through
+                                                        normal active
+                                                        organization workflows.
+                                                    </p>
+
+                                                    <div className="mt-2 flex items-start gap-2">
+                                                        <Checkbox
+                                                            id="dashboard-settings-deactivate-confirm"
+                                                            checked={
+                                                                deactivationConfirmed
+                                                            }
+                                                            onCheckedChange={(
+                                                                checked,
+                                                            ) =>
+                                                                setDeactivationConfirmed(
+                                                                    checked ===
+                                                                        true,
+                                                                )
+                                                            }
+                                                        />
+                                                        <Label
+                                                            htmlFor="dashboard-settings-deactivate-confirm"
+                                                            className="text-xs leading-5 font-normal"
+                                                        >
+                                                            I understand the
+                                                            access consequence
+                                                            and want to
+                                                            deactivate this
+                                                            organization.
+                                                        </Label>
+                                                    </div>
+                                                </AlertDescription>
+                                            </Alert>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div className="flex flex-wrap gap-2">
-                                    <Button type="submit" disabled={processing}>
-                                        Save settings
+                                    <Button
+                                        type="submit"
+                                        disabled={
+                                            processing || !confirmationsComplete
+                                        }
+                                    >
+                                        {processing
+                                            ? 'Saving…'
+                                            : 'Save settings'}
                                     </Button>
                                     <Button
                                         type="button"
                                         variant="outline"
                                         disabled={processing}
                                         onClick={() =>
-                                            dialog.onOpenChange(false)
+                                            handleDialogOpenChange(false)
                                         }
                                     >
                                         Cancel
@@ -516,6 +734,7 @@ function OrganizationSettingsDialog({
 export default function Dashboard() {
     const { organizationContext, dashboard: dashboardData } =
         usePage<PageProps>().props;
+    const [refreshing, setRefreshing] = useState(false);
 
     const activeMembership = organizationContext.memberships.find(
         (membership) =>
@@ -523,6 +742,19 @@ export default function Dashboard() {
     );
 
     const permissions = new Set(activeMembership?.permissions ?? []);
+
+    /** Refresh only the dashboard prop without introducing background polling. */
+    function refreshDashboard(): void {
+        if (refreshing) {
+            return;
+        }
+
+        router.reload({
+            only: ['dashboard'],
+            onStart: () => setRefreshing(true),
+            onFinish: () => setRefreshing(false),
+        });
+    }
 
     if (organizationContext.active === null || dashboardData === null) {
         return (
@@ -608,9 +840,7 @@ export default function Dashboard() {
         permissions.has('waste.record');
 
     const hasPendingWork = hasPendingTasks || hasQuickActions;
-
     const splitOperationalPanels = canViewReports && hasPendingWork;
-
     const subscription = organizationContext.subscription;
 
     return (
@@ -649,6 +879,34 @@ export default function Dashboard() {
                             <span aria-hidden="true">·</span>
 
                             <span>{dashboardData.timezone}</span>
+
+                            <span aria-hidden="true">·</span>
+
+                            <span aria-live="polite">
+                                Updated{' '}
+                                {formatDateTime(
+                                    dashboardData.generatedAt,
+                                    dashboardData.timezone,
+                                )}
+                            </span>
+
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={refreshing}
+                                onClick={refreshDashboard}
+                            >
+                                <RefreshCw
+                                    className={cn(
+                                        'size-3.5',
+                                        refreshing &&
+                                            'animate-spin motion-reduce:animate-none',
+                                    )}
+                                    aria-hidden="true"
+                                />
+                                {refreshing ? 'Refreshing…' : 'Refresh'}
+                            </Button>
                         </div>
                     </div>
 
@@ -696,6 +954,7 @@ export default function Dashboard() {
                             description="Current materialized stock value"
                             icon={WalletCards}
                             tone="emerald"
+                            href={InventoryValuationReportController.index()}
                         />
                     )}
 
@@ -706,6 +965,7 @@ export default function Dashboard() {
                             description="Items with zero or negative stock"
                             icon={AlertTriangle}
                             tone="amber"
+                            href={LowStockReportController.index()}
                         />
                     )}
 
@@ -716,6 +976,7 @@ export default function Dashboard() {
                             description="Draft, approved, or partially received"
                             icon={ClipboardList}
                             tone="blue"
+                            href={PurchaseOrderController.index()}
                         />
                     )}
 
@@ -726,6 +987,7 @@ export default function Dashboard() {
                             description="Approved or partially received orders"
                             icon={Truck}
                             tone="teal"
+                            href={PurchaseOrderController.index()}
                         />
                     )}
 
@@ -736,6 +998,7 @@ export default function Dashboard() {
                             description="Draft or submitted counts"
                             icon={ClipboardCheck}
                             tone="violet"
+                            href={StockCountController.index()}
                         />
                     )}
                 </div>
@@ -779,19 +1042,22 @@ export default function Dashboard() {
                                     </div>
                                 ) : (
                                     <>
-                                        <div className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto_auto] gap-4 border-b border-border bg-muted/30 px-4 py-2.5 text-xs font-medium text-muted-foreground md:grid">
+                                        <div className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto_auto_auto] gap-4 border-b border-border bg-muted/30 px-4 py-2.5 text-xs font-medium text-muted-foreground md:grid">
                                             <span>Item</span>
                                             <span>Location</span>
                                             <span className="text-right">
                                                 On hand
                                             </span>
                                             <span>Status</span>
+                                            <span className="sr-only">
+                                                Action
+                                            </span>
                                         </div>
 
                                         <div className="divide-y divide-border">
                                             {dashboardData.lowStockAlerts.map(
                                                 (alert) => {
-                                                    const isCritical =
+                                                    const isNegativeStock =
                                                         alert.quantityOnHand.startsWith(
                                                             '-',
                                                         );
@@ -799,13 +1065,13 @@ export default function Dashboard() {
                                                     return (
                                                         <div
                                                             key={alert.id}
-                                                            className="grid gap-3 px-4 py-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto_auto] md:items-center md:gap-4"
+                                                            className="grid gap-3 px-4 py-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto_auto_auto] md:items-center md:gap-4"
                                                         >
                                                             <div className="flex min-w-0 items-start gap-2.5">
                                                                 <AlertTriangle
                                                                     className={cn(
                                                                         'mt-0.5 size-4 shrink-0',
-                                                                        isCritical
+                                                                        isNegativeStock
                                                                             ? 'text-destructive'
                                                                             : 'text-warning-foreground',
                                                                     )}
@@ -863,16 +1129,35 @@ export default function Dashboard() {
                                                                 <Badge
                                                                     variant="outline"
                                                                     className={
-                                                                        isCritical
+                                                                        isNegativeStock
                                                                             ? 'border-destructive/30 bg-destructive/10 text-destructive'
                                                                             : 'border-warning-border bg-warning-subtle text-warning-foreground'
                                                                     }
                                                                 >
-                                                                    {isCritical
-                                                                        ? 'Critical'
-                                                                        : 'Low'}
+                                                                    {isNegativeStock
+                                                                        ? 'Negative stock'
+                                                                        : 'Out of stock'}
                                                                 </Badge>
                                                             </div>
+
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                asChild
+                                                            >
+                                                                <Link
+                                                                    href={LowStockReportController.index(
+                                                                        {
+                                                                            query: {
+                                                                                inventory_item_id:
+                                                                                    alert.itemId,
+                                                                            },
+                                                                        },
+                                                                    )}
+                                                                >
+                                                                    Review
+                                                                </Link>
+                                                            </Button>
                                                         </div>
                                                     );
                                                 },
@@ -1046,89 +1331,31 @@ export default function Dashboard() {
                                 </p>
                             </div>
                         ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full min-w-[840px] text-sm">
-                                    <thead className="border-b border-border bg-muted/30 text-left text-xs text-muted-foreground">
-                                        <tr>
-                                            <th
-                                                scope="col"
-                                                className="px-4 py-3 font-medium"
-                                            >
-                                                Date & time
-                                            </th>
-                                            <th
-                                                scope="col"
-                                                className="px-4 py-3 font-medium"
-                                            >
-                                                Movement
-                                            </th>
-                                            <th
-                                                scope="col"
-                                                className="px-4 py-3 font-medium"
-                                            >
-                                                Item / SKU
-                                            </th>
-                                            <th
-                                                scope="col"
-                                                className="px-4 py-3 font-medium"
-                                            >
-                                                Location
-                                            </th>
-                                            <th
-                                                scope="col"
-                                                className="px-4 py-3 font-medium"
-                                            >
-                                                Actor
-                                            </th>
-                                            <th
-                                                scope="col"
-                                                className="px-4 py-3 text-right font-medium"
-                                            >
-                                                Quantity
-                                            </th>
+                            <>
+                                <div className="divide-y divide-border md:hidden">
+                                    {dashboardData.recentActivity.map(
+                                        (activity) => {
+                                            const isOutbound =
+                                                activity.quantity.startsWith(
+                                                    '-',
+                                                );
+                                            const DirectionIcon = isOutbound
+                                                ? ArrowDownRight
+                                                : ArrowUpRight;
 
-                                            {canViewCosts && (
-                                                <th
-                                                    scope="col"
-                                                    className="px-4 py-3 text-right font-medium"
+                                            return (
+                                                <article
+                                                    key={activity.id}
+                                                    className="p-4"
                                                 >
-                                                    Value
-                                                </th>
-                                            )}
-                                        </tr>
-                                    </thead>
-
-                                    <tbody className="divide-y divide-border">
-                                        {dashboardData.recentActivity.map(
-                                            (activity) => {
-                                                const isOutbound =
-                                                    activity.quantity.startsWith(
-                                                        '-',
-                                                    );
-
-                                                const DirectionIcon = isOutbound
-                                                    ? ArrowDownRight
-                                                    : ArrowUpRight;
-
-                                                return (
-                                                    <tr
-                                                        key={activity.id}
-                                                        className="hover:bg-muted/20"
-                                                    >
-                                                        <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                                                            {formatDateTime(
-                                                                activity.occurredAt,
-                                                                dashboardData.timezone,
-                                                            )}
-                                                        </td>
-
-                                                        <td className="px-4 py-3">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="min-w-0">
                                                             <div className="flex items-center gap-2">
                                                                 <DirectionIcon
                                                                     className="size-4 shrink-0 text-muted-foreground"
                                                                     aria-hidden="true"
                                                                 />
-                                                                <span>
+                                                                <p className="text-sm font-medium">
                                                                     {movementLabels[
                                                                         activity
                                                                             .type
@@ -1136,59 +1363,228 @@ export default function Dashboard() {
                                                                         humanize(
                                                                             activity.type,
                                                                         )}
-                                                                </span>
+                                                                </p>
                                                             </div>
-                                                        </td>
 
-                                                        <td className="px-4 py-3">
-                                                            <p className="font-medium">
-                                                                {
-                                                                    activity.itemName
-                                                                }
+                                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                                {formatDateTime(
+                                                                    activity.occurredAt,
+                                                                    dashboardData.timezone,
+                                                                )}
                                                             </p>
-                                                            <p className="text-xs text-muted-foreground">
-                                                                {activity.sku}
-                                                            </p>
-                                                        </td>
+                                                        </div>
 
-                                                        <td className="px-4 py-3 text-muted-foreground">
-                                                            {
-                                                                activity.locationName
-                                                            }
-                                                        </td>
-
-                                                        <td className="px-4 py-3 text-muted-foreground">
-                                                            {activity.actorName ??
-                                                                'System'}
-                                                        </td>
-
-                                                        <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
+                                                        <p className="text-sm font-semibold whitespace-nowrap tabular-nums">
                                                             {formatQuantity(
                                                                 activity.quantity,
                                                             )}{' '}
                                                             {
                                                                 activity.unitSymbol
                                                             }
-                                                        </td>
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="mt-3">
+                                                        <p className="text-sm font-medium">
+                                                            {activity.itemName}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {activity.sku}
+                                                        </p>
+                                                    </div>
+
+                                                    <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                                                        <div>
+                                                            <dt className="text-xs text-muted-foreground">
+                                                                Location
+                                                            </dt>
+                                                            <dd className="mt-0.5">
+                                                                {
+                                                                    activity.locationName
+                                                                }
+                                                            </dd>
+                                                        </div>
+
+                                                        <div>
+                                                            <dt className="text-xs text-muted-foreground">
+                                                                Actor
+                                                            </dt>
+                                                            <dd className="mt-0.5">
+                                                                {activity.actorName ??
+                                                                    'System'}
+                                                            </dd>
+                                                        </div>
 
                                                         {canViewCosts && (
-                                                            <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
-                                                                {activity.totalCost ===
-                                                                null
-                                                                    ? 'N/A'
-                                                                    : formatCurrency(
-                                                                          activity.totalCost,
-                                                                          dashboardData.currency,
-                                                                      )}
-                                                            </td>
+                                                            <div>
+                                                                <dt className="text-xs text-muted-foreground">
+                                                                    Value
+                                                                </dt>
+                                                                <dd className="mt-0.5 tabular-nums">
+                                                                    {activity.totalCost ===
+                                                                    null
+                                                                        ? 'N/A'
+                                                                        : formatCurrency(
+                                                                              activity.totalCost,
+                                                                              dashboardData.currency,
+                                                                          )}
+                                                                </dd>
+                                                            </div>
                                                         )}
-                                                    </tr>
-                                                );
-                                            },
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
+                                                    </dl>
+                                                </article>
+                                            );
+                                        },
+                                    )}
+                                </div>
+
+                                <div className="hidden overflow-x-auto md:block">
+                                    <table className="w-full min-w-[840px] text-sm">
+                                        <thead className="border-b border-border bg-muted/30 text-left text-xs text-muted-foreground">
+                                            <tr>
+                                                <th
+                                                    scope="col"
+                                                    className="px-4 py-3 font-medium"
+                                                >
+                                                    Date & time
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="px-4 py-3 font-medium"
+                                                >
+                                                    Movement
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="px-4 py-3 font-medium"
+                                                >
+                                                    Item / SKU
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="px-4 py-3 font-medium"
+                                                >
+                                                    Location
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="px-4 py-3 font-medium"
+                                                >
+                                                    Actor
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="px-4 py-3 text-right font-medium"
+                                                >
+                                                    Quantity
+                                                </th>
+
+                                                {canViewCosts && (
+                                                    <th
+                                                        scope="col"
+                                                        className="px-4 py-3 text-right font-medium"
+                                                    >
+                                                        Value
+                                                    </th>
+                                                )}
+                                            </tr>
+                                        </thead>
+
+                                        <tbody className="divide-y divide-border">
+                                            {dashboardData.recentActivity.map(
+                                                (activity) => {
+                                                    const isOutbound =
+                                                        activity.quantity.startsWith(
+                                                            '-',
+                                                        );
+
+                                                    const DirectionIcon =
+                                                        isOutbound
+                                                            ? ArrowDownRight
+                                                            : ArrowUpRight;
+
+                                                    return (
+                                                        <tr
+                                                            key={activity.id}
+                                                            className="hover:bg-muted/20"
+                                                        >
+                                                            <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                                                                {formatDateTime(
+                                                                    activity.occurredAt,
+                                                                    dashboardData.timezone,
+                                                                )}
+                                                            </td>
+
+                                                            <td className="px-4 py-3">
+                                                                <div className="flex items-center gap-2">
+                                                                    <DirectionIcon
+                                                                        className="size-4 shrink-0 text-muted-foreground"
+                                                                        aria-hidden="true"
+                                                                    />
+                                                                    <span>
+                                                                        {movementLabels[
+                                                                            activity
+                                                                                .type
+                                                                        ] ??
+                                                                            humanize(
+                                                                                activity.type,
+                                                                            )}
+                                                                    </span>
+                                                                </div>
+                                                            </td>
+
+                                                            <td className="px-4 py-3">
+                                                                <p className="font-medium">
+                                                                    {
+                                                                        activity.itemName
+                                                                    }
+                                                                </p>
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    {
+                                                                        activity.sku
+                                                                    }
+                                                                </p>
+                                                            </td>
+
+                                                            <td className="px-4 py-3 text-muted-foreground">
+                                                                {
+                                                                    activity.locationName
+                                                                }
+                                                            </td>
+
+                                                            <td className="px-4 py-3 text-muted-foreground">
+                                                                {activity.actorName ??
+                                                                    'System'}
+                                                            </td>
+
+                                                            <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
+                                                                {formatQuantity(
+                                                                    activity.quantity,
+                                                                )}{' '}
+                                                                {
+                                                                    activity.unitSymbol
+                                                                }
+                                                            </td>
+
+                                                            {canViewCosts && (
+                                                                <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+                                                                    {activity.totalCost ===
+                                                                    null
+                                                                        ? 'N/A'
+                                                                        : formatCurrency(
+                                                                              activity.totalCost,
+                                                                              dashboardData.currency,
+                                                                          )}
+                                                                </td>
+                                                            )}
+                                                        </tr>
+                                                    );
+                                                },
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
                         )}
                     </section>
                 )}
@@ -1264,8 +1660,8 @@ export default function Dashboard() {
                                         )}
                                     >
                                         {subscription.accessMode === 'writable'
-                                            ? 'Writable'
-                                            : 'Read only'}
+                                            ? 'Full access'
+                                            : 'Read-only'}
                                     </Badge>
 
                                     {subscription.onTrial &&

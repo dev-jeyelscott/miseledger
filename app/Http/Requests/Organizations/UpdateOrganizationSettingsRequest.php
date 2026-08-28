@@ -4,6 +4,7 @@ namespace App\Http\Requests\Organizations;
 
 use App\Models\Organization;
 use App\Models\User;
+use DateTimeZone;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -30,6 +31,28 @@ class UpdateOrganizationSettingsRequest extends FormRequest
         'XCD', 'XCG', 'XDR', 'XOF', 'XPF', 'XSU', 'XUA', 'YER', 'ZAR', 'ZMW',
         'ZWG',
     ];
+
+    /**
+     * Return the same ISO currency whitelist used by settings validation.
+     *
+     * @return list<string>
+     */
+    public static function currencyOptions(): array
+    {
+        return self::CURRENCIES;
+    }
+
+    /**
+     * Return the IANA timezone identifiers accepted by the settings form.
+     *
+     * @return list<string>
+     */
+    public static function timezoneOptions(): array
+    {
+        return array_values(
+            DateTimeZone::listIdentifiers(DateTimeZone::ALL),
+        );
+    }
 
     /**
      * Determine if the user is authorized to make this request.
@@ -63,7 +86,12 @@ class UpdateOrganizationSettingsRequest extends FormRequest
                 ),
             ],
             'timezone' => ['required', 'string', 'max:64', 'timezone:all'],
-            'currency' => ['required', 'string', 'size:3', Rule::in(self::CURRENCIES)],
+            'currency' => [
+                'required',
+                'string',
+                'size:3',
+                Rule::in(self::currencyOptions()),
+            ],
             'active' => ['required', 'boolean'],
         ];
     }

@@ -6,6 +6,7 @@ use App\Enums\GoodsReceiptStatus;
 use App\Enums\OrganizationPermission;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\StockCountStatus;
+use App\Http\Requests\Organizations\UpdateOrganizationSettingsRequest;
 use App\Models\GoodsReceipt;
 use App\Models\Organization;
 use App\Models\PurchaseOrder;
@@ -91,6 +92,7 @@ class DashboardController extends Controller
             : null;
 
         return [
+            'generatedAt' => now()->toIso8601String(),
             'currency' => $organization->currency,
             'timezone' => $organization->timezone,
             'organizationSettings' => $canManageOrganization
@@ -101,6 +103,8 @@ class DashboardController extends Controller
                     'timezone' => $organization->timezone,
                     'currency' => $organization->currency,
                     'active' => $organization->active,
+                    'timezoneOptions' => UpdateOrganizationSettingsRequest::timezoneOptions(),
+                    'currencyOptions' => UpdateOrganizationSettingsRequest::currencyOptions(),
                 ]
                 : null,
             'metrics' => [
