@@ -13,6 +13,7 @@ use App\Http\Controllers\Billing\PayMongoWebhookController;
 use App\Http\Controllers\Billing\StripeWebhookController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Inventory\InventoryAdjustmentController;
+use App\Http\Controllers\Inventory\InventoryBrandController;
 use App\Http\Controllers\Inventory\InventoryCategoryController;
 use App\Http\Controllers\Inventory\InventoryItemBarcodeController;
 use App\Http\Controllers\Inventory\InventoryItemController;
@@ -300,6 +301,26 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 'categories/{inventoryCategory}',
                 [InventoryCategoryController::class, 'update'],
             )->name('categories.update');
+
+            Route::get(
+                'brands',
+                [InventoryBrandController::class, 'index'],
+            )->name('brands.index');
+
+            Route::post(
+                'brands',
+                [InventoryBrandController::class, 'store'],
+            )->name('brands.store');
+
+            Route::get(
+                'brands/{inventoryBrand}/edit',
+                [InventoryBrandController::class, 'edit'],
+            )->name('brands.edit');
+
+            Route::put(
+                'brands/{inventoryBrand}',
+                [InventoryBrandController::class, 'update'],
+            )->name('brands.update');
 
             Route::post(
                 'items/{inventoryItem}/units',

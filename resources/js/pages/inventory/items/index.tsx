@@ -3,6 +3,7 @@ import {
     ArrowDown,
     ArrowUp,
     ArrowUpDown,
+    Award,
     Boxes,
     CheckCircle2,
     Pencil,
@@ -14,6 +15,7 @@ import {
     Tags,
 } from 'lucide-react';
 import InventoryAdjustmentController from '@/actions/App/Http/Controllers/Inventory/InventoryAdjustmentController';
+import InventoryBrandController from '@/actions/App/Http/Controllers/Inventory/InventoryBrandController';
 import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import OpeningBalanceController from '@/actions/App/Http/Controllers/Inventory/OpeningBalanceController';
@@ -428,6 +430,13 @@ export default function InventoryItemsIndex({
                             <Link href={InventoryCategoryController.index()}>
                                 <Tags className="size-4" aria-hidden="true" />
                                 Categories
+                            </Link>
+                        </Button>
+
+                        <Button variant="outline" asChild>
+                            <Link href={InventoryBrandController.index()}>
+                                <Award className="size-4" aria-hidden="true" />
+                                Brands
                             </Link>
                         </Button>
 

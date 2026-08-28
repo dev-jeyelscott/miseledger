@@ -6,6 +6,12 @@ export type InventoryCategoryData = {
     active: boolean;
 };
 
+export type InventoryBrandData = {
+    id: number;
+    name: string;
+    active: boolean;
+};
+
 export type InventoryItemType =
     | 'ingredient'
     | 'finished_item'
