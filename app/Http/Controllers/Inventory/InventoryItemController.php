@@ -88,7 +88,9 @@ class InventoryItemController extends Controller
                         ->orWhereHas(
                             'barcodes',
                             static function (Builder $barcodes) use ($searchPattern): void {
-                                $barcodes->whereLike('barcode', $searchPattern);
+                                $barcodes
+                                    ->where('active', true)
+                                    ->whereLike('barcode', $searchPattern);
                             },
                         );
                 },

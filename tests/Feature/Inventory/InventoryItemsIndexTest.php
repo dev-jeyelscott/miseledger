@@ -194,7 +194,7 @@ test('inventory item filters combine search category type and status', function 
         );
 });
 
-test('inventory item search matches a sku value independent of item name', function () {
+test('inventory item search keeps partial name matching', function () {
     [$user, $organization, $unit] = inventoryItemsIndexContext();
 
     $target = InventoryItem::factory()
@@ -203,14 +203,18 @@ test('inventory item search matches a sku value independent of item name', funct
             'base_unit_of_measure_id' => $unit->id,
             'name' => 'Fresh Tomato',
             'sku' => 'TOM-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
         ]);
 
     InventoryItem::factory()
         ->for($organization)
         ->create([
             'base_unit_of_measure_id' => $unit->id,
-            'name' => 'Other Item',
-            'sku' => 'OTHER-001',
+            'name' => 'Frozen Corn',
+            'sku' => 'CORN-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
         ]);
 
     $this
@@ -219,7 +223,7 @@ test('inventory item search matches a sku value independent of item name', funct
         ])
         ->actingAs($user)
         ->get(route('inventory.items.index', [
-            'search' => 'TOM-001',
+            'search' => 'Fresh Tom',
         ]))
         ->assertOk()
         ->assertInertia(
@@ -227,11 +231,11 @@ test('inventory item search matches a sku value independent of item name', funct
                 ->component('inventory/items/index')
                 ->has('items', 1)
                 ->where('items.0.id', $target->id)
-                ->where('filters.search', 'TOM-001'),
+                ->where('filters.search', 'Fresh Tom'),
         );
 });
 
-test('inventory item search matches a base-item barcode value', function () {
+test('inventory item search keeps partial sku matching independent of item name', function () {
     [$user, $organization, $unit] = inventoryItemsIndexContext();
 
     $target = InventoryItem::factory()
@@ -240,13 +244,8 @@ test('inventory item search matches a base-item barcode value', function () {
             'base_unit_of_measure_id' => $unit->id,
             'name' => 'Fresh Tomato',
             'sku' => 'TOM-001',
-        ]);
-
-    InventoryItemBarcode::factory()
-        ->for($target)
-        ->create([
-            'organization_id' => $organization->id,
-            'barcode' => '0123456789012',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
         ]);
 
     InventoryItem::factory()
@@ -255,6 +254,57 @@ test('inventory item search matches a base-item barcode value', function () {
             'base_unit_of_measure_id' => $unit->id,
             'name' => 'Other Item',
             'sku' => 'OTHER-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'search' => 'TOM-',
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/items/index')
+                ->has('items', 1)
+                ->where('items.0.id', $target->id)
+                ->where('filters.search', 'TOM-'),
+        );
+});
+
+test('inventory item search matches a base-item active barcode value', function () {
+    [$user, $organization, $unit] = inventoryItemsIndexContext();
+
+    $target = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Fresh Tomato',
+            'sku' => 'TOM-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
+        ]);
+
+    InventoryItemBarcode::factory()
+        ->for($target)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '0123456789012',
+            'active' => true,
+        ]);
+
+    InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Other Item',
+            'sku' => 'OTHER-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
         ]);
 
     $this
@@ -275,7 +325,7 @@ test('inventory item search matches a base-item barcode value', function () {
         );
 });
 
-test('inventory item search matches an alternate-unit barcode value', function () {
+test('inventory item search matches an alternate-unit active barcode value', function () {
     [$user, $organization, $unit] = inventoryItemsIndexContext();
 
     $target = InventoryItem::factory()
@@ -284,6 +334,8 @@ test('inventory item search matches an alternate-unit barcode value', function (
             'base_unit_of_measure_id' => $unit->id,
             'name' => 'Case Of Flour',
             'sku' => 'FLOUR-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
         ]);
 
     $alternateUnit = InventoryItemUnit::factory()
@@ -296,6 +348,7 @@ test('inventory item search matches an alternate-unit barcode value', function (
             'organization_id' => $organization->id,
             'inventory_item_unit_id' => $alternateUnit->id,
             'barcode' => '1111111111111',
+            'active' => true,
         ]);
 
     $this
@@ -315,10 +368,50 @@ test('inventory item search matches an alternate-unit barcode value', function (
         );
 });
 
+test('unknown barcode returns a clean empty inventory result', function () {
+    [$user, $organization, $unit] = inventoryItemsIndexContext();
+
+    $item = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Known Item',
+            'sku' => 'KNOWN-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
+        ]);
+
+    InventoryItemBarcode::factory()
+        ->for($item)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '8888888888888',
+            'active' => true,
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'search' => '9999999999999',
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/items/index')
+                ->has('items', 0)
+                ->where('pagination.total', 0)
+                ->where('filters.search', '9999999999999'),
+        );
+});
+
 test('inventory item search does not resolve a barcode from another organization', function () {
     [$user, $organization] = inventoryItemsIndexContext();
 
     $otherOrganization = Organization::factory()->create();
+
     $otherUnit = UnitOfMeasure::factory()
         ->for($otherOrganization)
         ->create();
@@ -327,6 +420,10 @@ test('inventory item search does not resolve a barcode from another organization
         ->for($otherOrganization)
         ->create([
             'base_unit_of_measure_id' => $otherUnit->id,
+            'name' => 'Other Organization Item',
+            'sku' => 'OTHER-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
         ]);
 
     InventoryItemBarcode::factory()
@@ -334,6 +431,7 @@ test('inventory item search does not resolve a barcode from another organization
         ->create([
             'organization_id' => $otherOrganization->id,
             'barcode' => '2222222222222',
+            'active' => true,
         ]);
 
     $this
@@ -348,7 +446,312 @@ test('inventory item search does not resolve a barcode from another organization
         ->assertInertia(
             fn (Assert $page): Assert => $page
                 ->component('inventory/items/index')
-                ->has('items', 0),
+                ->has('items', 0)
+                ->where('pagination.total', 0),
+        );
+});
+
+test('identical barcode values resolve only inside the active organization', function () {
+    [$user, $organization, $unit] = inventoryItemsIndexContext();
+
+    $sharedBarcode = '3333333333333';
+
+    $localItem = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Local Item',
+            'sku' => 'LOCAL-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
+        ]);
+
+    InventoryItemBarcode::factory()
+        ->for($localItem)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => $sharedBarcode,
+            'active' => true,
+        ]);
+
+    $otherOrganization = Organization::factory()->create();
+
+    $otherUnit = UnitOfMeasure::factory()
+        ->for($otherOrganization)
+        ->create();
+
+    $otherItem = InventoryItem::factory()
+        ->for($otherOrganization)
+        ->create([
+            'base_unit_of_measure_id' => $otherUnit->id,
+            'name' => 'Other Tenant Item',
+            'sku' => 'OTHER-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
+        ]);
+
+    InventoryItemBarcode::factory()
+        ->for($otherItem)
+        ->create([
+            'organization_id' => $otherOrganization->id,
+            'barcode' => $sharedBarcode,
+            'active' => true,
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'search' => $sharedBarcode,
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/items/index')
+                ->has('items', 1)
+                ->where('items.0.id', $localItem->id)
+                ->where('pagination.total', 1),
+        );
+});
+
+test('category type and status filters compose with barcode search', function () {
+    [$user, $organization, $unit] = inventoryItemsIndexContext();
+
+    $produce = InventoryCategory::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Produce',
+        ]);
+
+    $pantry = InventoryCategory::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Pantry',
+        ]);
+
+    $target = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_category_id' => $produce->id,
+            'name' => 'Target Ingredient',
+            'sku' => 'TARGET-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
+            'type' => InventoryItemType::Ingredient,
+            'active' => true,
+        ]);
+
+    InventoryItemBarcode::factory()
+        ->for($target)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '7777000000001',
+            'active' => true,
+        ]);
+
+    $inactiveItem = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_category_id' => $produce->id,
+            'name' => 'Inactive Ingredient',
+            'sku' => 'INACTIVE-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
+            'type' => InventoryItemType::Ingredient,
+            'active' => false,
+        ]);
+
+    InventoryItemBarcode::factory()
+        ->for($inactiveItem)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '7777000000002',
+            'active' => true,
+        ]);
+
+    $wrongCategory = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_category_id' => $pantry->id,
+            'name' => 'Pantry Ingredient',
+            'sku' => 'PANTRY-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
+            'type' => InventoryItemType::Ingredient,
+            'active' => true,
+        ]);
+
+    InventoryItemBarcode::factory()
+        ->for($wrongCategory)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '7777000000003',
+            'active' => true,
+        ]);
+
+    $wrongType = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'inventory_category_id' => $produce->id,
+            'name' => 'Produce Packaging',
+            'sku' => 'PACK-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
+            'type' => InventoryItemType::Packaging,
+            'active' => true,
+        ]);
+
+    InventoryItemBarcode::factory()
+        ->for($wrongType)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '7777000000004',
+            'active' => true,
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'search' => '7777',
+            'category' => $produce->id,
+            'type' => InventoryItemType::Ingredient->value,
+            'status' => 'active',
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/items/index')
+                ->has('items', 1)
+                ->where('items.0.id', $target->id)
+                ->where('pagination.total', 1)
+                ->where('filters.search', '7777')
+                ->where('filters.categoryId', $produce->id)
+                ->where(
+                    'filters.type',
+                    InventoryItemType::Ingredient->value,
+                )
+                ->where('filters.status', 'active'),
+        );
+});
+
+test('barcode search pagination totals remain inventory-item based', function () {
+    [$user, $organization, $unit] = inventoryItemsIndexContext();
+
+    $firstItem = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'First Barcode Item',
+            'sku' => 'FIRST-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
+        ]);
+
+    InventoryItemBarcode::factory()
+        ->for($firstItem)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '4444000000001',
+            'active' => true,
+        ]);
+
+    InventoryItemBarcode::factory()
+        ->for($firstItem)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '4444000000002',
+            'active' => true,
+        ]);
+
+    $secondItem = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Second Barcode Item',
+            'sku' => 'SECOND-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
+        ]);
+
+    InventoryItemBarcode::factory()
+        ->for($secondItem)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '4444000000003',
+            'active' => true,
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'search' => '4444',
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/items/index')
+                ->has('items', 2)
+                ->where('pagination.total', 2),
+        );
+});
+
+test('inactive barcode mappings do not participate in inventory search', function () {
+    [$user, $organization, $unit] = inventoryItemsIndexContext();
+
+    $item = InventoryItem::factory()
+        ->for($organization)
+        ->create([
+            'base_unit_of_measure_id' => $unit->id,
+            'name' => 'Retired Barcode Item',
+            'sku' => 'RET-001',
+            'model_number' => null,
+            'manufacturer_part_number' => null,
+            'active' => true,
+        ]);
+
+    InventoryItemBarcode::factory()
+        ->for($item)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '6666666666666',
+            'active' => false,
+        ]);
+
+    InventoryItemBarcode::factory()
+        ->for($item)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '6677777777777',
+            'active' => true,
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get(route('inventory.items.index', [
+            'search' => '6666666666666',
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page): Assert => $page
+                ->component('inventory/items/index')
+                ->has('items', 0)
+                ->where('pagination.total', 0)
+                ->where('filters.search', '6666666666666'),
         );
 });
 
