@@ -44,8 +44,9 @@ test('inventory quick create remains intentionally compact', function () {
 
     expect($source)
         ->toContain(
-            'Create a compact inventory master record without leaving index context.',
+            'Add the essential inventory fields without leaving this',
         )
+        ->toContain('page. Use Create with full details when you also need')
         ->not->toContain('name="inventory_brand_id"')
         ->not->toContain('name="model_number"')
         ->not->toContain('name="manufacturer_part_number"')
@@ -62,4 +63,37 @@ test('inventory TypeScript contracts expose core product metadata', function () 
         ->toContain('modelNumber: string | null;')
         ->toContain('manufacturerPartNumber: string | null;')
         ->toContain('description: string | null;');
+});
+
+test('full inventory create form uses accessible sections and dirty navigation protection', function () {
+    $source = File::get(
+        resource_path('js/pages/inventory/items/create.tsx'),
+    );
+    $guardSource = File::get(
+        resource_path('js/hooks/use-dirty-form-navigation.ts'),
+    );
+
+    expect($source)
+        ->toContain('PageHeader')
+        ->toContain('Identity')
+        ->toContain('Classification')
+        ->toContain('Product details')
+        ->toContain('Stock configuration')
+        ->toContain('label="Product family (optional)"')
+        ->toContain('Record the usable percentage of this item.')
+        ->toContain('This is the authoritative unit for stock.')
+        ->toContain('useDirtyFormNavigation')
+        ->toContain('dirty={isDirty}')
+        ->toContain('NativeSelect')
+        ->toContain('Creating…')
+        ->toContain("title: 'Inventory items'")
+        ->toContain("title: 'Create inventory item'")
+        ->toContain('border-border')
+        ->not->toContain('border-sidebar-border');
+
+    expect($guardSource)
+        ->toContain("router.on('before'")
+        ->toContain("event.detail.visit.method !== 'get'")
+        ->toContain("window.addEventListener('beforeunload'")
+        ->toContain('confirmNavigation');
 });

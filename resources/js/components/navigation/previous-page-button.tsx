@@ -8,19 +8,27 @@ type PreviousPageButtonProps = Omit<
     'asChild' | 'onClick' | 'type'
 > & {
     fallback: string;
+    onNavigate?: () => boolean;
 };
 
 /** Render a Back/Cancel control that prefers real in-app browser history. */
 export function PreviousPageButton({
     fallback,
     children = 'Back',
+    onNavigate,
     ...props
 }: PreviousPageButtonProps) {
     return (
         <Button
             type="button"
             {...props}
-            onClick={() => navigateToPreviousPage(fallback)}
+            onClick={() => {
+                if (onNavigate?.() === false) {
+                    return;
+                }
+
+                navigateToPreviousPage(fallback);
+            }}
         >
             {children}
         </Button>
