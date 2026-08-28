@@ -124,6 +124,7 @@ test('inventory detail and edit workspaces preserve server-authoritative editabi
         ->toContain('name="base_unit_of_measure_id"')
         ->toContain('name="inventory_product_id"')
         ->toContain('Saving…')
+        ->toContain('Adding…')
         ->toContain('border-border')
         ->not->toContain('border-sidebar-border');
 });

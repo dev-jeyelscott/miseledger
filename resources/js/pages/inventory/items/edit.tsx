@@ -911,7 +911,9 @@ export default function EditInventoryItem({
                                                 type="submit"
                                                 disabled={processing}
                                             >
-                                                Add conversion
+                                                {processing
+                                                    ? 'Adding…'
+                                                    : 'Add conversion'}
                                             </Button>
                                         </>
                                     )}
@@ -1111,7 +1113,7 @@ export default function EditInventoryItem({
                                     />
 
                                     <Button type="submit" disabled={processing}>
-                                        Add barcode
+                                        {processing ? 'Adding…' : 'Add barcode'}
                                     </Button>
                                 </>
                             )}
