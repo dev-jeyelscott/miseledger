@@ -15,7 +15,6 @@ import {
     SlidersHorizontal,
     Tags,
 } from 'lucide-react';
-import { useState } from 'react';
 import type { ReactNode } from 'react';
 import InventoryAdjustmentController from '@/actions/App/Http/Controllers/Inventory/InventoryAdjustmentController';
 import InventoryBrandController from '@/actions/App/Http/Controllers/Inventory/InventoryBrandController';
@@ -122,12 +121,6 @@ type CreateInventoryItemDialogProps = {
     units: UnitOfMeasureData[];
 };
 
-type InventoryItemDetailsDialogProps = {
-    canManage: boolean;
-    item: InventoryItemListItem | null;
-    onOpenChange: (open: boolean) => void;
-};
-
 const itemTypeLabels: Record<InventoryItemType, string> = {
     ingredient: 'Ingredient',
     finished_item: 'Finished item',
@@ -207,118 +200,6 @@ function InventoryEmptyState({
             </p>
             {action ? <div className="mt-4">{action}</div> : null}
         </div>
-    );
-}
-
-/** Show an inventory-view-safe read-only summary without exposing mutation controls. */
-function InventoryItemDetailsDialog({
-    canManage,
-    item,
-    onOpenChange,
-}: InventoryItemDetailsDialogProps) {
-    if (item === null) {
-        return null;
-    }
-
-    return (
-        <Dialog open onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-xl">
-                <DialogHeader>
-                    <DialogTitle>{item.name}</DialogTitle>
-                    <DialogDescription>
-                        Read-only inventory item details.
-                    </DialogDescription>
-                </DialogHeader>
-
-                <dl className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                        <dt className="text-xs font-medium text-muted-foreground">
-                            SKU
-                        </dt>
-                        <dd className="mt-1 font-mono text-sm">{item.sku}</dd>
-                    </div>
-
-                    <div>
-                        <dt className="text-xs font-medium text-muted-foreground">
-                            Status
-                        </dt>
-                        <dd className="mt-1">
-                            <InventoryItemStatus active={item.active} />
-                        </dd>
-                    </div>
-
-                    <div>
-                        <dt className="text-xs font-medium text-muted-foreground">
-                            Item type
-                        </dt>
-                        <dd className="mt-1 text-sm">
-                            {itemTypeLabels[item.type]}
-                        </dd>
-                    </div>
-
-                    <div>
-                        <dt className="text-xs font-medium text-muted-foreground">
-                            Category
-                        </dt>
-                        <dd className="mt-1 text-sm">
-                            {item.inventoryCategory?.name ?? 'Uncategorized'}
-                        </dd>
-                    </div>
-
-                    <div>
-                        <dt className="text-xs font-medium text-muted-foreground">
-                            Brand
-                        </dt>
-                        <dd className="mt-1 text-sm">
-                            {item.inventoryBrand?.name ?? 'Unbranded'}
-                        </dd>
-                    </div>
-
-                    <div>
-                        <dt className="text-xs font-medium text-muted-foreground">
-                            Base unit
-                        </dt>
-                        <dd className="mt-1 text-sm">
-                            <span className="font-medium">
-                                {item.baseUnitOfMeasure.symbol}
-                            </span>{' '}
-                            <span className="text-muted-foreground">
-                                {item.baseUnitOfMeasure.name}
-                            </span>
-                        </dd>
-                    </div>
-
-                    <div>
-                        <dt className="text-xs font-medium text-muted-foreground">
-                            Yield
-                        </dt>
-                        <dd className="mt-1 text-sm tabular-nums">
-                            {item.yieldPercentage}%
-                        </dd>
-                    </div>
-
-                    <div>
-                        <dt className="text-xs font-medium text-muted-foreground">
-                            Unit conversions
-                        </dt>
-                        <dd className="mt-1 text-sm tabular-nums">
-                            {item.conversionCount}
-                        </dd>
-                    </div>
-                </dl>
-
-                {canManage && (
-                    <div className="flex justify-end border-t border-border pt-4">
-                        <Button asChild>
-                            <Link href={InventoryItemController.edit(item.id)}>
-                                <Pencil className="size-4" aria-hidden="true" />
-                                Edit item
-                            </Link>
-                        </Button>
-                    </div>
-                )}
-            </DialogContent>
-        </Dialog>
     );
 }
 
@@ -615,9 +496,6 @@ export default function InventoryItemsIndex({
     filters,
     canManage,
 }: Props) {
-    const [selectedItem, setSelectedItem] =
-        useState<InventoryItemListItem | null>(null);
-
     const hasQueryState =
         filters.search !== '' ||
         filters.categoryId !== null ||
@@ -1123,7 +1001,14 @@ export default function InventoryItemsIndex({
                                                 id={`inventory-item-${item.id}-name`}
                                                 className="font-medium"
                                             >
-                                                {item.name}
+                                                <Link
+                                                    href={InventoryItemController.show(
+                                                        item.id,
+                                                    )}
+                                                    className="underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                >
+                                                    {item.name}
+                                                </Link>
                                             </h2>
                                             <p className="mt-1 font-mono text-xs text-muted-foreground">
                                                 {item.sku}
@@ -1197,15 +1082,17 @@ export default function InventoryItemsIndex({
 
                                     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
                                         <Button
-                                            type="button"
                                             variant="outline"
                                             size="sm"
-                                            onClick={() =>
-                                                setSelectedItem(item)
-                                            }
-                                            aria-label={`View ${item.name} details`}
+                                            asChild
                                         >
-                                            View details
+                                            <Link
+                                                href={InventoryItemController.show(
+                                                    item.id,
+                                                )}
+                                            >
+                                                View details
+                                            </Link>
                                         </Button>
 
                                         {canManage && (
@@ -1369,16 +1256,14 @@ export default function InventoryItemsIndex({
                                             className="border-b border-border transition-colors last:border-b-0 hover:bg-muted/30"
                                         >
                                             <td className="px-4 py-3">
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        setSelectedItem(item)
-                                                    }
-                                                    aria-label={`View ${item.name} details`}
+                                                <Link
+                                                    href={InventoryItemController.show(
+                                                        item.id,
+                                                    )}
                                                     className="font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                                 >
                                                     {item.name}
-                                                </button>
+                                                </Link>
                                             </td>
 
                                             <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
@@ -1468,16 +1353,6 @@ export default function InventoryItemsIndex({
                     )}
                 </section>
             </div>
-
-            <InventoryItemDetailsDialog
-                item={selectedItem}
-                canManage={canManage}
-                onOpenChange={(open) => {
-                    if (!open) {
-                        setSelectedItem(null);
-                    }
-                }}
-            />
         </>
     );
 }

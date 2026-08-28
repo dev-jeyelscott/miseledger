@@ -1,8 +1,12 @@
 import { Form, Head } from '@inertiajs/react';
+import { useEffect } from 'react';
 import InventoryItemBarcodeController from '@/actions/App/Http/Controllers/Inventory/InventoryItemBarcodeController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InventoryItemUnitController from '@/actions/App/Http/Controllers/Inventory/InventoryItemUnitController';
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
+import { PageHeader } from '@/components/page-header';
+import { StatusBadge } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,8 +17,11 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
+import { useDirtyFormNavigation } from '@/hooks/use-dirty-form-navigation';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type {
@@ -54,6 +61,20 @@ type EditBarcodeDialogProps = {
     unitOptions: InventoryItemDetail['unitConversions'];
     trigger: React.ReactNode;
 };
+
+type DirtyStateTrackerProps = {
+    dirty: boolean;
+    onChange: (dirty: boolean) => void;
+};
+
+/** Keep the page navigation guard synchronized with the main edit form. */
+function DirtyStateTracker({ dirty, onChange }: DirtyStateTrackerProps) {
+    useEffect(() => {
+        onChange(dirty);
+    }, [dirty, onChange]);
+
+    return null;
+}
 
 /** Edit a barcode's value, symbology, unit, and primary/active state. */
 function EditBarcodeDialog({
@@ -360,313 +381,369 @@ export default function EditInventoryItem({
     productFamilies,
     availableConversionUnits,
 }: Props) {
+    const dirtyFormNavigation = useDirtyFormNavigation(
+        'You have unsaved inventory item changes. Leave without saving them?',
+    );
+
     return (
         <>
             <Head title={item.name} />
 
-            <div className="flex flex-1 flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-2xl font-semibold">{item.name}</h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        {item.sku}
-                    </p>
-                </div>
+            <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+                <PageHeader
+                    title={item.name}
+                    description={<span className="font-mono">{item.sku}</span>}
+                    actions={
+                        <>
+                            <StatusBadge
+                                label={item.active ? 'Active' : 'Inactive'}
+                                variant={item.active ? 'success' : 'neutral'}
+                            />
+                            <PreviousPageButton
+                                variant="outline"
+                                fallback={
+                                    InventoryItemController.show(item.id).url
+                                }
+                                onNavigate={
+                                    dirtyFormNavigation.confirmNavigation
+                                }
+                            >
+                                Back to item
+                            </PreviousPageButton>
+                        </>
+                    }
+                />
 
                 <div className="grid gap-6 lg:grid-cols-2">
-                    <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                        <h2 className="mb-5 font-medium">Item Details</h2>
+                    <div className="rounded-xl border border-border bg-card p-4 md:p-6">
+                        <div>
+                            <h2 className="font-semibold">Item details</h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Update the identity, classification, and stock
+                                configuration for this item.
+                            </p>
+                        </div>
 
                         <Form
                             {...InventoryItemController.update.form(item.id)}
-                            className="space-y-5"
+                            className="mt-5 space-y-5"
                         >
-                            {({ processing, errors }) => (
+                            {({ processing, errors, isDirty }) => (
                                 <>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="name">Name</Label>
-                                        <Input
+                                    <DirtyStateTracker
+                                        dirty={isDirty}
+                                        onChange={
+                                            dirtyFormNavigation.setIsDirty
+                                        }
+                                    />
+
+                                    <div className="grid gap-5 md:grid-cols-2">
+                                        <Field
                                             id="name"
-                                            name="name"
-                                            defaultValue={item.name}
-                                            required
-                                        />
-                                        <InputError message={errors.name} />
-                                    </div>
+                                            label="Name"
+                                            error={errors.name}
+                                        >
+                                            <Input
+                                                name="name"
+                                                defaultValue={item.name}
+                                                required
+                                            />
+                                        </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="sku">SKU</Label>
-                                        <Input
+                                        <Field
                                             id="sku"
-                                            name="sku"
-                                            defaultValue={item.sku}
-                                            required
-                                        />
-                                        <InputError message={errors.sku} />
-                                    </div>
+                                            label="SKU"
+                                            error={errors.sku}
+                                        >
+                                            <Input
+                                                name="sku"
+                                                defaultValue={item.sku}
+                                                required
+                                                className="font-mono"
+                                            />
+                                        </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="type">Item type</Label>
-                                        <select
+                                        <Field
                                             id="type"
-                                            name="type"
-                                            defaultValue={item.type}
-                                            required
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                            label="Item type"
+                                            error={errors.type}
                                         >
-                                            <option value="ingredient">
-                                                Ingredient
-                                            </option>
-                                            <option value="finished_item">
-                                                Finished item
-                                            </option>
-                                            <option value="prepared_item">
-                                                Prepared item
-                                            </option>
-                                            <option value="packaging">
-                                                Packaging
-                                            </option>
-                                            <option value="consumable">
-                                                Consumable
-                                            </option>
-                                        </select>
-                                        <InputError message={errors.type} />
-                                    </div>
+                                            <NativeSelect
+                                                name="type"
+                                                defaultValue={item.type}
+                                                required
+                                            >
+                                                <option value="ingredient">
+                                                    Ingredient
+                                                </option>
+                                                <option value="finished_item">
+                                                    Finished item
+                                                </option>
+                                                <option value="prepared_item">
+                                                    Prepared item
+                                                </option>
+                                                <option value="packaging">
+                                                    Packaging
+                                                </option>
+                                                <option value="consumable">
+                                                    Consumable
+                                                </option>
+                                            </NativeSelect>
+                                        </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="inventory_category_id">
-                                            Category
-                                        </Label>
-                                        <select
+                                        <Field
                                             id="inventory_category_id"
-                                            name="inventory_category_id"
-                                            defaultValue={
-                                                item.inventoryCategory?.id ?? ''
-                                            }
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                            label="Category"
+                                            error={errors.inventory_category_id}
                                         >
-                                            <option value="">
-                                                Uncategorized
-                                            </option>
-                                            {categories.map((category) => (
-                                                <option
-                                                    key={category.id}
-                                                    value={category.id}
-                                                >
-                                                    {category.name}
-                                                    {!category.active &&
-                                                        ' (Inactive)'}
+                                            <NativeSelect
+                                                name="inventory_category_id"
+                                                defaultValue={
+                                                    item.inventoryCategory
+                                                        ?.id ?? ''
+                                                }
+                                            >
+                                                <option value="">
+                                                    Uncategorized
                                                 </option>
-                                            ))}
-                                        </select>
-                                        <InputError
-                                            message={
-                                                errors.inventory_category_id
-                                            }
-                                        />
-                                    </div>
+                                                {categories.map((category) => (
+                                                    <option
+                                                        key={category.id}
+                                                        value={category.id}
+                                                    >
+                                                        {category.name}
+                                                        {!category.active &&
+                                                            ' (Inactive)'}
+                                                    </option>
+                                                ))}
+                                            </NativeSelect>
+                                        </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="inventory_brand_id">
-                                            Brand
-                                        </Label>
-                                        <select
+                                        <Field
                                             id="inventory_brand_id"
-                                            name="inventory_brand_id"
-                                            defaultValue={
-                                                item.inventoryBrand?.id ?? ''
-                                            }
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                            label="Brand"
+                                            error={errors.inventory_brand_id}
                                         >
-                                            <option value="">No brand</option>
-                                            {brands.map((brand) => (
-                                                <option
-                                                    key={brand.id}
-                                                    value={brand.id}
-                                                >
-                                                    {brand.name}
-                                                    {!brand.active &&
-                                                        ' (Inactive)'}
+                                            <NativeSelect
+                                                name="inventory_brand_id"
+                                                defaultValue={
+                                                    item.inventoryBrand?.id ??
+                                                    ''
+                                                }
+                                            >
+                                                <option value="">
+                                                    No brand
                                                 </option>
-                                            ))}
-                                        </select>
-                                        <InputError
-                                            message={errors.inventory_brand_id}
-                                        />
-                                    </div>
+                                                {brands.map((brand) => (
+                                                    <option
+                                                        key={brand.id}
+                                                        value={brand.id}
+                                                    >
+                                                        {brand.name}
+                                                        {!brand.active &&
+                                                            ' (Inactive)'}
+                                                    </option>
+                                                ))}
+                                            </NativeSelect>
+                                        </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="inventory_product_id">
-                                            Product family
-                                        </Label>
-                                        <select
+                                        {!item.editability.productFamily
+                                            .editable && (
+                                            <input
+                                                type="hidden"
+                                                name="inventory_product_id"
+                                                value={
+                                                    item.inventoryProduct?.id ??
+                                                    ''
+                                                }
+                                            />
+                                        )}
+                                        <Field
                                             id="inventory_product_id"
-                                            name="inventory_product_id"
-                                            defaultValue={
-                                                item.inventoryProduct?.id ?? ''
+                                            label="Product family"
+                                            error={errors.inventory_product_id}
+                                            helper={
+                                                item.editability.productFamily
+                                                    .reason ??
+                                                'Associate related variants with a product family before assigning its option values.'
                                             }
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                         >
-                                            <option value="">
-                                                No product family
-                                            </option>
-                                            {productFamilies.map((product) => (
-                                                <option
-                                                    key={product.id}
-                                                    value={product.id}
-                                                >
-                                                    {product.name}
-                                                    {!product.active
-                                                        ? ' (inactive)'
-                                                        : ''}
+                                            <NativeSelect
+                                                name={
+                                                    item.editability
+                                                        .productFamily.editable
+                                                        ? 'inventory_product_id'
+                                                        : undefined
+                                                }
+                                                defaultValue={
+                                                    item.inventoryProduct?.id ??
+                                                    ''
+                                                }
+                                                disabled={
+                                                    !item.editability
+                                                        .productFamily.editable
+                                                }
+                                            >
+                                                <option value="">
+                                                    No product family
                                                 </option>
-                                            ))}
-                                        </select>
-                                        <InputError
-                                            message={
-                                                errors.inventory_product_id
-                                            }
-                                        />
-                                    </div>
+                                                {productFamilies.map(
+                                                    (product) => (
+                                                        <option
+                                                            key={product.id}
+                                                            value={product.id}
+                                                        >
+                                                            {product.name}
+                                                            {!product.active
+                                                                ? ' (inactive)'
+                                                                : ''}
+                                                        </option>
+                                                    ),
+                                                )}
+                                            </NativeSelect>
+                                        </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="model_number">
-                                            Model number
-                                        </Label>
-                                        <Input
+                                        <Field
                                             id="model_number"
-                                            name="model_number"
-                                            defaultValue={
-                                                item.modelNumber ?? ''
-                                            }
-                                            placeholder="Optional"
-                                        />
-                                        <InputError
-                                            message={errors.model_number}
-                                        />
-                                    </div>
+                                            label="Model number (optional)"
+                                            error={errors.model_number}
+                                        >
+                                            <Input
+                                                name="model_number"
+                                                defaultValue={
+                                                    item.modelNumber ?? ''
+                                                }
+                                                placeholder="Optional"
+                                            />
+                                        </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="manufacturer_part_number">
-                                            Manufacturer part number
-                                        </Label>
-                                        <Input
+                                        <Field
                                             id="manufacturer_part_number"
-                                            name="manufacturer_part_number"
-                                            defaultValue={
-                                                item.manufacturerPartNumber ??
-                                                ''
-                                            }
-                                            placeholder="Optional"
-                                        />
-                                        <InputError
-                                            message={
+                                            label="Manufacturer part number (optional)"
+                                            error={
                                                 errors.manufacturer_part_number
                                             }
-                                        />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="description">
-                                            Description
-                                        </Label>
-                                        <textarea
-                                            id="description"
-                                            name="description"
-                                            rows={3}
-                                            maxLength={10000}
-                                            defaultValue={
-                                                item.description ?? ''
-                                            }
-                                            placeholder="Optional"
-                                            aria-invalid={
-                                                errors.description
-                                                    ? true
-                                                    : undefined
-                                            }
-                                            className={textareaClassName}
-                                        />
-                                        <InputError
-                                            message={errors.description}
-                                        />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="yield_percentage">
-                                            Yield (%)
-                                        </Label>
-                                        <Input
-                                            id="yield_percentage"
-                                            name="yield_percentage"
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            step="0.01"
-                                            defaultValue={item.yieldPercentage}
-                                            required
-                                        />
-                                        <InputError
-                                            message={errors.yield_percentage}
-                                        />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="base_unit_of_measure_id">
-                                            Base unit
-                                        </Label>
-
-                                        <select
-                                            id="base_unit_of_measure_id"
-                                            name="base_unit_of_measure_id"
-                                            defaultValue={
-                                                item.baseUnitOfMeasure.id
-                                            }
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                         >
-                                            {units.map((unit) => (
-                                                <option
-                                                    key={unit.id}
-                                                    value={unit.id}
-                                                >
-                                                    {unit.name} ({unit.symbol})
-                                                </option>
-                                            ))}
-                                        </select>
+                                            <Input
+                                                name="manufacturer_part_number"
+                                                defaultValue={
+                                                    item.manufacturerPartNumber ??
+                                                    ''
+                                                }
+                                                placeholder="Optional"
+                                            />
+                                        </Field>
 
-                                        <InputError
-                                            message={
+                                        <Field
+                                            id="description"
+                                            label="Description (optional)"
+                                            error={errors.description}
+                                            className="md:col-span-2"
+                                        >
+                                            <textarea
+                                                name="description"
+                                                rows={3}
+                                                maxLength={10000}
+                                                defaultValue={
+                                                    item.description ?? ''
+                                                }
+                                                placeholder="Optional"
+                                                className={textareaClassName}
+                                            />
+                                        </Field>
+
+                                        <Field
+                                            id="yield_percentage"
+                                            label="Yield (%)"
+                                            error={errors.yield_percentage}
+                                        >
+                                            <Input
+                                                name="yield_percentage"
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                step="0.01"
+                                                defaultValue={
+                                                    item.yieldPercentage
+                                                }
+                                                required
+                                            />
+                                        </Field>
+
+                                        {!item.editability.baseUnitOfMeasure
+                                            .editable && (
+                                            <input
+                                                type="hidden"
+                                                name="base_unit_of_measure_id"
+                                                value={
+                                                    item.baseUnitOfMeasure.id
+                                                }
+                                            />
+                                        )}
+                                        <Field
+                                            id="base_unit_of_measure_id"
+                                            label="Base unit"
+                                            error={
                                                 errors.base_unit_of_measure_id
                                             }
-                                        />
-
-                                        {item.unitConversions.length > 0 && (
-                                            <p className="text-xs text-muted-foreground">
-                                                The base unit is locked once an
-                                                alternate unit has been
-                                                configured.
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="active">Status</Label>
-
-                                        <select
-                                            id="active"
-                                            name="active"
-                                            defaultValue={
-                                                item.active ? '1' : '0'
+                                            helper={
+                                                item.editability
+                                                    .baseUnitOfMeasure.reason ??
+                                                'This is the authoritative unit for stock.'
                                             }
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                         >
-                                            <option value="1">Active</option>
-                                            <option value="0">Inactive</option>
-                                        </select>
+                                            <NativeSelect
+                                                name={
+                                                    item.editability
+                                                        .baseUnitOfMeasure
+                                                        .editable
+                                                        ? 'base_unit_of_measure_id'
+                                                        : undefined
+                                                }
+                                                defaultValue={
+                                                    item.baseUnitOfMeasure.id
+                                                }
+                                                disabled={
+                                                    !item.editability
+                                                        .baseUnitOfMeasure
+                                                        .editable
+                                                }
+                                            >
+                                                {units.map((unit) => (
+                                                    <option
+                                                        key={unit.id}
+                                                        value={unit.id}
+                                                    >
+                                                        {unit.name} (
+                                                        {unit.symbol})
+                                                    </option>
+                                                ))}
+                                            </NativeSelect>
+                                        </Field>
 
-                                        <InputError message={errors.active} />
+                                        <Field
+                                            id="active"
+                                            label="Status"
+                                            error={errors.active}
+                                        >
+                                            <NativeSelect
+                                                name="active"
+                                                defaultValue={
+                                                    item.active ? '1' : '0'
+                                                }
+                                            >
+                                                <option value="1">
+                                                    Active
+                                                </option>
+                                                <option value="0">
+                                                    Inactive
+                                                </option>
+                                            </NativeSelect>
+                                        </Field>
                                     </div>
 
                                     <Button type="submit" disabled={processing}>
-                                        Save item
+                                        {processing ? 'Saving…' : 'Save item'}
                                     </Button>
                                 </>
                             )}
@@ -674,10 +751,10 @@ export default function EditInventoryItem({
                     </div>
 
                     <div className="space-y-6">
-                        <div className="rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                            <div className="border-b border-sidebar-border/70 px-5 py-4 dark:border-sidebar-border">
+                        <div className="rounded-xl border border-border bg-card">
+                            <div className="border-b border-border px-5 py-4">
                                 <h2 className="font-medium">
-                                    Units & Conversions
+                                    Units and conversions
                                 </h2>
                                 <p className="mt-1 text-sm text-muted-foreground">
                                     Base: {item.baseUnitOfMeasure.symbol}
@@ -689,7 +766,7 @@ export default function EditInventoryItem({
                                     No alternate units configured.
                                 </div>
                             ) : (
-                                <div className="divide-y divide-sidebar-border/70 dark:divide-sidebar-border">
+                                <div className="divide-y divide-border">
                                     {item.unitConversions.map((conversion) => (
                                         <div
                                             key={conversion.id}
@@ -742,7 +819,7 @@ export default function EditInventoryItem({
                         </div>
 
                         {availableConversionUnits.length > 0 && (
-                            <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
+                            <div className="rounded-xl border border-border bg-card p-5">
                                 <h3 className="mb-5 font-medium">
                                     Add alternate unit
                                 </h3>
@@ -845,8 +922,8 @@ export default function EditInventoryItem({
                 </div>
 
                 <div className="grid gap-6 lg:grid-cols-2">
-                    <div className="rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                        <div className="border-b border-sidebar-border/70 px-5 py-4 dark:border-sidebar-border">
+                    <div className="rounded-xl border border-border bg-card">
+                        <div className="border-b border-border px-5 py-4">
                             <h2 className="font-medium">Barcodes</h2>
                             <p className="mt-1 text-sm text-muted-foreground">
                                 Identify this item or one of its alternate units
@@ -859,7 +936,7 @@ export default function EditInventoryItem({
                                 No barcodes configured.
                             </div>
                         ) : (
-                            <div className="divide-y divide-sidebar-border/70 dark:divide-sidebar-border">
+                            <div className="divide-y divide-border">
                                 {item.barcodes.map((barcode) => (
                                     <div
                                         key={barcode.id}
@@ -916,7 +993,7 @@ export default function EditInventoryItem({
                         )}
                     </div>
 
-                    <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
+                    <div className="rounded-xl border border-border bg-card p-5">
                         <h3 className="mb-5 font-medium">Add barcode</h3>
 
                         <Form

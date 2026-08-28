@@ -88,4 +88,14 @@ export type InventoryItemDetail = {
     inventoryProduct: InventoryProductData | null;
     unitConversions: InventoryItemUnitData[];
     barcodes: BarcodeData[];
+    editability: {
+        baseUnitOfMeasure: {
+            editable: boolean;
+            reason: string | null;
+        };
+        productFamily: {
+            editable: boolean;
+            reason: string | null;
+        };
+    };
 };

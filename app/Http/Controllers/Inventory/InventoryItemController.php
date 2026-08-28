@@ -16,6 +16,7 @@ use App\Models\InventoryProduct;
 use App\Models\Organization;
 use App\Models\UnitOfMeasure;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -331,6 +332,32 @@ class InventoryItemController extends Controller
     }
 
     /**
+     * Show a read-only inventory item from the active organization.
+     */
+    public function show(
+        Request $request,
+        string $inventoryItem,
+    ): Response {
+        $organization = $this->activeOrganization($request);
+
+        Gate::authorize(
+            OrganizationPermission::InventoryView->value,
+            $organization,
+        );
+
+        $item = $this->inventoryItemDetailQuery($organization)
+            ->findOrFail($inventoryItem);
+
+        return Inertia::render('inventory/items/show', [
+            'item' => $this->inventoryItemPayload($item),
+            'canManage' => Gate::allows(
+                OrganizationPermission::InventoryAdjust->value,
+                $organization,
+            ),
+        ]);
+    }
+
+    /**
      * Show inventory-item and alternate-UOM configuration.
      */
     public function edit(
@@ -344,21 +371,7 @@ class InventoryItemController extends Controller
             $organization,
         );
 
-        $item = $organization
-            ->inventoryItems()
-            ->with([
-                'baseUnitOfMeasure:id,name,symbol,active',
-                'inventoryCategory:id,name,active',
-                'inventoryBrand:id,name,active',
-                'inventoryProduct:id,name,active',
-                'unitConversions' => fn ($query) => $query
-                    ->with('unitOfMeasure:id,name,symbol,active')
-                    ->orderBy('id'),
-                'barcodes' => fn ($query) => $query
-                    ->with('inventoryItemUnit.unitOfMeasure:id,name,symbol,active')
-                    ->orderByDesc('primary')
-                    ->orderBy('id'),
-            ])
+        $item = $this->inventoryItemDetailQuery($organization)
             ->findOrFail($inventoryItem);
 
         $activeUnits = UnitOfMeasure::query()
@@ -391,110 +404,7 @@ class InventoryItemController extends Controller
             ->all();
 
         return Inertia::render('inventory/items/edit', [
-            'item' => [
-                'id' => $item->id,
-                'name' => $item->name,
-                'sku' => $item->sku,
-                'type' => $item->type->value,
-                'yieldPercentage' => $item->yield_percentage,
-                'modelNumber' => $item->model_number,
-                'manufacturerPartNumber' => $item->manufacturer_part_number,
-                'description' => $item->description,
-                'active' => $item->active,
-                'baseUnitOfMeasure' => [
-                    'id' => $item->baseUnitOfMeasure->id,
-                    'name' => $item->baseUnitOfMeasure->name,
-                    'symbol' => $item->baseUnitOfMeasure->symbol,
-                    'active' => $item->baseUnitOfMeasure->active,
-                ],
-                'inventoryCategory' => $item->inventoryCategory === null
-                    ? null
-                    : [
-                        'id' => $item->inventoryCategory->id,
-                        'name' => $item->inventoryCategory->name,
-                        'active' => $item->inventoryCategory->active,
-                    ],
-                'inventoryBrand' => $item->inventoryBrand === null
-                    ? null
-                    : [
-                        'id' => $item->inventoryBrand->id,
-                        'name' => $item->inventoryBrand->name,
-                        'active' => $item->inventoryBrand->active,
-                    ],
-                'inventoryProduct' => $item->inventoryProduct === null
-                    ? null
-                    : [
-                        'id' => $item->inventoryProduct->id,
-                        'name' => $item->inventoryProduct->name,
-                        'active' => $item->inventoryProduct->active,
-                    ],
-                'unitConversions' => $item
-                    ->unitConversions
-                    ->map(
-                        static fn (
-                            InventoryItemUnit $conversion,
-                        ): array => [
-                            'id' => $conversion->id,
-                            'quantityInBaseUnit' => (
-                                $conversion->quantity_in_base_unit
-                            ),
-                            'active' => $conversion->active,
-                            'unitOfMeasure' => [
-                                'id' => $conversion->unitOfMeasure->id,
-                                'name' => $conversion
-                                    ->unitOfMeasure
-                                    ->name,
-                                'symbol' => $conversion
-                                    ->unitOfMeasure
-                                    ->symbol,
-                                'active' => $conversion
-                                    ->unitOfMeasure
-                                    ->active,
-                            ],
-                        ],
-                    )
-                    ->values()
-                    ->all(),
-                'barcodes' => $item
-                    ->barcodes
-                    ->map(
-                        static fn (
-                            InventoryItemBarcode $barcode,
-                        ): array => [
-                            'id' => $barcode->id,
-                            'value' => $barcode->barcode,
-                            'symbology' => $barcode->symbology->value,
-                            'isPrimary' => $barcode->primary,
-                            'active' => $barcode->active,
-                            'inventoryItemUnit' => $barcode
-                                ->inventoryItemUnit === null
-                                ? null
-                                : [
-                                    'id' => $barcode->inventoryItemUnit->id,
-                                    'unitOfMeasure' => [
-                                        'id' => $barcode
-                                            ->inventoryItemUnit
-                                            ->unitOfMeasure
-                                            ->id,
-                                        'name' => $barcode
-                                            ->inventoryItemUnit
-                                            ->unitOfMeasure
-                                            ->name,
-                                        'symbol' => $barcode
-                                            ->inventoryItemUnit
-                                            ->unitOfMeasure
-                                            ->symbol,
-                                        'active' => $barcode
-                                            ->inventoryItemUnit
-                                            ->unitOfMeasure
-                                            ->active,
-                                    ],
-                                ],
-                        ],
-                    )
-                    ->values()
-                    ->all(),
-            ],
+            'item' => $this->inventoryItemPayload($item),
             'units' => $activeUnits
                 ->map(
                     static fn (UnitOfMeasure $unit): array => [
@@ -581,6 +491,137 @@ class InventoryItemController extends Controller
             'inventory.items.edit',
             $inventoryItem,
         );
+    }
+
+    /**
+     * Load the relations required by inventory item show and edit pages.
+     *
+     * @return HasMany<InventoryItem, Organization>
+     */
+    private function inventoryItemDetailQuery(
+        Organization $organization,
+    ): HasMany {
+        return $organization
+            ->inventoryItems()
+            ->with([
+                'baseUnitOfMeasure:id,name,symbol,active',
+                'inventoryCategory:id,name,active',
+                'inventoryBrand:id,name,active',
+                'inventoryProduct:id,name,active',
+                'unitConversions' => fn ($query) => $query
+                    ->with('unitOfMeasure:id,name,symbol,active')
+                    ->orderBy('id'),
+                'barcodes' => fn ($query) => $query
+                    ->with('inventoryItemUnit.unitOfMeasure:id,name,symbol,active')
+                    ->orderByDesc('primary')
+                    ->orderBy('id'),
+            ])
+            ->withExists([
+                'unitConversions',
+                'stockMovements',
+                'optionValueAssociations',
+            ]);
+    }
+
+    /**
+     * Serialize a loaded inventory item for its read-only and edit workspaces.
+     *
+     * @return array<string, mixed>
+     */
+    private function inventoryItemPayload(InventoryItem $item): array
+    {
+        $baseUnitLockedByConversions = $item->unit_conversions_exists;
+        $baseUnitLockedByMovements = $item->stock_movements_exists;
+
+        return [
+            'id' => $item->id,
+            'name' => $item->name,
+            'sku' => $item->sku,
+            'type' => $item->type->value,
+            'yieldPercentage' => $item->yield_percentage,
+            'modelNumber' => $item->model_number,
+            'manufacturerPartNumber' => $item->manufacturer_part_number,
+            'description' => $item->description,
+            'active' => $item->active,
+            'baseUnitOfMeasure' => [
+                'id' => $item->baseUnitOfMeasure->id,
+                'name' => $item->baseUnitOfMeasure->name,
+                'symbol' => $item->baseUnitOfMeasure->symbol,
+                'active' => $item->baseUnitOfMeasure->active,
+            ],
+            'inventoryCategory' => $item->inventoryCategory === null
+                ? null
+                : [
+                    'id' => $item->inventoryCategory->id,
+                    'name' => $item->inventoryCategory->name,
+                    'active' => $item->inventoryCategory->active,
+                ],
+            'inventoryBrand' => $item->inventoryBrand === null
+                ? null
+                : [
+                    'id' => $item->inventoryBrand->id,
+                    'name' => $item->inventoryBrand->name,
+                    'active' => $item->inventoryBrand->active,
+                ],
+            'inventoryProduct' => $item->inventoryProduct === null
+                ? null
+                : [
+                    'id' => $item->inventoryProduct->id,
+                    'name' => $item->inventoryProduct->name,
+                    'active' => $item->inventoryProduct->active,
+                ],
+            'unitConversions' => $item->unitConversions
+                ->map(static fn (InventoryItemUnit $conversion): array => [
+                    'id' => $conversion->id,
+                    'quantityInBaseUnit' => $conversion->quantity_in_base_unit,
+                    'active' => $conversion->active,
+                    'unitOfMeasure' => [
+                        'id' => $conversion->unitOfMeasure->id,
+                        'name' => $conversion->unitOfMeasure->name,
+                        'symbol' => $conversion->unitOfMeasure->symbol,
+                        'active' => $conversion->unitOfMeasure->active,
+                    ],
+                ])
+                ->values()
+                ->all(),
+            'barcodes' => $item->barcodes
+                ->map(static fn (InventoryItemBarcode $barcode): array => [
+                    'id' => $barcode->id,
+                    'value' => $barcode->barcode,
+                    'symbology' => $barcode->symbology->value,
+                    'isPrimary' => $barcode->primary,
+                    'active' => $barcode->active,
+                    'inventoryItemUnit' => $barcode->inventoryItemUnit === null
+                        ? null
+                        : [
+                            'id' => $barcode->inventoryItemUnit->id,
+                            'unitOfMeasure' => [
+                                'id' => $barcode->inventoryItemUnit->unitOfMeasure->id,
+                                'name' => $barcode->inventoryItemUnit->unitOfMeasure->name,
+                                'symbol' => $barcode->inventoryItemUnit->unitOfMeasure->symbol,
+                                'active' => $barcode->inventoryItemUnit->unitOfMeasure->active,
+                            ],
+                        ],
+                ])
+                ->values()
+                ->all(),
+            'editability' => [
+                'baseUnitOfMeasure' => [
+                    'editable' => ! $baseUnitLockedByConversions && ! $baseUnitLockedByMovements,
+                    'reason' => $baseUnitLockedByConversions
+                        ? __('The base unit cannot be changed after alternate units have been configured.')
+                        : ($baseUnitLockedByMovements
+                            ? __('The base unit cannot be changed after stock movements have been recorded.')
+                            : null),
+                ],
+                'productFamily' => [
+                    'editable' => ! $item->option_value_associations_exists,
+                    'reason' => $item->option_value_associations_exists
+                        ? __('The product family cannot be changed while this item has assigned option values.')
+                        : null,
+                ],
+            ],
+        ];
     }
 
     /**

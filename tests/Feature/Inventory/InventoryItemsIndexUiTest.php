@@ -66,9 +66,9 @@ test('quick add uses canonical native selects and field error relationships', fu
 
     expect($source)
         ->toContain('import { NativeSelect }')
-        ->toContain("import { FilterToolbar }")
-        ->toContain("import { PaginationControls }")
-        ->toContain("import { StatusBadge }")
+        ->toContain('import { FilterToolbar }')
+        ->toContain('import { PaginationControls }')
+        ->toContain('import { StatusBadge }')
         ->toContain('aria-invalid=')
         ->toContain('aria-describedby=')
         ->toContain('modal-item-name-error')
@@ -85,17 +85,18 @@ test('quick add uses canonical native selects and field error relationships', fu
         ->not->toContain('text-red-');
 });
 
-test('inventory item read-only drill down does not expose editing unless management is allowed', function () {
+test('inventory item index links all viewers to the read-only item detail while retaining management-only edit actions', function () {
     $source = File::get(
         resource_path('js/pages/inventory/items/index.tsx'),
     );
 
     expect($source)
-        ->toContain('Read-only inventory item details.')
-        ->toContain('aria-label={`View ${item.name} details`}')
+        ->toContain('InventoryItemController.show(')
+        ->toContain('View details')
         ->toContain('{canManage && (')
-        ->toContain('InventoryItemController.edit(item.id)')
-        ->toContain('Edit item');
+        ->toContain('InventoryItemController.edit(')
+        ->toContain('Edit')
+        ->not->toContain('Read-only inventory item details.');
 });
 
 test('inventory items index keeps semantic sorting and responsive record composition', function () {

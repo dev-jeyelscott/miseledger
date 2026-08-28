@@ -276,6 +276,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             )->name('items.store');
 
             Route::get(
+                'items/{inventoryItem}',
+                [InventoryItemController::class, 'show'],
+            )->name('items.show');
+
+            Route::get(
                 'items/{inventoryItem}/edit',
                 [InventoryItemController::class, 'edit'],
             )->name('items.edit');

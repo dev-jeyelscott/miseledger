@@ -97,3 +97,33 @@ test('full inventory create form uses accessible sections and dirty navigation p
         ->toContain("window.addEventListener('beforeunload'")
         ->toContain('confirmNavigation');
 });
+
+test('inventory detail and edit workspaces preserve server-authoritative editability contracts', function () {
+    $showSource = File::get(
+        resource_path('js/pages/inventory/items/show.tsx'),
+    );
+    $editSource = File::get(
+        resource_path('js/pages/inventory/items/edit.tsx'),
+    );
+
+    expect($showSource)
+        ->toContain('InventoryItemController.edit(')
+        ->toContain('{canManage ?')
+        ->toContain('Units and conversions')
+        ->toContain('Barcodes')
+        ->toContain('border-border');
+
+    expect($editSource)
+        ->toContain('Item details')
+        ->toContain('Units and conversions')
+        ->toContain('Barcodes')
+        ->toContain('useDirtyFormNavigation')
+        ->toContain('dirty={isDirty}')
+        ->toContain('baseUnitOfMeasure')
+        ->toContain('productFamily')
+        ->toContain('name="base_unit_of_measure_id"')
+        ->toContain('name="inventory_product_id"')
+        ->toContain('Saving…')
+        ->toContain('border-border')
+        ->not->toContain('border-sidebar-border');
+});
