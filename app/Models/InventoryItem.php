@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property int $base_unit_of_measure_id
  * @property int|null $inventory_category_id
  * @property int|null $inventory_brand_id
+ * @property int|null $inventory_product_id
  * @property string $name
  * @property string $sku
  * @property string|null $model_number
@@ -35,6 +36,7 @@ use Illuminate\Support\Carbon;
     'base_unit_of_measure_id',
     'inventory_category_id',
     'inventory_brand_id',
+    'inventory_product_id',
     'name',
     'sku',
     'model_number',
@@ -90,6 +92,16 @@ class InventoryItem extends Model
     public function inventoryBrand(): BelongsTo
     {
         return $this->belongsTo(InventoryBrand::class);
+    }
+
+    /**
+     * Get the optional product family assigned to this item.
+     *
+     * @return BelongsTo<InventoryProduct, $this>
+     */
+    public function inventoryProduct(): BelongsTo
+    {
+        return $this->belongsTo(InventoryProduct::class);
     }
 
     /**

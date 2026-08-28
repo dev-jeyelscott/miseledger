@@ -298,6 +298,9 @@ class InventoryItemController extends Controller
                 'inventory_brand_id' => $request->validated(
                     'inventory_brand_id',
                 ),
+                'inventory_product_id' => $request->validated(
+                    'inventory_product_id',
+                ),
                 'model_number' => $request->validated('model_number'),
                 'manufacturer_part_number' => $request->validated(
                     'manufacturer_part_number',
@@ -535,6 +538,9 @@ class InventoryItemController extends Controller
                 ),
                 'inventory_brand_id' => $request->validated(
                     'inventory_brand_id',
+                ),
+                'inventory_product_id' => $request->validated(
+                    'inventory_product_id',
                 ),
                 'model_number' => $request->validated('model_number'),
                 'manufacturer_part_number' => $request->validated(

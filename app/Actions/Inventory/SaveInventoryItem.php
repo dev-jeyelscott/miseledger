@@ -6,6 +6,7 @@ use App\Enums\InventoryItemType;
 use App\Models\InventoryBrand;
 use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
+use App\Models\InventoryProduct;
 use App\Models\Organization;
 use App\Models\UnitOfMeasure;
 use App\Support\Billing\OrganizationUsageLimitEnforcer;
@@ -28,6 +29,7 @@ final class SaveInventoryItem
      *     base_unit_of_measure_id: int,
      *     inventory_category_id: int|null,
      *     inventory_brand_id: int|null,
+     *     inventory_product_id: int|null,
      *     model_number: string|null,
      *     manufacturer_part_number: string|null,
      *     description: string|null,
@@ -128,6 +130,30 @@ final class SaveInventoryItem
                 }
 
                 $attributes['inventory_brand_id'] = $brand->id;
+            }
+
+            if ($attributes['inventory_product_id'] !== null) {
+                $product = InventoryProduct::query()
+                    ->where('organization_id', $organization->getKey())
+                    ->whereKey($attributes['inventory_product_id'])
+                    ->lockForUpdate()
+                    ->first();
+
+                $retainsCurrentProduct = $lockedItem !== null
+                    && $lockedItem->inventory_product_id === $product?->id;
+
+                if (
+                    $product === null
+                    || (! $product->active && ! $retainsCurrentProduct)
+                ) {
+                    throw ValidationException::withMessages([
+                        'inventory_product_id' => __(
+                            'Select an active product family from the current organization.',
+                        ),
+                    ]);
+                }
+
+                $attributes['inventory_product_id'] = $product->id;
             }
 
             if ($lockedItem === null) {

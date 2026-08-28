@@ -52,6 +52,7 @@ class SaveInventoryItemRequest extends FormRequest
         $inventoryItem = $this->inventoryItem();
         $currentCategoryId = $inventoryItem?->inventory_category_id;
         $currentBrandId = $inventoryItem?->inventory_brand_id;
+        $currentProductId = $inventoryItem?->inventory_product_id;
 
         return [
             'name' => [
@@ -127,6 +128,31 @@ class SaveInventoryItemRequest extends FormRequest
                                         $query->orWhere(
                                             'id',
                                             $currentBrandId,
+                                        );
+                                    }
+
+                                    return $query;
+                                },
+                            ),
+                    ),
+            ],
+            'inventory_product_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('inventory_products', 'id')
+                    ->where(
+                        fn (Builder $query): Builder => $query
+                            ->where('organization_id', $organizationId)
+                            ->where(
+                                function (Builder $query) use (
+                                    $currentProductId,
+                                ): Builder {
+                                    $query->where('active', true);
+
+                                    if ($currentProductId !== null) {
+                                        $query->orWhere(
+                                            'id',
+                                            $currentProductId,
                                         );
                                     }
 

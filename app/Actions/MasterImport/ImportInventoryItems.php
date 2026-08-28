@@ -123,6 +123,7 @@ final class ImportInventoryItems
                         'base_unit_of_measure_id' => $baseUnit->id,
                         'inventory_category_id' => $categoryId,
                         'inventory_brand_id' => null,
+                        'inventory_product_id' => null,
                         'model_number' => null,
                         'manufacturer_part_number' => null,
                         'description' => null,

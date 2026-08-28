@@ -18,6 +18,7 @@ use App\Http\Controllers\Inventory\InventoryCategoryController;
 use App\Http\Controllers\Inventory\InventoryItemBarcodeController;
 use App\Http\Controllers\Inventory\InventoryItemController;
 use App\Http\Controllers\Inventory\InventoryItemUnitController;
+use App\Http\Controllers\Inventory\InventoryProductController;
 use App\Http\Controllers\Inventory\InventoryValuationReportController;
 use App\Http\Controllers\Inventory\LowStockReportController;
 use App\Http\Controllers\Inventory\OpeningBalanceController;
@@ -321,6 +322,21 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 'brands/{inventoryBrand}',
                 [InventoryBrandController::class, 'update'],
             )->name('brands.update');
+
+            Route::get(
+                'product-families/{inventoryProduct}',
+                [InventoryProductController::class, 'show'],
+            )->name('product-families.show');
+
+            Route::post(
+                'product-families',
+                [InventoryProductController::class, 'store'],
+            )->name('product-families.store');
+
+            Route::put(
+                'product-families/{inventoryProduct}',
+                [InventoryProductController::class, 'update'],
+            )->name('product-families.update');
 
             Route::post(
                 'items/{inventoryItem}/units',

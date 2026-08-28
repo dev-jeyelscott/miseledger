@@ -136,6 +136,16 @@ class Organization extends Model
     }
 
     /**
+     * Get organization-scoped product families.
+     *
+     * @return HasMany<InventoryProduct, $this>
+     */
+    public function inventoryProducts(): HasMany
+    {
+        return $this->hasMany(InventoryProduct::class);
+    }
+
+    /**
      * Get organization-scoped suppliers.
      *
      * @return HasMany<Supplier, $this>
