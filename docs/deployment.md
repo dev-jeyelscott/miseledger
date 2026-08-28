@@ -225,6 +225,71 @@ Backup verification failures are detectable through the workflow's own failure s
 
 Backup verification always runs against an isolated CI-provisioned PostgreSQL instance and restores only into a separate, disposable database created for that run. It never connects to, restores into, or mutates the production database, and it never logs secrets, connection strings, or archive contents.
 
+## Restore Runbook
+
+This runbook recovers MiseLedger from a verified PostgreSQL backup after data loss or corruption. Use it only when the incident is PostgreSQL data loss/corruption; use [Rollback](#rollback) instead when the application image itself is at fault and the schema remains compatible.
+
+### Prerequisites
+
+- a verified backup exists for the required point in time (see [Backup Verification](#backup-verification)); note its verification timestamp and archive identifier;
+- the incident is confirmed to require a PostgreSQL restore, not an application rollback;
+- Coolify access to place MiseLedger in maintenance mode and to provision a new, isolated PostgreSQL target;
+- this document contains no credentials; obtain restore-time database credentials only from the Coolify secret store.
+
+### Responsible roles
+
+- Incident commander: authorizes the restore and owns the go/no-go decision to resume writes.
+- Database operator: provisions the clean PostgreSQL target and performs the restore.
+- Application operator: places MiseLedger in maintenance mode, repoints and redeploys the application, and runs post-restore validation.
+- Second approver: independently confirms every post-restore check before writes resume.
+
+### Procedure
+
+1. **Stop writes.** Put MiseLedger in maintenance mode (`php artisan down --retry=60`) and stop or pause the worker and scheduler resources so no queued job or scheduled command writes during the restore.
+2. **Provision a clean PostgreSQL target.** Create a new, isolated PostgreSQL database dedicated to the restore. Never restore in place over the existing database; a clean target ensures a partial or failed restore never leaves the prior database in a torn state.
+3. **Restore the verified backup.** Restore the identified, verified backup archive into the clean target only, using `pg_restore`.
+4. **Validate the application** against the restored database:
+   - update the private PostgreSQL connection configuration in Coolify secrets to point at the restored target;
+   - deploy or restart the web, worker, and scheduler resources on the same application image commit;
+   - verify `GET /up` returns HTTP 200;
+   - verify `php artisan migrate:status` shows no pending migrations.
+5. **Run the post-restore checks** below and capture their results as evidence.
+6. **Check ledger integrity.** Confirm StockMovement history is present and that StockBalance figures reconcile against StockMovement for a sample of items. Do not reconstruct StockMovement from StockBalance and do not repair StockBalance directly; this preserves the same invariant defined in [Backup Scope and Recovery Boundary](#backup-scope-and-recovery-boundary).
+7. **Resume writes** only after the second approver confirms every post-restore check passes: take the application out of maintenance mode (`php artisan up`) and resume worker and scheduler processing.
+
+### Post-restore checks
+
+Capture the result of each check as evidence:
+
+- organizations: row count and a known organization record present;
+- memberships: row count and a known membership record present;
+- inventory item counts: `inventory_items` row count matches the backup's point in time;
+- latest stock movements: the most recent StockMovement records for a sample of items match the backup;
+- stock balances: StockBalance figures reconcile against StockMovement for the same sample, read-only, with no repair;
+- purchasing records: purchase orders/receipts are present and counts match;
+- billing records: subscriptions and billing projections are present and match Stripe/PayMongo state;
+- login: an authenticated login succeeds against the restored database;
+- critical reports: at least one inventory/ledger report renders without error against the restored data.
+
+### Evidence to capture
+
+- the verified backup artifact identifier and its verification timestamp;
+- restore start and end timestamps and the operators involved;
+- the result of each post-restore check listed above;
+- `/up` and `migrate:status` output captured after repointing;
+- the second approver's explicit sign-off before writes resume.
+
+### Escalation conditions
+
+Escalate to the incident commander and halt before resuming writes when:
+
+- any post-restore check fails;
+- StockBalance does not reconcile against StockMovement for the sampled items;
+- the restore itself fails or the archive cannot be read;
+- no verified backup exists for the required point in time.
+
+Never resolve a failed or partial restore by reconstructing StockMovement from StockBalance or by editing `stock_balances` directly; escalate for a new restore attempt or a manual reconciliation review instead.
+
 ## Coolify Web Resource
 
 Create a Git-based application using this repository and the root `Dockerfile`.

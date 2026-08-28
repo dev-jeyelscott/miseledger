@@ -88,6 +88,69 @@ test('the backup verification workflow records a success timestamp in the job su
         ->toContain('exit 1');
 });
 
+test('the deployment guide restore runbook specifies the stop-writes through resume-writes sequence against a clean PostgreSQL target', function () {
+    $docs = file_get_contents(base_path('docs/deployment.md'));
+
+    expect($docs)
+        ->toContain('## Restore Runbook')
+        ->toContain('**Stop writes.**')
+        ->toContain('**Provision a clean PostgreSQL target.**')
+        ->toContain('Never restore in place over the existing database')
+        ->toContain('**Restore the verified backup.**')
+        ->toContain('**Validate the application**')
+        ->toContain('**Check ledger integrity.**')
+        ->toContain('**Resume writes**');
+});
+
+test('the deployment guide restore runbook enumerates every required post-restore check', function () {
+    $docs = file_get_contents(base_path('docs/deployment.md'));
+
+    expect($docs)
+        ->toContain('### Post-restore checks')
+        ->toContain('- organizations: row count and a known organization record present;')
+        ->toContain('- memberships: row count and a known membership record present;')
+        ->toContain('- inventory item counts: `inventory_items` row count matches the backup\'s point in time;')
+        ->toContain('- latest stock movements: the most recent StockMovement records for a sample of items match the backup;')
+        ->toContain('- stock balances: StockBalance figures reconcile against StockMovement for the same sample, read-only, with no repair;')
+        ->toContain('- purchasing records: purchase orders/receipts are present and counts match;')
+        ->toContain('- billing records: subscriptions and billing projections are present and match Stripe/PayMongo state;')
+        ->toContain('- login: an authenticated login succeeds against the restored database;')
+        ->toContain('- critical reports: at least one inventory/ledger report renders without error against the restored data.');
+});
+
+test('the deployment guide restore runbook forbids reconstructing StockMovement from StockBalance and forbids direct StockBalance repair', function () {
+    $docs = file_get_contents(base_path('docs/deployment.md'));
+
+    expect($docs)
+        ->toContain('Do not reconstruct StockMovement from StockBalance and do not repair StockBalance directly')
+        ->toContain('Never resolve a failed or partial restore by reconstructing StockMovement from StockBalance or by editing `stock_balances` directly');
+});
+
+test('the deployment guide restore runbook defines prerequisites, responsible roles, evidence to capture, and escalation conditions without credentials', function () {
+    $docs = file_get_contents(base_path('docs/deployment.md'));
+
+    expect($docs)
+        ->toContain('### Prerequisites')
+        ->toContain('this document contains no credentials; obtain restore-time database credentials only from the Coolify secret store.')
+        ->toContain('### Responsible roles')
+        ->toContain('Incident commander: authorizes the restore and owns the go/no-go decision to resume writes.')
+        ->toContain('Database operator: provisions the clean PostgreSQL target and performs the restore.')
+        ->toContain('Application operator: places MiseLedger in maintenance mode, repoints and redeploys the application, and runs post-restore validation.')
+        ->toContain('Second approver: independently confirms every post-restore check before writes resume.')
+        ->toContain('### Evidence to capture')
+        ->toContain('### Escalation conditions');
+
+    $runbook = substr(
+        $docs,
+        strpos($docs, '## Restore Runbook'),
+        strpos($docs, '## Coolify Web Resource') - strpos($docs, '## Restore Runbook')
+    );
+
+    expect($runbook)
+        ->not->toContain('DB_PASSWORD=')
+        ->not->toContain('PGPASSWORD=');
+});
+
 test('the backup verification workflow restores only into an isolated, disposable database and never targets production', function () {
     $workflow = file_get_contents(base_path('.github/workflows/billing-restore-readiness.yml'));
 
