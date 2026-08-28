@@ -182,6 +182,15 @@ test('the backup verification workflow restores only into an isolated, disposabl
         ->not->toContain('DB_PASSWORD }}');
 });
 
+test('the backup verification workflow never places a password-bearing PostgreSQL connection string in an executed command', function () {
+    $workflow = file_get_contents(base_path('.github/workflows/billing-restore-readiness.yml'));
+
+    expect($workflow)
+        ->not->toContain('postgresql://$DB_USERNAME:$DB_PASSWORD')
+        ->not->toMatch('/--dbname=[\'"]?postgresql:\/\//')
+        ->toContain('--dbname=miseledger_restore_target');
+});
+
 test('the restore drill workflow is runnable on demand and scheduled for periodic execution', function () {
     $workflow = file_get_contents(base_path('.github/workflows/billing-restore-readiness.yml'));
 

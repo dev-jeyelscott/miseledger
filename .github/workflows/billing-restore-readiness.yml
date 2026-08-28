@@ -102,7 +102,7 @@ jobs:
           set -euo pipefail
           echo "RESTORE_START=$(date -u +%FT%TZ)" >> "$GITHUB_ENV"
           createdb --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" miseledger_restore_target
-          pg_restore --clean --if-exists --no-owner --no-privileges --dbname="postgresql://$DB_USERNAME:$DB_PASSWORD@$DB_HOST:$DB_PORT/miseledger_restore_target" /tmp/miseledger-restore-readiness.dump
+          pg_restore --clean --if-exists --no-owner --no-privileges --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" --dbname=miseledger_restore_target /tmp/miseledger-restore-readiness.dump
 
       - name: Verify restored billing and ledger records
         run: |
