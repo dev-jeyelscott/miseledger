@@ -3,6 +3,7 @@ import InventoryItemBarcodeController from '@/actions/App/Http/Controllers/Inven
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InventoryItemUnitController from '@/actions/App/Http/Controllers/Inventory/InventoryItemUnitController';
 import InputError from '@/components/input-error';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -370,7 +371,7 @@ export default function EditInventoryItem({
 
                 <div className="grid gap-6 lg:grid-cols-2">
                     <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                        <h2 className="mb-5 font-medium">Item master</h2>
+                        <h2 className="mb-5 font-medium">Item Details</h2>
 
                         <Form
                             {...InventoryItemController.update.form(item.id)}
@@ -638,7 +639,9 @@ export default function EditInventoryItem({
                     <div className="space-y-6">
                         <div className="rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
                             <div className="border-b border-sidebar-border/70 px-5 py-4 dark:border-sidebar-border">
-                                <h2 className="font-medium">Alternate units</h2>
+                                <h2 className="font-medium">
+                                    Units & Conversions
+                                </h2>
                                 <p className="mt-1 text-sm text-muted-foreground">
                                     Base: {item.baseUnitOfMeasure.symbol}
                                 </p>
@@ -703,9 +706,9 @@ export default function EditInventoryItem({
 
                         {availableConversionUnits.length > 0 && (
                             <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                                <h2 className="mb-5 font-medium">
+                                <h3 className="mb-5 font-medium">
                                     Add alternate unit
-                                </h2>
+                                </h3>
 
                                 <Form
                                     {...InventoryItemUnitController.store.form(
@@ -829,9 +832,12 @@ export default function EditInventoryItem({
                                             <p className="font-medium">
                                                 {barcode.value}
                                                 {barcode.isPrimary && (
-                                                    <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className="ml-2"
+                                                    >
                                                         Primary
-                                                    </span>
+                                                    </Badge>
                                                 )}
                                             </p>
 
@@ -874,7 +880,7 @@ export default function EditInventoryItem({
                     </div>
 
                     <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                        <h2 className="mb-5 font-medium">Add barcode</h2>
+                        <h3 className="mb-5 font-medium">Add barcode</h3>
 
                         <Form
                             {...InventoryItemBarcodeController.store.form(

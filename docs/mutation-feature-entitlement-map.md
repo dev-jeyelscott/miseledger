@@ -142,6 +142,8 @@ reached.
 | `inventory/items/{inventoryItem}` | PUT | inventory_catalog | `blocked_when_read_only` | n/a | n/a |
 | `inventory/items/{inventoryItem}/units` | POST | inventory_catalog | `blocked_when_read_only` | n/a | n/a |
 | `inventory/items/{inventoryItem}/units/{inventoryItemUnit}(/edit)` | GET/PUT | inventory_catalog | `blocked_when_read_only` for PUT | `available_read_only` for GET | core / no feature gate for GET |
+| `inventory/items/{inventoryItem}/barcodes` | POST | inventory_catalog | `blocked_when_read_only` | n/a | n/a |
+| `inventory/items/{inventoryItem}/barcodes/{barcode}` | PUT | inventory_catalog | `blocked_when_read_only` | n/a | n/a |
 | `inventory/categories`, `inventory/categories/{inventoryCategory}/edit` | GET | n/a | n/a | `available_read_only` | core / no feature gate |
 | `inventory/categories` | POST | inventory_catalog | `blocked_when_read_only` | n/a | n/a |
 | `inventory/categories/{inventoryCategory}` | PUT | inventory_catalog | `blocked_when_read_only` | n/a | n/a |

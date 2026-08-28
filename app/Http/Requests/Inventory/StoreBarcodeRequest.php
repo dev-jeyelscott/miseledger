@@ -10,8 +10,8 @@ use App\Models\User;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreBarcodeRequest extends FormRequest
 {
@@ -52,7 +52,6 @@ class StoreBarcodeRequest extends FormRequest
                 'required',
                 'string',
                 'max:64',
-                'regex:/^[A-Z0-9\-]+$/',
                 Rule::unique('inventory_item_barcodes', 'barcode')
                     ->where(
                         fn (Builder $query): Builder => $query->where(
@@ -84,6 +83,20 @@ class StoreBarcodeRequest extends FormRequest
                 'required',
                 'boolean',
             ],
+        ];
+    }
+
+    /**
+     * Apply symbology-specific structural validation after base rules pass.
+     *
+     * @return array<int, callable(Validator): void>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                $this->validateBarcodeStructure($validator);
+            },
         ];
     }
 
@@ -120,7 +133,68 @@ class StoreBarcodeRequest extends FormRequest
     }
 
     /**
-     * Normalize the barcode value and flags before validation.
+     * Validate only safe structure rules for known barcode symbologies.
+     */
+    private function validateBarcodeStructure(Validator $validator): void
+    {
+        if (
+            $validator->errors()->has('value')
+            || $validator->errors()->has('symbology')
+        ) {
+            return;
+        }
+
+        $value = $this->input('value');
+        $symbology = BarcodeSymbology::tryFrom(
+            (string) $this->input('symbology'),
+        );
+
+        if (! is_string($value) || $symbology === null) {
+            return;
+        }
+
+        $message = match ($symbology) {
+            BarcodeSymbology::Ean13 => preg_match(
+                '~\A[0-9]{13}\z~',
+                $value,
+            ) === 1
+                ? null
+                : 'EAN-13 barcodes must contain exactly 13 digits.',
+            BarcodeSymbology::Ean8 => preg_match(
+                '~\A[0-9]{8}\z~',
+                $value,
+            ) === 1
+                ? null
+                : 'EAN-8 barcodes must contain exactly 8 digits.',
+            BarcodeSymbology::UpcA => preg_match(
+                '~\A[0-9]{12}\z~',
+                $value,
+            ) === 1
+                ? null
+                : 'UPC-A barcodes must contain exactly 12 digits.',
+            BarcodeSymbology::UpcE => preg_match(
+                '~\A[0-9]{8}\z~',
+                $value,
+            ) === 1
+                ? null
+                : 'UPC-E barcodes must contain exactly 8 digits.',
+            BarcodeSymbology::Code39 => preg_match(
+                '~\A[0-9A-Z .$/+%-]+\z~',
+                $value,
+            ) === 1
+                ? null
+                : 'Code 39 barcodes may only contain A-Z, 0-9, spaces, and . - $ / + %.',
+            BarcodeSymbology::Code128,
+            BarcodeSymbology::Other => null,
+        };
+
+        if ($message !== null) {
+            $validator->errors()->add('value', $message);
+        }
+    }
+
+    /**
+     * Trim accidental outer whitespace and normalize serialized form values.
      */
     protected function prepareForValidation(): void
     {
@@ -128,9 +202,7 @@ class StoreBarcodeRequest extends FormRequest
         $unitId = $this->input('inventory_item_unit_id');
 
         $this->merge([
-            'value' => is_string($value)
-                ? Str::upper(trim($value))
-                : $value,
+            'value' => is_string($value) ? trim($value) : $value,
             'inventory_item_unit_id' => $unitId === '' ? null : $unitId,
             'is_primary' => $this->boolean('is_primary'),
             'active' => $this->boolean('active'),

@@ -48,6 +48,14 @@ final class UpdateBarcode
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            $resolvedUnitId = $inventoryItemUnitId === null
+                ? null
+                : (int) $lockedItem
+                    ->unitConversions()
+                    ->whereKey($inventoryItemUnitId)
+                    ->firstOrFail()
+                    ->getKey();
+
             if ($isPrimary) {
                 $lockedItem
                     ->barcodes()
@@ -57,7 +65,7 @@ final class UpdateBarcode
             }
 
             $lockedBarcode->update([
-                'inventory_item_unit_id' => $inventoryItemUnitId,
+                'inventory_item_unit_id' => $resolvedUnitId,
                 'barcode' => $value,
                 'symbology' => $symbology,
                 'primary' => $isPrimary,

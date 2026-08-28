@@ -40,6 +40,14 @@ final class CreateBarcode
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            $resolvedUnitId = $inventoryItemUnitId === null
+                ? null
+                : (int) $lockedItem
+                    ->unitConversions()
+                    ->whereKey($inventoryItemUnitId)
+                    ->firstOrFail()
+                    ->getKey();
+
             if ($isPrimary) {
                 $lockedItem
                     ->barcodes()
@@ -49,7 +57,7 @@ final class CreateBarcode
 
             return $lockedItem->barcodes()->create([
                 'organization_id' => $organization->getKey(),
-                'inventory_item_unit_id' => $inventoryItemUnitId,
+                'inventory_item_unit_id' => $resolvedUnitId,
                 'barcode' => $value,
                 'symbology' => $symbology,
                 'primary' => $isPrimary,
