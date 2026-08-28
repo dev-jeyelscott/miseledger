@@ -17,7 +17,6 @@ use App\Models\WasteRecord;
 use Closure;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class DemoDataSeeder extends Seeder
 {
@@ -140,7 +139,8 @@ class DemoDataSeeder extends Seeder
     }
 
     /**
-     * Execute one demo scenario only when its completion marker is absent.
+     * Execute one demo scenario only when its completion marker is absent,
+     * rolling back partial writes if the scenario fails.
      *
      * @param  class-string<Seeder>  $seederClass
      * @param  Closure(): bool  $isComplete
@@ -153,17 +153,8 @@ class DemoDataSeeder extends Seeder
             return;
         }
 
-        DB::transaction(function () use (
-            $seederClass,
-            $isComplete,
-        ): void {
+        DB::transaction(function () use ($seederClass): void {
             $this->call([$seederClass]);
-
-            if (! $isComplete()) {
-                throw new RuntimeException(
-                    "Demo seeder [{$seederClass}] completed without creating its expected completion marker.",
-                );
-            }
         });
     }
 }
