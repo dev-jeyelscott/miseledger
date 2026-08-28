@@ -6,6 +6,7 @@ import {
     Award,
     Boxes,
     CheckCircle2,
+    ChevronDown,
     Pencil,
     Plus,
     Ruler,
@@ -23,8 +24,10 @@ import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/In
 import InventoryProductController from '@/actions/App/Http/Controllers/Inventory/InventoryProductController';
 import OpeningBalanceController from '@/actions/App/Http/Controllers/Inventory/OpeningBalanceController';
 import UnitOfMeasureController from '@/actions/App/Http/Controllers/Inventory/UnitOfMeasureController';
+import { FilterToolbar } from '@/components/filter-toolbar';
 import InputError from '@/components/input-error';
-import { Badge } from '@/components/ui/badge';
+import { PaginationControls } from '@/components/pagination-controls';
+import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -34,6 +37,14 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -167,21 +178,21 @@ function SortableHeading({
 /** Render active and inactive states using canonical semantic status tokens. */
 function InventoryItemStatus({ active }: { active: boolean }) {
     return (
-        <Badge
-            variant="outline"
-            className={
-                active
-                    ? 'border-success-border bg-success-subtle text-success-foreground'
-                    : 'border-border bg-muted text-muted-foreground'
-            }
-        >
-            {active ? 'Active' : 'Inactive'}
-        </Badge>
+        <StatusBadge
+            label={active ? 'Active' : 'Inactive'}
+            variant={active ? 'success' : 'neutral'}
+        />
     );
 }
 
 /** Render the appropriate empty-state copy for an empty inventory result. */
-function InventoryEmptyState({ hasQueryState }: { hasQueryState: boolean }) {
+function InventoryEmptyState({
+    action,
+    hasQueryState,
+}: {
+    action?: ReactNode;
+    hasQueryState: boolean;
+}) {
     return (
         <div className="mx-auto max-w-sm text-center">
             <p className="font-medium">
@@ -194,6 +205,7 @@ function InventoryEmptyState({ hasQueryState }: { hasQueryState: boolean }) {
                     ? 'Adjust or reset the filters to see more items.'
                     : 'Create an inventory item to begin managing stock master data.'}
             </p>
+            {action ? <div className="mt-4">{action}</div> : null}
         </div>
     );
 }
@@ -634,6 +646,26 @@ export default function InventoryItemsIndex({
         }).url;
     };
 
+    const emptyStateAction = canManage ? (
+        <div className="flex flex-wrap justify-center gap-2">
+            <CreateInventoryItemDialog
+                categories={categoryOptions}
+                units={createUnitOptions}
+                trigger={
+                    <Button>
+                        <Plus className="size-4" aria-hidden="true" />
+                        Quick add
+                    </Button>
+                }
+            />
+            <Button variant="outline" asChild>
+                <Link href={InventoryItemController.create()}>
+                    Create with full details
+                </Link>
+            </Button>
+        </div>
+    ) : undefined;
+
     return (
         <>
             <Head title="Inventory items" />
@@ -679,18 +711,23 @@ export default function InventoryItemsIndex({
                     aria-label="Related inventory actions"
                     className="rounded-xl border border-border bg-card p-3"
                 >
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                        <div
-                            role="group"
-                            aria-label="Inventory master data"
-                            className="flex flex-col gap-2 sm:flex-row sm:items-center"
-                        >
-                            <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                Master data
-                            </span>
-
-                            <div className="flex flex-wrap gap-1">
-                                <Button variant="ghost" size="sm" asChild>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                    Master data
+                                    <ChevronDown
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                                <DropdownMenuLabel>
+                                    Inventory master data
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem asChild>
                                     <Link
                                         href={UnitOfMeasureController.index()}
                                     >
@@ -700,9 +737,8 @@ export default function InventoryItemsIndex({
                                         />
                                         Units of measure
                                     </Link>
-                                </Button>
-
-                                <Button variant="ghost" size="sm" asChild>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
                                     <Link
                                         href={InventoryCategoryController.index()}
                                     >
@@ -712,9 +748,8 @@ export default function InventoryItemsIndex({
                                         />
                                         Categories
                                     </Link>
-                                </Button>
-
-                                <Button variant="ghost" size="sm" asChild>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
                                     <Link
                                         href={InventoryBrandController.index()}
                                     >
@@ -724,9 +759,8 @@ export default function InventoryItemsIndex({
                                         />
                                         Brands
                                     </Link>
-                                </Button>
-
-                                <Button variant="ghost" size="sm" asChild>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
                                     <Link
                                         href={InventoryProductController.index()}
                                     >
@@ -736,22 +770,27 @@ export default function InventoryItemsIndex({
                                         />
                                         Product families
                                     </Link>
-                                </Button>
-                            </div>
-                        </div>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
 
                         {canManage && (
-                            <div
-                                role="group"
-                                aria-label="Inventory stock actions"
-                                className="flex flex-col gap-2 sm:flex-row sm:items-center"
-                            >
-                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                    Stock actions
-                                </span>
-
-                                <div className="flex flex-wrap gap-1">
-                                    <Button variant="ghost" size="sm" asChild>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                        Stock actions
+                                        <ChevronDown
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start">
+                                    <DropdownMenuLabel>
+                                        Inventory stock actions
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem asChild>
                                         <Link
                                             href={OpeningBalanceController.create()}
                                         >
@@ -761,9 +800,8 @@ export default function InventoryItemsIndex({
                                             />
                                             Opening balance
                                         </Link>
-                                    </Button>
-
-                                    <Button variant="ghost" size="sm" asChild>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
                                         <Link
                                             href={InventoryAdjustmentController.create()}
                                         >
@@ -773,9 +811,9 @@ export default function InventoryItemsIndex({
                                             />
                                             Adjust inventory
                                         </Link>
-                                    </Button>
-                                </div>
-                            </div>
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         )}
                     </div>
                 </nav>
@@ -830,160 +868,244 @@ export default function InventoryItemsIndex({
                         method="get"
                     >
                         {({ processing }) => (
-                            <div className="grid gap-3 border-b border-border p-4 md:grid-cols-2 xl:grid-cols-[minmax(18rem,1fr)_minmax(10rem,14rem)_minmax(10rem,13rem)_minmax(10rem,13rem)_minmax(9rem,11rem)_auto]">
-                                <div className="relative md:col-span-2 xl:col-span-1">
-                                    <label
-                                        htmlFor="inventory-search"
-                                        className="sr-only"
-                                    >
-                                        Search inventory items by name, SKU,
-                                        barcode, model number, or manufacturer
-                                        part number
-                                    </label>
-                                    <Search
-                                        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                                        aria-hidden="true"
-                                    />
-                                    <Input
-                                        id="inventory-search"
-                                        name="search"
-                                        type="search"
-                                        defaultValue={filters.search}
-                                        placeholder="Search or scan by name, SKU, barcode, model, or part number..."
-                                        className="pl-9"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label
-                                        htmlFor="inventory-category"
-                                        className="sr-only"
-                                    >
-                                        Category
-                                    </label>
-                                    <NativeSelect
-                                        id="inventory-category"
-                                        name="category"
-                                        defaultValue={
-                                            filters.categoryId?.toString() ?? ''
-                                        }
-                                    >
-                                        <option value="">All categories</option>
-
-                                        {categoryOptions.map((category) => (
-                                            <option
-                                                key={category.id}
-                                                value={category.id}
-                                            >
-                                                {category.name}
-                                                {category.active
-                                                    ? ''
-                                                    : ' (inactive)'}
-                                            </option>
-                                        ))}
-                                    </NativeSelect>
-                                </div>
-
-                                <div>
-                                    <label
-                                        htmlFor="inventory-brand"
-                                        className="sr-only"
-                                    >
-                                        Brand
-                                    </label>
-                                    <NativeSelect
-                                        id="inventory-brand"
-                                        name="brand"
-                                        defaultValue={
-                                            filters.brandId?.toString() ?? ''
-                                        }
-                                    >
-                                        <option value="">All brands</option>
-
-                                        {brandOptions.map((brand) => (
-                                            <option
-                                                key={brand.id}
-                                                value={brand.id}
-                                            >
-                                                {brand.name}
-                                                {brand.active
-                                                    ? ''
-                                                    : ' (inactive)'}
-                                            </option>
-                                        ))}
-                                    </NativeSelect>
-                                </div>
-
-                                <div>
-                                    <label
-                                        htmlFor="inventory-type"
-                                        className="sr-only"
-                                    >
-                                        Type
-                                    </label>
-                                    <NativeSelect
-                                        id="inventory-type"
-                                        name="type"
-                                        defaultValue={filters.type ?? ''}
-                                    >
-                                        <option value="">All types</option>
-
-                                        {itemTypeOptions.map((type) => (
-                                            <option key={type} value={type}>
-                                                {itemTypeLabels[type]}
-                                            </option>
-                                        ))}
-                                    </NativeSelect>
-                                </div>
-
-                                <div>
-                                    <label
-                                        htmlFor="inventory-status"
-                                        className="sr-only"
-                                    >
-                                        Status
-                                    </label>
-                                    <NativeSelect
-                                        id="inventory-status"
-                                        name="status"
-                                        defaultValue={filters.status ?? ''}
-                                    >
-                                        <option value="">All statuses</option>
-                                        <option value="active">Active</option>
-                                        <option value="inactive">
-                                            Inactive
-                                        </option>
-                                    </NativeSelect>
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-2 md:col-span-2 xl:col-span-1 xl:justify-end">
-                                    <Button type="submit" disabled={processing}>
-                                        {processing
-                                            ? 'Applying…'
-                                            : 'Apply filters'}
-                                    </Button>
-
-                                    {hasQueryState && (
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            asChild
+                            <FilterToolbar className="rounded-b-none border-x-0 border-t-0">
+                                {filters.sort !== null && (
+                                    <>
+                                        <input
+                                            type="hidden"
+                                            name="sort"
+                                            value={filters.sort}
+                                        />
+                                        <input
+                                            type="hidden"
+                                            name="direction"
+                                            value={filters.direction}
+                                        />
+                                    </>
+                                )}
+                                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(18rem,1fr)_minmax(10rem,14rem)_minmax(10rem,13rem)_minmax(10rem,13rem)_minmax(9rem,11rem)_auto]">
+                                    <div className="relative md:col-span-2 xl:col-span-1">
+                                        <label
+                                            htmlFor="inventory-search"
+                                            className="sr-only"
                                         >
-                                            <Link
-                                                href={InventoryItemController.index()}
-                                            >
-                                                Reset
-                                            </Link>
+                                            Search inventory items by name, SKU,
+                                            barcode, model number, or
+                                            manufacturer part number
+                                        </label>
+                                        <Search
+                                            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                                            aria-hidden="true"
+                                        />
+                                        <Input
+                                            id="inventory-search"
+                                            name="search"
+                                            type="search"
+                                            defaultValue={filters.search}
+                                            placeholder="Search or scan items…"
+                                            className="pl-9"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label
+                                            htmlFor="inventory-category"
+                                            className="sr-only"
+                                        >
+                                            Category
+                                        </label>
+                                        <NativeSelect
+                                            id="inventory-category"
+                                            name="category"
+                                            defaultValue={
+                                                filters.categoryId?.toString() ??
+                                                ''
+                                            }
+                                        >
+                                            <option value="">
+                                                All categories
+                                            </option>
+
+                                            {categoryOptions.map((category) => (
+                                                <option
+                                                    key={category.id}
+                                                    value={category.id}
+                                                >
+                                                    {category.name}
+                                                    {category.active
+                                                        ? ''
+                                                        : ' (inactive)'}
+                                                </option>
+                                            ))}
+                                        </NativeSelect>
+                                    </div>
+
+                                    <div>
+                                        <label
+                                            htmlFor="inventory-brand"
+                                            className="sr-only"
+                                        >
+                                            Brand
+                                        </label>
+                                        <NativeSelect
+                                            id="inventory-brand"
+                                            name="brand"
+                                            defaultValue={
+                                                filters.brandId?.toString() ??
+                                                ''
+                                            }
+                                        >
+                                            <option value="">All brands</option>
+
+                                            {brandOptions.map((brand) => (
+                                                <option
+                                                    key={brand.id}
+                                                    value={brand.id}
+                                                >
+                                                    {brand.name}
+                                                    {brand.active
+                                                        ? ''
+                                                        : ' (inactive)'}
+                                                </option>
+                                            ))}
+                                        </NativeSelect>
+                                    </div>
+
+                                    <div>
+                                        <label
+                                            htmlFor="inventory-type"
+                                            className="sr-only"
+                                        >
+                                            Type
+                                        </label>
+                                        <NativeSelect
+                                            id="inventory-type"
+                                            name="type"
+                                            defaultValue={filters.type ?? ''}
+                                        >
+                                            <option value="">All types</option>
+
+                                            {itemTypeOptions.map((type) => (
+                                                <option key={type} value={type}>
+                                                    {itemTypeLabels[type]}
+                                                </option>
+                                            ))}
+                                        </NativeSelect>
+                                    </div>
+
+                                    <div>
+                                        <label
+                                            htmlFor="inventory-status"
+                                            className="sr-only"
+                                        >
+                                            Status
+                                        </label>
+                                        <NativeSelect
+                                            id="inventory-status"
+                                            name="status"
+                                            defaultValue={filters.status ?? ''}
+                                        >
+                                            <option value="">
+                                                All statuses
+                                            </option>
+                                            <option value="active">
+                                                Active
+                                            </option>
+                                            <option value="inactive">
+                                                Inactive
+                                            </option>
+                                        </NativeSelect>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-2 md:col-span-2 xl:col-span-1 xl:justify-end">
+                                        <Button
+                                            type="submit"
+                                            disabled={processing}
+                                        >
+                                            {processing
+                                                ? 'Applying…'
+                                                : 'Apply filters'}
                                         </Button>
-                                    )}
+
+                                        {hasQueryState && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                asChild
+                                            >
+                                                <Link
+                                                    href={InventoryItemController.index()}
+                                                >
+                                                    Reset
+                                                </Link>
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
+                            </FilterToolbar>
                         )}
+                    </Form>
+
+                    <Form
+                        action={InventoryItemController.index().url}
+                        method="get"
+                        className="border-b border-border p-3 md:hidden"
+                    >
+                        <input
+                            type="hidden"
+                            name="search"
+                            value={filters.search}
+                        />
+                        <input
+                            type="hidden"
+                            name="category"
+                            value={filters.categoryId ?? ''}
+                        />
+                        <input
+                            type="hidden"
+                            name="brand"
+                            value={filters.brandId ?? ''}
+                        />
+                        <input
+                            type="hidden"
+                            name="type"
+                            value={filters.type ?? ''}
+                        />
+                        <input
+                            type="hidden"
+                            name="status"
+                            value={filters.status ?? ''}
+                        />
+                        <label
+                            htmlFor="inventory-mobile-sort"
+                            className="sr-only"
+                        >
+                            Sort inventory items
+                        </label>
+                        <NativeSelect
+                            id="inventory-mobile-sort"
+                            name="sort"
+                            defaultValue={filters.sort ?? 'name'}
+                            onChange={(event) =>
+                                event.currentTarget.form?.requestSubmit()
+                            }
+                        >
+                            <option value="name">Sort by name</option>
+                            <option value="sku">Sort by SKU</option>
+                            <option value="type">Sort by type</option>
+                            <option value="status">Sort by status</option>
+                        </NativeSelect>
+                        <input
+                            type="hidden"
+                            name="direction"
+                            value={filters.direction}
+                        />
                     </Form>
 
                     {items.length === 0 ? (
                         <div className="px-4 py-12 md:hidden">
                             <InventoryEmptyState
+                                action={emptyStateAction}
                                 hasQueryState={hasQueryState}
                             />
                         </div>
@@ -1062,6 +1184,15 @@ export default function InventoryItemsIndex({
                                                 </span>
                                             </dd>
                                         </div>
+
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">
+                                                Conversions
+                                            </dt>
+                                            <dd className="mt-0.5 tabular-nums">
+                                                {item.conversionCount}
+                                            </dd>
+                                        </div>
                                     </dl>
 
                                     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
@@ -1072,6 +1203,7 @@ export default function InventoryItemsIndex({
                                             onClick={() =>
                                                 setSelectedItem(item)
                                             }
+                                            aria-label={`View ${item.name} details`}
                                         >
                                             View details
                                         </Button>
@@ -1225,6 +1357,7 @@ export default function InventoryItemsIndex({
                                             className="px-4 py-12"
                                         >
                                             <InventoryEmptyState
+                                                action={emptyStateAction}
                                                 hasQueryState={hasQueryState}
                                             />
                                         </td>
@@ -1320,72 +1453,18 @@ export default function InventoryItemsIndex({
                     </div>
 
                     {pagination.total > 0 && (
-                        <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                            <p className="text-sm text-muted-foreground">
-                                Showing {pagination.from ?? 0} to{' '}
-                                {pagination.to ?? 0} of{' '}
-                                {pagination.total.toLocaleString()} items
-                            </p>
-
-                            {pagination.last_page > 1 && (
-                                <div className="flex items-center gap-2">
-                                    {pagination.prev_page_url !== null ? (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            asChild
-                                        >
-                                            <Link
-                                                href={pagination.prev_page_url}
-                                                preserveScroll
-                                                preserveState
-                                            >
-                                                Previous
-                                            </Link>
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            disabled
-                                        >
-                                            Previous
-                                        </Button>
-                                    )}
-
-                                    <span className="px-1 text-sm text-muted-foreground">
-                                        Page {pagination.current_page} of{' '}
-                                        {pagination.last_page}
-                                    </span>
-
-                                    {pagination.next_page_url !== null ? (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            asChild
-                                        >
-                                            <Link
-                                                href={pagination.next_page_url}
-                                                preserveScroll
-                                                preserveState
-                                            >
-                                                Next
-                                            </Link>
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            disabled
-                                        >
-                                            Next
-                                        </Button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+                        <PaginationControls
+                            currentPage={pagination.current_page}
+                            from={pagination.from}
+                            itemLabel="items"
+                            lastPage={pagination.last_page}
+                            nextPageUrl={pagination.next_page_url}
+                            previousPageUrl={pagination.prev_page_url}
+                            preserveScroll
+                            preserveState
+                            to={pagination.to}
+                            total={pagination.total}
+                        />
                     )}
                 </section>
             </div>

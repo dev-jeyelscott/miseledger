@@ -15,8 +15,13 @@ test('inventory items index preserves filter names and barcode search guidance',
         ->toContain('name="status"')
         ->toContain('brand: filters.brandId ?? undefined')
         ->toContain('filters.brandId !== null')
-        ->toContain('barcode, model number, or manufacturer')
-        ->toContain('Search or scan by name, SKU, barcode, model, or part number...');
+        ->toContain('barcode, model number, or')
+        ->toContain('manufacturer part number')
+        ->toContain('Search or scan items…')
+        ->toContain('name="sort"')
+        ->toContain('name="direction"')
+        ->toContain('value={filters.sort}')
+        ->toContain('value={filters.direction}');
 });
 
 test('inventory items index exposes explicit creation paths and organized related actions', function () {
@@ -29,8 +34,9 @@ test('inventory items index exposes explicit creation paths and organized relate
         ->toContain('Create with full details')
         ->toContain('InventoryItemController.create()')
         ->toContain('aria-label="Related inventory actions"')
-        ->toContain('aria-label="Inventory master data"')
-        ->toContain('aria-label="Inventory stock actions"')
+        ->toContain('<DropdownMenu>')
+        ->toContain('Inventory master data')
+        ->toContain('Inventory stock actions')
         ->toContain('Units of measure')
         ->toContain('Categories')
         ->toContain('Brands')
@@ -60,6 +66,9 @@ test('quick add uses canonical native selects and field error relationships', fu
 
     expect($source)
         ->toContain('import { NativeSelect }')
+        ->toContain("import { FilterToolbar }")
+        ->toContain("import { PaginationControls }")
+        ->toContain("import { StatusBadge }")
         ->toContain('aria-invalid=')
         ->toContain('aria-describedby=')
         ->toContain('modal-item-name-error')
@@ -98,6 +107,9 @@ test('inventory items index keeps semantic sorting and responsive record composi
         ->toContain('md:hidden')
         ->toContain('hidden overflow-x-auto md:block')
         ->toContain('<article')
+        ->toContain('Conversions')
+        ->toContain('inventory-mobile-sort')
+        ->toContain('Sort inventory items')
         ->toContain('<table')
         ->toContain('scope="col"')
         ->toContain('aria-sort=')
