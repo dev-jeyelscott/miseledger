@@ -1,4 +1,4 @@
-import { Form, Head, Link, usePage } from '@inertiajs/react';
+import { Form, Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowDown,
     ArrowUp,
@@ -8,6 +8,7 @@ import {
     Filter,
     RotateCcw,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
@@ -215,6 +216,29 @@ export default function StockCountVariance({
         filters.locationId !== null ||
         filters.from !== null ||
         filters.to !== null;
+    const [isNavigating, setIsNavigating] = useState(false);
+    const selectedLocation = locationOptions.find(
+        (location) => location.id === filters.locationId,
+    );
+    const activeFilters = [
+        selectedLocation ? `Location: ${selectedLocation.name}` : null,
+        filters.from ? `From: ${filters.from}` : null,
+        filters.to ? `To: ${filters.to}` : null,
+    ].filter((filter): filter is string => filter !== null);
+
+    useEffect(() => {
+        const removeStartListener = router.on('start', () =>
+            setIsNavigating(true),
+        );
+        const removeFinishListener = router.on('finish', () =>
+            setIsNavigating(false),
+        );
+
+        return () => {
+            removeStartListener();
+            removeFinishListener();
+        };
+    }, []);
 
     return (
         <>
@@ -253,7 +277,7 @@ export default function StockCountVariance({
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <DashboardMetricCard
-                        title="Report lines"
+                        title="Analyzed lines"
                         value={summary.total.toLocaleString()}
                         description="Finalized count lines in the current filters"
                         icon={ClipboardList}
@@ -372,6 +396,24 @@ export default function StockCountVariance({
                                 </div>
                             </div>
 
+                            {activeFilters.length > 0 && (
+                                <div
+                                    className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4"
+                                    aria-label="Active filters"
+                                >
+                                    <span className="text-xs font-medium text-muted-foreground">
+                                        Active filters
+                                    </span>
+                                    {activeFilters.map((filter) => (
+                                        <StatusBadge
+                                            key={filter}
+                                            label={filter}
+                                            variant="neutral"
+                                        />
+                                    ))}
+                                </div>
+                            )}
+
                             {Object.keys(errors).length > 0 && (
                                 <div
                                     role="alert"
@@ -388,8 +430,12 @@ export default function StockCountVariance({
 
                 <section
                     aria-labelledby="stock-count-variance-details-title"
-                    className="overflow-hidden rounded-xl border border-border bg-card"
+                    aria-busy={isNavigating}
+                    className={`overflow-hidden rounded-xl border border-border bg-card transition-opacity motion-reduce:transition-none ${isNavigating ? 'opacity-60' : ''}`}
                 >
+                    <p className="sr-only" aria-live="polite">
+                        {isNavigating ? 'Updating count variance report…' : ''}
+                    </p>
                     <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
                         <div>
                             <h2

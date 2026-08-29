@@ -125,6 +125,19 @@ test('stock count form guards every lifecycle transition', function () {
         ->toContain("'Cancelling…'");
 });
 
+test('stock count drafts guard navigation and make finalized adjustment evidence explicit', function () {
+    $source = File::get(resource_path('js/pages/stock-counts/form.tsx'));
+
+    expect($source)
+        ->toContain("import { useDirtyFormNavigation } from '@/hooks/use-dirty-form-navigation';")
+        ->toContain("'Discard unsaved stock count changes?'")
+        ->toContain('onNavigate={confirmNavigation}')
+        ->toContain('onChangeCapture={() => setIsDirty(true)}')
+        ->toContain('Stock movement #${line.movementId}')
+        ->toContain('<FinalizedVariance')
+        ->toContain('This will finalize');
+});
+
 test('stock count form receives the organization timezone from its server options', function () {
     $controller = File::get(
         app_path('Http/Controllers/Inventory/StockCountController.php'),

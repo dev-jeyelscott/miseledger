@@ -82,6 +82,13 @@ test(
             ->toContain('Confirm shipment')
             ->toContain('Confirm transfer receipt?')
             ->toContain('Confirm receipt')
+            ->toContain('function transferErrorTargets(')
+            ->toContain('Review the highlighted fields')
+            ->toContain('focusErrorTarget(')
+            ->toContain('sticky bottom-0')
+            ->toContain('function TransferVarianceDisplay(')
+            ->toContain('Transfer out movement')
+            ->toContain('Transfer in movement')
             ->toContain('Discard unsaved changes?')
             ->toContain("router.on('before'")
             ->toContain(

@@ -1,4 +1,4 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head, Link, router } from '@inertiajs/react';
 import {
     ArrowRight,
     CheckCircle2,
@@ -10,7 +10,9 @@ import {
     Scale,
     TrendingDown,
     TrendingUp,
+    X,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import StockTransferController from '@/actions/App/Http/Controllers/Inventory/StockTransferController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
@@ -273,11 +275,60 @@ export default function StockTransferVariance({
                   (location) => location.id === filters.locationId,
               );
 
+    const [isNavigating, setIsNavigating] = useState(false);
     const activeFilters = [
-        selectedLocation ? `Location: ${selectedLocation.name}` : null,
-        filters.from ? `From: ${filters.from}` : null,
-        filters.to ? `To: ${filters.to}` : null,
-    ].filter((filter): filter is string => filter !== null);
+        selectedLocation
+            ? {
+                  label: `Location: ${selectedLocation.name}`,
+                  key: 'location_id',
+              }
+            : null,
+        filters.from ? { label: `From: ${filters.from}`, key: 'from' } : null,
+        filters.to ? { label: `To: ${filters.to}`, key: 'to' } : null,
+    ].filter(
+        (filter): filter is { label: string; key: string } => filter !== null,
+    );
+    const hrefFor = (changes: Record<string, string | null>): string => {
+        const params = new URLSearchParams();
+
+        if (filters.locationId !== null) {
+            params.set('location_id', filters.locationId.toString());
+        }
+
+        if (filters.from !== null) {
+            params.set('from', filters.from);
+        }
+
+        if (filters.to !== null) {
+            params.set('to', filters.to);
+        }
+
+        Object.entries(changes).forEach(([key, value]) => {
+            if (value === null || value === '') {
+                params.delete(key);
+
+                return;
+            }
+
+            params.set(key, value);
+        });
+
+        return `${StockTransferController.variance().url}?${params.toString()}`;
+    };
+
+    useEffect(() => {
+        const removeStartListener = router.on('start', () =>
+            setIsNavigating(true),
+        );
+        const removeFinishListener = router.on('finish', () =>
+            setIsNavigating(false),
+        );
+
+        return () => {
+            removeStartListener();
+            removeFinishListener();
+        };
+    }, []);
 
     return (
         <>
@@ -297,7 +348,7 @@ export default function StockTransferVariance({
                                 )
                             }
                         >
-                            Back
+                            Back to stock transfers
                         </Button>
                     }
                 />
@@ -368,11 +419,30 @@ export default function StockTransferVariance({
                                         </span>
                                     ) : (
                                         activeFilters.map((filter) => (
-                                            <StatusBadge
-                                                key={filter}
-                                                label={filter}
-                                                variant="neutral"
-                                            />
+                                            <Button
+                                                key={filter.key}
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 gap-1 px-2 text-xs"
+                                                asChild
+                                            >
+                                                <Link
+                                                    href={hrefFor({
+                                                        [filter.key]: null,
+                                                    })}
+                                                    replace
+                                                >
+                                                    {filter.label}
+                                                    <X
+                                                        className="size-3"
+                                                        aria-hidden="true"
+                                                    />
+                                                    <span className="sr-only">
+                                                        Remove {filter.label}{' '}
+                                                        filter
+                                                    </span>
+                                                </Link>
+                                            </Button>
                                         ))
                                     )}
                                 </div>
@@ -457,8 +527,14 @@ export default function StockTransferVariance({
 
                 <section
                     aria-labelledby="reconciliation-heading"
-                    className="rounded-xl border border-border bg-card text-card-foreground"
+                    aria-busy={isNavigating}
+                    className={`rounded-xl border border-border bg-card text-card-foreground transition-opacity motion-reduce:transition-none ${isNavigating ? 'opacity-60' : ''}`}
                 >
+                    <p className="sr-only" aria-live="polite">
+                        {isNavigating
+                            ? 'Updating transfer discrepancy report…'
+                            : ''}
+                    </p>
                     <div className="border-b border-border px-4 py-4">
                         <h2
                             id="reconciliation-heading"

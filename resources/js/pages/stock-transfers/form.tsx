@@ -159,6 +159,35 @@ function formatOrganizationDate(
     }).format(new Date(value));
 }
 
+/** Render receipt variance using the same explicit semantics as discrepancy analysis. */
+function TransferVarianceDisplay({
+    value,
+    baseUnitSymbol,
+}: {
+    value: string | null;
+    baseUnitSymbol: string;
+}) {
+    if (value === null) {
+        return <span className="text-muted-foreground">Not recorded</span>;
+    }
+
+    const normalized = value.trim();
+    const shortage = normalized.startsWith('-') && /[1-9]/.test(normalized);
+    const overage = !normalized.startsWith('-') && /[1-9]/.test(normalized);
+    const label = shortage ? 'Shortage' : overage ? 'Overage' : 'Exact';
+    const variant = shortage ? 'danger' : overage ? 'info' : 'success';
+
+    return (
+        <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium tabular-nums">
+                {overage ? '+' : ''}
+                {formatDecimal(value)} {baseUnitSymbol}
+            </span>
+            <StatusBadge label={label} variant={variant} />
+        </div>
+    );
+}
+
 /** Map persisted transfer states to readable sentence-case labels. */
 function transferStatusLabel(status: string): string {
     switch (status) {
@@ -203,6 +232,82 @@ function DirtyStateTracker({ dirty, onChange }: DirtyStateTrackerProps) {
 /** Return the first authoritative action validation error for dialog feedback. */
 function firstActionError(errors: Record<string, string>): string | null {
     return Object.values(errors)[0] ?? null;
+}
+
+type ErrorTarget = {
+    key: string;
+    label: string;
+    message: string;
+    targetId: string;
+};
+
+/** Map server validation keys to the rendered draft controls for accessible recovery. */
+function transferErrorTargets(errors: Record<string, string>): ErrorTarget[] {
+    const targets: Record<string, { label: string; targetId: string }> = {
+        number: { label: 'Transfer number', targetId: 'transfer-number' },
+        notes: { label: 'Notes', targetId: 'transfer-notes' },
+        from_location_id: {
+            label: 'Source location',
+            targetId: 'from-location',
+        },
+        from_storage_location_id: {
+            label: 'Source storage location',
+            targetId: 'from-storage-location',
+        },
+        to_location_id: {
+            label: 'Destination location',
+            targetId: 'to-location',
+        },
+        to_storage_location_id: {
+            label: 'Destination storage location',
+            targetId: 'to-storage-location',
+        },
+        lines: { label: 'Transfer lines', targetId: 'transfer-lines-error' },
+    };
+
+    return Object.entries(errors).flatMap(([key, message]) => {
+        const lineMatch = key.match(
+            /^lines\.(\d+)\.(inventory_item_id|requested_quantity|unit_id)$/,
+        );
+
+        if (lineMatch !== null) {
+            const labels: Record<string, string> = {
+                inventory_item_id: 'item',
+                requested_quantity: 'quantity',
+                unit_id: 'unit',
+            };
+
+            return [
+                {
+                    key,
+                    message,
+                    label: `Line ${Number(lineMatch[1]) + 1} ${labels[lineMatch[2]]}`,
+                    targetId: `transfer-line-${lineMatch[1]}-${lineMatch[2] === 'inventory_item_id' ? 'item' : lineMatch[2] === 'requested_quantity' ? 'quantity' : 'unit'}`,
+                },
+            ];
+        }
+
+        const target = targets[key];
+
+        return target ? [{ key, message, ...target }] : [];
+    });
+}
+
+/** Bring an invalid draft control into view without depending on visual position. */
+function focusErrorTarget(targetId: string): void {
+    const element = document.getElementById(targetId);
+
+    if (element === null) {
+        return;
+    }
+
+    element.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            ? 'auto'
+            : 'smooth',
+        block: 'center',
+    });
+    element.focus({ preventScroll: true });
 }
 
 /** Render one lifecycle milestone with actor and organization-local time. */
@@ -428,12 +533,11 @@ function TransferLineCards({
                                 <dt className="text-xs text-muted-foreground">
                                     Variance
                                 </dt>
-                                <dd className="mt-0.5 tabular-nums">
-                                    {line.varianceBaseQuantity === null
-                                        ? 'Not recorded'
-                                        : `${formatDecimal(
-                                              line.varianceBaseQuantity,
-                                          )} ${line.baseUnitSymbol}`}
+                                <dd className="mt-0.5">
+                                    <TransferVarianceDisplay
+                                        value={line.varianceBaseQuantity}
+                                        baseUnitSymbol={line.baseUnitSymbol}
+                                    />
                                 </dd>
                             </div>
                         )}
@@ -456,13 +560,13 @@ function TransferLineCards({
 
                     <div className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground">
                         <div>
-                            Out movement:{' '}
+                            Transfer out movement:{' '}
                             {line.outboundMovementId === null
                                 ? 'Not recorded'
                                 : `#${line.outboundMovementId}`}
                         </div>
                         <div className="mt-1">
-                            In movement:{' '}
+                            Transfer in movement:{' '}
                             {line.inboundMovementId === null
                                 ? 'Not recorded'
                                 : `#${line.inboundMovementId}`}
@@ -577,12 +681,11 @@ function TransferLineTable({
                                               )} ${line.baseUnitSymbol}`}
                                     </td>
 
-                                    <td className="px-4 py-3 tabular-nums">
-                                        {line.varianceBaseQuantity === null
-                                            ? 'Not recorded'
-                                            : `${formatDecimal(
-                                                  line.varianceBaseQuantity,
-                                              )} ${line.baseUnitSymbol}`}
+                                    <td className="px-4 py-3">
+                                        <TransferVarianceDisplay
+                                            value={line.varianceBaseQuantity}
+                                            baseUnitSymbol={line.baseUnitSymbol}
+                                        />
                                     </td>
                                 </>
                             )}
@@ -599,13 +702,13 @@ function TransferLineTable({
 
                             <td className="px-4 py-3 font-mono text-xs">
                                 <div>
-                                    OUT:{' '}
+                                    Transfer out movement:{' '}
                                     {line.outboundMovementId === null
                                         ? 'Pending'
                                         : `#${line.outboundMovementId}`}
                                 </div>
                                 <div className="mt-1">
-                                    IN:{' '}
+                                    Transfer in movement:{' '}
                                     {line.inboundMovementId === null
                                         ? 'Pending'
                                         : `#${line.inboundMovementId}`}
@@ -928,591 +1031,656 @@ export default function StockTransferForm({
                             replace: stockTransfer === null,
                         }}
                     >
-                        {({ processing, errors, isDirty }) => (
-                            <div className="grid gap-6">
-                                <DirtyStateTracker
-                                    dirty={isDirty}
-                                    onChange={setDraftDirty}
-                                />
+                        {({ processing, errors, isDirty }) => {
+                            const errorTargets = transferErrorTargets(errors);
 
-                                <section
-                                    className="rounded-xl border border-border bg-card p-5 shadow-sm"
-                                    aria-labelledby="transfer-details-heading"
-                                >
-                                    <div>
-                                        <h2
-                                            id="transfer-details-heading"
-                                            className="text-base font-semibold"
+                            return (
+                                <div className="grid gap-6">
+                                    <DirtyStateTracker
+                                        dirty={isDirty}
+                                        onChange={setDraftDirty}
+                                    />
+
+                                    {errorTargets.length > 0 && (
+                                        <section
+                                            className="rounded-xl border border-destructive/30 bg-destructive/5 p-4"
+                                            aria-labelledby="transfer-errors-heading"
+                                            role="alert"
                                         >
-                                            Transfer details
-                                        </h2>
-                                        <p className="mt-1 text-sm text-muted-foreground">
-                                            Draft details remain
-                                            inventory-neutral until the transfer
-                                            is shipped.
-                                        </p>
-                                    </div>
-
-                                    <div className="mt-5 grid gap-5 md:grid-cols-2">
-                                        <Field
-                                            id="transfer-number"
-                                            label="Transfer number"
-                                            error={errors.number}
-                                        >
-                                            <Input
-                                                name="number"
-                                                defaultValue={
-                                                    stockTransfer?.number ?? ''
-                                                }
-                                                required
-                                            />
-                                        </Field>
-
-                                        <Field
-                                            id="transfer-notes"
-                                            label="Notes"
-                                            error={errors.notes}
-                                            helper="Optional operational context for this transfer."
-                                        >
-                                            <textarea
-                                                name="notes"
-                                                defaultValue={
-                                                    stockTransfer?.notes ?? ''
-                                                }
-                                                rows={4}
-                                                className={textareaClassName}
-                                            />
-                                        </Field>
-                                    </div>
-                                </section>
-
-                                <section
-                                    className="rounded-xl border border-border bg-card p-5 shadow-sm"
-                                    aria-labelledby="transfer-direction-heading"
-                                >
-                                    <div>
-                                        <h2
-                                            id="transfer-direction-heading"
-                                            className="text-base font-semibold"
-                                        >
-                                            Transfer direction
-                                        </h2>
-                                        <p className="mt-1 text-sm text-muted-foreground">
-                                            Transfer from source to destination.
-                                        </p>
-                                    </div>
-
-                                    <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
-                                        <div className="rounded-lg border border-border bg-background p-4">
-                                            <div className="mb-4">
-                                                <div className="text-sm font-semibold">
-                                                    Source
-                                                </div>
-                                                <p className="mt-1 text-xs text-muted-foreground">
-                                                    Stock will leave this
-                                                    storage when the saved draft
-                                                    is shipped.
-                                                </p>
-                                            </div>
-
-                                            <div className="grid gap-4">
-                                                <Field
-                                                    id="from-location"
-                                                    label="Location"
-                                                    error={
-                                                        errors.from_location_id
-                                                    }
-                                                >
-                                                    <NativeSelect
-                                                        name="from_location_id"
-                                                        value={fromLocationId}
-                                                        onChange={(event) =>
-                                                            handleFromLocationChange(
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        required
-                                                    >
-                                                        <option value="">
-                                                            Select location
-                                                        </option>
-
-                                                        {locationOptions.map(
-                                                            (location) => (
-                                                                <option
-                                                                    key={
-                                                                        location.id
-                                                                    }
-                                                                    value={
-                                                                        location.id
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        location.name
-                                                                    }
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </NativeSelect>
-                                                </Field>
-
-                                                <Field
-                                                    id="from-storage-location"
-                                                    label="Storage location"
-                                                    error={
-                                                        errors.from_storage_location_id
-                                                    }
-                                                    helper="Changing source storage may reset the destination when both would point to the same storage."
-                                                >
-                                                    <NativeSelect
-                                                        name="from_storage_location_id"
-                                                        value={
-                                                            fromStorageLocationId
-                                                        }
-                                                        onChange={(event) =>
-                                                            handleFromStorageChange(
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        required
-                                                    >
-                                                        <option value="">
-                                                            Select storage
-                                                        </option>
-
-                                                        {fromStorageOptions.map(
-                                                            (storage) => (
-                                                                <option
-                                                                    key={
-                                                                        storage.id
-                                                                    }
-                                                                    value={
-                                                                        storage.id
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        storage.name
-                                                                    }
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </NativeSelect>
-                                                </Field>
-                                            </div>
-                                        </div>
-
-                                        <div
-                                            className="flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground"
-                                            aria-label="Transfer from source to destination"
-                                        >
-                                            <ArrowDown
-                                                className="size-5 lg:hidden"
-                                                aria-hidden="true"
-                                            />
-                                            <ArrowRight
-                                                className="hidden size-5 lg:block"
-                                                aria-hidden="true"
-                                            />
-                                            <span className="lg:sr-only">
-                                                To destination
-                                            </span>
-                                        </div>
-
-                                        <div className="rounded-lg border border-border bg-background p-4">
-                                            <div className="mb-4">
-                                                <div className="text-sm font-semibold">
-                                                    Destination
-                                                </div>
-                                                <p className="mt-1 text-xs text-muted-foreground">
-                                                    Received stock will enter
-                                                    this storage after shipment.
-                                                </p>
-                                            </div>
-
-                                            <div className="grid gap-4">
-                                                <Field
-                                                    id="to-location"
-                                                    label="Location"
-                                                    error={
-                                                        errors.to_location_id
-                                                    }
-                                                >
-                                                    <NativeSelect
-                                                        name="to_location_id"
-                                                        value={toLocationId}
-                                                        onChange={(event) =>
-                                                            handleToLocationChange(
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        required
-                                                    >
-                                                        <option value="">
-                                                            Select location
-                                                        </option>
-
-                                                        {locationOptions.map(
-                                                            (location) => (
-                                                                <option
-                                                                    key={
-                                                                        location.id
-                                                                    }
-                                                                    value={
-                                                                        location.id
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        location.name
-                                                                    }
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </NativeSelect>
-                                                </Field>
-
-                                                <Field
-                                                    id="to-storage-location"
-                                                    label="Storage location"
-                                                    error={
-                                                        errors.to_storage_location_id
-                                                    }
-                                                    helper="The selected source storage is excluded from valid destinations."
-                                                >
-                                                    <NativeSelect
-                                                        name="to_storage_location_id"
-                                                        value={
-                                                            toStorageLocationId
-                                                        }
-                                                        onChange={(event) =>
-                                                            setToStorageLocationId(
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        required
-                                                    >
-                                                        <option value="">
-                                                            Select storage
-                                                        </option>
-
-                                                        {toStorageOptions.map(
-                                                            (storage) => (
-                                                                <option
-                                                                    key={
-                                                                        storage.id
-                                                                    }
-                                                                    value={
-                                                                        storage.id
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        storage.name
-                                                                    }
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </NativeSelect>
-                                                </Field>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </section>
-
-                                <section
-                                    className="rounded-xl border border-border bg-card shadow-sm"
-                                    aria-labelledby="transfer-items-heading"
-                                >
-                                    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-5">
-                                        <div>
                                             <h2
-                                                id="transfer-items-heading"
-                                                className="text-base font-semibold"
+                                                id="transfer-errors-heading"
+                                                className="font-medium"
                                             >
-                                                Transfer items
+                                                Review the highlighted fields
                                             </h2>
                                             <p className="mt-1 text-sm text-muted-foreground">
-                                                Each inventory item can appear
-                                                only once in the transfer.
+                                                The server rejected part of this
+                                                draft. Select an issue to move
+                                                directly to its field.
                                             </p>
-                                        </div>
-
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            onClick={addLine}
-                                        >
-                                            Add item
-                                        </Button>
-                                    </div>
-
-                                    <div className="grid gap-4 p-5">
-                                        {lines.map((line, index) => {
-                                            const selectedItem =
-                                                inventoryItemOptions.find(
-                                                    (item) =>
-                                                        item.id.toString() ===
-                                                        line.inventoryItemId,
-                                                );
-
-                                            const validUnits =
-                                                unitOptions.filter(
-                                                    (unit) =>
-                                                        selectedItem?.validUnitIds.includes(
-                                                            unit.id,
-                                                        ) ?? false,
-                                                );
-
-                                            const duplicateItem =
-                                                line.inventoryItemId !== '' &&
-                                                isItemSelectedElsewhere(
-                                                    index,
-                                                    line.inventoryItemId,
-                                                );
-
-                                            const itemError =
-                                                errors[
-                                                    `lines.${index}.inventory_item_id`
-                                                ] ??
-                                                (duplicateItem
-                                                    ? 'This inventory item is already selected on another transfer line.'
-                                                    : undefined);
-
-                                            const itemId = `transfer-line-${index}-item`;
-                                            const quantityId = `transfer-line-${index}-quantity`;
-                                            const unitId = `transfer-line-${index}-unit`;
-
-                                            return (
-                                                <article
-                                                    key={index}
-                                                    className="rounded-lg border border-border bg-background p-4"
-                                                >
-                                                    <div className="mb-4 flex items-start justify-between gap-3">
-                                                        <div>
-                                                            <div className="text-sm font-semibold">
-                                                                Line {index + 1}
-                                                            </div>
-                                                            {selectedItem && (
-                                                                <div className="mt-1 font-mono text-xs text-muted-foreground">
-                                                                    {
-                                                                        selectedItem.sku
-                                                                    }
-                                                                </div>
-                                                            )}
-                                                        </div>
-
-                                                        <Button
+                                            <ul className="mt-3 space-y-1 text-sm">
+                                                {errorTargets.map((target) => (
+                                                    <li key={target.key}>
+                                                        <button
                                                             type="button"
-                                                            variant="outline"
-                                                            size="sm"
-                                                            disabled={
-                                                                lines.length ===
-                                                                1
-                                                            }
+                                                            className="text-left font-medium text-destructive underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                                             onClick={() =>
-                                                                removeLine(
-                                                                    index,
+                                                                focusErrorTarget(
+                                                                    target.targetId,
                                                                 )
                                                             }
                                                         >
-                                                            Remove
-                                                        </Button>
-                                                    </div>
+                                                            {target.label}:{' '}
+                                                            {target.message}
+                                                        </button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </section>
+                                    )}
 
-                                                    <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(8rem,1fr)_minmax(10rem,1fr)]">
-                                                        <Field
-                                                            id={itemId}
-                                                            label="Item"
-                                                            error={itemError}
-                                                            helper={
-                                                                selectedItem
-                                                                    ? `SKU ${selectedItem.sku}`
-                                                                    : 'Already selected items are unavailable in other lines.'
+                                    <section
+                                        className="rounded-xl border border-border bg-card p-5 shadow-sm"
+                                        aria-labelledby="transfer-details-heading"
+                                    >
+                                        <div>
+                                            <h2
+                                                id="transfer-details-heading"
+                                                className="text-base font-semibold"
+                                            >
+                                                Transfer details
+                                            </h2>
+                                            <p className="mt-1 text-sm text-muted-foreground">
+                                                Draft details remain
+                                                inventory-neutral until the
+                                                transfer is shipped.
+                                            </p>
+                                        </div>
+
+                                        <div className="mt-5 grid gap-5 md:grid-cols-2">
+                                            <Field
+                                                id="transfer-number"
+                                                label="Transfer number"
+                                                error={errors.number}
+                                            >
+                                                <Input
+                                                    name="number"
+                                                    defaultValue={
+                                                        stockTransfer?.number ??
+                                                        ''
+                                                    }
+                                                    required
+                                                />
+                                            </Field>
+
+                                            <Field
+                                                id="transfer-notes"
+                                                label="Notes"
+                                                error={errors.notes}
+                                                helper="Optional operational context for this transfer."
+                                            >
+                                                <textarea
+                                                    name="notes"
+                                                    defaultValue={
+                                                        stockTransfer?.notes ??
+                                                        ''
+                                                    }
+                                                    rows={4}
+                                                    className={
+                                                        textareaClassName
+                                                    }
+                                                />
+                                            </Field>
+                                        </div>
+                                    </section>
+
+                                    <section
+                                        className="rounded-xl border border-border bg-card p-5 shadow-sm"
+                                        aria-labelledby="transfer-direction-heading"
+                                    >
+                                        <div>
+                                            <h2
+                                                id="transfer-direction-heading"
+                                                className="text-base font-semibold"
+                                            >
+                                                Transfer direction
+                                            </h2>
+                                            <p className="mt-1 text-sm text-muted-foreground">
+                                                Transfer from source to
+                                                destination.
+                                            </p>
+                                        </div>
+
+                                        <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+                                            <div className="rounded-lg border border-border bg-background p-4">
+                                                <div className="mb-4">
+                                                    <div className="text-sm font-semibold">
+                                                        Source
+                                                    </div>
+                                                    <p className="mt-1 text-xs text-muted-foreground">
+                                                        Stock will leave this
+                                                        storage when the saved
+                                                        draft is shipped.
+                                                    </p>
+                                                </div>
+
+                                                <div className="grid gap-4">
+                                                    <Field
+                                                        id="from-location"
+                                                        label="Location"
+                                                        error={
+                                                            errors.from_location_id
+                                                        }
+                                                    >
+                                                        <NativeSelect
+                                                            name="from_location_id"
+                                                            value={
+                                                                fromLocationId
                                                             }
+                                                            onChange={(event) =>
+                                                                handleFromLocationChange(
+                                                                    event.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            required
                                                         >
-                                                            <NativeSelect
-                                                                name={`lines[${index}][inventory_item_id]`}
-                                                                value={
-                                                                    line.inventoryItemId
+                                                            <option value="">
+                                                                Select location
+                                                            </option>
+
+                                                            {locationOptions.map(
+                                                                (location) => (
+                                                                    <option
+                                                                        key={
+                                                                            location.id
+                                                                        }
+                                                                        value={
+                                                                            location.id
+                                                                        }
+                                                                    >
+                                                                        {
+                                                                            location.name
+                                                                        }
+                                                                    </option>
+                                                                ),
+                                                            )}
+                                                        </NativeSelect>
+                                                    </Field>
+
+                                                    <Field
+                                                        id="from-storage-location"
+                                                        label="Storage location"
+                                                        error={
+                                                            errors.from_storage_location_id
+                                                        }
+                                                        helper="Changing source storage may reset the destination when both would point to the same storage."
+                                                    >
+                                                        <NativeSelect
+                                                            name="from_storage_location_id"
+                                                            value={
+                                                                fromStorageLocationId
+                                                            }
+                                                            onChange={(event) =>
+                                                                handleFromStorageChange(
+                                                                    event.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            required
+                                                        >
+                                                            <option value="">
+                                                                Select storage
+                                                            </option>
+
+                                                            {fromStorageOptions.map(
+                                                                (storage) => (
+                                                                    <option
+                                                                        key={
+                                                                            storage.id
+                                                                        }
+                                                                        value={
+                                                                            storage.id
+                                                                        }
+                                                                    >
+                                                                        {
+                                                                            storage.name
+                                                                        }
+                                                                    </option>
+                                                                ),
+                                                            )}
+                                                        </NativeSelect>
+                                                    </Field>
+                                                </div>
+                                            </div>
+
+                                            <div
+                                                className="flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground"
+                                                aria-label="Transfer from source to destination"
+                                            >
+                                                <ArrowDown
+                                                    className="size-5 lg:hidden"
+                                                    aria-hidden="true"
+                                                />
+                                                <ArrowRight
+                                                    className="hidden size-5 lg:block"
+                                                    aria-hidden="true"
+                                                />
+                                                <span className="lg:sr-only">
+                                                    To destination
+                                                </span>
+                                            </div>
+
+                                            <div className="rounded-lg border border-border bg-background p-4">
+                                                <div className="mb-4">
+                                                    <div className="text-sm font-semibold">
+                                                        Destination
+                                                    </div>
+                                                    <p className="mt-1 text-xs text-muted-foreground">
+                                                        Received stock will
+                                                        enter this storage after
+                                                        shipment.
+                                                    </p>
+                                                </div>
+
+                                                <div className="grid gap-4">
+                                                    <Field
+                                                        id="to-location"
+                                                        label="Location"
+                                                        error={
+                                                            errors.to_location_id
+                                                        }
+                                                    >
+                                                        <NativeSelect
+                                                            name="to_location_id"
+                                                            value={toLocationId}
+                                                            onChange={(event) =>
+                                                                handleToLocationChange(
+                                                                    event.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            required
+                                                        >
+                                                            <option value="">
+                                                                Select location
+                                                            </option>
+
+                                                            {locationOptions.map(
+                                                                (location) => (
+                                                                    <option
+                                                                        key={
+                                                                            location.id
+                                                                        }
+                                                                        value={
+                                                                            location.id
+                                                                        }
+                                                                    >
+                                                                        {
+                                                                            location.name
+                                                                        }
+                                                                    </option>
+                                                                ),
+                                                            )}
+                                                        </NativeSelect>
+                                                    </Field>
+
+                                                    <Field
+                                                        id="to-storage-location"
+                                                        label="Storage location"
+                                                        error={
+                                                            errors.to_storage_location_id
+                                                        }
+                                                        helper="The selected source storage is excluded from valid destinations."
+                                                    >
+                                                        <NativeSelect
+                                                            name="to_storage_location_id"
+                                                            value={
+                                                                toStorageLocationId
+                                                            }
+                                                            onChange={(event) =>
+                                                                setToStorageLocationId(
+                                                                    event.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            required
+                                                        >
+                                                            <option value="">
+                                                                Select storage
+                                                            </option>
+
+                                                            {toStorageOptions.map(
+                                                                (storage) => (
+                                                                    <option
+                                                                        key={
+                                                                            storage.id
+                                                                        }
+                                                                        value={
+                                                                            storage.id
+                                                                        }
+                                                                    >
+                                                                        {
+                                                                            storage.name
+                                                                        }
+                                                                    </option>
+                                                                ),
+                                                            )}
+                                                        </NativeSelect>
+                                                    </Field>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section
+                                        className="rounded-xl border border-border bg-card shadow-sm"
+                                        aria-labelledby="transfer-items-heading"
+                                    >
+                                        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-5">
+                                            <div>
+                                                <h2
+                                                    id="transfer-items-heading"
+                                                    className="text-base font-semibold"
+                                                >
+                                                    Transfer items
+                                                </h2>
+                                                <p className="mt-1 text-sm text-muted-foreground">
+                                                    Each inventory item can
+                                                    appear only once in the
+                                                    transfer.
+                                                </p>
+                                            </div>
+
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={addLine}
+                                            >
+                                                Add item
+                                            </Button>
+                                        </div>
+
+                                        <div className="grid gap-4 p-5">
+                                            {lines.map((line, index) => {
+                                                const selectedItem =
+                                                    inventoryItemOptions.find(
+                                                        (item) =>
+                                                            item.id.toString() ===
+                                                            line.inventoryItemId,
+                                                    );
+
+                                                const validUnits =
+                                                    unitOptions.filter(
+                                                        (unit) =>
+                                                            selectedItem?.validUnitIds.includes(
+                                                                unit.id,
+                                                            ) ?? false,
+                                                    );
+
+                                                const duplicateItem =
+                                                    line.inventoryItemId !==
+                                                        '' &&
+                                                    isItemSelectedElsewhere(
+                                                        index,
+                                                        line.inventoryItemId,
+                                                    );
+
+                                                const itemError =
+                                                    errors[
+                                                        `lines.${index}.inventory_item_id`
+                                                    ] ??
+                                                    (duplicateItem
+                                                        ? 'This inventory item is already selected on another transfer line.'
+                                                        : undefined);
+
+                                                const itemId = `transfer-line-${index}-item`;
+                                                const quantityId = `transfer-line-${index}-quantity`;
+                                                const unitId = `transfer-line-${index}-unit`;
+
+                                                return (
+                                                    <article
+                                                        key={index}
+                                                        className="rounded-lg border border-border bg-background p-4"
+                                                    >
+                                                        <div className="mb-4 flex items-start justify-between gap-3">
+                                                            <div>
+                                                                <div className="text-sm font-semibold">
+                                                                    Line{' '}
+                                                                    {index + 1}
+                                                                </div>
+                                                                {selectedItem && (
+                                                                    <div className="mt-1 font-mono text-xs text-muted-foreground">
+                                                                        {
+                                                                            selectedItem.sku
+                                                                        }
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                disabled={
+                                                                    lines.length ===
+                                                                    1
                                                                 }
-                                                                onChange={(
-                                                                    event,
-                                                                ) =>
-                                                                    handleItemChange(
+                                                                onClick={() =>
+                                                                    removeLine(
                                                                         index,
-                                                                        event
-                                                                            .target
-                                                                            .value,
                                                                     )
                                                                 }
-                                                                required
                                                             >
-                                                                <option value="">
-                                                                    Select item
-                                                                </option>
+                                                                Remove
+                                                            </Button>
+                                                        </div>
 
-                                                                {inventoryItemOptions.map(
-                                                                    (item) => {
-                                                                        const itemValue =
-                                                                            item.id.toString();
-                                                                        const selectedElsewhere =
-                                                                            isItemSelectedElsewhere(
-                                                                                index,
-                                                                                itemValue,
+                                                        <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(8rem,1fr)_minmax(10rem,1fr)]">
+                                                            <Field
+                                                                id={itemId}
+                                                                label="Item"
+                                                                error={
+                                                                    itemError
+                                                                }
+                                                                helper={
+                                                                    selectedItem
+                                                                        ? `SKU ${selectedItem.sku}`
+                                                                        : 'Already selected items are unavailable in other lines.'
+                                                                }
+                                                            >
+                                                                <NativeSelect
+                                                                    name={`lines[${index}][inventory_item_id]`}
+                                                                    value={
+                                                                        line.inventoryItemId
+                                                                    }
+                                                                    onChange={(
+                                                                        event,
+                                                                    ) =>
+                                                                        handleItemChange(
+                                                                            index,
+                                                                            event
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                    required
+                                                                >
+                                                                    <option value="">
+                                                                        Select
+                                                                        item
+                                                                    </option>
+
+                                                                    {inventoryItemOptions.map(
+                                                                        (
+                                                                            item,
+                                                                        ) => {
+                                                                            const itemValue =
+                                                                                item.id.toString();
+                                                                            const selectedElsewhere =
+                                                                                isItemSelectedElsewhere(
+                                                                                    index,
+                                                                                    itemValue,
+                                                                                );
+
+                                                                            return (
+                                                                                <option
+                                                                                    key={
+                                                                                        item.id
+                                                                                    }
+                                                                                    value={
+                                                                                        item.id
+                                                                                    }
+                                                                                    disabled={
+                                                                                        selectedElsewhere
+                                                                                    }
+                                                                                >
+                                                                                    {
+                                                                                        item.name
+                                                                                    }{' '}
+                                                                                    (
+                                                                                    {
+                                                                                        item.sku
+                                                                                    }
+
+                                                                                    )
+                                                                                    {selectedElsewhere
+                                                                                        ? ' - already selected'
+                                                                                        : ''}
+                                                                                </option>
                                                                             );
+                                                                        },
+                                                                    )}
+                                                                </NativeSelect>
+                                                            </Field>
 
-                                                                        return (
+                                                            <Field
+                                                                id={quantityId}
+                                                                label="Quantity"
+                                                                error={
+                                                                    errors[
+                                                                        `lines.${index}.requested_quantity`
+                                                                    ]
+                                                                }
+                                                            >
+                                                                <Input
+                                                                    name={`lines[${index}][requested_quantity]`}
+                                                                    type="number"
+                                                                    min="0.000001"
+                                                                    max="999999999.999999"
+                                                                    step="0.000001"
+                                                                    value={
+                                                                        line.requestedQuantity
+                                                                    }
+                                                                    onChange={(
+                                                                        event,
+                                                                    ) =>
+                                                                        updateLine(
+                                                                            index,
+                                                                            {
+                                                                                requestedQuantity:
+                                                                                    event
+                                                                                        .target
+                                                                                        .value,
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                    className="tabular-nums"
+                                                                    required
+                                                                />
+                                                            </Field>
+
+                                                            <Field
+                                                                id={unitId}
+                                                                label="Unit"
+                                                                error={
+                                                                    errors[
+                                                                        `lines.${index}.unit_id`
+                                                                    ]
+                                                                }
+                                                                helper={
+                                                                    selectedItem
+                                                                        ? `Base unit: ${selectedItem.baseUnitSymbol}`
+                                                                        : undefined
+                                                                }
+                                                            >
+                                                                <NativeSelect
+                                                                    name={`lines[${index}][unit_id]`}
+                                                                    value={
+                                                                        line.unitId
+                                                                    }
+                                                                    onChange={(
+                                                                        event,
+                                                                    ) =>
+                                                                        updateLine(
+                                                                            index,
+                                                                            {
+                                                                                unitId: event
+                                                                                    .target
+                                                                                    .value,
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                    required
+                                                                >
+                                                                    <option value="">
+                                                                        Select
+                                                                        unit
+                                                                    </option>
+
+                                                                    {validUnits.map(
+                                                                        (
+                                                                            unit,
+                                                                        ) => (
                                                                             <option
                                                                                 key={
-                                                                                    item.id
+                                                                                    unit.id
                                                                                 }
                                                                                 value={
-                                                                                    item.id
-                                                                                }
-                                                                                disabled={
-                                                                                    selectedElsewhere
+                                                                                    unit.id
                                                                                 }
                                                                             >
                                                                                 {
-                                                                                    item.name
+                                                                                    unit.name
                                                                                 }{' '}
                                                                                 (
                                                                                 {
-                                                                                    item.sku
+                                                                                    unit.symbol
                                                                                 }
 
                                                                                 )
-                                                                                {selectedElsewhere
-                                                                                    ? ' - already selected'
-                                                                                    : ''}
                                                                             </option>
-                                                                        );
-                                                                    },
-                                                                )}
-                                                            </NativeSelect>
-                                                        </Field>
+                                                                        ),
+                                                                    )}
+                                                                </NativeSelect>
+                                                            </Field>
+                                                        </div>
+                                                    </article>
+                                                );
+                                            })}
 
-                                                        <Field
-                                                            id={quantityId}
-                                                            label="Quantity"
-                                                            error={
-                                                                errors[
-                                                                    `lines.${index}.requested_quantity`
-                                                                ]
-                                                            }
-                                                        >
-                                                            <Input
-                                                                name={`lines[${index}][requested_quantity]`}
-                                                                type="number"
-                                                                min="0.000001"
-                                                                max="999999999.999999"
-                                                                step="0.000001"
-                                                                value={
-                                                                    line.requestedQuantity
-                                                                }
-                                                                onChange={(
-                                                                    event,
-                                                                ) =>
-                                                                    updateLine(
-                                                                        index,
-                                                                        {
-                                                                            requestedQuantity:
-                                                                                event
-                                                                                    .target
-                                                                                    .value,
-                                                                        },
-                                                                    )
-                                                                }
-                                                                className="tabular-nums"
-                                                                required
-                                                            />
-                                                        </Field>
+                                            <InputError
+                                                id="transfer-lines-error"
+                                                message={errors.lines}
+                                            />
+                                        </div>
+                                    </section>
 
-                                                        <Field
-                                                            id={unitId}
-                                                            label="Unit"
-                                                            error={
-                                                                errors[
-                                                                    `lines.${index}.unit_id`
-                                                                ]
-                                                            }
-                                                            helper={
-                                                                selectedItem
-                                                                    ? `Base unit: ${selectedItem.baseUnitSymbol}`
-                                                                    : undefined
-                                                            }
-                                                        >
-                                                            <NativeSelect
-                                                                name={`lines[${index}][unit_id]`}
-                                                                value={
-                                                                    line.unitId
-                                                                }
-                                                                onChange={(
-                                                                    event,
-                                                                ) =>
-                                                                    updateLine(
-                                                                        index,
-                                                                        {
-                                                                            unitId: event
-                                                                                .target
-                                                                                .value,
-                                                                        },
-                                                                    )
-                                                                }
-                                                                required
-                                                            >
-                                                                <option value="">
-                                                                    Select unit
-                                                                </option>
-
-                                                                {validUnits.map(
-                                                                    (unit) => (
-                                                                        <option
-                                                                            key={
-                                                                                unit.id
-                                                                            }
-                                                                            value={
-                                                                                unit.id
-                                                                            }
-                                                                        >
-                                                                            {
-                                                                                unit.name
-                                                                            }{' '}
-                                                                            (
-                                                                            {
-                                                                                unit.symbol
-                                                                            }
-                                                                            )
-                                                                        </option>
-                                                                    ),
-                                                                )}
-                                                            </NativeSelect>
-                                                        </Field>
-                                                    </div>
-                                                </article>
-                                            );
-                                        })}
-
-                                        <InputError
-                                            id="transfer-lines-error"
-                                            message={errors.lines}
-                                        />
+                                    <div className="sticky bottom-0 z-10 -mx-4 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+                                        <Button
+                                            type="submit"
+                                            disabled={processing}
+                                        >
+                                            {processing
+                                                ? 'Saving…'
+                                                : stockTransfer === null
+                                                  ? 'Create draft'
+                                                  : 'Save draft'}
+                                        </Button>
                                     </div>
-                                </section>
-
-                                <div className="flex flex-wrap gap-2">
-                                    <Button type="submit" disabled={processing}>
-                                        {processing
-                                            ? 'Saving…'
-                                            : stockTransfer === null
-                                              ? 'Create draft'
-                                              : 'Save draft'}
-                                    </Button>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        }}
                     </Form>
                 )}
 

@@ -1,15 +1,10 @@
 import { Form, Head, Link, router } from '@inertiajs/react';
 import {
-    Ban,
+    ArrowRight,
     CheckCircle2,
     ChevronDown,
-    ChevronLeft,
-    ChevronRight,
     ChevronUp,
-    ChevronsLeft,
-    ChevronsRight,
     ChevronsUpDown,
-    Eye,
     FilePenLine,
     Filter,
     Info,
@@ -19,16 +14,23 @@ import {
     Search,
     TriangleAlert,
     Truck,
+    X,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import StockTransferController from '@/actions/App/Http/Controllers/Inventory/StockTransferController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
-import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/empty-state';
+import { FilterToolbar } from '@/components/filter-toolbar';
+import { PageHeader } from '@/components/page-header';
+import { PaginationControls } from '@/components/pagination-controls';
+import { StatusBadge } from '@/components/status-badge';
+import type { StatusBadgeProps } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { cn } from '@/lib/utils';
-import { dashboard } from '@/routes';
 
 type StockTransferStatus = 'draft' | 'shipped' | 'received' | 'cancelled';
 type StockTransferView =
@@ -41,7 +43,6 @@ type StockTransferSort =
     | 'shipped_at'
     | 'received_at';
 type SortDirection = 'asc' | 'desc';
-
 type StockTransferRow = {
     id: number;
     number: string;
@@ -57,14 +58,12 @@ type StockTransferRow = {
     varianceItemCount: number | null;
     requestedByName: string | null;
 };
-
 type StockTransferSummary = {
     draftCount: number;
     shippedCount: number;
     receivedCount: number;
     varianceCount: number;
 };
-
 type Pagination = {
     currentPage: number;
     from: number | null;
@@ -75,12 +74,7 @@ type Pagination = {
     to: number | null;
     total: number;
 };
-
-type LocationOption = {
-    id: number;
-    name: string;
-};
-
+type LocationOption = { id: number; name: string };
 type Filters = {
     search: string | null;
     view: StockTransferView;
@@ -92,7 +86,6 @@ type Filters = {
     direction: SortDirection;
     perPage: number;
 };
-
 type Props = {
     rows: StockTransferRow[];
     pagination: Pagination;
@@ -104,9 +97,6 @@ type Props = {
     canViewReport: boolean;
 };
 
-const selectClassName =
-    'h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50';
-
 const quickViews: Array<{ label: string; value: StockTransferView }> = [
     { label: 'All', value: 'all' },
     { label: 'Draft', value: 'draft' },
@@ -114,8 +104,15 @@ const quickViews: Array<{ label: string; value: StockTransferView }> = [
     { label: 'Received', value: 'received' },
     { label: 'Variance', value: 'variance' },
 ];
+const viewLabels: Record<StockTransferView, string> = {
+    all: 'All statuses',
+    draft: 'Draft',
+    shipped: 'Awaiting receipt',
+    received: 'Received',
+    cancelled: 'Cancelled',
+    variance: 'Has variance',
+};
 
-/** Format workflow timestamps consistently in the active organization's timezone. */
 function formatOrganizationDate(value: string, timezone: string): string {
     return new Intl.DateTimeFormat('en-US', {
         month: 'numeric',
@@ -126,54 +123,28 @@ function formatOrganizationDate(value: string, timezone: string): string {
         timeZone: timezone,
     }).format(new Date(value));
 }
-
-/** Render one stock-transfer lifecycle status using text, icon, and color. */
-function StatusBadge({ status }: { status: StockTransferStatus }) {
+function transferStatusVariant(
+    status: StockTransferStatus,
+): StatusBadgeProps['variant'] {
     if (status === 'received') {
-        return (
-            <Badge
-                variant="outline"
-                className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
-            >
-                <CheckCircle2 aria-hidden="true" />
-                Received
-            </Badge>
-        );
+        return 'success';
     }
 
     if (status === 'shipped') {
-        return (
-            <Badge
-                variant="outline"
-                className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
-            >
-                <Truck aria-hidden="true" />
-                Shipped
-            </Badge>
-        );
+        return 'info';
     }
 
     if (status === 'cancelled') {
-        return (
-            <Badge
-                variant="outline"
-                className="border-destructive/30 bg-destructive/10 text-destructive dark:border-destructive/50 dark:bg-destructive/20"
-            >
-                <Ban aria-hidden="true" />
-                Cancelled
-            </Badge>
-        );
+        return 'danger';
     }
 
-    return (
-        <Badge variant="secondary">
-            <FilePenLine aria-hidden="true" />
-            Draft
-        </Badge>
-    );
+    return 'neutral';
 }
-
-/** Show the active sort direction without implying unsupported table sorting. */
+function transferStatusLabel(status: StockTransferStatus): string {
+    return status === 'shipped'
+        ? 'Awaiting receipt'
+        : status.charAt(0).toUpperCase() + status.slice(1);
+}
 function SortIndicator({
     active,
     direction,
@@ -191,17 +162,41 @@ function SortIndicator({
         <ChevronDown className="size-3.5" aria-hidden="true" />
     );
 }
+function VarianceState({ count }: { count: number | null }) {
+    if (count === null) {
+        return <span className="text-muted-foreground">—</span>;
+    }
 
-/** Keep numbered pagination compact while retaining nearby navigation context. */
-function paginationPages(currentPage: number, lastPage: number): number[] {
-    const visiblePages = 5;
-    let start = Math.max(1, currentPage - Math.floor(visiblePages / 2));
-    let end = Math.min(lastPage, start + visiblePages - 1);
-
-    start = Math.max(1, end - visiblePages + 1);
-    end = Math.min(lastPage, start + visiblePages - 1);
-
-    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+    return count === 0 ? (
+        <StatusBadge label="No variance" variant="success" />
+    ) : (
+        <StatusBadge
+            label={`${count.toLocaleString()} ${count === 1 ? 'item' : 'items'} with variance`}
+            variant="danger"
+        />
+    );
+}
+function TransferDirection({ row }: { row: StockTransferRow }) {
+    return (
+        <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0">
+                <p className="truncate font-medium">{row.fromLocationName}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                    {row.fromStorageLocationName}
+                </p>
+            </div>
+            <ArrowRight
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-label="to"
+            />
+            <div className="min-w-0">
+                <p className="truncate font-medium">{row.toLocationName}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                    {row.toStorageLocationName}
+                </p>
+            </div>
+        </div>
+    );
 }
 
 /** Render the server-authoritative Stock Transfers operational index. */
@@ -215,14 +210,34 @@ export default function StockTransferIndex({
     canCreate,
     canViewReport,
 }: Props) {
-    const hasFilters =
-        filters.search !== null ||
-        filters.view !== 'all' ||
-        filters.fromLocationId !== null ||
-        filters.toLocationId !== null ||
-        filters.from !== null ||
-        filters.to !== null;
-
+    const [isNavigating, setIsNavigating] = useState(false);
+    const source = locationOptions.find(
+        (location) => location.id === filters.fromLocationId,
+    );
+    const destination = locationOptions.find(
+        (location) => location.id === filters.toLocationId,
+    );
+    const activeFilters = [
+        filters.search
+            ? { label: `Search: ${filters.search}`, key: 'search' }
+            : null,
+        filters.view !== 'all'
+            ? { label: `Status: ${viewLabels[filters.view]}`, key: 'view' }
+            : null,
+        source
+            ? { label: `Source: ${source.name}`, key: 'from_location_id' }
+            : null,
+        destination
+            ? {
+                  label: `Destination: ${destination.name}`,
+                  key: 'to_location_id',
+              }
+            : null,
+        filters.from ? { label: `From: ${filters.from}`, key: 'from' } : null,
+        filters.to ? { label: `To: ${filters.to}`, key: 'to' } : null,
+    ].filter(
+        (filter): filter is { label: string; key: string } => filter !== null,
+    );
     const hrefFor = (
         changes: Record<string, string | number | null>,
     ): string => {
@@ -253,7 +268,6 @@ export default function StockTransferIndex({
         params.set('sort', filters.sort);
         params.set('direction', filters.direction);
         params.set('per_page', filters.perPage.toString());
-
         Object.entries(changes).forEach(([key, value]) => {
             if (value === null || value === '') {
                 params.delete(key);
@@ -266,64 +280,74 @@ export default function StockTransferIndex({
 
         return `${StockTransferController.index().url}?${params.toString()}`;
     };
-
-    const sortHref = (sort: StockTransferSort): string => {
-        const direction =
-            filters.sort === sort && filters.direction === 'asc'
-                ? 'desc'
-                : 'asc';
-
-        return hrefFor({
+    const sortHref = (sort: StockTransferSort): string =>
+        hrefFor({
             sort,
-            direction,
+            direction:
+                filters.sort === sort && filters.direction === 'asc'
+                    ? 'desc'
+                    : 'asc',
             page: null,
         });
-    };
+    useEffect(() => {
+        const removeStartListener = router.on('start', () =>
+            setIsNavigating(true),
+        );
+        const removeFinishListener = router.on('finish', () =>
+            setIsNavigating(false),
+        );
 
-    const pages = paginationPages(pagination.currentPage, pagination.lastPage);
+        return () => {
+            removeStartListener();
+            removeFinishListener();
+        };
+    }, []);
+    const sortHeaders: Array<[StockTransferSort, string]> = [
+        ['number', 'Number'],
+        ['status', 'Status'],
+        ['requested_at', 'Requested'],
+        ['shipped_at', 'Shipped'],
+        ['received_at', 'Received'],
+    ];
 
     return (
         <>
             <Head title="Stock transfers" />
-
-            <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Stock transfers
-                        </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Move inventory safely between storage locations.
-                        </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                        {canViewReport && (
-                            <Button variant="outline" asChild>
-                                <Link href={StockTransferController.variance()}>
-                                    <TriangleAlert
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    Variance report
-                                </Link>
-                            </Button>
-                        )}
-
-                        {canCreate && (
-                            <Button asChild>
-                                <Link href={StockTransferController.create()}>
-                                    <Plus
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    New transfer
-                                </Link>
-                            </Button>
-                        )}
-                    </div>
-                </div>
-
+            <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+                <PageHeader
+                    title="Stock transfers"
+                    description="Move inventory safely between storage locations."
+                    actions={
+                        <>
+                            {canViewReport && (
+                                <Button variant="outline" asChild>
+                                    <Link
+                                        href={StockTransferController.variance()}
+                                    >
+                                        <TriangleAlert
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        Variance report
+                                    </Link>
+                                </Button>
+                            )}
+                            {canCreate && (
+                                <Button asChild>
+                                    <Link
+                                        href={StockTransferController.create()}
+                                    >
+                                        <Plus
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        New transfer
+                                    </Link>
+                                </Button>
+                            )}
+                        </>
+                    }
+                />
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <DashboardMetricCard
                         title="Draft transfers"
@@ -332,7 +356,6 @@ export default function StockTransferIndex({
                         icon={FilePenLine}
                         tone="violet"
                     />
-
                     <DashboardMetricCard
                         title="Awaiting receipt"
                         value={summary.shippedCount.toLocaleString()}
@@ -340,7 +363,6 @@ export default function StockTransferIndex({
                         icon={Truck}
                         tone="blue"
                     />
-
                     <DashboardMetricCard
                         title="Received transfers"
                         value={summary.receivedCount.toLocaleString()}
@@ -348,7 +370,6 @@ export default function StockTransferIndex({
                         icon={CheckCircle2}
                         tone="emerald"
                     />
-
                     <DashboardMetricCard
                         title="Transfers with variance"
                         value={summary.varianceCount.toLocaleString()}
@@ -357,14 +378,10 @@ export default function StockTransferIndex({
                         tone="amber"
                     />
                 </div>
-
-                <section className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
-                    <Form
-                        action={StockTransferController.index().url}
-                        method="get"
-                    >
-                        {({ errors, processing }) => (
-                            <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-[1.35fr_0.85fr_1fr_1fr_0.8fr_0.8fr_auto]">
+                <Form action={StockTransferController.index().url} method="get">
+                    {({ errors, processing }) => (
+                        <FilterToolbar>
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.35fr_0.85fr_1fr_1fr_0.8fr_0.8fr_auto]">
                                 <input
                                     type="hidden"
                                     name="sort"
@@ -380,39 +397,34 @@ export default function StockTransferIndex({
                                     name="per_page"
                                     value={filters.perPage}
                                 />
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="search">Search</Label>
+                                <Field
+                                    id="search"
+                                    label="Search"
+                                    error={errors.search}
+                                >
                                     <div className="relative">
                                         <Search
                                             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
                                             aria-hidden="true"
                                         />
                                         <Input
-                                            id="search"
                                             type="search"
                                             name="search"
                                             defaultValue={filters.search ?? ''}
                                             placeholder="Number, location, storage, or requester"
                                             className="pl-9"
                                             autoComplete="off"
-                                            aria-invalid={
-                                                errors.search ? true : undefined
-                                            }
                                         />
                                     </div>
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="view">Status</Label>
-                                    <select
-                                        id="view"
+                                </Field>
+                                <Field
+                                    id="view"
+                                    label="Status"
+                                    error={errors.view}
+                                >
+                                    <NativeSelect
                                         name="view"
                                         defaultValue={filters.view}
-                                        className={selectClassName}
-                                        aria-invalid={
-                                            errors.view ? true : undefined
-                                        }
                                     >
                                         <option value="all">
                                             All statuses
@@ -430,26 +442,19 @@ export default function StockTransferIndex({
                                         <option value="variance">
                                             Has variance
                                         </option>
-                                    </select>
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="from_location_id">
-                                        Source location
-                                    </Label>
-                                    <select
-                                        id="from_location_id"
+                                    </NativeSelect>
+                                </Field>
+                                <Field
+                                    id="from_location_id"
+                                    label="Source location"
+                                    error={errors.from_location_id}
+                                >
+                                    <NativeSelect
                                         name="from_location_id"
                                         defaultValue={
                                             filters.fromLocationId?.toString() ??
                                             ''
                                         }
-                                        className={selectClassName}
-                                        aria-invalid={
-                                            errors.from_location_id
-                                                ? true
-                                                : undefined
-                                        }
                                     >
                                         <option value="">All locations</option>
                                         {locationOptions.map((location) => (
@@ -460,26 +465,19 @@ export default function StockTransferIndex({
                                                 {location.name}
                                             </option>
                                         ))}
-                                    </select>
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="to_location_id">
-                                        Destination location
-                                    </Label>
-                                    <select
-                                        id="to_location_id"
+                                    </NativeSelect>
+                                </Field>
+                                <Field
+                                    id="to_location_id"
+                                    label="Destination location"
+                                    error={errors.to_location_id}
+                                >
+                                    <NativeSelect
                                         name="to_location_id"
                                         defaultValue={
                                             filters.toLocationId?.toString() ??
                                             ''
                                         }
-                                        className={selectClassName}
-                                        aria-invalid={
-                                            errors.to_location_id
-                                                ? true
-                                                : undefined
-                                        }
                                     >
                                         <option value="">All locations</option>
                                         {locationOptions.map((location) => (
@@ -490,48 +488,44 @@ export default function StockTransferIndex({
                                                 {location.name}
                                             </option>
                                         ))}
-                                    </select>
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="from">Requested from</Label>
+                                    </NativeSelect>
+                                </Field>
+                                <Field
+                                    id="from"
+                                    label="Requested from"
+                                    error={errors.from}
+                                >
                                     <Input
-                                        id="from"
-                                        type="date"
                                         name="from"
-                                        defaultValue={filters.from ?? ''}
-                                        aria-invalid={
-                                            errors.from ? true : undefined
-                                        }
-                                    />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="to">Requested to</Label>
-                                    <Input
-                                        id="to"
                                         type="date"
-                                        name="to"
-                                        defaultValue={filters.to ?? ''}
-                                        aria-invalid={
-                                            errors.to ? true : undefined
-                                        }
+                                        defaultValue={filters.from ?? ''}
                                     />
-                                </div>
-
+                                </Field>
+                                <Field
+                                    id="to"
+                                    label="Requested to"
+                                    error={errors.to}
+                                >
+                                    <Input
+                                        name="to"
+                                        type="date"
+                                        defaultValue={filters.to ?? ''}
+                                    />
+                                </Field>
                                 <div className="flex items-end gap-2 md:col-span-2 xl:col-span-1">
                                     <Button
                                         type="submit"
                                         disabled={processing}
-                                        className="min-w-24 flex-1 xl:flex-none"
+                                        className="flex-1 xl:flex-none"
                                     >
                                         <Filter
                                             className="size-4"
                                             aria-hidden="true"
                                         />
-                                        {processing ? 'Applying…' : 'Apply'}
+                                        {processing
+                                            ? 'Applying…'
+                                            : 'Apply filters'}
                                     </Button>
-
                                     <Button
                                         variant="outline"
                                         className="flex-1 xl:flex-none"
@@ -548,57 +542,90 @@ export default function StockTransferIndex({
                                         </Link>
                                     </Button>
                                 </div>
-
-                                {Object.keys(errors).length > 0 && (
-                                    <div
-                                        role="alert"
-                                        className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive md:col-span-2 xl:col-span-7"
-                                    >
-                                        One or more stock-transfer filters are
-                                        invalid. Review the values or reset the
-                                        filters and try again.
-                                    </div>
-                                )}
                             </div>
-                        )}
-                    </Form>
-
-                    <nav
-                        aria-label="Stock transfer views"
-                        className="flex gap-1 overflow-x-auto border-t border-sidebar-border/70 px-4 pt-2 dark:border-sidebar-border"
-                    >
-                        {quickViews.map((view) => {
-                            const active = filters.view === view.value;
-
-                            return (
-                                <Link
-                                    key={view.value}
-                                    href={hrefFor({
-                                        view: view.value,
-                                        page: null,
-                                    })}
-                                    preserveScroll
-                                    preserveState
-                                    aria-current={active ? 'page' : undefined}
-                                    className={cn(
-                                        'border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                                        active
-                                            ? 'border-primary text-foreground'
-                                            : 'border-transparent text-muted-foreground hover:text-foreground',
-                                    )}
+                            {activeFilters.length > 0 && (
+                                <div
+                                    className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4"
+                                    aria-label="Active filters"
                                 >
-                                    {view.label}
-                                </Link>
-                            );
-                        })}
-                    </nav>
-                </section>
-
-                <section
-                    className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border"
-                    aria-labelledby="stock-transfers-table-title"
+                                    <span className="text-xs font-medium text-muted-foreground">
+                                        Active filters
+                                    </span>
+                                    {activeFilters.map((filter) => (
+                                        <Button
+                                            key={filter.key}
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 gap-1 px-2 text-xs"
+                                            asChild
+                                        >
+                                            <Link
+                                                href={hrefFor({
+                                                    [filter.key]: null,
+                                                    page: null,
+                                                })}
+                                                preserveScroll
+                                                preserveState
+                                            >
+                                                <span>{filter.label}</span>
+                                                <X
+                                                    className="size-3"
+                                                    aria-hidden="true"
+                                                />
+                                                <span className="sr-only">
+                                                    Remove {filter.label} filter
+                                                </span>
+                                            </Link>
+                                        </Button>
+                                    ))}
+                                </div>
+                            )}
+                            {Object.keys(errors).length > 0 && (
+                                <div
+                                    role="alert"
+                                    className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                                >
+                                    One or more stock-transfer filters are
+                                    invalid. Review the described fields or
+                                    reset the filters and try again.
+                                </div>
+                            )}
+                        </FilterToolbar>
+                    )}
+                </Form>
+                <nav
+                    aria-label="Stock transfer views"
+                    className="flex gap-1 overflow-x-auto border-b border-border px-1"
                 >
-                    <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-sidebar-border/70 px-4 py-3 dark:border-sidebar-border">
+                    {quickViews.map((view) => (
+                        <Link
+                            key={view.value}
+                            href={hrefFor({ view: view.value, page: null })}
+                            preserveScroll
+                            preserveState
+                            aria-current={
+                                filters.view === view.value ? 'page' : undefined
+                            }
+                            className={cn(
+                                'border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none motion-reduce:transition-none',
+                                filters.view === view.value
+                                    ? 'border-primary text-foreground'
+                                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                            )}
+                        >
+                            {view.label}
+                        </Link>
+                    ))}
+                </nav>
+                <section
+                    aria-labelledby="stock-transfers-table-title"
+                    aria-busy={isNavigating}
+                    className={cn(
+                        'overflow-hidden rounded-xl border border-border bg-card text-card-foreground transition-opacity motion-reduce:transition-none',
+                        isNavigating && 'opacity-60',
+                    )}
+                >
+                    <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
                         <div>
                             <h2
                                 id="stock-transfers-table-title"
@@ -611,321 +638,376 @@ export default function StockTransferIndex({
                                 for the active organization.
                             </p>
                         </div>
-
-                        <Badge variant="outline">
-                            {pagination.total.toLocaleString()}{' '}
-                            {pagination.total === 1 ? 'transfer' : 'transfers'}
-                        </Badge>
+                        <StatusBadge
+                            label={`${pagination.total.toLocaleString()} ${pagination.total === 1 ? 'transfer' : 'transfers'}`}
+                            variant="neutral"
+                        />
                     </div>
+                    <p className="sr-only" aria-live="polite">
+                        {isNavigating ? 'Updating stock transfer results…' : ''}
+                    </p>
+                    {rows.length === 0 ? (
+                        <EmptyState
+                            className="px-6 py-14"
+                            icon={Search}
+                            title={
+                                activeFilters.length > 0
+                                    ? 'No stock transfers match these filters'
+                                    : 'No stock transfers yet'
+                            }
+                            description={
+                                activeFilters.length > 0
+                                    ? 'Adjust or remove filters to see other transfer history.'
+                                    : 'Create a transfer when inventory needs to move between storage locations.'
+                            }
+                            action={
+                                activeFilters.length > 0 ? (
+                                    <Button variant="outline" size="sm" asChild>
+                                        <Link
+                                            href={StockTransferController.index()}
+                                        >
+                                            <RotateCcw
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            Reset filters
+                                        </Link>
+                                    </Button>
+                                ) : undefined
+                            }
+                        />
+                    ) : (
+                        <>
+                            <div
+                                className="divide-y divide-border md:hidden"
+                                data-testid="mobile-stock-transfers"
+                            >
+                                {rows.map((row) => {
+                                    const editable =
+                                        canCreate && row.status === 'draft';
 
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[1640px] text-sm">
-                            <caption className="sr-only">
-                                Stock transfers showing source and destination,
-                                lifecycle status, workflow timestamps, item and
-                                variance counts, requester, and available
-                                action.
-                            </caption>
-                            <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                                <tr>
-                                    <th scope="col" className="px-4 py-3">
-                                        <Link
-                                            href={sortHref('number')}
-                                            preserveScroll
-                                            preserveState
-                                            className="inline-flex items-center gap-1.5 font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                    return (
+                                        <article
+                                            key={row.id}
+                                            className="space-y-4 p-4"
+                                            aria-labelledby={`stock-transfer-${row.id}`}
                                         >
-                                            Number
-                                            <SortIndicator
-                                                active={
-                                                    filters.sort === 'number'
-                                                }
-                                                direction={filters.direction}
-                                            />
-                                        </Link>
-                                    </th>
-                                    <th scope="col" className="px-4 py-3">
-                                        Source
-                                    </th>
-                                    <th scope="col" className="px-4 py-3">
-                                        Destination
-                                    </th>
-                                    <th scope="col" className="px-4 py-3">
-                                        <Link
-                                            href={sortHref('status')}
-                                            preserveScroll
-                                            preserveState
-                                            className="inline-flex items-center gap-1.5 font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                        >
-                                            Status
-                                            <SortIndicator
-                                                active={
-                                                    filters.sort === 'status'
-                                                }
-                                                direction={filters.direction}
-                                            />
-                                        </Link>
-                                    </th>
-                                    <th scope="col" className="px-4 py-3">
-                                        <Link
-                                            href={sortHref('requested_at')}
-                                            preserveScroll
-                                            preserveState
-                                            className="inline-flex items-center gap-1.5 font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                        >
-                                            Requested
-                                            <SortIndicator
-                                                active={
-                                                    filters.sort ===
-                                                    'requested_at'
-                                                }
-                                                direction={filters.direction}
-                                            />
-                                        </Link>
-                                    </th>
-                                    <th scope="col" className="px-4 py-3">
-                                        <Link
-                                            href={sortHref('shipped_at')}
-                                            preserveScroll
-                                            preserveState
-                                            className="inline-flex items-center gap-1.5 font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                        >
-                                            Shipped
-                                            <SortIndicator
-                                                active={
-                                                    filters.sort ===
-                                                    'shipped_at'
-                                                }
-                                                direction={filters.direction}
-                                            />
-                                        </Link>
-                                    </th>
-                                    <th scope="col" className="px-4 py-3">
-                                        <Link
-                                            href={sortHref('received_at')}
-                                            preserveScroll
-                                            preserveState
-                                            className="inline-flex items-center gap-1.5 font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                        >
-                                            Received
-                                            <SortIndicator
-                                                active={
-                                                    filters.sort ===
-                                                    'received_at'
-                                                }
-                                                direction={filters.direction}
-                                            />
-                                        </Link>
-                                    </th>
-                                    <th scope="col" className="px-4 py-3">
-                                        Items
-                                    </th>
-                                    <th scope="col" className="px-4 py-3">
-                                        Variance
-                                    </th>
-                                    <th scope="col" className="px-4 py-3">
-                                        Requested by
-                                    </th>
-                                    <th
-                                        scope="col"
-                                        className="w-16 px-4 py-3 text-right"
-                                    >
-                                        Actions
-                                    </th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                {rows.length === 0 ? (
-                                    <tr>
-                                        <td
-                                            colSpan={11}
-                                            className="px-6 py-14 text-center"
-                                        >
-                                            <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted">
-                                                <Search
-                                                    className="size-5 text-muted-foreground"
-                                                    aria-hidden="true"
-                                                />
-                                            </div>
-                                            <p className="mt-3 font-medium">
-                                                {hasFilters
-                                                    ? 'No stock transfers match these filters.'
-                                                    : 'No stock transfers yet.'}
-                                            </p>
-                                            <p className="mt-1 text-sm text-muted-foreground">
-                                                {hasFilters
-                                                    ? 'Adjust or reset the filters to see other transfer history.'
-                                                    : 'Create a transfer when inventory needs to move between storage locations.'}
-                                            </p>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    rows.map((row) => {
-                                        const canEditDraft =
-                                            canCreate && row.status === 'draft';
-
-                                        return (
-                                            <tr
-                                                key={row.id}
-                                                className="border-b border-sidebar-border/70 transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
-                                            >
-                                                <td className="px-4 py-3 font-medium">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0">
                                                     <Link
+                                                        id={`stock-transfer-${row.id}`}
                                                         href={StockTransferController.edit(
                                                             row.id,
                                                         )}
-                                                        className="text-blue-600 underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:text-blue-400"
+                                                        className="font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                                     >
                                                         {row.number}
                                                     </Link>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <div>
-                                                        {row.fromLocationName}
-                                                    </div>
-                                                    <div className="mt-0.5 text-xs text-muted-foreground">
-                                                        {
-                                                            row.fromStorageLocationName
+                                                    <p className="mt-1 text-xs text-muted-foreground">
+                                                        Requested{' '}
+                                                        {row.requestedAt
+                                                            ? formatOrganizationDate(
+                                                                  row.requestedAt,
+                                                                  timezone,
+                                                              )
+                                                            : '—'}
+                                                    </p>
+                                                </div>
+                                                <StatusBadge
+                                                    label={transferStatusLabel(
+                                                        row.status,
+                                                    )}
+                                                    variant={transferStatusVariant(
+                                                        row.status,
+                                                    )}
+                                                />
+                                            </div>
+                                            <TransferDirection row={row} />
+                                            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                                                <div>
+                                                    <dt className="text-xs text-muted-foreground">
+                                                        Items
+                                                    </dt>
+                                                    <dd className="mt-1 tabular-nums">
+                                                        {row.itemCount.toLocaleString()}
+                                                    </dd>
+                                                </div>
+                                                <div>
+                                                    <dt className="text-xs text-muted-foreground">
+                                                        Variance
+                                                    </dt>
+                                                    <dd className="mt-1">
+                                                        <VarianceState
+                                                            count={
+                                                                row.varianceItemCount
+                                                            }
+                                                        />
+                                                    </dd>
+                                                </div>
+                                                <div>
+                                                    <dt className="text-xs text-muted-foreground">
+                                                        Shipped
+                                                    </dt>
+                                                    <dd className="mt-1">
+                                                        {row.shippedAt
+                                                            ? formatOrganizationDate(
+                                                                  row.shippedAt,
+                                                                  timezone,
+                                                              )
+                                                            : '—'}
+                                                    </dd>
+                                                </div>
+                                                <div>
+                                                    <dt className="text-xs text-muted-foreground">
+                                                        Received
+                                                    </dt>
+                                                    <dd className="mt-1">
+                                                        {row.receivedAt
+                                                            ? formatOrganizationDate(
+                                                                  row.receivedAt,
+                                                                  timezone,
+                                                              )
+                                                            : '—'}
+                                                    </dd>
+                                                </div>
+                                            </dl>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full"
+                                                asChild
+                                            >
+                                                <Link
+                                                    href={StockTransferController.edit(
+                                                        row.id,
+                                                    )}
+                                                >
+                                                    {editable && (
+                                                        <Pencil
+                                                            className="size-4"
+                                                            aria-hidden="true"
+                                                        />
+                                                    )}
+                                                    {editable
+                                                        ? 'Edit transfer'
+                                                        : 'View transfer'}
+                                                </Link>
+                                            </Button>
+                                        </article>
+                                    );
+                                })}
+                            </div>
+                            <div className="hidden overflow-x-auto md:block">
+                                <table className="w-full min-w-[1260px] text-sm">
+                                    <caption className="sr-only">
+                                        Stock transfers showing direction,
+                                        lifecycle status, timestamps, item and
+                                        variance counts, requester, and
+                                        available action.
+                                    </caption>
+                                    <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+                                        <tr>
+                                            {sortHeaders.map(
+                                                ([sort, label]) => (
+                                                    <th
+                                                        key={sort}
+                                                        scope="col"
+                                                        aria-sort={
+                                                            filters.sort ===
+                                                            sort
+                                                                ? filters.direction ===
+                                                                  'asc'
+                                                                    ? 'ascending'
+                                                                    : 'descending'
+                                                                : 'none'
                                                         }
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <div>
-                                                        {row.toLocationName}
-                                                    </div>
-                                                    <div className="mt-0.5 text-xs text-muted-foreground">
-                                                        {
-                                                            row.toStorageLocationName
-                                                        }
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <StatusBadge
-                                                        status={row.status}
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap tabular-nums">
-                                                    {row.requestedAt ===
-                                                    null ? (
-                                                        <span className="text-muted-foreground">
-                                                            —
-                                                        </span>
-                                                    ) : (
-                                                        <time
-                                                            dateTime={
-                                                                row.requestedAt
-                                                            }
-                                                        >
-                                                            {formatOrganizationDate(
-                                                                row.requestedAt,
-                                                                timezone,
-                                                            )}
-                                                        </time>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap tabular-nums">
-                                                    {row.shippedAt === null ? (
-                                                        <span className="text-muted-foreground">
-                                                            —
-                                                        </span>
-                                                    ) : (
-                                                        <time
-                                                            dateTime={
-                                                                row.shippedAt
-                                                            }
-                                                        >
-                                                            {formatOrganizationDate(
-                                                                row.shippedAt,
-                                                                timezone,
-                                                            )}
-                                                        </time>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap tabular-nums">
-                                                    {row.receivedAt === null ? (
-                                                        <span className="text-muted-foreground">
-                                                            —
-                                                        </span>
-                                                    ) : (
-                                                        <time
-                                                            dateTime={
-                                                                row.receivedAt
-                                                            }
-                                                        >
-                                                            {formatOrganizationDate(
-                                                                row.receivedAt,
-                                                                timezone,
-                                                            )}
-                                                        </time>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 tabular-nums">
-                                                    {row.itemCount.toLocaleString()}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap tabular-nums">
-                                                    {row.varianceItemCount ===
-                                                    null ? (
-                                                        <span className="text-muted-foreground">
-                                                            —
-                                                        </span>
-                                                    ) : row.varianceItemCount ===
-                                                      0 ? (
-                                                        <span className="text-emerald-700 dark:text-emerald-300">
-                                                            No variance
-                                                        </span>
-                                                    ) : (
-                                                        <span className="font-medium text-destructive">
-                                                            {row.varianceItemCount.toLocaleString()}{' '}
-                                                            {row.varianceItemCount ===
-                                                            1
-                                                                ? 'item'
-                                                                : 'items'}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    {row.requestedByName ?? (
-                                                        <span className="text-muted-foreground">
-                                                            —
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-2 text-right">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        asChild
+                                                        className="px-4 py-3"
                                                     >
+                                                        <Link
+                                                            href={sortHref(
+                                                                sort,
+                                                            )}
+                                                            preserveScroll
+                                                            preserveState
+                                                            className="inline-flex items-center gap-1.5 font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                        >
+                                                            {label}
+                                                            <SortIndicator
+                                                                active={
+                                                                    filters.sort ===
+                                                                    sort
+                                                                }
+                                                                direction={
+                                                                    filters.direction
+                                                                }
+                                                            />
+                                                        </Link>
+                                                    </th>
+                                                ),
+                                            )}
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3"
+                                            >
+                                                Source → Destination
+                                            </th>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3"
+                                            >
+                                                Items
+                                            </th>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3"
+                                            >
+                                                Variance
+                                            </th>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3"
+                                            >
+                                                Requested by
+                                            </th>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 text-right"
+                                            >
+                                                Action
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {rows.map((row) => {
+                                            const editable =
+                                                canCreate &&
+                                                row.status === 'draft';
+
+                                            return (
+                                                <tr
+                                                    key={row.id}
+                                                    className="border-b border-border transition-colors last:border-b-0 hover:bg-muted/30"
+                                                >
+                                                    <td className="px-4 py-3 font-medium">
                                                         <Link
                                                             href={StockTransferController.edit(
                                                                 row.id,
                                                             )}
-                                                            aria-label={`${canEditDraft ? 'Edit' : 'View'} ${row.number}`}
+                                                            className="underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                                         >
-                                                            {canEditDraft ? (
-                                                                <Pencil
-                                                                    className="size-4"
-                                                                    aria-hidden="true"
-                                                                />
-                                                            ) : (
-                                                                <Eye
-                                                                    className="size-4"
-                                                                    aria-hidden="true"
-                                                                />
-                                                            )}
+                                                            {row.number}
                                                         </Link>
-                                                    </Button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div className="flex items-start gap-2 border-t border-sidebar-border/70 bg-blue-50/60 px-4 py-3 text-sm text-blue-800 dark:border-sidebar-border dark:bg-blue-950/20 dark:text-blue-200">
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <StatusBadge
+                                                            label={transferStatusLabel(
+                                                                row.status,
+                                                            )}
+                                                            variant={transferStatusVariant(
+                                                                row.status,
+                                                            )}
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap tabular-nums">
+                                                        {row.requestedAt ? (
+                                                            <time
+                                                                dateTime={
+                                                                    row.requestedAt
+                                                                }
+                                                            >
+                                                                {formatOrganizationDate(
+                                                                    row.requestedAt,
+                                                                    timezone,
+                                                                )}
+                                                            </time>
+                                                        ) : (
+                                                            '—'
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap tabular-nums">
+                                                        {row.shippedAt ? (
+                                                            <time
+                                                                dateTime={
+                                                                    row.shippedAt
+                                                                }
+                                                            >
+                                                                {formatOrganizationDate(
+                                                                    row.shippedAt,
+                                                                    timezone,
+                                                                )}
+                                                            </time>
+                                                        ) : (
+                                                            '—'
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap tabular-nums">
+                                                        {row.receivedAt ? (
+                                                            <time
+                                                                dateTime={
+                                                                    row.receivedAt
+                                                                }
+                                                            >
+                                                                {formatOrganizationDate(
+                                                                    row.receivedAt,
+                                                                    timezone,
+                                                                )}
+                                                            </time>
+                                                        ) : (
+                                                            '—'
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <TransferDirection
+                                                            row={row}
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 tabular-nums">
+                                                        {row.itemCount.toLocaleString()}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <VarianceState
+                                                            count={
+                                                                row.varianceItemCount
+                                                            }
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        {row.requestedByName ?? (
+                                                            <span className="text-muted-foreground">
+                                                                —
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            asChild
+                                                        >
+                                                            <Link
+                                                                href={StockTransferController.edit(
+                                                                    row.id,
+                                                                )}
+                                                            >
+                                                                {editable
+                                                                    ? 'Edit'
+                                                                    : 'View'}
+                                                                <span className="sr-only">
+                                                                    {' '}
+                                                                    {row.number}
+                                                                </span>
+                                                            </Link>
+                                                        </Button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    )}
+                    <div className="flex flex-col gap-3 border-t border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-start">
                         <Info
                             className="mt-0.5 size-4 shrink-0"
                             aria-hidden="true"
@@ -933,27 +1015,21 @@ export default function StockTransferIndex({
                         <p>
                             Shipping removes stock from the source location.
                             Destination stock changes only when receipt is
-                            recorded, and received quantities and variances stay
-                            attached to the transfer audit trail.
+                            recorded, and received quantities and variances
+                            remain attached to the transfer audit trail.
                         </p>
                     </div>
-
                     {pagination.total > 0 && (
-                        <div className="flex flex-col gap-3 border-t border-sidebar-border/70 px-4 py-3 lg:flex-row lg:items-center lg:justify-between dark:border-sidebar-border">
-                            <p className="text-sm text-muted-foreground">
-                                Showing {pagination.from ?? 0} to{' '}
-                                {pagination.to ?? 0} of{' '}
-                                {pagination.total.toLocaleString()} results
-                            </p>
-
-                            <div className="flex flex-wrap items-center gap-3">
-                                <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <span>Rows per page</span>
-                                    <select
-                                        aria-label="Rows per page"
+                        <>
+                            <div className="border-t border-border px-4 py-3">
+                                <Field
+                                    id="per-page"
+                                    label="Rows per page"
+                                    className="max-w-40"
+                                >
+                                    <NativeSelect
                                         value={pagination.perPage}
-                                        className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                        onChange={(event) => {
+                                        onChange={(event) =>
                                             router.visit(
                                                 hrefFor({
                                                     per_page:
@@ -965,204 +1041,31 @@ export default function StockTransferIndex({
                                                     preserveScroll: true,
                                                     preserveState: true,
                                                 },
-                                            );
-                                        }}
+                                            )
+                                        }
                                     >
                                         <option value="10">10</option>
                                         <option value="25">25</option>
                                         <option value="50">50</option>
-                                    </select>
-                                </label>
-
-                                {pagination.lastPage > 1 && (
-                                    <nav
-                                        className="flex items-center gap-1"
-                                        aria-label="Stock transfer pagination"
-                                    >
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="icon"
-                                            disabled={
-                                                pagination.currentPage === 1
-                                            }
-                                            asChild={
-                                                pagination.currentPage !== 1
-                                            }
-                                        >
-                                            {pagination.currentPage === 1 ? (
-                                                <ChevronsLeft
-                                                    className="size-4"
-                                                    aria-hidden="true"
-                                                />
-                                            ) : (
-                                                <Link
-                                                    href={hrefFor({ page: 1 })}
-                                                    preserveScroll
-                                                    preserveState
-                                                    aria-label="First page"
-                                                >
-                                                    <ChevronsLeft
-                                                        className="size-4"
-                                                        aria-hidden="true"
-                                                    />
-                                                </Link>
-                                            )}
-                                        </Button>
-
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="icon"
-                                            disabled={
-                                                pagination.previousPageUrl ===
-                                                null
-                                            }
-                                            asChild={
-                                                pagination.previousPageUrl !==
-                                                null
-                                            }
-                                        >
-                                            {pagination.previousPageUrl ===
-                                            null ? (
-                                                <ChevronLeft
-                                                    className="size-4"
-                                                    aria-hidden="true"
-                                                />
-                                            ) : (
-                                                <Link
-                                                    href={
-                                                        pagination.previousPageUrl
-                                                    }
-                                                    preserveScroll
-                                                    preserveState
-                                                    aria-label="Previous page"
-                                                >
-                                                    <ChevronLeft
-                                                        className="size-4"
-                                                        aria-hidden="true"
-                                                    />
-                                                </Link>
-                                            )}
-                                        </Button>
-
-                                        {pages.map((page) => (
-                                            <Button
-                                                key={page}
-                                                variant={
-                                                    page ===
-                                                    pagination.currentPage
-                                                        ? 'secondary'
-                                                        : 'outline'
-                                                }
-                                                size="icon"
-                                                asChild
-                                            >
-                                                <Link
-                                                    href={hrefFor({ page })}
-                                                    preserveScroll
-                                                    preserveState
-                                                    aria-label={`Page ${page}`}
-                                                    aria-current={
-                                                        page ===
-                                                        pagination.currentPage
-                                                            ? 'page'
-                                                            : undefined
-                                                    }
-                                                >
-                                                    {page}
-                                                </Link>
-                                            </Button>
-                                        ))}
-
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="icon"
-                                            disabled={
-                                                pagination.nextPageUrl === null
-                                            }
-                                            asChild={
-                                                pagination.nextPageUrl !== null
-                                            }
-                                        >
-                                            {pagination.nextPageUrl === null ? (
-                                                <ChevronRight
-                                                    className="size-4"
-                                                    aria-hidden="true"
-                                                />
-                                            ) : (
-                                                <Link
-                                                    href={
-                                                        pagination.nextPageUrl
-                                                    }
-                                                    preserveScroll
-                                                    preserveState
-                                                    aria-label="Next page"
-                                                >
-                                                    <ChevronRight
-                                                        className="size-4"
-                                                        aria-hidden="true"
-                                                    />
-                                                </Link>
-                                            )}
-                                        </Button>
-
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="icon"
-                                            disabled={
-                                                pagination.currentPage ===
-                                                pagination.lastPage
-                                            }
-                                            asChild={
-                                                pagination.currentPage !==
-                                                pagination.lastPage
-                                            }
-                                        >
-                                            {pagination.currentPage ===
-                                            pagination.lastPage ? (
-                                                <ChevronsRight
-                                                    className="size-4"
-                                                    aria-hidden="true"
-                                                />
-                                            ) : (
-                                                <Link
-                                                    href={hrefFor({
-                                                        page: pagination.lastPage,
-                                                    })}
-                                                    preserveScroll
-                                                    preserveState
-                                                    aria-label="Last page"
-                                                >
-                                                    <ChevronsRight
-                                                        className="size-4"
-                                                        aria-hidden="true"
-                                                    />
-                                                </Link>
-                                            )}
-                                        </Button>
-                                    </nav>
-                                )}
+                                    </NativeSelect>
+                                </Field>
                             </div>
-                        </div>
+                            <PaginationControls
+                                currentPage={pagination.currentPage}
+                                from={pagination.from}
+                                to={pagination.to}
+                                total={pagination.total}
+                                lastPage={pagination.lastPage}
+                                previousPageUrl={pagination.previousPageUrl}
+                                nextPageUrl={pagination.nextPageUrl}
+                                itemLabel="transfers"
+                                preserveScroll
+                                preserveState
+                            />
+                        </>
                     )}
                 </section>
             </div>
         </>
     );
 }
-
-StockTransferIndex.layout = {
-    breadcrumbs: [
-        {
-            title: 'Dashboard',
-            href: dashboard(),
-        },
-        {
-            title: 'Stock transfers',
-            href: StockTransferController.index(),
-        },
-    ],
-};

@@ -20,6 +20,7 @@ import {
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
+import { useDirtyFormNavigation } from '@/hooks/use-dirty-form-navigation';
 import { dashboard } from '@/routes';
 
 type StockCountStatus = 'draft' | 'submitted' | 'finalized' | 'cancelled';
@@ -170,6 +171,32 @@ function stockCountStatusVariant(
 /** Convert a lifecycle status into its visible human-readable label. */
 function stockCountStatusLabel(status: StockCountStatus): string {
     return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+/** Make finalized variance direction explicit without relying on color alone. */
+function FinalizedVariance({ value, unit }: { value: string; unit: string }) {
+    const numericValue = value.trim();
+    const variant =
+        numericValue === '0' || numericValue === '0.0'
+            ? 'neutral'
+            : numericValue.startsWith('-')
+              ? 'danger'
+              : 'success';
+    const label =
+        variant === 'neutral'
+            ? 'No variance'
+            : variant === 'danger'
+              ? 'Shortage'
+              : 'Overage';
+
+    return (
+        <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium tabular-nums">
+                {formatDecimal(value)} {unit}
+            </span>
+            <StatusBadge label={label} variant={variant} />
+        </div>
+    );
 }
 
 /** Map one server validation key to the exact rendered control that owns it. */
@@ -386,11 +413,13 @@ function CountEvidence({
                                         <dt className="text-muted-foreground">
                                             Variance
                                         </dt>
-                                        <dd className="font-medium">
-                                            {formatDecimal(
-                                                line.varianceBaseQuantity,
-                                            )}{' '}
-                                            {line.baseUnitSymbol}
+                                        <dd>
+                                            <FinalizedVariance
+                                                value={
+                                                    line.varianceBaseQuantity
+                                                }
+                                                unit={line.baseUnitSymbol}
+                                            />
                                         </dd>
                                     </div>
                                 </>
@@ -419,7 +448,7 @@ function CountEvidence({
                                     <dd className="font-medium">
                                         {line.movementId === null
                                             ? 'No movement'
-                                            : `#${line.movementId}`}
+                                            : `Stock movement #${line.movementId}`}
                                     </dd>
                                 </div>
                             )}
@@ -525,10 +554,12 @@ function CountEvidence({
                                         </td>
 
                                         <td className="px-4 py-3 align-top">
-                                            {formatDecimal(
-                                                line.varianceBaseQuantity,
-                                            )}{' '}
-                                            {line.baseUnitSymbol}
+                                            <FinalizedVariance
+                                                value={
+                                                    line.varianceBaseQuantity
+                                                }
+                                                unit={line.baseUnitSymbol}
+                                            />
                                         </td>
                                     </>
                                 )}
@@ -547,7 +578,7 @@ function CountEvidence({
                                     <td className="px-4 py-3 align-top">
                                         {line.movementId === null
                                             ? 'No movement'
-                                            : `#${line.movementId}`}
+                                            : `Stock movement #${line.movementId}`}
                                     </td>
                                 )}
                             </tr>
@@ -575,6 +606,9 @@ export default function StockCountForm({
     const editable =
         canCreate && (stockCount === null || stockCount.status === 'draft');
     const finalized = stockCount?.status === 'finalized';
+    const { confirmNavigation, setIsDirty } = useDirtyFormNavigation(
+        'Discard unsaved stock count changes?',
+    );
 
     const initialLocationId =
         stockCount?.locationId.toString() ??
@@ -615,6 +649,7 @@ export default function StockCountForm({
 
     /** Update one dynamic physical-count line without mutating sibling lines. */
     const updateLine = (index: number, values: Partial<LineState>) => {
+        setIsDirty(true);
         setLines((current) =>
             current.map((line, currentIndex) =>
                 currentIndex === index
@@ -629,11 +664,13 @@ export default function StockCountForm({
 
     /** Append one blank physical-count evidence line. */
     const addLine = () => {
+        setIsDirty(true);
         setLines((current) => [...current, emptyLine()]);
     };
 
     /** Remove one physical-count line while retaining at least one line. */
     const removeLine = (index: number) => {
+        setIsDirty(true);
         setLines((current) =>
             current.filter((_, currentIndex) => currentIndex !== index),
         );
@@ -641,6 +678,7 @@ export default function StockCountForm({
 
     /** Keep storage selection inside the newly selected parent location. */
     const handleLocationChange = (value: string) => {
+        setIsDirty(true);
         setLocationId(value);
 
         const firstStorage = storageLocationOptions.find(
@@ -696,6 +734,7 @@ export default function StockCountForm({
                     actions={
                         <PreviousPageButton
                             fallback={StockCountController.index.url()}
+                            onNavigate={confirmNavigation}
                             variant="outline"
                         >
                             Back to stock counts
@@ -786,7 +825,11 @@ export default function StockCountForm({
                 )}
 
                 {editable ? (
-                    <Form {...formAttributes}>
+                    <Form
+                        {...formAttributes}
+                        onChangeCapture={() => setIsDirty(true)}
+                        onSuccess={() => setIsDirty(false)}
+                    >
                         {({ processing, errors }) => {
                             const targets = errorTargets(errors);
 
@@ -1506,6 +1549,15 @@ export default function StockCountForm({
                                                 finalized evidence is then
                                                 locked for audit integrity.
                                             </DialogDescription>
+
+                                            <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+                                                This will finalize{' '}
+                                                {stockCount.lines.length}{' '}
+                                                {stockCount.lines.length === 1
+                                                    ? 'count line'
+                                                    : 'count lines'}
+                                                .
+                                            </p>
                                         </DialogHeader>
 
                                         {actionError !== null && (

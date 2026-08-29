@@ -10,6 +10,7 @@ use App\Models\StockTransfer;
 use App\Models\StorageLocation;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /** Create one storage location for Stock Transfers index regression tests. */
@@ -495,4 +496,27 @@ test('stock transfers index preserves permission aware read and action visibilit
         ])
         ->get(route('stock-transfers.index'))
         ->assertForbidden();
+});
+
+test('stock transfers index follows the canonical responsive operations ui contract', function () {
+    $source = File::get(resource_path('js/pages/stock-transfers/index.tsx'));
+
+    expect($source)
+        ->toContain("import { EmptyState } from '@/components/empty-state';")
+        ->toContain("import { FilterToolbar } from '@/components/filter-toolbar';")
+        ->toContain("import { PageHeader } from '@/components/page-header';")
+        ->toContain("import { PaginationControls } from '@/components/pagination-controls';")
+        ->toContain("import { StatusBadge } from '@/components/status-badge';")
+        ->toContain("import { Field } from '@/components/ui/field';")
+        ->toContain("import { NativeSelect } from '@/components/ui/native-select';")
+        ->toContain('Active filters')
+        ->toContain('Remove {filter.label} filter')
+        ->toContain('aria-busy={isNavigating}')
+        ->toContain('aria-sort={')
+        ->toContain('mobile-stock-transfers')
+        ->toContain('Source → Destination')
+        ->toContain('Awaiting receipt')
+        ->not->toContain('border-sidebar-border')
+        ->not->toContain('const selectClassName')
+        ->not->toContain('function StatusBadge(');
 });

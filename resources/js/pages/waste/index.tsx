@@ -1,8 +1,6 @@
 import { Form, Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ChevronDown,
-    ChevronLeft,
-    ChevronRight,
     CircleDollarSign,
     ClipboardList,
     Download,
@@ -14,6 +12,7 @@ import {
     Search,
     Star,
     Tags,
+    X,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -25,6 +24,7 @@ import { EmptyState } from '@/components/empty-state';
 import { FilterToolbar } from '@/components/filter-toolbar';
 import InputError from '@/components/input-error';
 import { PageHeader } from '@/components/page-header';
+import { PaginationControls } from '@/components/pagination-controls';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -184,6 +184,7 @@ type Props = {
 };
 
 type ActiveFilter = {
+    key: string;
     label: string;
     value: string;
 };
@@ -267,6 +268,56 @@ function buildExportUrl(filters: Props['filters']): string {
     return query === '' ? baseUrl : `${baseUrl}?${query}`;
 }
 
+/** Preserve server-backed report filters while removing one selected dimension. */
+function buildReportUrl(
+    filters: Props['filters'],
+    changes: Record<string, string | null>,
+): string {
+    const params = new URLSearchParams();
+
+    if (filters.locationId !== null) {
+        params.set('location_id', filters.locationId.toString());
+    }
+
+    if (filters.inventoryCategoryId !== null) {
+        params.set(
+            'inventory_category_id',
+            filters.inventoryCategoryId.toString(),
+        );
+    }
+
+    if (filters.inventoryItemId !== null) {
+        params.set('inventory_item_id', filters.inventoryItemId.toString());
+    }
+
+    if (filters.wasteReasonId !== null) {
+        params.set('waste_reason_id', filters.wasteReasonId.toString());
+    }
+
+    if (filters.from !== null) {
+        params.set('from', filters.from);
+    }
+
+    if (filters.to !== null) {
+        params.set('to', filters.to);
+    }
+
+    Object.entries(changes).forEach(([key, value]) => {
+        if (value === null || value === '') {
+            params.delete(key);
+
+            return;
+        }
+
+        params.set(key, value);
+    });
+    const query = params.toString();
+
+    return query === ''
+        ? WasteController.index().url
+        : `${WasteController.index().url}?${query}`;
+}
+
 /** Render quantity aggregates without combining unrelated base units. */
 function QuantityTotals({
     totals,
@@ -326,6 +377,7 @@ function activeReportFilters(
 
     if (filters.locationId !== null) {
         active.push({
+            key: 'location_id',
             label: 'Location',
             value:
                 options.locations.find(
@@ -336,6 +388,7 @@ function activeReportFilters(
 
     if (filters.inventoryCategoryId !== null) {
         active.push({
+            key: 'inventory_category_id',
             label: 'Category',
             value:
                 options.inventoryCategories.find(
@@ -350,6 +403,7 @@ function activeReportFilters(
         );
 
         active.push({
+            key: 'inventory_item_id',
             label: 'Item',
             value: item
                 ? `${item.name} (${item.sku})`
@@ -359,6 +413,7 @@ function activeReportFilters(
 
     if (filters.wasteReasonId !== null) {
         active.push({
+            key: 'waste_reason_id',
             label: 'Reason',
             value:
                 options.wasteReasons.find(
@@ -368,11 +423,11 @@ function activeReportFilters(
     }
 
     if (filters.from !== null) {
-        active.push({ label: 'From', value: filters.from });
+        active.push({ key: 'from', label: 'From', value: filters.from });
     }
 
     if (filters.to !== null) {
-        active.push({ label: 'To', value: filters.to });
+        active.push({ key: 'to', label: 'To', value: filters.to });
     }
 
     return active;
@@ -510,6 +565,11 @@ function RecordWasteForm({
                     }
 
                     event.preventDefault();
+
+                    if (!event.currentTarget.reportValidity()) {
+                        return;
+                    }
+
                     setConfirmationOpen(true);
                 }}
                 onError={() => setDirty(true)}
@@ -1461,6 +1521,44 @@ export default function WasteIndex({
                     description="Record known operational stock loss, administer retained reasons, analyze finalized Waste, and review immutable evidence."
                 />
 
+                <nav
+                    aria-label="Waste workspace sections"
+                    className="flex gap-1 overflow-x-auto border-b border-border px-1"
+                >
+                    {(showRecordForm || canManageReasons) && (
+                        <a
+                            href="#waste-operations-title"
+                            className="border-b-2 border-transparent px-3 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground underline-offset-4 hover:border-primary hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                        >
+                            Operations
+                        </a>
+                    )}
+                    {canViewReport &&
+                        reportOptions !== null &&
+                        report !== null && (
+                            <>
+                                <a
+                                    href="#waste-report-overview-title"
+                                    className="border-b-2 border-transparent px-3 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground underline-offset-4 hover:border-primary hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                >
+                                    Report
+                                </a>
+                                <a
+                                    href="#waste-breakdown-analysis-title"
+                                    className="border-b-2 border-transparent px-3 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground underline-offset-4 hover:border-primary hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                >
+                                    Breakdowns
+                                </a>
+                                <a
+                                    href="#waste-evidence-title"
+                                    className="border-b-2 border-transparent px-3 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground underline-offset-4 hover:border-primary hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                >
+                                    Evidence
+                                </a>
+                            </>
+                        )}
+                </nav>
+
                 {(showRecordForm || canManageReasons) && (
                     <section
                         className="grid gap-4"
@@ -1811,22 +1909,42 @@ export default function WasteIndex({
                                                 <div className="mt-2 flex flex-wrap gap-2">
                                                     {activeFilters.map(
                                                         (filter) => (
-                                                            <span
-                                                                key={`${filter.label}-${filter.value}`}
-                                                                className="inline-flex rounded-md border border-border bg-muted px-2 py-1 text-xs"
+                                                            <Button
+                                                                key={filter.key}
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-7 gap-1 px-2 text-xs"
+                                                                asChild
                                                             >
-                                                                <span className="text-muted-foreground">
+                                                                <Link
+                                                                    href={buildReportUrl(
+                                                                        filters,
+                                                                        {
+                                                                            [filter.key]:
+                                                                                null,
+                                                                        },
+                                                                    )}
+                                                                >
                                                                     {
                                                                         filter.label
                                                                     }
-                                                                    :
-                                                                </span>
-                                                                <span className="ml-1 font-medium">
+                                                                    :{' '}
                                                                     {
                                                                         filter.value
                                                                     }
-                                                                </span>
-                                                            </span>
+                                                                    <X
+                                                                        className="size-3"
+                                                                        aria-hidden="true"
+                                                                    />
+                                                                    <span className="sr-only">
+                                                                        Remove{' '}
+                                                                        {
+                                                                            filter.label
+                                                                        }{' '}
+                                                                        filter
+                                                                    </span>
+                                                                </Link>
+                                                            </Button>
                                                         ),
                                                     )}
                                                 </div>
@@ -2239,88 +2357,18 @@ export default function WasteIndex({
                                 </>
                             )}
 
-                            {rows !== null && rows.last_page > 1 && (
-                                <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                                    <p className="text-xs text-muted-foreground">
-                                        Showing {rows.from ?? 0} to{' '}
-                                        {rows.to ?? 0} of{' '}
-                                        {rows.total.toLocaleString()} records
-                                    </p>
-
-                                    <nav
-                                        className="flex items-center gap-2"
-                                        aria-label="Waste evidence pagination"
-                                    >
-                                        {rows.prev_page_url ? (
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                asChild
-                                            >
-                                                <Link
-                                                    href={rows.prev_page_url}
-                                                    aria-label="Previous page"
-                                                    preserveScroll
-                                                >
-                                                    <ChevronLeft
-                                                        className="size-4"
-                                                        aria-hidden="true"
-                                                    />
-                                                </Link>
-                                            </Button>
-                                        ) : (
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="icon"
-                                                aria-label="Previous page"
-                                                disabled
-                                            >
-                                                <ChevronLeft
-                                                    className="size-4"
-                                                    aria-hidden="true"
-                                                />
-                                            </Button>
-                                        )}
-
-                                        <span className="min-w-24 text-center text-xs text-muted-foreground">
-                                            Page {rows.current_page} of{' '}
-                                            {rows.last_page}
-                                        </span>
-
-                                        {rows.next_page_url ? (
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                asChild
-                                            >
-                                                <Link
-                                                    href={rows.next_page_url}
-                                                    aria-label="Next page"
-                                                    preserveScroll
-                                                >
-                                                    <ChevronRight
-                                                        className="size-4"
-                                                        aria-hidden="true"
-                                                    />
-                                                </Link>
-                                            </Button>
-                                        ) : (
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="icon"
-                                                aria-label="Next page"
-                                                disabled
-                                            >
-                                                <ChevronRight
-                                                    className="size-4"
-                                                    aria-hidden="true"
-                                                />
-                                            </Button>
-                                        )}
-                                    </nav>
-                                </div>
+                            {rows !== null && (
+                                <PaginationControls
+                                    currentPage={rows.current_page}
+                                    from={rows.from}
+                                    to={rows.to}
+                                    total={rows.total}
+                                    lastPage={rows.last_page}
+                                    previousPageUrl={rows.prev_page_url}
+                                    nextPageUrl={rows.next_page_url}
+                                    itemLabel="records"
+                                    preserveScroll
+                                />
                             )}
                         </section>
                     </>

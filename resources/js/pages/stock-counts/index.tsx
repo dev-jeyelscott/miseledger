@@ -9,6 +9,7 @@ import {
     Plus,
     RotateCcw,
     TriangleAlert,
+    X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -211,17 +212,31 @@ export default function StockCountIndex({
     );
 
     const activeFilters = [
-        filters.search !== null ? `Search: ${filters.search}` : null,
-        filters.view !== 'all' ? `Status: ${viewLabels[filters.view]}` : null,
+        filters.search !== null
+            ? { label: `Search: ${filters.search}`, key: 'search' }
+            : null,
+        filters.view !== 'all'
+            ? { label: `Status: ${viewLabels[filters.view]}`, key: 'view' }
+            : null,
         selectedLocation !== undefined
-            ? `Location: ${selectedLocation.name}`
+            ? {
+                  label: `Location: ${selectedLocation.name}`,
+                  key: 'location_id',
+              }
             : null,
         selectedStorageLocation !== undefined
-            ? `Storage: ${selectedStorageLocation.name}`
+            ? {
+                  label: `Storage: ${selectedStorageLocation.name}`,
+                  key: 'storage_location_id',
+              }
             : null,
-        filters.from !== null ? `From: ${filters.from}` : null,
-        filters.to !== null ? `To: ${filters.to}` : null,
-    ].filter((value): value is string => value !== null);
+        filters.from !== null
+            ? { label: `From: ${filters.from}`, key: 'from' }
+            : null,
+        filters.to !== null ? { label: `To: ${filters.to}`, key: 'to' } : null,
+    ].filter(
+        (value): value is { label: string; key: string } => value !== null,
+    );
 
     /** Preserve every current server-backed query parameter while changing requested values. */
     const hrefFor = (
@@ -572,12 +587,32 @@ export default function StockCountIndex({
                                             Active filters
                                         </span>
                                         {activeFilters.map((filter) => (
-                                            <Badge
-                                                key={filter}
+                                            <Button
+                                                key={filter.key}
                                                 variant="outline"
+                                                size="sm"
+                                                className="h-7 gap-1 px-2 text-xs"
+                                                asChild
                                             >
-                                                {filter}
-                                            </Badge>
+                                                <Link
+                                                    href={hrefFor({
+                                                        [filter.key]: null,
+                                                        page: null,
+                                                    })}
+                                                    preserveScroll
+                                                    preserveState
+                                                >
+                                                    {filter.label}
+                                                    <X
+                                                        className="size-3"
+                                                        aria-hidden="true"
+                                                    />
+                                                    <span className="sr-only">
+                                                        Remove {filter.label}{' '}
+                                                        filter
+                                                    </span>
+                                                </Link>
+                                            </Button>
                                         ))}
                                     </div>
                                 )}

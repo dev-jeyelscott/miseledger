@@ -67,6 +67,9 @@ test(
                 "import { PageHeader } from '@/components/page-header';",
             )
             ->toContain(
+                "import { PaginationControls } from '@/components/pagination-controls';",
+            )
+            ->toContain(
                 "import { StatusBadge } from '@/components/status-badge';",
             )
             ->toContain(
@@ -87,6 +90,9 @@ test(
             ->toContain("window.addEventListener('beforeunload'")
             ->toContain('timeZone: timezone')
             ->toContain('Active filters')
+            ->toContain('Waste workspace sections')
+            ->toContain('#waste-evidence-title')
+            ->toContain('<PaginationControls')
             ->toContain('<details')
             ->toContain('md:hidden')
             ->toContain('hidden overflow-x-auto md:block')
@@ -107,3 +113,14 @@ test(
             ->not->toContain('router.push(');
     },
 );
+
+test('waste confirmation respects native validation and filters remain directly removable', function () {
+    $source = File::get(resource_path('js/pages/waste/index.tsx'));
+
+    expect($source)
+        ->toContain('event.currentTarget.reportValidity()')
+        ->toContain('function buildReportUrl(')
+        ->toContain('Remove')
+        ->toContain('filter.key')
+        ->toContain('buildReportUrl(');
+});
