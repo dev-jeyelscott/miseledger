@@ -10,6 +10,7 @@ export type InventoryBrandData = {
     id: number;
     name: string;
     active: boolean;
+    usageCount?: number;
 };
 
 export type InventoryProductData = {

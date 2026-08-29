@@ -11,6 +11,7 @@ use App\Models\Organization;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -25,16 +26,46 @@ class InventoryBrandController extends Controller
             $organization,
         );
 
-        $brands = $organization
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:120'],
+            'status' => [
+                'nullable',
+                'string',
+                Rule::in(['active', 'inactive']),
+            ],
+        ]);
+
+        $search = trim((string) ($validated['search'] ?? ''));
+
+        $status = isset($validated['status'])
+            ? (string) $validated['status']
+            : null;
+
+        $brandsQuery = $organization
             ->inventoryBrands()
+            ->withCount('inventoryItems');
+
+        if ($search !== '') {
+            $brandsQuery->whereLike('name', '%'.$search.'%');
+        }
+
+        if ($status !== null) {
+            $brandsQuery->where('active', $status === 'active');
+        }
+
+        $brands = $brandsQuery
             ->orderByDesc('active')
             ->orderBy('name')
+            ->orderBy('id')
             ->get()
             ->map(
                 static fn (InventoryBrand $brand): array => [
                     'id' => $brand->id,
                     'name' => $brand->name,
                     'active' => $brand->active,
+                    'usageCount' => (int) $brand->getAttribute(
+                        'inventory_items_count',
+                    ),
                 ],
             )
             ->values()
@@ -42,6 +73,10 @@ class InventoryBrandController extends Controller
 
         return Inertia::render('inventory/brands/index', [
             'brands' => $brands,
+            'filters' => [
+                'search' => $search,
+                'status' => $status,
+            ],
             'canManage' => Gate::allows(
                 OrganizationPermission::InventoryAdjust->value,
                 $organization,
