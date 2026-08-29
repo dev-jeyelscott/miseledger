@@ -189,7 +189,11 @@ test('modal category unit and conversion edits return to their current context',
             'active' => true,
         ]);
 
-    $unitsUrl = route('inventory.units.index');
+    $unitsUrl = route('inventory.units.index', [
+        'search' => 'bottle',
+        'dimension' => 'count',
+        'status' => 'active',
+    ]);
 
     $this
         ->withSession([

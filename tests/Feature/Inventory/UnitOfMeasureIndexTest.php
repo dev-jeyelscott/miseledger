@@ -190,6 +190,42 @@ test('modal unit creation returns to the current filtered index context', functi
     ]);
 });
 
+test('modal unit update returns to the current filtered index context', function () {
+    [$user, $organization] = unitOfMeasureIndexContext();
+
+    $unit = UnitOfMeasure::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Each',
+            'symbol' => 'ea',
+            'dimension' => 'count',
+            'active' => true,
+        ]);
+
+    $indexUrl = route('inventory.units.index', [
+        'search' => 'each',
+        'dimension' => 'count',
+        'status' => 'active',
+    ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->from($indexUrl)
+        ->put(route('inventory.units.update', $unit), [
+            '_modal' => '1',
+            'name' => 'Piece',
+            'symbol' => 'ea',
+            'dimension' => 'count',
+            'active' => true,
+        ])
+        ->assertRedirect($indexUrl);
+
+    expect($unit->refresh()->name)->toBe('Piece');
+});
+
 test('non modal unit update redirects to the unit index', function () {
     [$user, $organization] = unitOfMeasureIndexContext();
 
