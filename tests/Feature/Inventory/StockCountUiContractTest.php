@@ -61,3 +61,51 @@ test('stock count index keeps server authoritative query semantics', function ()
         ->toContain('preserveScroll')
         ->toContain('preserveState');
 });
+
+test('stock count form follows the canonical lifecycle workspace contract', function () {
+    $source = File::get(resource_path('js/pages/stock-counts/form.tsx'));
+
+    expect($source)
+        ->toContain("import { PageHeader } from '@/components/page-header';")
+        ->toContain("import { StatusBadge } from '@/components/status-badge';")
+        ->toContain("import { Field } from '@/components/ui/field';")
+        ->toContain("import { NativeSelect } from '@/components/ui/native-select';")
+        ->toContain('Finalized audit evidence')
+        ->toContain('Physical count evidence')
+        ->toContain('formatOrganizationDate(')
+        ->toContain('timeZone: timezone')
+        ->toContain('Review the highlighted fields')
+        ->toContain('focusErrorTarget(')
+        ->toContain('md:hidden')
+        ->toContain('hidden overflow-x-auto md:block')
+        ->toContain('rounded-xl border border-border bg-card')
+        ->not->toContain('border-sidebar-border')
+        ->not->toContain('<Label>')
+        ->not->toContain('new Date(value).toLocaleString()');
+});
+
+test('stock count form guards every lifecycle transition', function () {
+    $source = File::get(resource_path('js/pages/stock-counts/form.tsx'));
+
+    expect($source)
+        ->toContain('Submit stock count?')
+        ->toContain('Finalize count and commit inventory adjustments?')
+        ->toContain('Finalize and commit adjustments')
+        ->toContain('Cancel stock count?')
+        ->toContain('StockCountController.submit.form(')
+        ->toContain('StockCountController.finalize.form(')
+        ->toContain('StockCountController.cancel.form(')
+        ->toContain("stockCount?.status === 'draft' && canCreate")
+        ->toContain("stockCount?.status === 'submitted' && canFinalize")
+        ->toContain('server validation')
+        ->toContain('stock-ledger workflow');
+});
+
+test('stock count form receives the organization timezone from its server options', function () {
+    $controller = File::get(
+        app_path('Http/Controllers/Inventory/StockCountController.php'),
+    );
+
+    expect($controller)
+        ->toContain("'timezone' => \$organization->timezone,");
+});

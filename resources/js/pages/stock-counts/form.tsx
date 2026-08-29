@@ -1,12 +1,28 @@
 import { Form, Head } from '@inertiajs/react';
+import { AlertCircle, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
 import InputError from '@/components/input-error';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
+import { PageHeader } from '@/components/page-header';
+import { StatusBadge } from '@/components/status-badge';
+import type { StatusBadgeProps } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
+
+type StockCountStatus = 'draft' | 'submitted' | 'finalized' | 'cancelled';
 
 type LocationOption = {
     id: number;
@@ -54,7 +70,7 @@ type StockCountLine = {
 type StockCount = {
     id: number;
     number: string;
-    status: string;
+    status: StockCountStatus;
     locationId: number;
     locationName: string;
     storageLocationId: number;
@@ -81,19 +97,33 @@ type Props = {
     inventoryItemOptions: InventoryItemOption[];
     unitOptions: UnitOption[];
     currency: string;
+    timezone: string;
     canCreate: boolean;
     canFinalize: boolean;
     canViewCosts: boolean;
 };
 
-const emptyLine = (): LineState => ({
-    inventoryItemId: '',
-    countedQuantity: '0',
-    countUnitId: '',
-    notes: '',
-});
+type ErrorMap = Record<string, string>;
 
-const formatDecimal = (value: string): string => {
+type ErrorTarget = {
+    key: string;
+    label: string;
+    targetId: string;
+    message: string;
+};
+
+/** Create the initial editable line state for a new physical-count row. */
+function emptyLine(): LineState {
+    return {
+        inventoryItemId: '',
+        countedQuantity: '0',
+        countUnitId: '',
+        notes: '',
+    };
+}
+
+/** Format persisted decimal strings without introducing floating-point arithmetic. */
+function formatDecimal(value: string): string {
     const [rawInteger, rawDecimal = ''] = value.trim().split('.');
     const negative = rawInteger.startsWith('-');
     const integerDigits = negative ? rawInteger.slice(1) : rawInteger;
@@ -103,11 +133,421 @@ const formatDecimal = (value: string): string => {
     return `${negative ? '-' : ''}${groupedInteger}${
         decimal === '' ? '' : `.${decimal}`
     }`;
-};
+}
 
-const formatDate = (value: string | null): string =>
-    value === null ? '—' : new Date(value).toLocaleString();
+/** Format workflow timestamps in the active organization's configured timezone. */
+function formatOrganizationDate(
+    value: string | null,
+    timezone: string,
+): string {
+    if (value === null) {
+        return 'Not recorded';
+    }
 
+    return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: timezone,
+        timeZoneName: 'short',
+    }).format(new Date(value));
+}
+
+/** Resolve the canonical semantic badge treatment for a count lifecycle state. */
+function stockCountStatusVariant(
+    status: StockCountStatus,
+): StatusBadgeProps['variant'] {
+    if (status === 'finalized') {
+        return 'success';
+    }
+
+    if (status === 'submitted') {
+        return 'info';
+    }
+
+    if (status === 'cancelled') {
+        return 'danger';
+    }
+
+    return 'neutral';
+}
+
+/** Convert a lifecycle status into its visible human-readable label. */
+function stockCountStatusLabel(status: StockCountStatus): string {
+    return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+/** Map one server validation key to the exact rendered control that owns it. */
+function errorTargetId(key: string): string | null {
+    if (key === 'number') {
+        return 'stock-count-number';
+    }
+
+    if (key === 'location_id') {
+        return 'stock-count-location';
+    }
+
+    if (key === 'storage_location_id') {
+        return 'stock-count-storage-location';
+    }
+
+    if (key === 'lines') {
+        return 'stock-count-lines';
+    }
+
+    const lineMatch = key.match(
+        /^lines\.(\d+)\.(inventory_item_id|counted_quantity|count_unit_id|notes)$/,
+    );
+
+    if (lineMatch === null) {
+        return null;
+    }
+
+    const [, index, field] = lineMatch;
+
+    const fieldSuffix = {
+        inventory_item_id: 'item',
+        counted_quantity: 'quantity',
+        count_unit_id: 'unit',
+        notes: 'notes',
+    }[field];
+
+    return `stock-count-line-${index}-${fieldSuffix}`;
+}
+
+/** Produce concise labels for server validation errors in the navigation summary. */
+function errorTargetLabel(key: string): string {
+    if (key === 'number') {
+        return 'Count number';
+    }
+
+    if (key === 'location_id') {
+        return 'Location';
+    }
+
+    if (key === 'storage_location_id') {
+        return 'Storage location';
+    }
+
+    if (key === 'lines') {
+        return 'Count lines';
+    }
+
+    const lineMatch = key.match(/^lines\.(\d+)\.(.+)$/);
+
+    if (lineMatch === null) {
+        return key;
+    }
+
+    const [, rawIndex, field] = lineMatch;
+    const index = Number(rawIndex) + 1;
+
+    const fieldLabel = {
+        inventory_item_id: 'Inventory item',
+        counted_quantity: 'Physical quantity',
+        count_unit_id: 'Count unit',
+        notes: 'Line notes',
+    }[field];
+
+    return `Line ${index}: ${fieldLabel ?? field}`;
+}
+
+/** Convert Inertia's server errors into accessible in-page navigation targets. */
+function errorTargets(errors: ErrorMap): ErrorTarget[] {
+    return Object.entries(errors).flatMap(([key, message]) => {
+        const targetId = errorTargetId(key);
+
+        return targetId === null
+            ? []
+            : [
+                  {
+                      key,
+                      label: errorTargetLabel(key),
+                      targetId,
+                      message,
+                  },
+              ];
+    });
+}
+
+/** Move keyboard focus to a server-invalid field without adding client validation. */
+function focusErrorTarget(targetId: string): void {
+    const element = document.getElementById(targetId);
+
+    if (element === null) {
+        return;
+    }
+
+    element.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+    });
+
+    element.focus({
+        preventScroll: true,
+    });
+}
+
+/** Render the immutable physical evidence attached to a non-editable count. */
+function CountEvidence({
+    stockCount,
+    finalized,
+    currency,
+    canViewCosts,
+}: {
+    stockCount: StockCount;
+    finalized: boolean;
+    currency: string;
+    canViewCosts: boolean;
+}) {
+    return (
+        <section
+            className="overflow-hidden rounded-xl border border-border bg-card"
+            aria-labelledby="stock-count-evidence-heading"
+        >
+            <div className="border-b border-border px-4 py-4 sm:px-5">
+                <h2 id="stock-count-evidence-heading" className="font-semibold">
+                    {finalized ? 'Finalized audit evidence' : 'Count evidence'}
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                    {finalized
+                        ? 'This evidence is locked. Expected quantities, variances, and adjustment references reflect the finalized server record.'
+                        : 'Physical count evidence is frozen in its current lifecycle state and is not editable here.'}
+                </p>
+            </div>
+
+            <div className="divide-y divide-border md:hidden">
+                {stockCount.lines.map((line, index) => (
+                    <article key={line.id} className="space-y-4 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                                <p className="text-xs font-medium text-muted-foreground">
+                                    Line {index + 1}
+                                </p>
+                                <h3 className="truncate font-medium">
+                                    {line.itemName}
+                                </h3>
+                                <p className="text-xs text-muted-foreground">
+                                    {line.itemSku}
+                                </p>
+                            </div>
+                        </div>
+
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                            <div>
+                                <dt className="text-muted-foreground">
+                                    Counted
+                                </dt>
+                                <dd className="font-medium">
+                                    {formatDecimal(line.countedQuantity)}{' '}
+                                    {line.countUnitSymbol}
+                                </dd>
+                            </div>
+
+                            <div>
+                                <dt className="text-muted-foreground">
+                                    Counted base
+                                </dt>
+                                <dd className="font-medium">
+                                    {formatDecimal(line.countedBaseQuantity)}{' '}
+                                    {line.baseUnitSymbol}
+                                </dd>
+                            </div>
+
+                            {finalized && (
+                                <>
+                                    <div>
+                                        <dt className="text-muted-foreground">
+                                            Expected
+                                        </dt>
+                                        <dd className="font-medium">
+                                            {formatDecimal(
+                                                line.expectedBaseQuantity,
+                                            )}{' '}
+                                            {line.baseUnitSymbol}
+                                        </dd>
+                                    </div>
+
+                                    <div>
+                                        <dt className="text-muted-foreground">
+                                            Variance
+                                        </dt>
+                                        <dd className="font-medium">
+                                            {formatDecimal(
+                                                line.varianceBaseQuantity,
+                                            )}{' '}
+                                            {line.baseUnitSymbol}
+                                        </dd>
+                                    </div>
+                                </>
+                            )}
+
+                            {finalized && canViewCosts && (
+                                <div>
+                                    <dt className="text-muted-foreground">
+                                        Variance value
+                                    </dt>
+                                    <dd className="font-medium">
+                                        {line.varianceTotalCost === null
+                                            ? 'Not available'
+                                            : `${currency} ${formatDecimal(
+                                                  line.varianceTotalCost,
+                                              )}`}
+                                    </dd>
+                                </div>
+                            )}
+
+                            {finalized && (
+                                <div>
+                                    <dt className="text-muted-foreground">
+                                        Adjustment
+                                    </dt>
+                                    <dd className="font-medium">
+                                        {line.movementId === null
+                                            ? 'No movement'
+                                            : `#${line.movementId}`}
+                                    </dd>
+                                </div>
+                            )}
+                        </dl>
+
+                        {line.notes && (
+                            <div className="rounded-md bg-muted/50 p-3 text-sm">
+                                <p className="text-xs font-medium text-muted-foreground">
+                                    Count note
+                                </p>
+                                <p className="mt-1">{line.notes}</p>
+                            </div>
+                        )}
+                    </article>
+                ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-sm">
+                    <thead className="border-b border-border bg-muted/40 text-left">
+                        <tr>
+                            <th scope="col" className="px-4 py-3 font-medium">
+                                Item
+                            </th>
+                            <th scope="col" className="px-4 py-3 font-medium">
+                                Counted
+                            </th>
+                            <th scope="col" className="px-4 py-3 font-medium">
+                                Counted base
+                            </th>
+
+                            {finalized && (
+                                <>
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium"
+                                    >
+                                        Expected
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 font-medium"
+                                    >
+                                        Variance
+                                    </th>
+                                </>
+                            )}
+
+                            {finalized && canViewCosts && (
+                                <th
+                                    scope="col"
+                                    className="px-4 py-3 text-right font-medium"
+                                >
+                                    Variance value
+                                </th>
+                            )}
+
+                            {finalized && (
+                                <th
+                                    scope="col"
+                                    className="px-4 py-3 font-medium"
+                                >
+                                    Adjustment
+                                </th>
+                            )}
+                        </tr>
+                    </thead>
+
+                    <tbody className="divide-y divide-border">
+                        {stockCount.lines.map((line) => (
+                            <tr key={line.id}>
+                                <td className="px-4 py-3 align-top">
+                                    <div className="font-medium">
+                                        {line.itemName}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                        {line.itemSku}
+                                    </div>
+                                    {line.notes && (
+                                        <div className="mt-2 max-w-sm text-xs text-muted-foreground">
+                                            {line.notes}
+                                        </div>
+                                    )}
+                                </td>
+
+                                <td className="px-4 py-3 align-top">
+                                    {formatDecimal(line.countedQuantity)}{' '}
+                                    {line.countUnitSymbol}
+                                </td>
+
+                                <td className="px-4 py-3 align-top">
+                                    {formatDecimal(line.countedBaseQuantity)}{' '}
+                                    {line.baseUnitSymbol}
+                                </td>
+
+                                {finalized && (
+                                    <>
+                                        <td className="px-4 py-3 align-top">
+                                            {formatDecimal(
+                                                line.expectedBaseQuantity,
+                                            )}{' '}
+                                            {line.baseUnitSymbol}
+                                        </td>
+
+                                        <td className="px-4 py-3 align-top">
+                                            {formatDecimal(
+                                                line.varianceBaseQuantity,
+                                            )}{' '}
+                                            {line.baseUnitSymbol}
+                                        </td>
+                                    </>
+                                )}
+
+                                {finalized && canViewCosts && (
+                                    <td className="px-4 py-3 text-right align-top">
+                                        {line.varianceTotalCost === null
+                                            ? 'Not available'
+                                            : `${currency} ${formatDecimal(
+                                                  line.varianceTotalCost,
+                                              )}`}
+                                    </td>
+                                )}
+
+                                {finalized && (
+                                    <td className="px-4 py-3 align-top">
+                                        {line.movementId === null
+                                            ? 'No movement'
+                                            : `#${line.movementId}`}
+                                    </td>
+                                )}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    );
+}
+
+/** Render the lifecycle-oriented Stock Count creation, evidence, and audit workspace. */
 export default function StockCountForm({
     stockCount,
     locationOptions,
@@ -115,13 +555,13 @@ export default function StockCountForm({
     inventoryItemOptions,
     unitOptions,
     currency,
+    timezone,
     canCreate,
     canFinalize,
     canViewCosts,
 }: Props) {
     const editable =
         canCreate && (stockCount === null || stockCount.status === 'draft');
-
     const finalized = stockCount?.status === 'finalized';
 
     const initialLocationId =
@@ -143,6 +583,9 @@ export default function StockCountForm({
     const [storageLocationId, setStorageLocationId] = useState(
         initialStorageLocationId,
     );
+    const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+    const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
+    const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
     const [lines, setLines] = useState<LineState[]>(
         stockCount?.lines.map((line) => ({
@@ -158,6 +601,7 @@ export default function StockCountForm({
             storageLocation.locationId.toString() === locationId,
     );
 
+    /** Update one dynamic physical-count line without mutating sibling lines. */
     const updateLine = (index: number, values: Partial<LineState>) => {
         setLines((current) =>
             current.map((line, currentIndex) =>
@@ -171,16 +615,19 @@ export default function StockCountForm({
         );
     };
 
+    /** Append one blank physical-count evidence line. */
     const addLine = () => {
         setLines((current) => [...current, emptyLine()]);
     };
 
+    /** Remove one physical-count line while retaining at least one line. */
     const removeLine = (index: number) => {
         setLines((current) =>
             current.filter((_, currentIndex) => currentIndex !== index),
         );
     };
 
+    /** Keep storage selection inside the newly selected parent location. */
     const handleLocationChange = (value: string) => {
         setLocationId(value);
 
@@ -192,6 +639,7 @@ export default function StockCountForm({
         setStorageLocationId(firstStorage?.id.toString() ?? '');
     };
 
+    /** Default a selected inventory item to its server-provided base count unit. */
     const handleItemChange = (index: number, value: string) => {
         const inventoryItem = inventoryItemOptions.find(
             (item) => item.id.toString() === value,
@@ -209,639 +657,854 @@ export default function StockCountForm({
             : StockCountController.update.form.put(stockCount.id);
 
     const title = stockCount === null ? 'New stock count' : stockCount.number;
+    const status = stockCount?.status;
 
     return (
         <>
             <Head title={title} />
 
-            <div className="flex flex-1 flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-2xl font-semibold">{title}</h1>
+            <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title={
+                        <span className="flex flex-wrap items-center gap-2">
+                            <span>{title}</span>
+                            {status && (
+                                <StatusBadge
+                                    label={stockCountStatusLabel(status)}
+                                    variant={stockCountStatusVariant(status)}
+                                />
+                            )}
+                        </span>
+                    }
+                    description={
+                        stockCount === null
+                            ? 'Create physical count evidence as a draft before submitting it for reconciliation.'
+                            : `${stockCount.locationName} / ${stockCount.storageLocationName}`
+                    }
+                    actions={
+                        <PreviousPageButton
+                            fallback={StockCountController.index.url()}
+                            variant="outline"
+                        >
+                            Back to stock counts
+                        </PreviousPageButton>
+                    }
+                />
 
-                    {stockCount !== null && (
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            {stockCount.locationName} →{' '}
-                            {stockCount.storageLocationName} ·{' '}
-                            <span className="capitalize">
-                                {stockCount.status}
-                            </span>
-                        </p>
-                    )}
-                </div>
+                {stockCount && (
+                    <section
+                        className="rounded-xl border border-border bg-card p-4 sm:p-5"
+                        aria-labelledby="stock-count-lifecycle-heading"
+                    >
+                        <div className="mb-4">
+                            <h2
+                                id="stock-count-lifecycle-heading"
+                                className="font-semibold"
+                            >
+                                Lifecycle
+                            </h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Workflow timestamps are shown in {timezone}.
+                            </p>
+                        </div>
+
+                        <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                            <div>
+                                <dt className="text-sm text-muted-foreground">
+                                    Counted at
+                                </dt>
+                                <dd className="mt-1 font-medium">
+                                    {formatOrganizationDate(
+                                        stockCount.countedAt,
+                                        timezone,
+                                    )}
+                                </dd>
+                            </div>
+
+                            <div>
+                                <dt className="text-sm text-muted-foreground">
+                                    Created by
+                                </dt>
+                                <dd className="mt-1 font-medium">
+                                    {stockCount.createdBy ?? 'Not recorded'}
+                                </dd>
+                            </div>
+
+                            <div>
+                                <dt className="text-sm text-muted-foreground">
+                                    Submitted by
+                                </dt>
+                                <dd className="mt-1 font-medium">
+                                    {stockCount.submittedBy ?? 'Not recorded'}
+                                </dd>
+                            </div>
+
+                            <div>
+                                <dt className="text-sm text-muted-foreground">
+                                    Finalized
+                                </dt>
+                                <dd className="mt-1 font-medium">
+                                    {stockCount.finalizedBy ?? 'Not finalized'}
+                                </dd>
+                                {stockCount.finalizedAt && (
+                                    <dd className="mt-1 text-xs text-muted-foreground">
+                                        {formatOrganizationDate(
+                                            stockCount.finalizedAt,
+                                            timezone,
+                                        )}
+                                    </dd>
+                                )}
+                            </div>
+                        </dl>
+                    </section>
+                )}
 
                 {editable ? (
                     <Form {...formAttributes}>
-                        {({ processing, errors }) => (
-                            <div className="space-y-6">
-                                <div className="grid gap-4 rounded-xl border border-sidebar-border/70 p-5 md:grid-cols-3 dark:border-sidebar-border">
-                                    <div className="grid gap-2">
-                                        <Label>Count number</Label>
-                                        <Input
-                                            name="number"
-                                            defaultValue={
-                                                stockCount?.number ?? ''
-                                            }
-                                            required
-                                        />
-                                        <InputError message={errors.number} />
-                                    </div>
+                        {({ processing, errors }) => {
+                            const targets = errorTargets(errors);
 
-                                    <div className="grid gap-2">
-                                        <Label>Location</Label>
-                                        <select
-                                            name="location_id"
-                                            value={locationId}
-                                            onChange={(event) =>
-                                                handleLocationChange(
-                                                    event.target.value,
-                                                )
-                                            }
-                                            required
-                                            className="h-9 rounded-md border bg-background px-3 text-sm"
+                            return (
+                                <div className="space-y-6">
+                                    {targets.length > 0 && (
+                                        <section
+                                            className="rounded-xl border border-destructive/30 bg-destructive/5 p-4"
+                                            aria-labelledby="stock-count-errors-heading"
+                                            role="alert"
                                         >
-                                            <option value="">
-                                                Select location
-                                            </option>
+                                            <div className="flex gap-3">
+                                                <AlertCircle
+                                                    className="mt-0.5 size-5 shrink-0 text-destructive"
+                                                    aria-hidden="true"
+                                                />
 
-                                            {locationOptions.map((location) => (
-                                                <option
-                                                    key={location.id}
-                                                    value={location.id}
-                                                >
-                                                    {location.name}
-                                                </option>
-                                            ))}
-                                        </select>
-                                        <InputError
-                                            message={errors.location_id}
-                                        />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label>Storage location</Label>
-                                        <select
-                                            name="storage_location_id"
-                                            value={storageLocationId}
-                                            onChange={(event) =>
-                                                setStorageLocationId(
-                                                    event.target.value,
-                                                )
-                                            }
-                                            required
-                                            className="h-9 rounded-md border bg-background px-3 text-sm"
-                                        >
-                                            <option value="">
-                                                Select storage
-                                            </option>
-
-                                            {selectedStorageLocations.map(
-                                                (storageLocation) => (
-                                                    <option
-                                                        key={storageLocation.id}
-                                                        value={
-                                                            storageLocation.id
-                                                        }
+                                                <div>
+                                                    <h2
+                                                        id="stock-count-errors-heading"
+                                                        className="font-medium"
                                                     >
-                                                        {storageLocation.name}
-                                                    </option>
-                                                ),
-                                            )}
-                                        </select>
-                                        <InputError
-                                            message={errors.storage_location_id}
-                                        />
-                                    </div>
-                                </div>
+                                                        Review the highlighted
+                                                        fields
+                                                    </h2>
+                                                    <p className="mt-1 text-sm text-muted-foreground">
+                                                        The server rejected part
+                                                        of this draft. Select an
+                                                        issue to move directly
+                                                        to its field.
+                                                    </p>
 
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <h2 className="font-semibold">
-                                                Count lines
-                                            </h2>
-                                            <p className="text-sm text-muted-foreground">
-                                                Enter the physical quantity in
-                                                the practical unit used during
-                                                counting.
-                                            </p>
-                                        </div>
-
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            onClick={addLine}
-                                        >
-                                            Add item
-                                        </Button>
-                                    </div>
-
-                                    {lines.map((line, index) => {
-                                        const selectedItem =
-                                            inventoryItemOptions.find(
-                                                (item) =>
-                                                    item.id.toString() ===
-                                                    line.inventoryItemId,
-                                            );
-
-                                        return (
-                                            <div
-                                                key={index}
-                                                className="space-y-4 rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border"
-                                            >
-                                                <div className="grid gap-4 lg:grid-cols-4">
-                                                    <div className="grid gap-2 lg:col-span-2">
-                                                        <Label>
-                                                            Inventory item
-                                                        </Label>
-                                                        <select
-                                                            name={`lines[${index}][inventory_item_id]`}
-                                                            value={
-                                                                line.inventoryItemId
-                                                            }
-                                                            onChange={(event) =>
-                                                                handleItemChange(
-                                                                    index,
-                                                                    event.target
-                                                                        .value,
-                                                                )
-                                                            }
-                                                            required
-                                                            className="h-9 rounded-md border bg-background px-3 text-sm"
-                                                        >
-                                                            <option value="">
-                                                                Select item
-                                                            </option>
-
-                                                            {inventoryItemOptions.map(
-                                                                (item) => {
-                                                                    const used =
-                                                                        lines.some(
-                                                                            (
-                                                                                otherLine,
-                                                                                otherIndex,
-                                                                            ) =>
-                                                                                otherIndex !==
-                                                                                    index &&
-                                                                                otherLine.inventoryItemId ===
-                                                                                    item.id.toString(),
-                                                                        );
-
-                                                                    return (
-                                                                        <option
-                                                                            key={
-                                                                                item.id
-                                                                            }
-                                                                            value={
-                                                                                item.id
-                                                                            }
-                                                                            disabled={
-                                                                                used
-                                                                            }
-                                                                        >
-                                                                            {
-                                                                                item.name
-                                                                            }{' '}
-                                                                            (
-                                                                            {
-                                                                                item.sku
-                                                                            }
+                                                    <ul className="mt-3 space-y-1 text-sm">
+                                                        {targets.map(
+                                                            (target) => (
+                                                                <li
+                                                                    key={
+                                                                        target.key
+                                                                    }
+                                                                >
+                                                                    <button
+                                                                        type="button"
+                                                                        className="text-left font-medium text-destructive underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                                        onClick={() =>
+                                                                            focusErrorTarget(
+                                                                                target.targetId,
                                                                             )
-                                                                        </option>
-                                                                    );
-                                                                },
-                                                            )}
-                                                        </select>
-                                                        <InputError
-                                                            message={
-                                                                errors[
-                                                                    `lines.${index}.inventory_item_id`
-                                                                ]
-                                                            }
-                                                        />
-                                                    </div>
-
-                                                    <div className="grid gap-2">
-                                                        <Label>
-                                                            Physical quantity
-                                                        </Label>
-                                                        <Input
-                                                            name={`lines[${index}][counted_quantity]`}
-                                                            type="number"
-                                                            min="0"
-                                                            max="999999999.999999"
-                                                            step="0.000001"
-                                                            value={
-                                                                line.countedQuantity
-                                                            }
-                                                            onChange={(event) =>
-                                                                updateLine(
-                                                                    index,
-                                                                    {
-                                                                        countedQuantity:
-                                                                            event
-                                                                                .target
-                                                                                .value,
-                                                                    },
-                                                                )
-                                                            }
-                                                            required
-                                                        />
-                                                        <InputError
-                                                            message={
-                                                                errors[
-                                                                    `lines.${index}.counted_quantity`
-                                                                ]
-                                                            }
-                                                        />
-                                                    </div>
-
-                                                    <div className="grid gap-2">
-                                                        <Label>
-                                                            Count unit
-                                                        </Label>
-                                                        <select
-                                                            name={`lines[${index}][count_unit_id]`}
-                                                            value={
-                                                                line.countUnitId
-                                                            }
-                                                            onChange={(event) =>
-                                                                updateLine(
-                                                                    index,
-                                                                    {
-                                                                        countUnitId:
-                                                                            event
-                                                                                .target
-                                                                                .value,
-                                                                    },
-                                                                )
-                                                            }
-                                                            required
-                                                            className="h-9 rounded-md border bg-background px-3 text-sm"
-                                                        >
-                                                            <option value="">
-                                                                Select unit
-                                                            </option>
-
-                                                            {unitOptions.map(
-                                                                (unit) => (
-                                                                    <option
-                                                                        key={
-                                                                            unit.id
-                                                                        }
-                                                                        value={
-                                                                            unit.id
                                                                         }
                                                                     >
                                                                         {
-                                                                            unit.name
-                                                                        }{' '}
-                                                                        (
-                                                                        {
-                                                                            unit.symbol
+                                                                            target.label
                                                                         }
-                                                                        )
-                                                                    </option>
-                                                                ),
-                                                            )}
-                                                        </select>
-                                                        <InputError
-                                                            message={
-                                                                errors[
-                                                                    `lines.${index}.count_unit_id`
-                                                                ]
-                                                            }
-                                                        />
-                                                    </div>
+                                                                        :{' '}
+                                                                        {
+                                                                            target.message
+                                                                        }
+                                                                    </button>
+                                                                </li>
+                                                            ),
+                                                        )}
+                                                    </ul>
                                                 </div>
+                                            </div>
+                                        </section>
+                                    )}
 
-                                                <div className="grid gap-4 md:grid-cols-[1fr_auto]">
-                                                    <div className="grid gap-2">
-                                                        <Label>
-                                                            Line notes
-                                                        </Label>
-                                                        <Input
-                                                            name={`lines[${index}][notes]`}
-                                                            value={line.notes}
-                                                            onChange={(event) =>
-                                                                updateLine(
-                                                                    index,
-                                                                    {
-                                                                        notes: event
-                                                                            .target
-                                                                            .value,
-                                                                    },
-                                                                )
-                                                            }
-                                                        />
-                                                        <InputError
-                                                            message={
+                                    <section
+                                        className="rounded-xl border border-border bg-card"
+                                        aria-labelledby="stock-count-scope-heading"
+                                    >
+                                        <div className="border-b border-border px-4 py-4 sm:px-5">
+                                            <h2
+                                                id="stock-count-scope-heading"
+                                                className="font-semibold"
+                                            >
+                                                Count scope
+                                            </h2>
+                                            <p className="mt-1 text-sm text-muted-foreground">
+                                                Define where this physical
+                                                evidence was collected. Server
+                                                validation remains
+                                                authoritative.
+                                            </p>
+                                        </div>
+
+                                        <div className="grid gap-4 p-4 sm:p-5 md:grid-cols-3">
+                                            <Field
+                                                id="stock-count-number"
+                                                label="Count number"
+                                                error={errors.number}
+                                            >
+                                                <Input
+                                                    name="number"
+                                                    defaultValue={
+                                                        stockCount?.number ?? ''
+                                                    }
+                                                    required
+                                                />
+                                            </Field>
+
+                                            <Field
+                                                id="stock-count-location"
+                                                label="Location"
+                                                error={errors.location_id}
+                                            >
+                                                <NativeSelect
+                                                    name="location_id"
+                                                    value={locationId}
+                                                    onChange={(event) =>
+                                                        handleLocationChange(
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    required
+                                                >
+                                                    <option value="">
+                                                        Select location
+                                                    </option>
+
+                                                    {locationOptions.map(
+                                                        (location) => (
+                                                            <option
+                                                                key={
+                                                                    location.id
+                                                                }
+                                                                value={
+                                                                    location.id
+                                                                }
+                                                            >
+                                                                {location.name}
+                                                            </option>
+                                                        ),
+                                                    )}
+                                                </NativeSelect>
+                                            </Field>
+
+                                            <Field
+                                                id="stock-count-storage-location"
+                                                label="Storage location"
+                                                error={
+                                                    errors.storage_location_id
+                                                }
+                                            >
+                                                <NativeSelect
+                                                    name="storage_location_id"
+                                                    value={storageLocationId}
+                                                    onChange={(event) =>
+                                                        setStorageLocationId(
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    required
+                                                >
+                                                    <option value="">
+                                                        Select storage
+                                                    </option>
+
+                                                    {selectedStorageLocations.map(
+                                                        (storageLocation) => (
+                                                            <option
+                                                                key={
+                                                                    storageLocation.id
+                                                                }
+                                                                value={
+                                                                    storageLocation.id
+                                                                }
+                                                            >
+                                                                {
+                                                                    storageLocation.name
+                                                                }
+                                                            </option>
+                                                        ),
+                                                    )}
+                                                </NativeSelect>
+                                            </Field>
+                                        </div>
+                                    </section>
+
+                                    <section
+                                        id="stock-count-lines"
+                                        tabIndex={-1}
+                                        className="rounded-xl border border-border bg-card"
+                                        aria-labelledby="stock-count-lines-heading"
+                                    >
+                                        <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
+                                            <div>
+                                                <h2
+                                                    id="stock-count-lines-heading"
+                                                    className="font-semibold"
+                                                >
+                                                    Physical count evidence
+                                                </h2>
+                                                <p className="mt-1 text-sm text-muted-foreground">
+                                                    Enter each observed quantity
+                                                    in the practical unit used
+                                                    during counting.
+                                                </p>
+                                            </div>
+
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={addLine}
+                                                className="w-full sm:w-auto"
+                                            >
+                                                <Plus
+                                                    className="size-4"
+                                                    aria-hidden="true"
+                                                />
+                                                Add item
+                                            </Button>
+                                        </div>
+
+                                        <div className="divide-y divide-border">
+                                            {lines.map((line, index) => {
+                                                const selectedItem =
+                                                    inventoryItemOptions.find(
+                                                        (item) =>
+                                                            item.id.toString() ===
+                                                            line.inventoryItemId,
+                                                    );
+
+                                                return (
+                                                    <fieldset
+                                                        key={index}
+                                                        className="space-y-4 p-4 sm:p-5"
+                                                    >
+                                                        <legend className="mb-3 flex w-full items-center justify-between gap-3">
+                                                            <span className="font-medium">
+                                                                Line {index + 1}
+                                                            </span>
+
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() =>
+                                                                    removeLine(
+                                                                        index,
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    lines.length ===
+                                                                    1
+                                                                }
+                                                                aria-label={`Remove line ${index + 1}`}
+                                                            >
+                                                                <Trash2
+                                                                    className="size-4"
+                                                                    aria-hidden="true"
+                                                                />
+                                                                Remove
+                                                            </Button>
+                                                        </legend>
+
+                                                        <div className="grid gap-4 lg:grid-cols-4">
+                                                            <Field
+                                                                id={`stock-count-line-${index}-item`}
+                                                                label="Inventory item"
+                                                                error={
+                                                                    errors[
+                                                                        `lines.${index}.inventory_item_id`
+                                                                    ]
+                                                                }
+                                                                className="lg:col-span-2"
+                                                            >
+                                                                <NativeSelect
+                                                                    name={`lines[${index}][inventory_item_id]`}
+                                                                    value={
+                                                                        line.inventoryItemId
+                                                                    }
+                                                                    onChange={(
+                                                                        event,
+                                                                    ) =>
+                                                                        handleItemChange(
+                                                                            index,
+                                                                            event
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                    required
+                                                                >
+                                                                    <option value="">
+                                                                        Select
+                                                                        item
+                                                                    </option>
+
+                                                                    {inventoryItemOptions.map(
+                                                                        (
+                                                                            item,
+                                                                        ) => {
+                                                                            const used =
+                                                                                lines.some(
+                                                                                    (
+                                                                                        otherLine,
+                                                                                        otherIndex,
+                                                                                    ) =>
+                                                                                        otherIndex !==
+                                                                                            index &&
+                                                                                        otherLine.inventoryItemId ===
+                                                                                            item.id.toString(),
+                                                                                );
+
+                                                                            return (
+                                                                                <option
+                                                                                    key={
+                                                                                        item.id
+                                                                                    }
+                                                                                    value={
+                                                                                        item.id
+                                                                                    }
+                                                                                    disabled={
+                                                                                        used
+                                                                                    }
+                                                                                >
+                                                                                    {
+                                                                                        item.name
+                                                                                    }{' '}
+                                                                                    (
+                                                                                    {
+                                                                                        item.sku
+                                                                                    }
+
+                                                                                    )
+                                                                                </option>
+                                                                            );
+                                                                        },
+                                                                    )}
+                                                                </NativeSelect>
+                                                            </Field>
+
+                                                            <Field
+                                                                id={`stock-count-line-${index}-quantity`}
+                                                                label="Physical quantity"
+                                                                error={
+                                                                    errors[
+                                                                        `lines.${index}.counted_quantity`
+                                                                    ]
+                                                                }
+                                                            >
+                                                                <Input
+                                                                    name={`lines[${index}][counted_quantity]`}
+                                                                    type="number"
+                                                                    min="0"
+                                                                    max="999999999.999999"
+                                                                    step="0.000001"
+                                                                    value={
+                                                                        line.countedQuantity
+                                                                    }
+                                                                    onChange={(
+                                                                        event,
+                                                                    ) =>
+                                                                        updateLine(
+                                                                            index,
+                                                                            {
+                                                                                countedQuantity:
+                                                                                    event
+                                                                                        .target
+                                                                                        .value,
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                    required
+                                                                />
+                                                            </Field>
+
+                                                            <Field
+                                                                id={`stock-count-line-${index}-unit`}
+                                                                label="Count unit"
+                                                                error={
+                                                                    errors[
+                                                                        `lines.${index}.count_unit_id`
+                                                                    ]
+                                                                }
+                                                            >
+                                                                <NativeSelect
+                                                                    name={`lines[${index}][count_unit_id]`}
+                                                                    value={
+                                                                        line.countUnitId
+                                                                    }
+                                                                    onChange={(
+                                                                        event,
+                                                                    ) =>
+                                                                        updateLine(
+                                                                            index,
+                                                                            {
+                                                                                countUnitId:
+                                                                                    event
+                                                                                        .target
+                                                                                        .value,
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                    required
+                                                                >
+                                                                    <option value="">
+                                                                        Select
+                                                                        unit
+                                                                    </option>
+
+                                                                    {unitOptions.map(
+                                                                        (
+                                                                            unit,
+                                                                        ) => (
+                                                                            <option
+                                                                                key={
+                                                                                    unit.id
+                                                                                }
+                                                                                value={
+                                                                                    unit.id
+                                                                                }
+                                                                            >
+                                                                                {
+                                                                                    unit.name
+                                                                                }{' '}
+                                                                                (
+                                                                                {
+                                                                                    unit.symbol
+                                                                                }
+
+                                                                                )
+                                                                            </option>
+                                                                        ),
+                                                                    )}
+                                                                </NativeSelect>
+                                                            </Field>
+                                                        </div>
+
+                                                        <Field
+                                                            id={`stock-count-line-${index}-notes`}
+                                                            label="Line notes"
+                                                            error={
                                                                 errors[
                                                                     `lines.${index}.notes`
                                                                 ]
                                                             }
-                                                        />
-                                                    </div>
-
-                                                    <div className="flex items-end">
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            onClick={() =>
-                                                                removeLine(
-                                                                    index,
-                                                                )
-                                                            }
-                                                            disabled={
-                                                                lines.length ===
-                                                                1
-                                                            }
                                                         >
-                                                            Remove
-                                                        </Button>
-                                                    </div>
-                                                </div>
+                                                            <Input
+                                                                name={`lines[${index}][notes]`}
+                                                                value={
+                                                                    line.notes
+                                                                }
+                                                                onChange={(
+                                                                    event,
+                                                                ) =>
+                                                                    updateLine(
+                                                                        index,
+                                                                        {
+                                                                            notes: event
+                                                                                .target
+                                                                                .value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                        </Field>
 
-                                                {selectedItem && (
-                                                    <p className="text-xs text-muted-foreground">
-                                                        Base unit:{' '}
-                                                        {
-                                                            selectedItem.baseUnitSymbol
-                                                        }
-                                                        . Conversion is
-                                                        validated and
-                                                        snapshotted by the
-                                                        server.
-                                                    </p>
-                                                )}
+                                                        {selectedItem && (
+                                                            <p className="text-xs text-muted-foreground">
+                                                                Base unit:{' '}
+                                                                {
+                                                                    selectedItem.baseUnitSymbol
+                                                                }
+                                                                . Conversion is
+                                                                validated and
+                                                                snapshotted by
+                                                                the server.
+                                                            </p>
+                                                        )}
 
-                                                {stockCount?.lines[index] && (
-                                                    <p className="text-xs text-muted-foreground">
-                                                        Last saved base
-                                                        quantity:{' '}
-                                                        {formatDecimal(
-                                                            stockCount.lines[
-                                                                index
-                                                            ]
-                                                                .countedBaseQuantity,
-                                                        )}{' '}
-                                                        {
-                                                            stockCount.lines[
-                                                                index
-                                                            ].baseUnitSymbol
-                                                        }
-                                                    </p>
-                                                )}
+                                                        {stockCount?.lines[
+                                                            index
+                                                        ] && (
+                                                            <p className="text-xs text-muted-foreground">
+                                                                Last saved base
+                                                                quantity:{' '}
+                                                                {formatDecimal(
+                                                                    stockCount
+                                                                        .lines[
+                                                                        index
+                                                                    ]
+                                                                        .countedBaseQuantity,
+                                                                )}{' '}
+                                                                {
+                                                                    stockCount
+                                                                        .lines[
+                                                                        index
+                                                                    ]
+                                                                        .baseUnitSymbol
+                                                                }
+                                                            </p>
+                                                        )}
+                                                    </fieldset>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {errors.lines && (
+                                            <div className="border-t border-border px-4 py-3 sm:px-5">
+                                                <InputError
+                                                    id="stock-count-lines-error"
+                                                    message={errors.lines}
+                                                />
                                             </div>
-                                        );
-                                    })}
+                                        )}
+                                    </section>
 
-                                    <InputError message={errors.lines} />
+                                    <div className="sticky bottom-0 z-10 -mx-4 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+                                        <Button
+                                            type="submit"
+                                            disabled={processing}
+                                            className="w-full sm:w-auto"
+                                        >
+                                            {stockCount === null
+                                                ? 'Create draft'
+                                                : 'Save draft'}
+                                        </Button>
+                                    </div>
                                 </div>
-
-                                <div className="flex gap-2">
-                                    <Button type="submit" disabled={processing}>
-                                        {stockCount === null
-                                            ? 'Create draft'
-                                            : 'Save draft'}
-                                    </Button>
-
-                                    <PreviousPageButton
-                                        fallback={StockCountController.index.url()}
-                                        variant="outline"
-                                    />
-                                </div>
-                            </div>
-                        )}
+                            );
+                        }}
                     </Form>
                 ) : (
                     stockCount && (
-                        <div className="space-y-5">
-                            <div className="grid gap-4 rounded-xl border border-sidebar-border/70 p-5 md:grid-cols-4 dark:border-sidebar-border">
-                                <div>
-                                    <div className="text-sm text-muted-foreground">
-                                        Status
-                                    </div>
-                                    <div className="font-medium capitalize">
-                                        {stockCount.status}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <div className="text-sm text-muted-foreground">
-                                        Counted at
-                                    </div>
-                                    <div className="font-medium">
-                                        {formatDate(stockCount.countedAt)}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <div className="text-sm text-muted-foreground">
-                                        Submitted by
-                                    </div>
-                                    <div className="font-medium">
-                                        {stockCount.submittedBy ?? '—'}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <div className="text-sm text-muted-foreground">
-                                        Finalized by
-                                    </div>
-                                    <div className="font-medium">
-                                        {stockCount.finalizedBy ?? '—'}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="overflow-x-auto rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                                <table className="w-full text-sm">
-                                    <thead className="border-b text-left">
-                                        <tr>
-                                            <th className="px-4 py-3">Item</th>
-                                            <th className="px-4 py-3">
-                                                Counted
-                                            </th>
-                                            <th className="px-4 py-3">
-                                                Counted base
-                                            </th>
-
-                                            {finalized && (
-                                                <>
-                                                    <th className="px-4 py-3">
-                                                        Expected
-                                                    </th>
-                                                    <th className="px-4 py-3">
-                                                        Variance
-                                                    </th>
-                                                </>
-                                            )}
-
-                                            {finalized && canViewCosts && (
-                                                <th className="px-4 py-3 text-right">
-                                                    Variance value
-                                                </th>
-                                            )}
-
-                                            {finalized && (
-                                                <th className="px-4 py-3">
-                                                    Adjustment
-                                                </th>
-                                            )}
-                                        </tr>
-                                    </thead>
-
-                                    <tbody>
-                                        {stockCount.lines.map((line) => (
-                                            <tr
-                                                key={line.id}
-                                                className="border-b last:border-b-0"
-                                            >
-                                                <td className="px-4 py-3">
-                                                    <div className="font-medium">
-                                                        {line.itemName}
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {line.itemSku}
-                                                    </div>
-                                                </td>
-
-                                                <td className="px-4 py-3">
-                                                    {formatDecimal(
-                                                        line.countedQuantity,
-                                                    )}{' '}
-                                                    {line.countUnitSymbol}
-                                                </td>
-
-                                                <td className="px-4 py-3">
-                                                    {formatDecimal(
-                                                        line.countedBaseQuantity,
-                                                    )}{' '}
-                                                    {line.baseUnitSymbol}
-                                                </td>
-
-                                                {finalized && (
-                                                    <>
-                                                        <td className="px-4 py-3">
-                                                            {formatDecimal(
-                                                                line.expectedBaseQuantity,
-                                                            )}{' '}
-                                                            {
-                                                                line.baseUnitSymbol
-                                                            }
-                                                        </td>
-
-                                                        <td className="px-4 py-3">
-                                                            {formatDecimal(
-                                                                line.varianceBaseQuantity,
-                                                            )}{' '}
-                                                            {
-                                                                line.baseUnitSymbol
-                                                            }
-                                                        </td>
-                                                    </>
-                                                )}
-
-                                                {finalized && canViewCosts && (
-                                                    <td className="px-4 py-3 text-right">
-                                                        {line.varianceTotalCost ===
-                                                        null
-                                                            ? '—'
-                                                            : `${currency} ${formatDecimal(
-                                                                  line.varianceTotalCost,
-                                                              )}`}
-                                                    </td>
-                                                )}
-
-                                                {finalized && (
-                                                    <td className="px-4 py-3">
-                                                        {line.movementId ===
-                                                        null
-                                                            ? 'No movement'
-                                                            : `#${line.movementId}`}
-                                                    </td>
-                                                )}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                        <CountEvidence
+                            stockCount={stockCount}
+                            finalized={finalized}
+                            currency={currency}
+                            canViewCosts={canViewCosts}
+                        />
                     )
                 )}
 
                 {stockCount?.status === 'draft' && canCreate && (
-                    <div className="flex gap-2">
-                        <Form
-                            {...StockCountController.submit.form(stockCount.id)}
+                    <section
+                        className="rounded-xl border border-border bg-card p-4 sm:p-5"
+                        aria-labelledby="stock-count-draft-actions"
+                    >
+                        <h2
+                            id="stock-count-draft-actions"
+                            className="font-semibold"
                         >
-                            {({ processing }) => (
-                                <Button type="submit" disabled={processing}>
-                                    Submit count
+                            Draft actions
+                        </h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Save any evidence changes before changing the count
+                            lifecycle.
+                        </p>
+
+                        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                            <Button
+                                type="button"
+                                onClick={() => setSubmitDialogOpen(true)}
+                            >
+                                Submit count
+                            </Button>
+
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setCancelDialogOpen(true)}
+                            >
+                                Cancel count
+                            </Button>
+                        </div>
+                    </section>
+                )}
+
+                {stockCount?.status === 'submitted' && (
+                    <section
+                        className="rounded-xl border border-border bg-card p-4 sm:p-5"
+                        aria-labelledby="stock-count-submitted-actions"
+                    >
+                        <h2
+                            id="stock-count-submitted-actions"
+                            className="font-semibold"
+                        >
+                            Submitted count
+                        </h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Evidence is frozen. Finalization remains subject to
+                            all server-side inventory and ledger validation.
+                        </p>
+
+                        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                            {canFinalize && (
+                                <Button
+                                    type="button"
+                                    onClick={() => setFinalizeDialogOpen(true)}
+                                >
+                                    Finalize count
                                 </Button>
                             )}
-                        </Form>
 
-                        <Form
-                            {...StockCountController.cancel.form(stockCount.id)}
-                        >
-                            {({ processing }) => (
+                            {canCreate && (
                                 <Button
-                                    type="submit"
+                                    type="button"
                                     variant="outline"
-                                    disabled={processing}
+                                    onClick={() => setCancelDialogOpen(true)}
                                 >
                                     Cancel count
                                 </Button>
                             )}
-                        </Form>
-                    </div>
+                        </div>
+                    </section>
                 )}
+            </div>
 
-                {stockCount?.status === 'submitted' && (
-                    <div className="flex gap-2">
-                        {canFinalize && (
+            {stockCount?.status === 'draft' && canCreate && (
+                <Dialog
+                    open={submitDialogOpen}
+                    onOpenChange={setSubmitDialogOpen}
+                >
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Submit stock count?</DialogTitle>
+                            <DialogDescription>
+                                Submitting freezes the current physical count
+                                evidence for finalization. The server will
+                                validate the lifecycle transition before it is
+                                accepted.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setSubmitDialogOpen(false)}
+                            >
+                                Keep draft
+                            </Button>
+
+                            <Form
+                                {...StockCountController.submit.form(
+                                    stockCount.id,
+                                )}
+                                onSuccess={() => setSubmitDialogOpen(false)}
+                            >
+                                {({ processing }) => (
+                                    <Button type="submit" disabled={processing}>
+                                        Submit count
+                                    </Button>
+                                )}
+                            </Form>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
+
+            {stockCount?.status === 'submitted' && canFinalize && (
+                <Dialog
+                    open={finalizeDialogOpen}
+                    onOpenChange={setFinalizeDialogOpen}
+                >
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>
+                                Finalize count and commit inventory adjustments?
+                            </DialogTitle>
+                            <DialogDescription>
+                                Finalization is the inventory-impacting step.
+                                After server validation, MiseLedger will commit
+                                the required count adjustments through the
+                                existing stock-ledger workflow. The finalized
+                                evidence is then locked for audit integrity.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setFinalizeDialogOpen(false)}
+                            >
+                                Go back
+                            </Button>
+
                             <Form
                                 {...StockCountController.finalize.form(
                                     stockCount.id,
                                 )}
+                                onSuccess={() => setFinalizeDialogOpen(false)}
                             >
                                 {({ processing }) => (
                                     <Button type="submit" disabled={processing}>
-                                        Finalize count
+                                        Finalize and commit adjustments
                                     </Button>
                                 )}
                             </Form>
-                        )}
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
 
-                        {canCreate && (
-                            <Form
-                                {...StockCountController.cancel.form(
-                                    stockCount.id,
-                                )}
-                            >
-                                {({ processing }) => (
-                                    <Button
-                                        type="submit"
-                                        variant="outline"
-                                        disabled={processing}
-                                    >
-                                        Cancel count
-                                    </Button>
-                                )}
-                            </Form>
-                        )}
-                    </div>
+            {stockCount &&
+                canCreate &&
+                (stockCount.status === 'draft' ||
+                    stockCount.status === 'submitted') && (
+                    <Dialog
+                        open={cancelDialogOpen}
+                        onOpenChange={setCancelDialogOpen}
+                    >
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Cancel stock count?</DialogTitle>
+                                <DialogDescription>
+                                    Cancelling ends this count without
+                                    committing inventory adjustments. The server
+                                    remains responsible for validating whether
+                                    the transition is allowed.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <DialogFooter>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setCancelDialogOpen(false)}
+                                >
+                                    Keep count
+                                </Button>
+
+                                <Form
+                                    {...StockCountController.cancel.form(
+                                        stockCount.id,
+                                    )}
+                                    onSuccess={() => setCancelDialogOpen(false)}
+                                >
+                                    {({ processing }) => (
+                                        <Button
+                                            type="submit"
+                                            variant="destructive"
+                                            disabled={processing}
+                                        >
+                                            Cancel count
+                                        </Button>
+                                    )}
+                                </Form>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 )}
-
-                <PreviousPageButton
-                    fallback={StockCountController.index.url()}
-                    variant="outline"
-                    className="w-fit"
-                >
-                    Back to stock counts
-                </PreviousPageButton>
-            </div>
         </>
     );
 }

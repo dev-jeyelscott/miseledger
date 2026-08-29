@@ -1030,13 +1030,13 @@ class StockCountController extends Controller
 
         $from = isset($validated['from'])
             && is_string($validated['from'])
-                ? $validated['from']
-                : null;
+            ? $validated['from']
+            : null;
 
         $to = isset($validated['to'])
             && is_string($validated['to'])
-                ? $validated['to']
-                : null;
+            ? $validated['to']
+            : null;
 
         if (
             $from !== null
@@ -1187,11 +1187,11 @@ class StockCountController extends Controller
                             ->symbol,
                         'varianceBaseQuantity' => $line->variance_base_quantity,
                         'varianceUnitCost' => $canViewCosts
-                                ? $line->variance_unit_cost
-                                : null,
+                            ? $line->variance_unit_cost
+                            : null,
                         'varianceTotalCost' => $canViewCosts
-                                ? $line->variance_total_cost
-                                : null,
+                            ? $line->variance_total_cost
+                            : null,
                         'notes' => $line->notes,
                         'movementId' => $line->movement?->id,
                     ],
@@ -1314,6 +1314,7 @@ class StockCountController extends Controller
             'inventoryItemOptions' => $inventoryItems,
             'unitOptions' => $units,
             'currency' => $organization->currency,
+            'timezone' => $organization->timezone,
         ];
     }
 
