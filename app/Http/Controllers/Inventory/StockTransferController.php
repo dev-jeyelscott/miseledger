@@ -615,6 +615,7 @@ class StockTransferController extends Controller
                     'to' => $to,
                 ],
                 'currency' => $organization->currency,
+                'timezone' => $organization->timezone,
                 'canViewCosts' => $canViewCosts,
             ],
         );
