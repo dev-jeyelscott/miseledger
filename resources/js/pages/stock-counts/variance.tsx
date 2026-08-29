@@ -118,9 +118,7 @@ function varianceLabel(sign: VarianceSign): string {
 }
 
 /** Map variance direction to the shared semantic status treatment. */
-function varianceVariant(
-    sign: VarianceSign,
-): 'info' | 'success' | 'warning' {
+function varianceVariant(sign: VarianceSign): 'info' | 'success' | 'warning' {
     switch (sign) {
         case 'negative':
             return 'warning';
@@ -185,7 +183,10 @@ function VarianceIndicator({ value }: { value: string }) {
 
     return (
         <span className="inline-flex items-center gap-1.5">
-            <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+            <Icon
+                className="size-3.5 text-muted-foreground"
+                aria-hidden="true"
+            />
             <StatusBadge
                 label={varianceLabel(sign)}
                 variant={varianceVariant(sign)}
@@ -485,9 +486,7 @@ export default function StockCountVariance({
                                             </div>
 
                                             <VarianceIndicator
-                                                value={
-                                                    row.varianceBaseQuantity
-                                                }
+                                                value={row.varianceBaseQuantity}
                                             />
                                         </div>
 
@@ -720,7 +719,9 @@ export default function StockCountVariance({
                                                 </td>
 
                                                 <td className="px-4 py-3">
-                                                    <div>{row.locationName}</div>
+                                                    <div>
+                                                        {row.locationName}
+                                                    </div>
                                                     <div className="mt-1 text-xs text-muted-foreground">
                                                         {
                                                             row.storageLocationName

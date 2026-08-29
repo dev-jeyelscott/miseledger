@@ -193,6 +193,7 @@ class WasteController extends Controller
             'report' => $report,
             'filters' => $filters,
             'currency' => $organization->currency,
+            'timezone' => $organization->timezone,
             'canRecord' => $canRecord,
             'canManageReasons' => $canManageReasons,
             'canViewReport' => $canViewReport,
