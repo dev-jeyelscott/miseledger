@@ -320,11 +320,6 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 [InventoryBrandController::class, 'store'],
             )->name('brands.store');
 
-            Route::get(
-                'brands/{inventoryBrand}/edit',
-                [InventoryBrandController::class, 'edit'],
-            )->name('brands.edit');
-
             Route::put(
                 'brands/{inventoryBrand}',
                 [InventoryBrandController::class, 'update'],

@@ -68,17 +68,3 @@ test('inventory brand index breadcrumbs are dashboard, inventory, brands', funct
         ->toContain("title: 'Inventory'")
         ->toContain("title: 'Brands'");
 });
-
-test('inventory brand edit page uses shared header and form contracts', function () {
-    $source = File::get(
-        resource_path('js/pages/inventory/brands/edit.tsx'),
-    );
-
-    expect($source)
-        ->toContain("import { PageHeader } from '@/components/page-header';")
-        ->toContain("import { Field } from '@/components/ui/field';")
-        ->toContain("import { NativeSelect } from '@/components/ui/native-select';")
-        ->toContain('<PageHeader')
-        ->toContain('border-border')
-        ->toContain('Saving…');
-});

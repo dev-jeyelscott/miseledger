@@ -43,7 +43,7 @@ test('an owner can create and deactivate an inventory brand', function () {
             'name' => 'Acme Foods',
             'active' => false,
         ])
-        ->assertRedirect(route('inventory.brands.edit', $brand));
+        ->assertRedirect(route('inventory.brands.index'));
 
     expect($brand->refresh()->active)->toBeFalse();
 });
@@ -133,6 +133,10 @@ test('an auditor can view brands but cannot modify them', function () {
             'role' => OrganizationRole::Auditor,
         ]);
 
+    $brand = InventoryBrand::factory()
+        ->for($organization)
+        ->create();
+
     $this->withSession([
         'active_organization_id' => $organization->id,
     ])
@@ -150,7 +154,17 @@ test('an auditor can view brands but cannot modify them', function () {
         ])
         ->assertForbidden();
 
-    $this->assertDatabaseCount('inventory_brands', 0);
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->put(route('inventory.brands.update', $brand), [
+            'name' => 'Updated Brand',
+            'active' => false,
+        ])
+        ->assertForbidden();
+
+    expect($brand->refresh()->name)->not->toBe('Updated Brand');
 });
 
 test('inventory brands index filters by search and status with normalized props', function () {
@@ -288,7 +302,7 @@ test('inventory brands index orders by active then name and reports tenant scope
         );
 });
 
-test('cross organization inventory brand editing is not exposed', function () {
+test('cross organization inventory brand updates remain unavailable', function () {
     $user = User::factory()->create();
     $organization = Organization::factory()->create();
     $otherOrganization = Organization::factory()->create();
@@ -308,6 +322,34 @@ test('cross organization inventory brand editing is not exposed', function () {
         'active_organization_id' => $organization->id,
     ])
         ->actingAs($user)
-        ->get(route('inventory.brands.edit', $brand))
+        ->put(route('inventory.brands.update', $brand), [
+            'name' => 'Updated Brand',
+            'active' => false,
+        ])
+        ->assertForbidden();
+
+    expect($brand->refresh()->name)->not->toBe('Updated Brand');
+});
+
+test('the former inventory brand edit URL returns not found', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    $brand = InventoryBrand::factory()
+        ->for($organization)
+        ->create();
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->get('/inventory/brands/'.$brand->id.'/edit')
         ->assertNotFound();
 });

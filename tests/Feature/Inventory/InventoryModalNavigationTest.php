@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\OrganizationRole;
+use App\Models\InventoryBrand;
 use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
 use App\Models\InventoryItemUnit;
@@ -153,6 +154,37 @@ test('standalone item creation keeps the existing edit redirect', function () {
     $response->assertRedirect(route('inventory.items.edit', $item));
 });
 
+test('modal brand edits return to the exact filtered brand index context', function () {
+    [$user, $organization] = inventoryModalNavigationContext();
+
+    $brand = InventoryBrand::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Acme Foods',
+            'active' => true,
+        ]);
+
+    $brandsUrl = route('inventory.brands.index', [
+        'search' => 'acme',
+        'status' => 'active',
+    ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->from($brandsUrl)
+        ->put(route('inventory.brands.update', $brand), [
+            '_modal' => '1',
+            'name' => 'Acme Food Service',
+            'active' => true,
+        ])
+        ->assertRedirect($brandsUrl);
+
+    expect($brand->refresh()->name)->toBe('Acme Food Service');
+});
+
 test('modal category unit and conversion edits return to their current context', function () {
     [$user, $organization, $baseUnit] = inventoryModalNavigationContext();
 
@@ -267,6 +299,7 @@ test('inventory modal and return controls use shared navigation primitives', fun
         'js/pages/inventory/items/index.tsx' => 'CreateInventoryItemDialog',
         'js/pages/inventory/items/edit.tsx' => 'EditInventoryItemUnitDialog',
         'js/pages/inventory/categories/index.tsx' => 'EditInventoryCategoryDialog',
+        'js/pages/inventory/brands/index.tsx' => 'EditInventoryBrandDialog',
         'js/pages/inventory/units/index.tsx' => 'EditUnitOfMeasureDialog',
     ];
 

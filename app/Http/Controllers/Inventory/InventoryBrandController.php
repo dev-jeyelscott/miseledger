@@ -107,30 +107,6 @@ class InventoryBrandController extends Controller
         return to_route('inventory.brands.index');
     }
 
-    public function edit(
-        Request $request,
-        string $inventoryBrand,
-    ): Response {
-        $organization = $this->activeOrganization($request);
-
-        Gate::authorize(
-            OrganizationPermission::InventoryAdjust->value,
-            $organization,
-        );
-
-        $brand = $organization
-            ->inventoryBrands()
-            ->findOrFail($inventoryBrand);
-
-        return Inertia::render('inventory/brands/edit', [
-            'brand' => [
-                'id' => $brand->id,
-                'name' => $brand->name,
-                'active' => $brand->active,
-            ],
-        ]);
-    }
-
     public function update(
         SaveInventoryBrandRequest $request,
         string $inventoryBrand,
@@ -161,10 +137,7 @@ class InventoryBrandController extends Controller
             return back();
         }
 
-        return to_route(
-            'inventory.brands.edit',
-            $inventoryBrand,
-        );
+        return to_route('inventory.brands.index');
     }
 
     private function activeOrganization(Request $request): Organization
