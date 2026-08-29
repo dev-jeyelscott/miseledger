@@ -313,9 +313,7 @@ export default function InventoryCategoriesIndex({
                                         <NativeSelect
                                             id="category-status-filter"
                                             name="status"
-                                            defaultValue={
-                                                filters.status ?? ''
-                                            }
+                                            defaultValue={filters.status ?? ''}
                                         >
                                             <option value="">
                                                 All statuses

@@ -144,9 +144,7 @@ export default function ProductFamiliesIndex({
                                         <NativeSelect
                                             id="product-family-status-filter"
                                             name="status"
-                                            defaultValue={
-                                                filters.status ?? ''
-                                            }
+                                            defaultValue={filters.status ?? ''}
                                         >
                                             <option value="">
                                                 All statuses

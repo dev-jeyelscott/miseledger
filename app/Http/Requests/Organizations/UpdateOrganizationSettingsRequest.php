@@ -49,9 +49,7 @@ class UpdateOrganizationSettingsRequest extends FormRequest
      */
     public static function timezoneOptions(): array
     {
-        return array_values(
-            DateTimeZone::listIdentifiers(DateTimeZone::ALL),
-        );
+        return DateTimeZone::listIdentifiers(DateTimeZone::ALL);
     }
 
     /**
