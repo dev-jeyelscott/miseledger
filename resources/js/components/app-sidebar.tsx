@@ -2,29 +2,37 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
     ArrowLeftRight,
+    BadgeCheck,
     Boxes,
     ClipboardCheck,
     ClipboardList,
     Coins,
     CreditCard,
     History,
+    Layers3,
     LayoutGrid,
     MapPin,
     NotebookText,
     PackageCheck,
+    PackagePlus,
     PackageSearch,
     Ruler,
     Settings,
+    SlidersHorizontal,
     Tags,
     Trash2,
     Truck,
     Users,
 } from 'lucide-react';
 import OrganizationBillingController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingController';
+import InventoryAdjustmentController from '@/actions/App/Http/Controllers/Inventory/InventoryAdjustmentController';
+import InventoryBrandController from '@/actions/App/Http/Controllers/Inventory/InventoryBrandController';
 import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
+import InventoryProductController from '@/actions/App/Http/Controllers/Inventory/InventoryProductController';
 import InventoryValuationReportController from '@/actions/App/Http/Controllers/Inventory/InventoryValuationReportController';
 import LowStockReportController from '@/actions/App/Http/Controllers/Inventory/LowStockReportController';
+import OpeningBalanceController from '@/actions/App/Http/Controllers/Inventory/OpeningBalanceController';
 import PurchasingHistoryReportController from '@/actions/App/Http/Controllers/Inventory/PurchasingHistoryReportController';
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
 import StockMovementLedgerReportController from '@/actions/App/Http/Controllers/Inventory/StockMovementLedgerReportController';
@@ -97,9 +105,34 @@ export function AppSidebar() {
                 icon: Tags,
             },
             {
+                title: 'Brands',
+                href: InventoryBrandController.index(),
+                icon: BadgeCheck,
+            },
+            {
+                title: 'Product families',
+                href: InventoryProductController.index(),
+                icon: Layers3,
+            },
+            {
                 title: 'Units of measure',
                 href: UnitOfMeasureController.index(),
                 icon: Ruler,
+            },
+        );
+    }
+
+    if (permissions.has('inventory.adjust')) {
+        inventoryNavItems.push(
+            {
+                title: 'Opening balances',
+                href: OpeningBalanceController.create(),
+                icon: PackagePlus,
+            },
+            {
+                title: 'Stock adjustments',
+                href: InventoryAdjustmentController.create(),
+                icon: SlidersHorizontal,
             },
         );
     }

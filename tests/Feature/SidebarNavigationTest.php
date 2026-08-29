@@ -25,12 +25,31 @@ test('sidebar keeps grouped permission aware navigation and the authorized organ
         ->toContain("title: 'Reports'")
         ->toContain("title: 'Organization'")
         ->toContain("permissions.has('inventory.view')")
+        ->toContain("permissions.has('inventory.adjust')")
         ->toContain("permissions.has('purchasing.view')")
         ->toContain("permissions.has('reports.view')")
         ->toContain("permissions.has('locations.manage')")
         ->toContain("permissions.has('users.manage')")
         ->toContain("permissions.has('organization.manage')")
         ->toContain('<OrganizationSwitcher');
+
+    expect($sidebar)
+        ->toContain("title: 'Brands'")
+        ->toContain('href: InventoryBrandController.index()')
+        ->toContain("title: 'Product families'")
+        ->toContain('href: InventoryProductController.index()')
+        ->toContain("title: 'Opening balances'")
+        ->toContain('href: OpeningBalanceController.create()')
+        ->toContain("title: 'Stock adjustments'")
+        ->toContain('href: InventoryAdjustmentController.create()');
+
+    expect($sidebar)
+        ->toMatch(
+            "/if \\(permissions\\.has\\('inventory\\.view'\\)\\) \\{[\\s\\S]*?title: 'Brands'[\\s\\S]*?title: 'Product families'[\\s\\S]*?\\n    \\}/",
+        )
+        ->toMatch(
+            "/if \\(permissions\\.has\\('inventory\\.adjust'\\)\\) \\{[\\s\\S]*?title: 'Opening balances'[\\s\\S]*?title: 'Stock adjustments'[\\s\\S]*?\\n    \\}/",
+        );
 
     expect($sidebar)
         ->toContain("permissions.has('purchasing.view') && grants?.purchasing")
