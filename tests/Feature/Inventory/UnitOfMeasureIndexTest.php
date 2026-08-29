@@ -213,10 +213,30 @@ test('unit index frontend uses guarded dialogs filters and dense table', functio
         ->toContain('divide-y divide-border md:hidden')
         ->toContain('hidden overflow-x-auto md:block')
         ->toContain("label={active ? 'Active' : 'Inactive'}")
+        ->toContain("variant={active ? 'success' : 'neutral'}")
         ->toContain('overflow-x-auto')
         ->toContain('Used by')
         ->toContain('Updated')
         ->toContain('PreviousPageButton')
+        ->toContain("? 'Creating…'")
+        ->toContain("processing ? 'Saving…' : 'Save unit'")
+        ->toContain("? 'Applying…'")
         ->not->toContain('CreateUnitOfMeasureSheet')
+        ->not->toContain('border-sidebar-border')
         ->not->toContain("import { Badge } from '@/components/ui/badge';");
+});
+
+test('unit edit page frontend uses shared page and field contracts', function () {
+    $source = file_get_contents(
+        resource_path('js/pages/inventory/units/edit.tsx'),
+    );
+
+    expect($source)
+        ->toContain("import { PageHeader } from '@/components/page-header';")
+        ->toContain("import { Field } from '@/components/ui/field';")
+        ->toContain("import { NativeSelect } from '@/components/ui/native-select';")
+        ->toContain('<PageHeader')
+        ->toContain('border-border')
+        ->toContain("processing ? 'Saving…' : 'Save unit'")
+        ->not->toContain('border-sidebar-border');
 });
