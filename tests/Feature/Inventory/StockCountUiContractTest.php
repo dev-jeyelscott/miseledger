@@ -74,7 +74,7 @@ test('stock count form follows the canonical lifecycle workspace contract', func
         ->toContain('Physical count evidence')
         ->toContain('formatOrganizationDate(')
         ->toContain('timeZone: timezone')
-        ->toContain('Review the highlighted fields')
+        ->toMatch('/Review the highlighted\s+fields/')
         ->toContain('focusErrorTarget(')
         ->toContain('md:hidden')
         ->toContain('hidden overflow-x-auto md:block')
