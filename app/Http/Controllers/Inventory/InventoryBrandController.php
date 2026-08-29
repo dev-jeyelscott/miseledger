@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Inventory\SaveInventoryBrandRequest;
 use App\Models\InventoryBrand;
 use App\Models\Organization;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -43,7 +44,11 @@ class InventoryBrandController extends Controller
 
         $brandsQuery = $organization
             ->inventoryBrands()
-            ->withCount('inventoryItems');
+            ->withCount([
+                'inventoryItems' => static function (Builder $query) use ($organization): void {
+                    $query->whereBelongsTo($organization);
+                },
+            ]);
 
         if ($search !== '') {
             $brandsQuery->whereLike('name', '%'.$search.'%');

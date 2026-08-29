@@ -272,7 +272,7 @@ test('inventory brands index orders by active then name and reports tenant scope
             'inventory_brand_id' => $apple->id,
         ]);
 
-    $otherBrand = InventoryBrand::factory()
+    InventoryBrand::factory()
         ->for($otherOrganization)
         ->create([
             'name' => 'Apple',
@@ -281,7 +281,7 @@ test('inventory brands index orders by active then name and reports tenant scope
     InventoryItem::factory()
         ->for($otherOrganization)
         ->create([
-            'inventory_brand_id' => $otherBrand->id,
+            'inventory_brand_id' => $apple->id,
         ]);
 
     $this->withSession([
