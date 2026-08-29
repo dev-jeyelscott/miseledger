@@ -218,6 +218,9 @@ function EditUnitOfMeasureDialog({
         'Discard the unit of measure changes you entered?',
     );
 
+    const isReferenced = unit.usageCount > 0;
+    const lockActive = isReferenced && unit.active;
+
     return (
         <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
             <DialogTrigger asChild>{trigger}</DialogTrigger>
@@ -259,11 +262,26 @@ function EditUnitOfMeasureDialog({
                                     label="Symbol"
                                     error={errors.symbol}
                                 >
-                                    <Input
-                                        name="symbol"
-                                        defaultValue={unit.symbol}
-                                        required
-                                    />
+                                    {isReferenced ? (
+                                        <>
+                                            <Input
+                                                value={unit.symbol}
+                                                readOnly
+                                                disabled
+                                            />
+                                            <input
+                                                type="hidden"
+                                                name="symbol"
+                                                value={unit.symbol}
+                                            />
+                                        </>
+                                    ) : (
+                                        <Input
+                                            name="symbol"
+                                            defaultValue={unit.symbol}
+                                            required
+                                        />
+                                    )}
                                 </Field>
 
                                 <Field
@@ -271,20 +289,55 @@ function EditUnitOfMeasureDialog({
                                     label="Dimension"
                                     error={errors.dimension}
                                 >
-                                    <NativeSelect
-                                        name="dimension"
-                                        defaultValue={unit.dimension}
-                                        required
-                                    >
-                                        {dimensionOptions.map((dimension) => (
-                                            <option
-                                                key={dimension}
-                                                value={dimension}
+                                    {isReferenced ? (
+                                        <>
+                                            <NativeSelect
+                                                value={unit.dimension}
+                                                disabled
                                             >
-                                                {dimensionLabels[dimension]}
-                                            </option>
-                                        ))}
-                                    </NativeSelect>
+                                                {dimensionOptions.map(
+                                                    (dimension) => (
+                                                        <option
+                                                            key={dimension}
+                                                            value={dimension}
+                                                        >
+                                                            {
+                                                                dimensionLabels[
+                                                                    dimension
+                                                                ]
+                                                            }
+                                                        </option>
+                                                    ),
+                                                )}
+                                            </NativeSelect>
+                                            <input
+                                                type="hidden"
+                                                name="dimension"
+                                                value={unit.dimension}
+                                            />
+                                        </>
+                                    ) : (
+                                        <NativeSelect
+                                            name="dimension"
+                                            defaultValue={unit.dimension}
+                                            required
+                                        >
+                                            {dimensionOptions.map(
+                                                (dimension) => (
+                                                    <option
+                                                        key={dimension}
+                                                        value={dimension}
+                                                    >
+                                                        {
+                                                            dimensionLabels[
+                                                                dimension
+                                                            ]
+                                                        }
+                                                    </option>
+                                                ),
+                                            )}
+                                        </NativeSelect>
+                                    )}
                                 </Field>
 
                                 <Field
@@ -292,14 +345,31 @@ function EditUnitOfMeasureDialog({
                                     label="Status"
                                     error={errors.active}
                                 >
-                                    <NativeSelect
-                                        name="active"
-                                        defaultValue={unit.active ? '1' : '0'}
-                                        required
-                                    >
-                                        <option value="1">Active</option>
-                                        <option value="0">Inactive</option>
-                                    </NativeSelect>
+                                    {lockActive ? (
+                                        <>
+                                            <NativeSelect value="1" disabled>
+                                                <option value="1">
+                                                    Active
+                                                </option>
+                                            </NativeSelect>
+                                            <input
+                                                type="hidden"
+                                                name="active"
+                                                value="1"
+                                            />
+                                        </>
+                                    ) : (
+                                        <NativeSelect
+                                            name="active"
+                                            defaultValue={
+                                                unit.active ? '1' : '0'
+                                            }
+                                            required
+                                        >
+                                            <option value="1">Active</option>
+                                            <option value="0">Inactive</option>
+                                        </NativeSelect>
+                                    )}
                                 </Field>
 
                                 <div className="flex gap-3 rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
@@ -309,8 +379,8 @@ function EditUnitOfMeasureDialog({
                                     />
 
                                     <p>
-                                        {unit.usageCount > 0
-                                            ? `This unit is referenced by ${unit.usageCount.toLocaleString()} item configuration${unit.usageCount === 1 ? '' : 's'}. Existing inventory rules protect referenced symbols, dimensions, and active state.`
+                                        {isReferenced
+                                            ? `This unit is referenced by ${unit.usageCount.toLocaleString()} item configuration${unit.usageCount === 1 ? '' : 's'}. Symbol and dimension are locked, and an active unit cannot be deactivated, while it remains referenced.`
                                             : 'Changes remain subject to standard unit and inventory-integrity validation.'}
                                     </p>
                                 </div>

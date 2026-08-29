@@ -230,6 +230,24 @@ test('unit index frontend uses guarded dialogs filters and dense table', functio
         ->not->toContain("import { Badge } from '@/components/ui/badge';");
 });
 
+test('unit edit dialog frontend locks referenced semantic fields and active state', function () {
+    $source = file_get_contents(
+        resource_path('js/pages/inventory/units/index.tsx'),
+    );
+    $normalizedSource = preg_replace('/\s+/', ' ', $source);
+
+    expect($source)
+        ->toContain('const isReferenced = unit.usageCount > 0;')
+        ->toContain('const lockActive = isReferenced && unit.active;')
+        ->toContain('Symbol and dimension are locked')
+        ->toContain('an active unit cannot be deactivated');
+
+    expect($normalizedSource)
+        ->toContain('type="hidden" name="symbol" value={unit.symbol}')
+        ->toContain('type="hidden" name="dimension" value={unit.dimension}')
+        ->toContain('type="hidden" name="active" value="1"');
+});
+
 test('unit edit page frontend uses shared page and field contracts', function () {
     $source = file_get_contents(
         resource_path('js/pages/inventory/units/edit.tsx'),
