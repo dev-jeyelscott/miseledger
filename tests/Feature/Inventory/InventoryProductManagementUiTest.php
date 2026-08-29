@@ -14,8 +14,12 @@ use Illuminate\Support\Facades\File;
 test('an inventory manager receives the product family page with its variants and controlled options', function () {
     $user = User::factory()->create();
     $organization = Organization::factory()->create();
-    $product = InventoryProduct::factory()->for($organization)->create(['name' => 'Cordless drills']);
-    $brand = InventoryBrand::factory()->for($organization)->create(['name' => 'Acme']);
+    $product = InventoryProduct::factory()->for($organization)->create([
+        'name' => 'Cordless drills',
+    ]);
+    $brand = InventoryBrand::factory()->for($organization)->create([
+        'name' => 'Acme',
+    ]);
     $item = InventoryItem::factory()->for($organization)->create([
         'inventory_product_id' => $product->id,
         'inventory_brand_id' => $brand->id,
@@ -51,10 +55,14 @@ test('an inventory manager receives the product family page with its variants an
             ->where('productFamily.name', 'Cordless drills')
             ->where('productFamily.options.0.name', 'Voltage')
             ->where('productFamily.options.0.values.0.value', '18V')
+            ->where('productFamily.variants.0.id', $item->id)
             ->where('productFamily.variants.0.description', '18V compact drill')
             ->where('productFamily.variants.0.sku', 'DRILL-18V')
             ->where('productFamily.variants.0.barcode', '1234567890123')
-            ->where('productFamily.variants.0.baseUnitOfMeasure.id', $item->base_unit_of_measure_id)
+            ->where(
+                'productFamily.variants.0.baseUnitOfMeasure.id',
+                $item->base_unit_of_measure_id,
+            )
             ->where('productFamily.variants.0.brand.name', 'Acme'));
 });
 
@@ -64,37 +72,55 @@ test('option and value mutations are limited to inventory managers and their act
     $organization = Organization::factory()->create();
     $otherOrganization = Organization::factory()->create();
     $product = InventoryProduct::factory()->for($organization)->create();
-    $foreignProduct = InventoryProduct::factory()->for($otherOrganization)->create();
+    $foreignProduct = InventoryProduct::factory()
+        ->for($otherOrganization)
+        ->create();
 
-    OrganizationMembership::factory()->for($organization)->for($manager)->create([
-        'role' => OrganizationRole::Owner,
-    ]);
-    OrganizationMembership::factory()->for($organization)->for($viewer)->create([
-        'role' => OrganizationRole::Auditor,
-    ]);
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($manager)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($viewer)
+        ->create([
+            'role' => OrganizationRole::Auditor,
+        ]);
 
     $this->withSession(['active_organization_id' => $organization->id])
         ->actingAs($viewer)
-        ->post(route('inventory.product-families.options.store', $product), [
-            'name' => 'Size',
-            'active' => true,
-        ])
+        ->post(
+            route('inventory.product-families.options.store', $product),
+            [
+                'name' => 'Size',
+                'active' => true,
+            ],
+        )
         ->assertForbidden();
 
     $this->withSession(['active_organization_id' => $organization->id])
         ->actingAs($manager)
-        ->post(route('inventory.product-families.options.store', $foreignProduct), [
-            'name' => 'Size',
-            'active' => true,
-        ])
+        ->post(
+            route('inventory.product-families.options.store', $foreignProduct),
+            [
+                'name' => 'Size',
+                'active' => true,
+            ],
+        )
         ->assertForbidden();
 
     $this->withSession(['active_organization_id' => $organization->id])
         ->actingAs($manager)
-        ->post(route('inventory.product-families.options.store', $product), [
-            'name' => 'Size',
-            'active' => true,
-        ])
+        ->post(
+            route('inventory.product-families.options.store', $product),
+            [
+                'name' => 'Size',
+                'active' => true,
+            ],
+        )
         ->assertRedirect()
         ->assertSessionHasNoErrors();
 
@@ -102,26 +128,42 @@ test('option and value mutations are limited to inventory managers and their act
 
     $this->withSession(['active_organization_id' => $organization->id])
         ->actingAs($manager)
-        ->post(route('inventory.product-families.options.values.store', [$product, $option]), [
-            'value' => 'Small',
-            'active' => true,
-        ])
+        ->post(
+            route(
+                'inventory.product-families.options.values.store',
+                [$product, $option],
+            ),
+            [
+                'value' => 'Small',
+                'active' => true,
+            ],
+        )
         ->assertRedirect()
         ->assertSessionHasNoErrors();
 
     expect($option->values()->value('value'))->toBe('Small');
 });
 
-test('the product family index page consumes the shared master-data UI contract', function () {
-    $source = File::get(resource_path('js/pages/inventory/product-families/index.tsx'));
+test('the product family index uses the canonical server backed master data composition', function () {
+    $source = File::get(
+        resource_path('js/pages/inventory/product-families/index.tsx'),
+    );
     $normalizedSource = preg_replace('/\s+/', ' ', $source);
 
     expect($source)
-        ->toContain("import { FilterToolbar } from '@/components/filter-toolbar';")
-        ->toContain("import { PageHeader } from '@/components/page-header';")
-        ->toContain("import { StatusBadge } from '@/components/status-badge';")
+        ->toContain(
+            "import { FilterToolbar } from '@/components/filter-toolbar';",
+        )
+        ->toContain(
+            "import { PageHeader } from '@/components/page-header';",
+        )
+        ->toContain(
+            "import { StatusBadge } from '@/components/status-badge';",
+        )
         ->toContain("import { Field } from '@/components/ui/field';")
-        ->toContain("import { NativeSelect } from '@/components/ui/native-select';")
+        ->toContain(
+            "import { NativeSelect } from '@/components/ui/native-select';",
+        )
         ->toContain('<PageHeader')
         ->toContain('<FilterToolbar')
         ->toContain('<StatusBadge')
@@ -142,44 +184,83 @@ test('the product family index page consumes the shared master-data UI contract'
         ->toContain('{canManage && (')
         ->not->toContain('useState')
         ->not->toContain('useMemo')
-        ->not->toContain("import { Badge } from '@/components/ui/badge';");
+        ->not->toContain(
+            "import { Badge } from '@/components/ui/badge';",
+        );
 
     expect($normalizedSource)
-        ->toContain("label={ productFamily.active ? 'Active' : 'Inactive' } variant={ productFamily.active ? 'success' : 'neutral' }")
-        ->toContain('{processing ? \'Creating…\' : \'Create\'}');
+        ->toContain(
+            "label={ productFamily.active ? 'Active' : 'Inactive' } variant={ productFamily.active ? 'success' : 'neutral' }",
+        )
+        ->toContain("{processing ? 'Creating…' : 'Create'}");
 });
 
-test('the product family show page uses the shared Field, NativeSelect, and StatusBadge contracts for option and value statuses', function () {
-    $source = File::get(resource_path('js/pages/inventory/product-families/show.tsx'));
+test('the product family detail is view first and uses guarded option and value dialogs', function () {
+    $source = File::get(
+        resource_path('js/pages/inventory/product-families/show.tsx'),
+    );
 
     expect($source)
-        ->toContain("import { Field } from '@/components/ui/field';")
-        ->toContain("import { NativeSelect } from '@/components/ui/native-select';")
-        ->not->toContain("import { Badge } from '@/components/ui/badge';")
+        ->toContain(
+            "import { useGuardedDialog } from '@/hooks/use-guarded-dialog';",
+        )
+        ->toContain(
+            'DialogTrigger',
+        )
+        ->toContain('CreateOptionDialog')
+        ->toContain('EditOptionDialog')
+        ->toContain('CreateOptionValueDialog')
+        ->toContain('EditOptionValueDialog')
+        ->toContain('createProductOption')
+        ->toContain('editProductOption')
+        ->toContain('createProductOptionValue')
+        ->toContain('editProductOptionValue')
+        ->toContain('resetOnSuccess')
+        ->toContain('onSuccess={dialog.closeAfterSuccess}')
+        ->toContain('<StatusBadge')
+        ->not->toContain(
+            "import { Badge } from '@/components/ui/badge';",
+        )
         ->not->toContain('<Badge');
-
-    $optionStatusField = "<Field\n                                                            id={`option-active-\${option.id}`}";
-    $valueStatusField = "<Field\n                                                                id={`option-value-active-\${value.id}`}";
-
-    expect($source)
-        ->toContain($optionStatusField)
-        ->toContain($valueStatusField)
-        ->toContain('<StatusBadge');
 });
 
-test('the product family interface uses Wayfinder item actions and exposes all required variant columns', function () {
-    $source = File::get(resource_path('js/pages/inventory/product-families/show.tsx'));
+test('the product family detail exposes its semantic status and dynamic breadcrumb', function () {
+    $source = File::get(
+        resource_path('js/pages/inventory/product-families/show.tsx'),
+    );
 
     expect($source)
-        ->toContain("InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController'")
-        ->toContain('InventoryItemController.edit(')
-        ->toContain('variant.id')
+        ->toContain('setLayoutProps({')
+        ->toContain('title: productFamily.name')
+        ->toContain(
+            'href: InventoryProductController.show(productFamily.id)',
+        )
+        ->toContain('Family status')
+        ->toContain('<ActiveStatus active={productFamily.active} />');
+});
+
+test('variant discovery is local and preserves responsive read only navigation', function () {
+    $source = File::get(
+        resource_path('js/pages/inventory/product-families/show.tsx'),
+    );
+
+    expect($source)
+        ->toContain('useState')
+        ->toContain('useMemo')
+        ->toContain('variantSearch')
+        ->toContain('filteredVariants')
+        ->toContain('Search variants')
+        ->toContain('Search variants by name, SKU, barcode, brand, or unit...')
+        ->toContain('md:hidden')
+        ->toContain('hidden overflow-x-auto md:block')
         ->toContain('Variant description')
+        ->toContain('Brand')
         ->toContain('SKU')
         ->toContain('Barcode')
         ->toContain('Base unit')
         ->toContain('Status')
         ->toContain('scope="col"')
-        ->toContain('overflow-x-auto')
-        ->toContain('canManage');
+        ->toContain('InventoryItemController.show(')
+        ->toContain('InventoryItemController.edit(')
+        ->toContain('{canManage && (');
 });
