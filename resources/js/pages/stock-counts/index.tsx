@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
+import { EmptyState } from '@/components/empty-state';
 import { FilterToolbar } from '@/components/filter-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { PaginationControls } from '@/components/pagination-controls';
@@ -171,36 +172,6 @@ function ariaSortFor(
     return direction === 'asc' ? 'ascending' : 'descending';
 }
 
-/** Render a reusable no-record state for both mobile and desktop presentations. */
-function StockCountEmptyState({
-    canCreate,
-    hasFilters,
-}: {
-    canCreate: boolean;
-    hasFilters: boolean;
-}) {
-    return (
-        <div className="mx-auto max-w-sm text-center">
-            <ClipboardList
-                className="mx-auto size-8 text-muted-foreground"
-                aria-hidden="true"
-            />
-            <p className="mt-3 font-medium">
-                {hasFilters
-                    ? 'No stock counts match these filters.'
-                    : 'No stock counts yet.'}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-                {hasFilters
-                    ? 'Adjust or reset the filters to see other stock-count history.'
-                    : canCreate
-                      ? 'Create a stock count when you are ready to reconcile physical inventory.'
-                      : 'Stock counts will appear here when they are available.'}
-            </p>
-        </div>
-    );
-}
-
 /** Render one server-authoritative Stock Counts operational index. */
 export default function StockCountIndex({
     rows,
@@ -222,6 +193,15 @@ export default function StockCountIndex({
         filters.storageLocationId !== null ||
         filters.from !== null ||
         filters.to !== null;
+
+    const emptyStateTitle = hasFilters
+        ? 'No stock counts match these filters.'
+        : 'No stock counts yet.';
+    const emptyStateDescription = hasFilters
+        ? 'Adjust or reset the filters to see other stock-count history.'
+        : canCreate
+          ? 'Create a stock count when you are ready to reconcile physical inventory.'
+          : 'Stock counts will appear here when they are available.';
 
     const selectedLocation = locationOptions.find(
         (location) => location.id === filters.locationId,
@@ -674,9 +654,10 @@ export default function StockCountIndex({
 
                     {rows.length === 0 ? (
                         <div className="px-4 py-12 md:hidden">
-                            <StockCountEmptyState
-                                hasFilters={hasFilters}
-                                canCreate={canCreate}
+                            <EmptyState
+                                icon={ClipboardList}
+                                title={emptyStateTitle}
+                                description={emptyStateDescription}
                             />
                         </div>
                     ) : (
@@ -943,9 +924,12 @@ export default function StockCountIndex({
                                 {rows.length === 0 ? (
                                     <tr>
                                         <td colSpan={9} className="px-6 py-14">
-                                            <StockCountEmptyState
-                                                hasFilters={hasFilters}
-                                                canCreate={canCreate}
+                                            <EmptyState
+                                                icon={ClipboardList}
+                                                title={emptyStateTitle}
+                                                description={
+                                                    emptyStateDescription
+                                                }
                                             />
                                         </td>
                                     </tr>

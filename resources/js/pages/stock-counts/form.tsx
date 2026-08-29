@@ -135,15 +135,8 @@ function formatDecimal(value: string): string {
     }`;
 }
 
-/** Format workflow timestamps in the active organization's configured timezone. */
-function formatOrganizationDate(
-    value: string | null,
-    timezone: string,
-): string {
-    if (value === null) {
-        return 'Not recorded';
-    }
-
+/** Format authoritative workflow timestamps in the active organization timezone. */
+function formatOrganizationDate(value: string, timezone: string): string {
     return new Intl.DateTimeFormat('en-US', {
         month: 'short',
         day: 'numeric',
@@ -272,7 +265,12 @@ function errorTargets(errors: ErrorMap): ErrorTarget[] {
     });
 }
 
-/** Move keyboard focus to a server-invalid field without adding client validation. */
+/** Return the first authoritative lifecycle-action validation error. */
+function firstActionError(errors: ErrorMap): string | null {
+    return Object.values(errors)[0] ?? null;
+}
+
+/** Move keyboard focus to a server-invalid field while respecting reduced motion. */
 function focusErrorTarget(targetId: string): void {
     const element = document.getElementById(targetId);
 
@@ -280,8 +278,12 @@ function focusErrorTarget(targetId: string): void {
         return;
     }
 
+    const prefersReducedMotion = window.matchMedia(
+        '(prefers-reduced-motion: reduce)',
+    ).matches;
+
     element.scrollIntoView({
-        behavior: 'smooth',
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
         block: 'center',
     });
 
@@ -290,7 +292,7 @@ function focusErrorTarget(targetId: string): void {
     });
 }
 
-/** Render the immutable physical evidence attached to a non-editable count. */
+/** Render immutable physical evidence attached to a non-editable count. */
 function CountEvidence({
     stockCount,
     finalized,
@@ -302,6 +304,18 @@ function CountEvidence({
     currency: string;
     canViewCosts: boolean;
 }) {
+    const evidenceHeading = finalized
+        ? 'Finalized audit evidence'
+        : stockCount.status === 'submitted'
+          ? 'Submitted evidence'
+          : 'Cancelled evidence';
+
+    const evidenceDescription = finalized
+        ? 'This evidence is locked. Expected quantities, variances, and adjustment references reflect the finalized server record.'
+        : stockCount.status === 'submitted'
+          ? 'This physical count evidence is frozen while awaiting finalization or cancellation. Inventory has not been adjusted by submission.'
+          : 'This physical count evidence is frozen because the count was cancelled without inventory adjustments.';
+
     return (
         <section
             className="overflow-hidden rounded-xl border border-border bg-card"
@@ -309,12 +323,10 @@ function CountEvidence({
         >
             <div className="border-b border-border px-4 py-4 sm:px-5">
                 <h2 id="stock-count-evidence-heading" className="font-semibold">
-                    {finalized ? 'Finalized audit evidence' : 'Count evidence'}
+                    {evidenceHeading}
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    {finalized
-                        ? 'This evidence is locked. Expected quantities, variances, and adjustment references reflect the finalized server record.'
-                        : 'Physical count evidence is frozen in its current lifecycle state and is not editable here.'}
+                    {evidenceDescription}
                 </p>
             </div>
 
@@ -701,60 +713,74 @@ export default function StockCountForm({
                                 id="stock-count-lifecycle-heading"
                                 className="font-semibold"
                             >
-                                Lifecycle
+                                Lifecycle and evidence
                             </h2>
                             <p className="mt-1 text-sm text-muted-foreground">
-                                Workflow timestamps are shown in {timezone}.
+                                Recorded workflow times are shown in {timezone}.
                             </p>
                         </div>
 
                         <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                            <div>
-                                <dt className="text-sm text-muted-foreground">
-                                    Counted at
-                                </dt>
-                                <dd className="mt-1 font-medium">
-                                    {formatOrganizationDate(
-                                        stockCount.countedAt,
-                                        timezone,
-                                    )}
-                                </dd>
-                            </div>
+                            {stockCount.createdBy && (
+                                <div>
+                                    <dt className="text-sm text-muted-foreground">
+                                        Created by
+                                    </dt>
+                                    <dd className="mt-1 font-medium">
+                                        {stockCount.createdBy}
+                                    </dd>
+                                </div>
+                            )}
 
-                            <div>
-                                <dt className="text-sm text-muted-foreground">
-                                    Created by
-                                </dt>
-                                <dd className="mt-1 font-medium">
-                                    {stockCount.createdBy ?? 'Not recorded'}
-                                </dd>
-                            </div>
+                            {stockCount.countedAt && (
+                                <div>
+                                    <dt className="text-sm text-muted-foreground">
+                                        Counted at
+                                    </dt>
+                                    <dd className="mt-1 font-medium">
+                                        {formatOrganizationDate(
+                                            stockCount.countedAt,
+                                            timezone,
+                                        )}
+                                    </dd>
+                                </div>
+                            )}
 
-                            <div>
-                                <dt className="text-sm text-muted-foreground">
-                                    Submitted by
-                                </dt>
-                                <dd className="mt-1 font-medium">
-                                    {stockCount.submittedBy ?? 'Not recorded'}
-                                </dd>
-                            </div>
+                            {stockCount.submittedBy && (
+                                <div>
+                                    <dt className="text-sm text-muted-foreground">
+                                        Submitted by
+                                    </dt>
+                                    <dd className="mt-1 font-medium">
+                                        {stockCount.submittedBy}
+                                    </dd>
+                                </div>
+                            )}
 
-                            <div>
-                                <dt className="text-sm text-muted-foreground">
-                                    Finalized
-                                </dt>
-                                <dd className="mt-1 font-medium">
-                                    {stockCount.finalizedBy ?? 'Not finalized'}
-                                </dd>
-                                {stockCount.finalizedAt && (
-                                    <dd className="mt-1 text-xs text-muted-foreground">
+                            {stockCount.finalizedBy && (
+                                <div>
+                                    <dt className="text-sm text-muted-foreground">
+                                        Finalized by
+                                    </dt>
+                                    <dd className="mt-1 font-medium">
+                                        {stockCount.finalizedBy}
+                                    </dd>
+                                </div>
+                            )}
+
+                            {stockCount.finalizedAt && (
+                                <div>
+                                    <dt className="text-sm text-muted-foreground">
+                                        Finalized at
+                                    </dt>
+                                    <dd className="mt-1 font-medium">
                                         {formatOrganizationDate(
                                             stockCount.finalizedAt,
                                             timezone,
                                         )}
                                     </dd>
-                                )}
-                            </div>
+                                </div>
+                            )}
                         </dl>
                     </section>
                 )}
@@ -1221,7 +1247,15 @@ export default function StockCountForm({
 
                                                         {selectedItem && (
                                                             <p className="text-xs text-muted-foreground">
-                                                                Base unit:{' '}
+                                                                Selected item:{' '}
+                                                                {
+                                                                    selectedItem.name
+                                                                }{' '}
+                                                                (
+                                                                {
+                                                                    selectedItem.sku
+                                                                }
+                                                                ). Base unit:{' '}
                                                                 {
                                                                     selectedItem.baseUnitSymbol
                                                                 }
@@ -1275,9 +1309,11 @@ export default function StockCountForm({
                                             disabled={processing}
                                             className="w-full sm:w-auto"
                                         >
-                                            {stockCount === null
-                                                ? 'Create draft'
-                                                : 'Save draft'}
+                                            {processing
+                                                ? 'Saving…'
+                                                : stockCount === null
+                                                  ? 'Create draft'
+                                                  : 'Save draft'}
                                         </Button>
                                     </div>
                                 </div>
@@ -1376,38 +1412,64 @@ export default function StockCountForm({
                     onOpenChange={setSubmitDialogOpen}
                 >
                     <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Submit stock count?</DialogTitle>
-                            <DialogDescription>
-                                Submitting freezes the current physical count
-                                evidence for finalization. The server will
-                                validate the lifecycle transition before it is
-                                accepted.
-                            </DialogDescription>
-                        </DialogHeader>
+                        <Form
+                            {...StockCountController.submit.form(stockCount.id)}
+                            onSuccess={() => setSubmitDialogOpen(false)}
+                        >
+                            {({ processing, errors }) => {
+                                const actionError = firstActionError(errors);
 
-                        <DialogFooter>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setSubmitDialogOpen(false)}
-                            >
-                                Keep draft
-                            </Button>
+                                return (
+                                    <div className="grid gap-4">
+                                        <DialogHeader>
+                                            <DialogTitle>
+                                                Submit stock count?
+                                            </DialogTitle>
+                                            <DialogDescription>
+                                                Submitting freezes the current
+                                                physical count evidence for
+                                                finalization. It does not adjust
+                                                inventory. The server will
+                                                validate the lifecycle
+                                                transition before it is
+                                                accepted.
+                                            </DialogDescription>
+                                        </DialogHeader>
 
-                            <Form
-                                {...StockCountController.submit.form(
-                                    stockCount.id,
-                                )}
-                                onSuccess={() => setSubmitDialogOpen(false)}
-                            >
-                                {({ processing }) => (
-                                    <Button type="submit" disabled={processing}>
-                                        Submit count
-                                    </Button>
-                                )}
-                            </Form>
-                        </DialogFooter>
+                                        {actionError !== null && (
+                                            <p
+                                                role="alert"
+                                                className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                                            >
+                                                {actionError}
+                                            </p>
+                                        )}
+
+                                        <DialogFooter>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                disabled={processing}
+                                                onClick={() =>
+                                                    setSubmitDialogOpen(false)
+                                                }
+                                            >
+                                                Keep draft
+                                            </Button>
+
+                                            <Button
+                                                type="submit"
+                                                disabled={processing}
+                                            >
+                                                {processing
+                                                    ? 'Submitting…'
+                                                    : 'Submit count'}
+                                            </Button>
+                                        </DialogFooter>
+                                    </div>
+                                );
+                            }}
+                        </Form>
                     </DialogContent>
                 </Dialog>
             )}
@@ -1418,41 +1480,68 @@ export default function StockCountForm({
                     onOpenChange={setFinalizeDialogOpen}
                 >
                     <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>
-                                Finalize count and commit inventory adjustments?
-                            </DialogTitle>
-                            <DialogDescription>
-                                Finalization is the inventory-impacting step.
-                                After server validation, MiseLedger will commit
-                                the required count adjustments through the
-                                existing stock-ledger workflow. The finalized
-                                evidence is then locked for audit integrity.
-                            </DialogDescription>
-                        </DialogHeader>
+                        <Form
+                            {...StockCountController.finalize.form(
+                                stockCount.id,
+                            )}
+                            onSuccess={() => setFinalizeDialogOpen(false)}
+                        >
+                            {({ processing, errors }) => {
+                                const actionError = firstActionError(errors);
 
-                        <DialogFooter>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setFinalizeDialogOpen(false)}
-                            >
-                                Go back
-                            </Button>
+                                return (
+                                    <div className="grid gap-4">
+                                        <DialogHeader>
+                                            <DialogTitle>
+                                                Finalize count and commit
+                                                inventory adjustments?
+                                            </DialogTitle>
+                                            <DialogDescription>
+                                                Finalization is the
+                                                inventory-impacting step. After
+                                                server validation, MiseLedger
+                                                will commit the required count
+                                                adjustments through the existing
+                                                stock-ledger workflow. The
+                                                finalized evidence is then
+                                                locked for audit integrity.
+                                            </DialogDescription>
+                                        </DialogHeader>
 
-                            <Form
-                                {...StockCountController.finalize.form(
-                                    stockCount.id,
-                                )}
-                                onSuccess={() => setFinalizeDialogOpen(false)}
-                            >
-                                {({ processing }) => (
-                                    <Button type="submit" disabled={processing}>
-                                        Finalize and commit adjustments
-                                    </Button>
-                                )}
-                            </Form>
-                        </DialogFooter>
+                                        {actionError !== null && (
+                                            <p
+                                                role="alert"
+                                                className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                                            >
+                                                {actionError}
+                                            </p>
+                                        )}
+
+                                        <DialogFooter>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                disabled={processing}
+                                                onClick={() =>
+                                                    setFinalizeDialogOpen(false)
+                                                }
+                                            >
+                                                Go back
+                                            </Button>
+
+                                            <Button
+                                                type="submit"
+                                                disabled={processing}
+                                            >
+                                                {processing
+                                                    ? 'Finalizing…'
+                                                    : 'Finalize and commit adjustments'}
+                                            </Button>
+                                        </DialogFooter>
+                                    </div>
+                                );
+                            }}
+                        </Form>
                     </DialogContent>
                 </Dialog>
             )}
@@ -1466,42 +1555,69 @@ export default function StockCountForm({
                         onOpenChange={setCancelDialogOpen}
                     >
                         <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Cancel stock count?</DialogTitle>
-                                <DialogDescription>
-                                    Cancelling ends this count without
-                                    committing inventory adjustments. The server
-                                    remains responsible for validating whether
-                                    the transition is allowed.
-                                </DialogDescription>
-                            </DialogHeader>
+                            <Form
+                                {...StockCountController.cancel.form(
+                                    stockCount.id,
+                                )}
+                                onSuccess={() => setCancelDialogOpen(false)}
+                            >
+                                {({ processing, errors }) => {
+                                    const actionError =
+                                        firstActionError(errors);
 
-                            <DialogFooter>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => setCancelDialogOpen(false)}
-                                >
-                                    Keep count
-                                </Button>
+                                    return (
+                                        <div className="grid gap-4">
+                                            <DialogHeader>
+                                                <DialogTitle>
+                                                    Cancel stock count?
+                                                </DialogTitle>
+                                                <DialogDescription>
+                                                    Cancelling ends this count
+                                                    without committing inventory
+                                                    adjustments. The server
+                                                    remains responsible for
+                                                    validating whether the
+                                                    transition is allowed.
+                                                </DialogDescription>
+                                            </DialogHeader>
 
-                                <Form
-                                    {...StockCountController.cancel.form(
-                                        stockCount.id,
-                                    )}
-                                    onSuccess={() => setCancelDialogOpen(false)}
-                                >
-                                    {({ processing }) => (
-                                        <Button
-                                            type="submit"
-                                            variant="destructive"
-                                            disabled={processing}
-                                        >
-                                            Cancel count
-                                        </Button>
-                                    )}
-                                </Form>
-                            </DialogFooter>
+                                            {actionError !== null && (
+                                                <p
+                                                    role="alert"
+                                                    className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                                                >
+                                                    {actionError}
+                                                </p>
+                                            )}
+
+                                            <DialogFooter>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    disabled={processing}
+                                                    onClick={() =>
+                                                        setCancelDialogOpen(
+                                                            false,
+                                                        )
+                                                    }
+                                                >
+                                                    Keep count
+                                                </Button>
+
+                                                <Button
+                                                    type="submit"
+                                                    variant="destructive"
+                                                    disabled={processing}
+                                                >
+                                                    {processing
+                                                        ? 'Cancelling…'
+                                                        : 'Cancel count'}
+                                                </Button>
+                                            </DialogFooter>
+                                        </div>
+                                    );
+                                }}
+                            </Form>
                         </DialogContent>
                     </Dialog>
                 )}

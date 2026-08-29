@@ -71,11 +71,15 @@ test('stock count form follows the canonical lifecycle workspace contract', func
         ->toContain("import { Field } from '@/components/ui/field';")
         ->toContain("import { NativeSelect } from '@/components/ui/native-select';")
         ->toContain('Finalized audit evidence')
+        ->toContain('Submitted evidence')
+        ->toContain('Cancelled evidence')
         ->toContain('Physical count evidence')
         ->toContain('formatOrganizationDate(')
         ->toContain('timeZone: timezone')
-        ->toMatch('/Review the highlighted\s+fields/')
+        ->toMatch('/Review the highlighted\\s+fields/')
         ->toContain('focusErrorTarget(')
+        ->toContain("'(prefers-reduced-motion: reduce)'")
+        ->toContain("behavior: prefersReducedMotion ? 'auto' : 'smooth'")
         ->toContain('md:hidden')
         ->toContain('hidden overflow-x-auto md:block')
         ->toContain('rounded-xl border border-border bg-card')
@@ -84,12 +88,29 @@ test('stock count form follows the canonical lifecycle workspace contract', func
         ->not->toContain('new Date(value).toLocaleString()');
 });
 
+test('stock count form keeps field and server error recovery accessible', function () {
+    $source = File::get(resource_path('js/pages/stock-counts/form.tsx'));
+
+    expect($source)
+        ->toContain('function firstActionError(')
+        ->toContain('role="alert"')
+        ->toContain('stock-count-line-${index}-item')
+        ->toContain('stock-count-line-${index}-quantity')
+        ->toContain('stock-count-line-${index}-unit')
+        ->toContain('stock-count-line-${index}-notes')
+        ->toContain('element.focus(')
+        ->toContain('preventScroll: true');
+});
+
 test('stock count form guards every lifecycle transition', function () {
     $source = File::get(resource_path('js/pages/stock-counts/form.tsx'));
 
     expect($source)
         ->toContain('Submit stock count?')
-        ->toContain('Finalize count and commit inventory adjustments?')
+        ->toContain('It does not adjust')
+        ->toContain('inventory.')
+        ->toContain('Finalize count and commit')
+        ->toContain('inventory adjustments?')
         ->toContain('Finalize and commit adjustments')
         ->toContain('Cancel stock count?')
         ->toContain('StockCountController.submit.form(')
@@ -98,7 +119,10 @@ test('stock count form guards every lifecycle transition', function () {
         ->toContain("stockCount?.status === 'draft' && canCreate")
         ->toContain("stockCount?.status === 'submitted' && canFinalize")
         ->toContain('server validation')
-        ->toContain('stock-ledger workflow');
+        ->toContain('stock-ledger workflow')
+        ->toContain("'Submitting…'")
+        ->toContain("'Finalizing…'")
+        ->toContain("'Cancelling…'");
 });
 
 test('stock count form receives the organization timezone from its server options', function () {
