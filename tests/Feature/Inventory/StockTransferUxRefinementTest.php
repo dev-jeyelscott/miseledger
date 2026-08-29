@@ -55,8 +55,11 @@ test(
         $source = File::get(
             resource_path('js/pages/stock-transfers/form.tsx'),
         );
+        $normalizedSource = preg_replace('/\s+/', ' ', $source);
 
-        expect($source)
+        expect($normalizedSource)
+            ->not->toBeNull()
+            ->and($normalizedSource)
             ->toContain(
                 "import { PageHeader } from '@/components/page-header';",
             )
