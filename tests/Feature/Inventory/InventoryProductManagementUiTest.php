@@ -114,6 +114,7 @@ test('option and value mutations are limited to inventory managers and their act
 
 test('the product family index page consumes the shared master-data UI contract', function () {
     $source = File::get(resource_path('js/pages/inventory/product-families/index.tsx'));
+    $normalizedSource = preg_replace('/\s+/', ' ', $source);
 
     expect($source)
         ->toContain("import { PageHeader } from '@/components/page-header';")
@@ -122,15 +123,16 @@ test('the product family index page consumes the shared master-data UI contract'
         ->toContain("import { NativeSelect } from '@/components/ui/native-select';")
         ->toContain('<PageHeader')
         ->toContain('<StatusBadge')
-        ->toContain("'Active'")
-        ->toContain("'Inactive'")
         ->toContain('border-border')
         ->toContain('md:hidden')
         ->toContain('hidden overflow-x-auto md:block')
         ->toContain('canManage')
         ->toContain('{canManage && (')
-        ->toContain("? 'Creating…'")
         ->not->toContain("import { Badge } from '@/components/ui/badge';");
+
+    expect($normalizedSource)
+        ->toContain("label={ productFamily.active ? 'Active' : 'Inactive' } variant={ productFamily.active ? 'success' : 'neutral' }")
+        ->toContain('{processing ? \'Creating…\' : \'Create\'}');
 });
 
 test('the product family show page uses the shared Field, NativeSelect, and StatusBadge contracts for option and value statuses', function () {

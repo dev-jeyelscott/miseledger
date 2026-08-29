@@ -194,6 +194,11 @@ test('unit index frontend uses guarded dialogs filters and dense table', functio
     $source = file_get_contents(
         resource_path('js/pages/inventory/units/index.tsx'),
     );
+    $normalizedSource = preg_replace('/\s+/', ' ', $source);
+
+    expect($normalizedSource)
+        ->toContain('{processing ? \'Creating…\' : \'Create unit\'}')
+        ->toContain('{processing ? \'Saving…\' : \'Save unit\'}');
 
     expect($source)
         ->toContain("import { FilterToolbar } from '@/components/filter-toolbar';")
@@ -218,8 +223,6 @@ test('unit index frontend uses guarded dialogs filters and dense table', functio
         ->toContain('Used by')
         ->toContain('Updated')
         ->toContain('PreviousPageButton')
-        ->toContain("? 'Creating…'")
-        ->toContain("processing ? 'Saving…' : 'Save unit'")
         ->toContain("? 'Applying…'")
         ->not->toContain('CreateUnitOfMeasureSheet')
         ->not->toContain('border-sidebar-border')
