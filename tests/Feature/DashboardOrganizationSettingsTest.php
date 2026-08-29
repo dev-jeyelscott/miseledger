@@ -4,6 +4,7 @@ use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('dashboard exposes active organization settings to an authorized owner', function () {
@@ -62,13 +63,13 @@ test('dashboard exposes active organization settings to an authorized owner', fu
                 )
                 ->where(
                     'dashboard.organizationSettings.timezoneOptions',
-                    fn (mixed $options): bool => is_array($options)
-                        && in_array('Asia/Manila', $options, true),
+                    fn (mixed $options): bool => $options instanceof Collection
+                        && $options->containsStrict('Asia/Manila'),
                 )
                 ->where(
                     'dashboard.organizationSettings.currencyOptions',
-                    fn (mixed $options): bool => is_array($options)
-                        && in_array('PHP', $options, true),
+                    fn (mixed $options): bool => $options instanceof Collection
+                        && $options->containsStrict('PHP'),
                 ),
         );
 });
