@@ -817,5 +817,9 @@ UnitsOfMeasureIndex.layout = {
             title: 'Inventory',
             href: InventoryItemController.index(),
         },
+        {
+            title: 'Units of measure',
+            href: UnitOfMeasureController.index(),
+        },
     ],
 };

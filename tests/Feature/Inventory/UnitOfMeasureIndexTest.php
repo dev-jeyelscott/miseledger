@@ -224,6 +224,7 @@ test('unit index frontend uses guarded dialogs filters and dense table', functio
         ->toContain('Updated')
         ->toContain('PreviousPageButton')
         ->toContain("? 'Applying…'")
+        ->toContain("title: 'Units of measure'")
         ->not->toContain('CreateUnitOfMeasureSheet')
         ->not->toContain('border-sidebar-border')
         ->not->toContain("import { Badge } from '@/components/ui/badge';");
