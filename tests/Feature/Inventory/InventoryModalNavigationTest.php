@@ -195,7 +195,10 @@ test('modal category unit and conversion edits return to their current context',
             'active' => true,
         ]);
 
-    $categoriesUrl = route('inventory.categories.index');
+    $categoriesUrl = route('inventory.categories.index', [
+        'search' => 'pantry',
+        'status' => 'active',
+    ]);
 
     $this
         ->withSession([
@@ -316,7 +319,6 @@ test('inventory modal and return controls use shared navigation primitives', fun
         'js/pages/inventory/items/create.tsx',
         'js/pages/inventory/items/unit-edit.tsx',
         'js/pages/inventory/categories/index.tsx',
-        'js/pages/inventory/categories/edit.tsx',
         'js/pages/inventory/units/index.tsx',
         'js/pages/inventory/opening-balances/create.tsx',
         'js/pages/inventory/adjustments/create.tsx',

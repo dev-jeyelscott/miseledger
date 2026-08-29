@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Inventory\SaveInventoryCategoryRequest;
 use App\Models\InventoryCategory;
 use App\Models\Organization;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -44,7 +45,13 @@ class InventoryCategoryController extends Controller
             ? (string) $validated['status']
             : null;
 
-        $categoriesQuery = $organization->inventoryCategories();
+        $categoriesQuery = $organization
+            ->inventoryCategories()
+            ->withCount([
+                'inventoryItems' => static function (Builder $query) use ($organization): void {
+                    $query->whereBelongsTo($organization);
+                },
+            ]);
 
         if ($search !== '') {
             $categoriesQuery->whereLike('name', '%'.$search.'%');
@@ -57,12 +64,16 @@ class InventoryCategoryController extends Controller
         $categories = $categoriesQuery
             ->orderByDesc('active')
             ->orderBy('name')
+            ->orderBy('id')
             ->get()
             ->map(
                 static fn (InventoryCategory $category): array => [
                     'id' => $category->id,
                     'name' => $category->name,
                     'active' => $category->active,
+                    'usageCount' => (int) $category->getAttribute(
+                        'inventory_items_count',
+                    ),
                 ],
             )
             ->values()
@@ -108,33 +119,6 @@ class InventoryCategoryController extends Controller
     }
 
     /**
-     * Show the full-page editor for an organization-owned inventory category.
-     */
-    public function edit(
-        Request $request,
-        string $inventoryCategory,
-    ): Response {
-        $organization = $this->activeOrganization($request);
-
-        Gate::authorize(
-            OrganizationPermission::InventoryAdjust->value,
-            $organization,
-        );
-
-        $category = $organization
-            ->inventoryCategories()
-            ->findOrFail($inventoryCategory);
-
-        return Inertia::render('inventory/categories/edit', [
-            'category' => [
-                'id' => $category->id,
-                'name' => $category->name,
-                'active' => $category->active,
-            ],
-        ]);
-    }
-
-    /**
      * Update an inventory category owned by the active organization.
      */
     public function update(
@@ -167,10 +151,7 @@ class InventoryCategoryController extends Controller
             return back();
         }
 
-        return to_route(
-            'inventory.categories.edit',
-            $inventoryCategory,
-        );
+        return to_route('inventory.categories.index');
     }
 
     /**

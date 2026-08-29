@@ -300,11 +300,6 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 [InventoryCategoryController::class, 'store'],
             )->name('categories.store');
 
-            Route::get(
-                'categories/{inventoryCategory}/edit',
-                [InventoryCategoryController::class, 'edit'],
-            )->name('categories.edit');
-
             Route::put(
                 'categories/{inventoryCategory}',
                 [InventoryCategoryController::class, 'update'],

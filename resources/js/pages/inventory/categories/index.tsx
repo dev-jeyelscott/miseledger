@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
-import type { InventoryCategoryData } from '@/types';
+import type { InventoryCategoryListItem } from '@/types';
 
 type CategoryStatus = 'active' | 'inactive';
 
@@ -31,7 +31,7 @@ type Filters = {
 };
 
 type Props = {
-    categories: InventoryCategoryData[];
+    categories: InventoryCategoryListItem[];
     filters: Filters;
     canManage: boolean;
 };
@@ -41,7 +41,7 @@ type CreateInventoryCategoryDialogProps = {
 };
 
 type EditInventoryCategoryDialogProps = {
-    category: InventoryCategoryData;
+    category: InventoryCategoryListItem;
     trigger: ReactNode;
 };
 
@@ -394,6 +394,14 @@ export default function InventoryCategoriesIndex({
                                         />
                                     </div>
 
+                                    <p className="text-sm text-muted-foreground">
+                                        Used by{' '}
+                                        {category.usageCount.toLocaleString()}{' '}
+                                        {category.usageCount === 1
+                                            ? 'item'
+                                            : 'items'}
+                                    </p>
+
                                     {canManage && (
                                         <div className="flex justify-end border-t border-border pt-3">
                                             <EditInventoryCategoryDialog
@@ -420,7 +428,7 @@ export default function InventoryCategoriesIndex({
                     )}
 
                     <div className="hidden overflow-x-auto md:block">
-                        <table className="w-full min-w-[560px] text-sm">
+                        <table className="w-full min-w-[640px] text-sm">
                             <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                                 <tr className="border-b border-border">
                                     <th
@@ -434,6 +442,12 @@ export default function InventoryCategoriesIndex({
                                         className="w-36 px-4 py-3 font-medium"
                                     >
                                         Status
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        className="px-4 py-3 text-right font-medium"
+                                    >
+                                        Used by
                                     </th>
 
                                     {canManage && (
@@ -451,7 +465,7 @@ export default function InventoryCategoriesIndex({
                                 {categories.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan={canManage ? 3 : 2}
+                                            colSpan={canManage ? 4 : 3}
                                             className="px-4 py-12 text-center"
                                         >
                                             <div className="mx-auto max-w-sm">
@@ -486,6 +500,13 @@ export default function InventoryCategoriesIndex({
                                                 <InventoryCategoryStatus
                                                     active={category.active}
                                                 />
+                                            </td>
+
+                                            <td className="px-4 py-3 text-right tabular-nums">
+                                                {category.usageCount.toLocaleString()}{' '}
+                                                {category.usageCount === 1
+                                                    ? 'item'
+                                                    : 'items'}
                                             </td>
 
                                             {canManage && (

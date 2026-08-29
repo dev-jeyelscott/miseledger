@@ -21,7 +21,9 @@ test('inventory category index uses the approved server-backed responsive discov
         ->toContain('All statuses')
         ->toContain('Category name')
         ->toContain('Status')
+        ->toContain('Used by')
         ->toContain('Actions')
+        ->toContain('usageCount')
         ->toContain('<StatusBadge')
         ->toContain("label={active ? 'Active' : 'Inactive'}")
         ->toContain('border-border')
@@ -76,16 +78,16 @@ test('inventory category index breadcrumbs are dashboard inventory and categorie
         ->toContain("title: 'Categories'");
 });
 
-test('inventory category edit page uses shared header and form contracts', function () {
-    $source = File::get(
-        resource_path('js/pages/inventory/categories/edit.tsx'),
-    );
+test('standalone inventory category editor has been removed', function () {
+    expect(
+        File::exists(
+            resource_path('js/pages/inventory/categories/edit.tsx'),
+        ),
+    )->toBeFalse();
 
-    expect($source)
-        ->toContain("import { PageHeader } from '@/components/page-header';")
-        ->toContain("import { Field } from '@/components/ui/field';")
-        ->toContain("import { NativeSelect } from '@/components/ui/native-select';")
-        ->toContain('<PageHeader')
-        ->toContain('border-border')
-        ->toContain('Saving…');
+    $routes = File::get(base_path('routes/web.php'));
+
+    expect($routes)
+        ->not->toContain("'categories/{inventoryCategory}/edit'")
+        ->not->toContain("->name('categories.edit')");
 });

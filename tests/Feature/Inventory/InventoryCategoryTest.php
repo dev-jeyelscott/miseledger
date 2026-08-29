@@ -2,6 +2,7 @@
 
 use App\Enums\OrganizationRole;
 use App\Models\InventoryCategory;
+use App\Models\InventoryItem;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
@@ -42,7 +43,7 @@ test('an owner can create and deactivate an inventory category', function () {
             'name' => 'Dry goods',
             'active' => false,
         ])
-        ->assertRedirect(route('inventory.categories.edit', $category));
+        ->assertRedirect(route('inventory.categories.index'));
 
     expect($category->refresh()->active)->toBeFalse();
 });
@@ -82,7 +83,7 @@ test('category names are unique within an organization but reusable elsewhere', 
         ->assertSessionHasErrors('name');
 });
 
-test('inventory categories index only exposes the active organization categories', function () {
+test('inventory categories index only exposes active organization categories and tenant-safe usage counts', function () {
     $user = User::factory()->create();
     $organization = Organization::factory()->create();
     $otherOrganization = Organization::factory()->create();
@@ -100,10 +101,23 @@ test('inventory categories index only exposes the active organization categories
             'name' => 'Produce',
         ]);
 
-    InventoryCategory::factory()
+    InventoryItem::factory()
+        ->count(2)
+        ->for($organization)
+        ->create([
+            'inventory_category_id' => $category->id,
+        ]);
+
+    $otherCategory = InventoryCategory::factory()
         ->for($otherOrganization)
         ->create([
             'name' => 'Other organization category',
+        ]);
+
+    InventoryItem::factory()
+        ->for($otherOrganization)
+        ->create([
+            'inventory_category_id' => $otherCategory->id,
         ]);
 
     $this->withSession([
@@ -117,7 +131,8 @@ test('inventory categories index only exposes the active organization categories
                 ->component('inventory/categories/index')
                 ->has('categories', 1)
                 ->where('categories.0.id', $category->id)
-                ->where('categories.0.name', 'Produce'),
+                ->where('categories.0.name', 'Produce')
+                ->where('categories.0.usageCount', 2),
         );
 });
 
@@ -226,7 +241,30 @@ test('an auditor can view categories but cannot modify them', function () {
     $this->assertDatabaseCount('inventory_categories', 0);
 });
 
-test('cross organization inventory category editing is not exposed', function () {
+test('standalone inventory category editing is no longer exposed', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    $category = InventoryCategory::factory()
+        ->for($organization)
+        ->create();
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->get("/inventory/categories/{$category->id}/edit")
+        ->assertNotFound();
+});
+
+test('cross organization inventory category updates are forbidden', function () {
     $user = User::factory()->create();
     $organization = Organization::factory()->create();
     $otherOrganization = Organization::factory()->create();
@@ -240,12 +278,21 @@ test('cross organization inventory category editing is not exposed', function ()
 
     $category = InventoryCategory::factory()
         ->for($otherOrganization)
-        ->create();
+        ->create([
+            'name' => 'Foreign category',
+            'active' => true,
+        ]);
 
     $this->withSession([
         'active_organization_id' => $organization->id,
     ])
         ->actingAs($user)
-        ->get(route('inventory.categories.edit', $category))
-        ->assertNotFound();
+        ->put(route('inventory.categories.update', $category), [
+            'name' => 'Changed foreign category',
+            'active' => false,
+        ])
+        ->assertForbidden();
+
+    expect($category->refresh()->name)->toBe('Foreign category')
+        ->and($category->active)->toBeTrue();
 });

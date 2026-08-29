@@ -4,6 +4,11 @@ export type InventoryCategoryData = {
     id: number;
     name: string;
     active: boolean;
+    usageCount?: number;
+};
+
+export type InventoryCategoryListItem = InventoryCategoryData & {
+    usageCount: number;
 };
 
 export type InventoryBrandData = {
