@@ -13,6 +13,10 @@ export type InventoryBrandData = {
     usageCount?: number;
 };
 
+export type InventoryBrandListItem = InventoryBrandData & {
+    usageCount: number;
+};
+
 export type InventoryProductData = {
     id: number;
     name: string;
