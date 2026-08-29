@@ -4,11 +4,13 @@ import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/In
 import InventoryProductController from '@/actions/App/Http/Controllers/Inventory/InventoryProductController';
 import InventoryProductOptionController from '@/actions/App/Http/Controllers/Inventory/InventoryProductOptionController';
 import InventoryProductOptionValueController from '@/actions/App/Http/Controllers/Inventory/InventoryProductOptionValueController';
-import InputError from '@/components/input-error';
+import { PageHeader } from '@/components/page-header';
+import { StatusBadge } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 
 type OptionValue = { id: number; value: string; active: boolean };
@@ -43,25 +45,20 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
             <Head title={productFamily.name} />
 
             <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            {productFamily.name}
-                        </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Manage this family’s controlled options and review
-                            the inventory items associated with it.
-                        </p>
-                    </div>
-                    <Button asChild variant="outline">
-                        <Link href={InventoryProductController.index()}>
-                            All product families
-                        </Link>
-                    </Button>
-                </div>
+                <PageHeader
+                    title={productFamily.name}
+                    description="Manage this family’s controlled options and review the inventory items associated with it."
+                    actions={
+                        <Button asChild variant="outline">
+                            <Link href={InventoryProductController.index()}>
+                                All product families
+                            </Link>
+                        </Button>
+                    }
+                />
 
                 {canManage && (
-                    <section className="rounded-xl border border-sidebar-border/70 bg-card p-5 dark:border-sidebar-border">
+                    <section className="rounded-xl border border-border bg-card p-5">
                         <h2 className="text-sm font-semibold">
                             Family details
                         </h2>
@@ -73,39 +70,34 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                         >
                             {({ processing, errors }) => (
                                 <>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="product-family-name">
-                                            Name
-                                        </Label>
+                                    <Field
+                                        id="product-family-name"
+                                        label="Name"
+                                        error={errors.name}
+                                    >
                                         <Input
-                                            id="product-family-name"
                                             name="name"
                                             defaultValue={productFamily.name}
                                             required
                                         />
-                                        <InputError message={errors.name} />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="product-family-active">
-                                            Status
-                                        </Label>
-                                        <select
-                                            id="product-family-active"
+                                    </Field>
+                                    <Field
+                                        id="product-family-active"
+                                        label="Status"
+                                        error={errors.active}
+                                    >
+                                        <NativeSelect
                                             name="active"
                                             defaultValue={
                                                 productFamily.active ? '1' : '0'
                                             }
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                         >
                                             <option value="1">Active</option>
                                             <option value="0">Inactive</option>
-                                        </select>
-                                        <InputError message={errors.active} />
-                                    </div>
+                                        </NativeSelect>
+                                    </Field>
                                     <Button type="submit" disabled={processing}>
-                                        {processing
-                                            ? 'Saving...'
-                                            : 'Save family'}
+                                        {processing ? 'Saving…' : 'Save family'}
                                     </Button>
                                 </>
                             )}
@@ -113,8 +105,8 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                     </section>
                 )}
 
-                <section className="rounded-xl border border-sidebar-border/70 bg-card dark:border-sidebar-border">
-                    <div className="border-b border-sidebar-border/70 px-4 py-3 dark:border-sidebar-border">
+                <section className="rounded-xl border border-border bg-card">
+                    <div className="border-b border-border px-4 py-3">
                         <h2 className="text-sm font-semibold">
                             Controlled options
                         </h2>
@@ -133,23 +125,22 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                             >
                                 {({ processing, errors }) => (
                                     <>
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="new-option-name">
-                                                Add option
-                                            </Label>
+                                        <Field
+                                            id="new-option-name"
+                                            label="Add option"
+                                            error={errors.name}
+                                        >
                                             <Input
-                                                id="new-option-name"
                                                 name="name"
                                                 placeholder="e.g., Size"
                                                 required
                                             />
-                                            <input
-                                                type="hidden"
-                                                name="active"
-                                                value="1"
-                                            />
-                                            <InputError message={errors.name} />
-                                        </div>
+                                        </Field>
+                                        <input
+                                            type="hidden"
+                                            name="active"
+                                            value="1"
+                                        />
                                         <Button
                                             type="submit"
                                             disabled={processing}
@@ -159,7 +150,7 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                                 aria-hidden="true"
                                             />
                                             {processing
-                                                ? 'Adding...'
+                                                ? 'Adding…'
                                                 : 'Add option'}
                                         </Button>
                                     </>
@@ -187,17 +178,18 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                             <h3 className="font-semibold">
                                                 {option.name}
                                             </h3>
-                                            <Badge
+                                            <StatusBadge
+                                                label={
+                                                    option.active
+                                                        ? 'Active'
+                                                        : 'Inactive'
+                                                }
                                                 variant={
                                                     option.active
-                                                        ? 'default'
-                                                        : 'secondary'
+                                                        ? 'success'
+                                                        : 'neutral'
                                                 }
-                                            >
-                                                {option.active
-                                                    ? 'Active'
-                                                    : 'Inactive'}
-                                            </Badge>
+                                            />
                                         </div>
                                         {canManage && (
                                             <Form
@@ -211,35 +203,26 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                             >
                                                 {({ processing, errors }) => (
                                                     <>
-                                                        <div className="grid gap-1">
-                                                            <Label
-                                                                className="sr-only"
-                                                                htmlFor={`option-name-${option.id}`}
-                                                            >
-                                                                Option name
-                                                            </Label>
+                                                        <Field
+                                                            id={`option-name-${option.id}`}
+                                                            label="Option name"
+                                                            error={errors.name}
+                                                        >
                                                             <Input
-                                                                id={`option-name-${option.id}`}
                                                                 name="name"
                                                                 defaultValue={
                                                                     option.name
                                                                 }
                                                                 required
                                                             />
-                                                            <InputError
-                                                                message={
-                                                                    errors.name
-                                                                }
-                                                            />
-                                                        </div>
-                                                        <select
+                                                        </Field>
+                                                        <NativeSelect
                                                             name="active"
                                                             defaultValue={
                                                                 option.active
                                                                     ? '1'
                                                                     : '0'
                                                             }
-                                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                                         >
                                                             <option value="1">
                                                                 Active
@@ -247,7 +230,7 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                                             <option value="0">
                                                                 Inactive
                                                             </option>
-                                                        </select>
+                                                        </NativeSelect>
                                                         <Button
                                                             type="submit"
                                                             variant="outline"
@@ -284,18 +267,15 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                                         errors,
                                                     }) => (
                                                         <>
-                                                            <div className="grid gap-1">
-                                                                <Label
-                                                                    className="sr-only"
-                                                                    htmlFor={`option-value-name-${value.id}`}
-                                                                >
-                                                                    {
-                                                                        option.name
-                                                                    }{' '}
-                                                                    value
-                                                                </Label>
+                                                            <Field
+                                                                id={`option-value-name-${value.id}`}
+                                                                label={`${option.name} value`}
+                                                                error={
+                                                                    errors.value
+                                                                }
+                                                                className="gap-1"
+                                                            >
                                                                 <Input
-                                                                    id={`option-value-name-${value.id}`}
                                                                     name="value"
                                                                     defaultValue={
                                                                         value.value
@@ -303,13 +283,8 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                                                     required
                                                                     className="h-8 w-28"
                                                                 />
-                                                                <InputError
-                                                                    message={
-                                                                        errors.value
-                                                                    }
-                                                                />
-                                                            </div>
-                                                            <select
+                                                            </Field>
+                                                            <NativeSelect
                                                                 aria-label={`${value.value} status`}
                                                                 name="active"
                                                                 defaultValue={
@@ -317,7 +292,7 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                                                         ? '1'
                                                                         : '0'
                                                                 }
-                                                                className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                                                className="h-8 px-2 text-xs"
                                                             >
                                                                 <option value="1">
                                                                     Active
@@ -325,7 +300,7 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                                                 <option value="0">
                                                                     Inactive
                                                                 </option>
-                                                            </select>
+                                                            </NativeSelect>
                                                             <Button
                                                                 type="submit"
                                                                 variant="ghost"
@@ -365,24 +340,17 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                         >
                                             {({ processing, errors }) => (
                                                 <>
-                                                    <div className="grid gap-1">
-                                                        <Label
-                                                            htmlFor={`option-value-${option.id}`}
-                                                        >
-                                                            Add value
-                                                        </Label>
+                                                    <Field
+                                                        id={`option-value-${option.id}`}
+                                                        label="Add value"
+                                                        error={errors.value}
+                                                    >
                                                         <Input
-                                                            id={`option-value-${option.id}`}
                                                             name="value"
                                                             required
                                                             placeholder="e.g., Small"
                                                         />
-                                                        <InputError
-                                                            message={
-                                                                errors.value
-                                                            }
-                                                        />
-                                                    </div>
+                                                    </Field>
                                                     <input
                                                         type="hidden"
                                                         name="active"
@@ -394,7 +362,7 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                                         disabled={processing}
                                                     >
                                                         {processing
-                                                            ? 'Adding...'
+                                                            ? 'Adding…'
                                                             : 'Add value'}
                                                     </Button>
                                                 </>
@@ -407,8 +375,8 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                     </div>
                 </section>
 
-                <section className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card dark:border-sidebar-border">
-                    <div className="border-b border-sidebar-border/70 px-4 py-3 dark:border-sidebar-border">
+                <section className="overflow-hidden rounded-xl border border-border bg-card">
+                    <div className="border-b border-border px-4 py-3">
                         <h2 className="text-sm font-semibold">Variants</h2>
                         <p className="mt-1 text-xs text-muted-foreground">
                             Item details remain owned and edited in the
@@ -481,7 +449,7 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                     productFamily.variants.map((variant) => (
                                         <tr
                                             key={variant.id}
-                                            className="border-t border-sidebar-border/70 hover:bg-muted/30 dark:border-sidebar-border"
+                                            className="border-t border-border hover:bg-muted/30"
                                         >
                                             <td className="px-4 py-3">
                                                 <Link
@@ -515,17 +483,18 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                                 )
                                             </td>
                                             <td className="px-4 py-3">
-                                                <Badge
+                                                <StatusBadge
+                                                    label={
+                                                        variant.active
+                                                            ? 'Active'
+                                                            : 'Inactive'
+                                                    }
                                                     variant={
                                                         variant.active
-                                                            ? 'default'
-                                                            : 'secondary'
+                                                            ? 'success'
+                                                            : 'neutral'
                                                     }
-                                                >
-                                                    {variant.active
-                                                        ? 'Active'
-                                                        : 'Inactive'}
-                                                </Badge>
+                                                />
                                             </td>
                                         </tr>
                                     ))

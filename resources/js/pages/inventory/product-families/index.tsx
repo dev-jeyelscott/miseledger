@@ -2,11 +2,12 @@ import { Form, Head, Link } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InventoryProductController from '@/actions/App/Http/Controllers/Inventory/InventoryProductController';
-import InputError from '@/components/input-error';
-import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/page-header';
+import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 
 type ProductFamily = {
@@ -30,20 +31,13 @@ export default function ProductFamiliesIndex({
             <Head title="Product families" />
 
             <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Product families
-                        </h1>
-                        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                            Group related inventory variants and define the
-                            controlled options they use.
-                        </p>
-                    </div>
-                </div>
+                <PageHeader
+                    title="Product families"
+                    description="Group related inventory variants and define the controlled options they use."
+                />
 
                 {canManage && (
-                    <section className="rounded-xl border border-sidebar-border/70 bg-card p-5 dark:border-sidebar-border">
+                    <section className="rounded-xl border border-border bg-card p-5">
                         <h2 className="text-sm font-semibold">
                             Create product family
                         </h2>
@@ -53,41 +47,38 @@ export default function ProductFamiliesIndex({
                         >
                             {({ processing, errors }) => (
                                 <>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="product-family-name">
-                                            Name
-                                        </Label>
+                                    <Field
+                                        id="product-family-name"
+                                        label="Name"
+                                        error={errors.name}
+                                    >
                                         <Input
-                                            id="product-family-name"
                                             name="name"
                                             required
                                             placeholder="e.g., Cordless drills"
                                         />
-                                        <InputError message={errors.name} />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="product-family-active">
-                                            Status
-                                        </Label>
-                                        <select
-                                            id="product-family-active"
+                                    <Field
+                                        id="product-family-active"
+                                        label="Status"
+                                        error={errors.active}
+                                    >
+                                        <NativeSelect
                                             name="active"
                                             defaultValue="1"
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                         >
                                             <option value="1">Active</option>
                                             <option value="0">Inactive</option>
-                                        </select>
-                                        <InputError message={errors.active} />
-                                    </div>
+                                        </NativeSelect>
+                                    </Field>
 
                                     <Button type="submit" disabled={processing}>
                                         <Plus
                                             className="size-4"
                                             aria-hidden="true"
                                         />
-                                        {processing ? 'Creating...' : 'Create'}
+                                        {processing ? 'Creating…' : 'Create'}
                                     </Button>
                                 </>
                             )}
@@ -95,13 +86,65 @@ export default function ProductFamiliesIndex({
                     </section>
                 )}
 
-                <section className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card dark:border-sidebar-border">
-                    <div className="border-b border-sidebar-border/70 px-4 py-3 dark:border-sidebar-border">
+                <section className="overflow-hidden rounded-xl border border-border bg-card">
+                    <div className="border-b border-border px-4 py-3">
                         <h2 className="text-sm font-semibold">
                             Available families
                         </h2>
                     </div>
-                    <div className="overflow-x-auto">
+
+                    {productFamilies.length === 0 ? (
+                        <div className="px-4 py-10 text-center md:hidden">
+                            <p className="font-medium">
+                                No product families yet
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                {canManage
+                                    ? 'Create a family to organize related item variants.'
+                                    : 'Product families will appear here when available.'}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-border md:hidden">
+                            {productFamilies.map((productFamily) => (
+                                <article
+                                    key={productFamily.id}
+                                    className="space-y-3 p-4"
+                                    aria-labelledby={`product-family-${productFamily.id}-name`}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <Link
+                                            id={`product-family-${productFamily.id}-name`}
+                                            href={InventoryProductController.show(
+                                                productFamily.id,
+                                            )}
+                                            className="font-medium focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                        >
+                                            {productFamily.name}
+                                        </Link>
+
+                                        <StatusBadge
+                                            label={
+                                                productFamily.active
+                                                    ? 'Active'
+                                                    : 'Inactive'
+                                            }
+                                            variant={
+                                                productFamily.active
+                                                    ? 'success'
+                                                    : 'neutral'
+                                            }
+                                        />
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">
+                                        {productFamily.variantCount} variants
+                                    </p>
+                                </article>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="hidden overflow-x-auto md:block">
                         <table className="w-full min-w-[38rem] text-sm">
                             <caption className="sr-only">
                                 Product families available to this organization
@@ -149,7 +192,7 @@ export default function ProductFamiliesIndex({
                                     productFamilies.map((productFamily) => (
                                         <tr
                                             key={productFamily.id}
-                                            className="border-t border-sidebar-border/70 hover:bg-muted/30 dark:border-sidebar-border"
+                                            className="border-t border-border hover:bg-muted/30"
                                         >
                                             <td className="px-4 py-3 font-medium">
                                                 <Link
@@ -165,17 +208,18 @@ export default function ProductFamiliesIndex({
                                                 {productFamily.variantCount}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <Badge
+                                                <StatusBadge
+                                                    label={
+                                                        productFamily.active
+                                                            ? 'Active'
+                                                            : 'Inactive'
+                                                    }
                                                     variant={
                                                         productFamily.active
-                                                            ? 'default'
-                                                            : 'secondary'
+                                                            ? 'success'
+                                                            : 'neutral'
                                                     }
-                                                >
-                                                    {productFamily.active
-                                                        ? 'Active'
-                                                        : 'Inactive'}
-                                                </Badge>
+                                                />
                                             </td>
                                         </tr>
                                     ))
