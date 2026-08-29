@@ -1,6 +1,5 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import {
-    CircleMinus,
     ClipboardList,
     Clock,
     Filter,
@@ -13,11 +12,16 @@ import {
 import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/GoodsReceiptController';
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
-import InputError from '@/components/input-error';
+import { EmptyState } from '@/components/empty-state';
+import { FilterToolbar } from '@/components/filter-toolbar';
+import { PageHeader } from '@/components/page-header';
+import { PaginationControls } from '@/components/pagination-controls';
+import { StatusBadge } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 
 type GoodsReceiptStatus = 'draft' | 'finalized' | 'cancelled';
@@ -80,9 +84,6 @@ type Props = {
     canFinalize: boolean;
 };
 
-const selectClassName =
-    'h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50';
-
 const statusOptions: Array<{
     value: GoodsReceiptStatus;
     label: string;
@@ -127,35 +128,19 @@ const sortOptions: Array<{
     },
 ];
 
-/**
- * Return the semantic badge treatment for one goods-receipt state.
- */
-function statusClassName(status: GoodsReceiptStatus): string {
+/** Map persisted receipt lifecycle states to the shared semantic badge vocabulary. */
+function statusVariant(
+    status: GoodsReceiptStatus,
+): 'neutral' | 'success' | 'warning' | 'info' | 'danger' {
     switch (status) {
         case 'draft':
-            return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300';
+            return 'warning';
 
         case 'finalized':
-            return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300';
+            return 'success';
 
         case 'cancelled':
-            return 'border-destructive/30 bg-destructive/10 text-destructive dark:border-destructive/50 dark:bg-destructive/20';
-    }
-}
-
-/**
- * Render an icon so receipt state never depends on color alone.
- */
-function ReceiptStatusIcon({ status }: { status: GoodsReceiptStatus }) {
-    switch (status) {
-        case 'draft':
-            return <Clock className="size-3" aria-hidden="true" />;
-
-        case 'finalized':
-            return <PackageCheck className="size-3" aria-hidden="true" />;
-
-        case 'cancelled':
-            return <CircleMinus className="size-3" aria-hidden="true" />;
+            return 'danger';
     }
 }
 
@@ -183,6 +168,104 @@ function actionLabel(status: GoodsReceiptStatus, canFinalize: boolean): string {
     return 'View';
 }
 
+/** Render one receiving register row as a mobile record card. */
+function ReceiptCard({
+    receipt,
+    canFinalize,
+    receivedAtFormatter,
+}: {
+    receipt: ReceiptRow;
+    canFinalize: boolean;
+    receivedAtFormatter: Intl.DateTimeFormat;
+}) {
+    return (
+        <article className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <Link
+                        href={GoodsReceiptController.edit(receipt.id)}
+                        className="font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                    >
+                        {receipt.number}
+                    </Link>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {receipt.supplierName}
+                    </p>
+                </div>
+
+                <StatusBadge
+                    label={statusLabel(receipt.status)}
+                    variant={statusVariant(receipt.status)}
+                />
+            </div>
+
+            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div>
+                    <dt className="text-xs text-muted-foreground">
+                        Purchase order
+                    </dt>
+                    <dd className="mt-0.5">
+                        <Link
+                            href={PurchaseOrderController.edit(
+                                receipt.purchaseOrderId,
+                            )}
+                            className="font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                        >
+                            {receipt.purchaseOrderNumber}
+                        </Link>
+                    </dd>
+                </div>
+
+                <div>
+                    <dt className="text-xs text-muted-foreground">Location</dt>
+                    <dd className="mt-0.5 truncate">{receipt.locationName}</dd>
+                </div>
+
+                <div>
+                    <dt className="text-xs text-muted-foreground">
+                        Accepted lines
+                    </dt>
+                    <dd className="mt-0.5 tabular-nums">
+                        {receipt.acceptedLineCount.toLocaleString()}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt className="text-xs text-muted-foreground">
+                        Received date
+                    </dt>
+                    <dd className="mt-0.5">
+                        {receipt.receivedAt === null
+                            ? receipt.status === 'draft'
+                                ? 'Not finalized'
+                                : 'Not recorded'
+                            : receivedAtFormatter.format(
+                                  new Date(receipt.receivedAt),
+                              )}
+                    </dd>
+                </div>
+
+                <div className="col-span-2">
+                    <dt className="text-xs text-muted-foreground">
+                        Received by
+                    </dt>
+                    <dd className="mt-0.5">
+                        {receipt.receivedBy ?? 'Not recorded'}
+                    </dd>
+                </div>
+            </dl>
+
+            <div className="mt-4 border-t border-border pt-3">
+                <Button variant="outline" size="sm" className="w-full" asChild>
+                    <Link href={GoodsReceiptController.edit(receipt.id)}>
+                        {actionLabel(receipt.status, canFinalize)}
+                    </Link>
+                </Button>
+            </div>
+        </article>
+    );
+}
+
 export default function GoodsReceiptIndex({
     receipts,
     summary,
@@ -192,16 +275,30 @@ export default function GoodsReceiptIndex({
     timezone,
     canFinalize,
 }: Props) {
-    const activeFilterCount = [
-        filters.search,
-        filters.status,
-        filters.supplierId,
-        filters.locationId,
-        filters.from,
-        filters.to,
-    ].filter((value) => value !== null).length;
+    const activeFilterLabels = [
+        filters.search === null ? null : `Search: ${filters.search}`,
+        filters.status === null
+            ? null
+            : `Status: ${statusLabel(filters.status)}`,
+        filters.locationId === null
+            ? null
+            : `Location: ${
+                  locationOptions.find(
+                      (option) => option.id === filters.locationId,
+                  )?.name ?? filters.locationId
+              }`,
+        filters.supplierId === null
+            ? null
+            : `Supplier: ${
+                  supplierOptions.find(
+                      (option) => option.id === filters.supplierId,
+                  )?.name ?? filters.supplierId
+              }`,
+        filters.from === null ? null : `From: ${filters.from}`,
+        filters.to === null ? null : `To: ${filters.to}`,
+    ].filter((label): label is string => label !== null);
 
-    const hasFilters = activeFilterCount > 0;
+    const hasFilters = activeFilterLabels.length > 0;
 
     const receivedAtFormatter = new Intl.DateTimeFormat('en-PH', {
         year: 'numeric',
@@ -217,30 +314,23 @@ export default function GoodsReceiptIndex({
             <Head title="Receiving" />
 
             <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Receiving
-                        </h1>
-
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Track draft, finalized, and cancelled goods receipts
-                            across locations.
-                        </p>
-                    </div>
-
-                    {canFinalize && (
-                        <Button asChild>
-                            <Link href={PurchaseOrderController.index()}>
-                                <Package
-                                    className="size-4"
-                                    aria-hidden="true"
-                                />
-                                Receive from purchase order
-                            </Link>
-                        </Button>
-                    )}
-                </div>
+                <PageHeader
+                    title="Receiving"
+                    description="Track draft, finalized, and cancelled goods receipts across locations."
+                    actions={
+                        canFinalize ? (
+                            <Button asChild>
+                                <Link href={PurchaseOrderController.index()}>
+                                    <Package
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    Receive from purchase order
+                                </Link>
+                            </Button>
+                        ) : undefined
+                    }
+                />
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <DashboardMetricCard
@@ -278,46 +368,43 @@ export default function GoodsReceiptIndex({
 
                 <Form action={GoodsReceiptController.index().url} method="get">
                     {({ errors, processing }) => (
-                        <div className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
+                        <FilterToolbar className="overflow-hidden p-0 shadow-sm">
                             <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-8">
-                                <div className="grid gap-2 md:col-span-2 xl:col-span-2">
-                                    <Label htmlFor="search">Search</Label>
+                                <div className="md:col-span-2 xl:col-span-2">
+                                    <Field
+                                        id="search"
+                                        label="Search"
+                                        error={errors.search}
+                                    >
+                                        <div className="relative">
+                                            <Search
+                                                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                                                aria-hidden="true"
+                                            />
 
-                                    <div className="relative">
-                                        <Search
-                                            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                                            aria-hidden="true"
-                                        />
-
-                                        <Input
-                                            id="search"
-                                            name="search"
-                                            type="search"
-                                            defaultValue={filters.search ?? ''}
-                                            placeholder="Receipt, PO, or supplier"
-                                            className="pl-9"
-                                            maxLength={120}
-                                            autoComplete="off"
-                                            aria-invalid={
-                                                errors.search ? true : undefined
-                                            }
-                                        />
-                                    </div>
-
-                                    <InputError message={errors.search} />
+                                            <Input
+                                                name="search"
+                                                type="search"
+                                                defaultValue={
+                                                    filters.search ?? ''
+                                                }
+                                                placeholder="Receipt, PO, or supplier"
+                                                className="pl-9"
+                                                maxLength={120}
+                                                autoComplete="off"
+                                            />
+                                        </div>
+                                    </Field>
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="status">Status</Label>
-
-                                    <select
-                                        id="status"
+                                <Field
+                                    id="status"
+                                    label="Status"
+                                    error={errors.status}
+                                >
+                                    <NativeSelect
                                         name="status"
                                         defaultValue={filters.status ?? ''}
-                                        aria-invalid={
-                                            errors.status ? true : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         <option value="">All statuses</option>
 
@@ -329,28 +416,19 @@ export default function GoodsReceiptIndex({
                                                 {status.label}
                                             </option>
                                         ))}
-                                    </select>
+                                    </NativeSelect>
+                                </Field>
 
-                                    <InputError message={errors.status} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="location_id">
-                                        Location
-                                    </Label>
-
-                                    <select
-                                        id="location_id"
+                                <Field
+                                    id="location_id"
+                                    label="Location"
+                                    error={errors.location_id}
+                                >
+                                    <NativeSelect
                                         name="location_id"
                                         defaultValue={
                                             filters.locationId?.toString() ?? ''
                                         }
-                                        aria-invalid={
-                                            errors.location_id
-                                                ? true
-                                                : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         <option value="">All locations</option>
 
@@ -362,28 +440,19 @@ export default function GoodsReceiptIndex({
                                                 {location.name}
                                             </option>
                                         ))}
-                                    </select>
+                                    </NativeSelect>
+                                </Field>
 
-                                    <InputError message={errors.location_id} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="supplier_id">
-                                        Supplier
-                                    </Label>
-
-                                    <select
-                                        id="supplier_id"
+                                <Field
+                                    id="supplier_id"
+                                    label="Supplier"
+                                    error={errors.supplier_id}
+                                >
+                                    <NativeSelect
                                         name="supplier_id"
                                         defaultValue={
                                             filters.supplierId?.toString() ?? ''
                                         }
-                                        aria-invalid={
-                                            errors.supplier_id
-                                                ? true
-                                                : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         <option value="">All suppliers</option>
 
@@ -395,54 +464,41 @@ export default function GoodsReceiptIndex({
                                                 {supplier.name}
                                             </option>
                                         ))}
-                                    </select>
+                                    </NativeSelect>
+                                </Field>
 
-                                    <InputError message={errors.supplier_id} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="from">Received from</Label>
-
+                                <Field
+                                    id="from"
+                                    label="Received from"
+                                    error={errors.from}
+                                >
                                     <Input
-                                        id="from"
                                         name="from"
                                         type="date"
                                         defaultValue={filters.from ?? ''}
-                                        aria-invalid={
-                                            errors.from ? true : undefined
-                                        }
                                     />
+                                </Field>
 
-                                    <InputError message={errors.from} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="to">Received to</Label>
-
+                                <Field
+                                    id="to"
+                                    label="Received to"
+                                    error={errors.to}
+                                >
                                     <Input
-                                        id="to"
                                         name="to"
                                         type="date"
                                         defaultValue={filters.to ?? ''}
-                                        aria-invalid={
-                                            errors.to ? true : undefined
-                                        }
                                     />
+                                </Field>
 
-                                    <InputError message={errors.to} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="sort">Sort</Label>
-
-                                    <select
-                                        id="sort"
+                                <Field
+                                    id="sort"
+                                    label="Sort"
+                                    error={errors.sort}
+                                >
+                                    <NativeSelect
                                         name="sort"
                                         defaultValue={filters.sort}
-                                        aria-invalid={
-                                            errors.sort ? true : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         {sortOptions.map((sort) => (
                                             <option
@@ -452,10 +508,8 @@ export default function GoodsReceiptIndex({
                                                 {sort.label}
                                             </option>
                                         ))}
-                                    </select>
-
-                                    <InputError message={errors.sort} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
                                 <div className="flex items-end gap-2 md:col-span-2 xl:col-span-8 xl:justify-end">
                                     <Button
@@ -483,15 +537,81 @@ export default function GoodsReceiptIndex({
                                     </Button>
                                 </div>
                             </div>
-                        </div>
+
+                            <div
+                                className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3 text-sm text-muted-foreground"
+                                aria-live="polite"
+                            >
+                                <Filter className="size-4" aria-hidden="true" />
+
+                                {activeFilterLabels.length === 0 ? (
+                                    <Badge variant="outline">
+                                        Active filters: None
+                                    </Badge>
+                                ) : (
+                                    activeFilterLabels.map((label) => (
+                                        <Badge key={label} variant="outline">
+                                            {label}
+                                        </Badge>
+                                    ))
+                                )}
+
+                                {hasFilters && (
+                                    <Link
+                                        href={GoodsReceiptController.index()}
+                                        className="font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                    >
+                                        Clear all
+                                    </Link>
+                                )}
+                            </div>
+                        </FilterToolbar>
                     )}
                 </Form>
 
                 <section
-                    className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border"
+                    className="grid gap-3 md:hidden"
+                    aria-labelledby="receiving-register-cards-title"
+                >
+                    <h2 id="receiving-register-cards-title" className="sr-only">
+                        Receiving register
+                    </h2>
+
+                    {receipts.data.length === 0 ? (
+                        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                            <EmptyState
+                                icon={ClipboardList}
+                                title={
+                                    hasFilters
+                                        ? 'No receipts found'
+                                        : 'No goods receipts yet'
+                                }
+                                description={
+                                    hasFilters
+                                        ? 'Adjust or clear the filters to view other receiving history.'
+                                        : canFinalize
+                                          ? 'Start receiving from an approved or partially received purchase order.'
+                                          : 'Goods receipts will appear here when receiving activity is recorded.'
+                                }
+                            />
+                        </div>
+                    ) : (
+                        receipts.data.map((receipt) => (
+                            <ReceiptCard
+                                key={receipt.id}
+                                receipt={receipt}
+                                canFinalize={canFinalize}
+                                receivedAtFormatter={receivedAtFormatter}
+                            />
+                        ))
+                    )}
+                </section>
+
+                <section
+                    className="hidden overflow-hidden rounded-xl border border-border bg-card shadow-sm md:block"
                     aria-labelledby="receiving-register-title"
                 >
-                    <div className="flex min-h-14 flex-col justify-center gap-1 border-b border-sidebar-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-sidebar-border">
+                    <div className="flex min-h-14 flex-col justify-center gap-1 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <h2
                                 id="receiving-register-title"
@@ -504,8 +624,8 @@ export default function GoodsReceiptIndex({
                                 {receipts.total.toLocaleString()}{' '}
                                 {receipts.total === 1 ? 'receipt' : 'receipts'}
                                 {hasFilters
-                                    ? ` match ${activeFilterCount} active ${
-                                          activeFilterCount === 1
+                                    ? ` match ${activeFilterLabels.length} active ${
+                                          activeFilterLabels.length === 1
                                               ? 'filter'
                                               : 'filters'
                                       }`
@@ -593,30 +713,22 @@ export default function GoodsReceiptIndex({
                             <tbody>
                                 {receipts.data.length === 0 ? (
                                     <tr>
-                                        <td
-                                            colSpan={9}
-                                            className="px-6 py-14 text-center"
-                                        >
-                                            <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted">
-                                                <ClipboardList
-                                                    className="size-5 text-muted-foreground"
-                                                    aria-hidden="true"
-                                                />
-                                            </div>
-
-                                            <p className="mt-3 font-medium">
-                                                {hasFilters
-                                                    ? 'No receipts found'
-                                                    : 'No goods receipts yet'}
-                                            </p>
-
-                                            <p className="mt-1 text-sm text-muted-foreground">
-                                                {hasFilters
-                                                    ? 'Adjust or clear the filters to view other receiving history.'
-                                                    : canFinalize
-                                                      ? 'Start receiving from an approved or partially received purchase order.'
-                                                      : 'Goods receipts will appear here when receiving activity is recorded.'}
-                                            </p>
+                                        <td colSpan={9} className="px-6 py-14">
+                                            <EmptyState
+                                                icon={ClipboardList}
+                                                title={
+                                                    hasFilters
+                                                        ? 'No receipts found'
+                                                        : 'No goods receipts yet'
+                                                }
+                                                description={
+                                                    hasFilters
+                                                        ? 'Adjust or clear the filters to view other receiving history.'
+                                                        : canFinalize
+                                                          ? 'Start receiving from an approved or partially received purchase order.'
+                                                          : 'Goods receipts will appear here when receiving activity is recorded.'
+                                                }
+                                            />
                                         </td>
                                     </tr>
                                 ) : (
@@ -630,7 +742,7 @@ export default function GoodsReceiptIndex({
                                                     href={GoodsReceiptController.edit(
                                                         receipt.id,
                                                     )}
-                                                    className="font-medium text-blue-700 underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none dark:text-blue-300"
+                                                    className="font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
                                                 >
                                                     {receipt.number}
                                                 </Link>
@@ -677,7 +789,7 @@ export default function GoodsReceiptIndex({
                                                         {receipt.status ===
                                                         'draft'
                                                             ? 'Not finalized'
-                                                            : '—'}
+                                                            : 'Not recorded'}
                                                     </span>
                                                 ) : (
                                                     receivedAtFormatter.format(
@@ -689,26 +801,20 @@ export default function GoodsReceiptIndex({
                                             </td>
 
                                             <td className="px-4 py-3">
-                                                <Badge
-                                                    variant="outline"
-                                                    className={statusClassName(
+                                                <StatusBadge
+                                                    label={statusLabel(
                                                         receipt.status,
                                                     )}
-                                                >
-                                                    <ReceiptStatusIcon
-                                                        status={receipt.status}
-                                                    />
-
-                                                    {statusLabel(
+                                                    variant={statusVariant(
                                                         receipt.status,
                                                     )}
-                                                </Badge>
+                                                />
                                             </td>
 
                                             <td className="max-w-56 px-4 py-3">
                                                 {receipt.receivedBy === null ? (
                                                     <span className="text-muted-foreground">
-                                                        —
+                                                        Not recorded
                                                     </span>
                                                 ) : (
                                                     <span
@@ -747,74 +853,18 @@ export default function GoodsReceiptIndex({
                         </table>
                     </div>
 
-                    {receipts.total > 0 && (
-                        <div className="flex flex-col gap-3 border-t border-sidebar-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-sidebar-border">
-                            <p className="text-sm text-muted-foreground">
-                                Showing {receipts.from ?? 0} to{' '}
-                                {receipts.to ?? 0} of{' '}
-                                {receipts.total.toLocaleString()} receipts
-                            </p>
-
-                            {receipts.last_page > 1 && (
-                                <div className="flex items-center gap-2">
-                                    {receipts.prev_page_url !== null ? (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            asChild
-                                        >
-                                            <Link
-                                                href={receipts.prev_page_url}
-                                                preserveScroll
-                                                preserveState
-                                            >
-                                                Previous
-                                            </Link>
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            disabled
-                                        >
-                                            Previous
-                                        </Button>
-                                    )}
-
-                                    <span className="min-w-24 text-center text-sm text-muted-foreground">
-                                        Page {receipts.current_page} of{' '}
-                                        {receipts.last_page}
-                                    </span>
-
-                                    {receipts.next_page_url !== null ? (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            asChild
-                                        >
-                                            <Link
-                                                href={receipts.next_page_url}
-                                                preserveScroll
-                                                preserveState
-                                            >
-                                                Next
-                                            </Link>
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            disabled
-                                        >
-                                            Next
-                                        </Button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                    <PaginationControls
+                        currentPage={receipts.current_page}
+                        lastPage={receipts.last_page}
+                        from={receipts.from}
+                        to={receipts.to}
+                        total={receipts.total}
+                        previousPageUrl={receipts.prev_page_url}
+                        nextPageUrl={receipts.next_page_url}
+                        itemLabel="receipts"
+                        preserveScroll
+                        preserveState
+                    />
                 </section>
             </div>
         </>

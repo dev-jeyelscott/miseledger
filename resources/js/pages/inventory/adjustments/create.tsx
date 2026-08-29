@@ -4,9 +4,22 @@ import InventoryAdjustmentController from '@/actions/App/Http/Controllers/Invent
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InputError from '@/components/input-error';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
+import { PageHeader } from '@/components/page-header';
+import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 
 type Option = {
@@ -31,15 +44,57 @@ type UnitOption = Option & {
 type Props = {
     operationId: string;
     defaultOccurredAt: string;
+    timezone: string;
     locationOptions: Option[];
     storageLocationOptions: StorageLocationOption[];
     inventoryItemOptions: InventoryItemOption[];
     unitOptions: UnitOption[];
 };
 
+const textareaClassName =
+    'border-input bg-background min-h-24 w-full resize-y rounded-md border px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50';
+
+/** Derive the Increase/Decrease semantic from a signed quantity string. */
+function adjustmentDirection(quantity: string): {
+    label: string;
+    variant: 'success' | 'danger' | 'neutral';
+} {
+    const trimmed = quantity.trim();
+
+    if (trimmed === '' || !/[1-9]/.test(trimmed)) {
+        return { label: 'No change', variant: 'neutral' };
+    }
+
+    return trimmed.startsWith('-')
+        ? { label: 'Decrease', variant: 'danger' }
+        : { label: 'Increase', variant: 'success' };
+}
+
+/** Format an organization-local datetime-local value for confirmation review. */
+function formatEffectiveTime(value: string, timezone: string): string {
+    if (value === '') {
+        return 'Not set';
+    }
+
+    const parsed = new Date(value);
+
+    if (Number.isNaN(parsed.getTime())) {
+        return value;
+    }
+
+    return `${new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+    }).format(parsed)} (${timezone})`;
+}
+
 export default function InventoryAdjustmentCreate({
     operationId,
     defaultOccurredAt,
+    timezone,
     locationOptions,
     storageLocationOptions,
     inventoryItemOptions,
@@ -49,6 +104,10 @@ export default function InventoryAdjustmentCreate({
     const [storageLocationId, setStorageLocationId] = useState('');
     const [inventoryItemId, setInventoryItemId] = useState('');
     const [unitId, setUnitId] = useState('');
+    const [quantity, setQuantity] = useState('');
+    const [occurredAt, setOccurredAt] = useState(defaultOccurredAt);
+    const [reason, setReason] = useState('');
+    const [confirmOpen, setConfirmOpen] = useState(false);
 
     const availableStorageLocations = storageLocationOptions.filter(
         (storageLocation) =>
@@ -61,25 +120,42 @@ export default function InventoryAdjustmentCreate({
         inventoryItemOptions.length > 0 &&
         unitOptions.length > 0;
 
+    const selectedLocation = locationOptions.find(
+        (location) => location.id.toString() === locationId,
+    );
+    const selectedStorageLocation = availableStorageLocations.find(
+        (storageLocation) =>
+            storageLocation.id.toString() === storageLocationId,
+    );
+    const selectedItem = inventoryItemOptions.find(
+        (item) => item.id.toString() === inventoryItemId,
+    );
+    const selectedUnit = unitOptions.find(
+        (unit) => unit.id.toString() === unitId,
+    );
+
+    const direction = adjustmentDirection(quantity);
+    const canReview =
+        hasRequiredOptions &&
+        locationId !== '' &&
+        storageLocationId !== '' &&
+        inventoryItemId !== '' &&
+        unitId !== '' &&
+        quantity.trim() !== '' &&
+        reason.trim() !== '';
+
     return (
         <>
             <Head title="Manual inventory adjustment" />
 
-            <div className="flex flex-1 flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-2xl font-semibold">
-                        Manual inventory adjustment
-                    </h1>
+            <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Manual inventory adjustment"
+                    description="Correct on-hand stock with an audited, reasoned movement. Use a positive quantity to add stock and a negative quantity to remove stock."
+                />
 
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        Correct on-hand stock with an audited, reasoned
-                        movement. Use a positive quantity to add stock and a
-                        negative quantity to remove stock.
-                    </p>
-                </div>
-
-                <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                    <div className="mb-6 rounded-lg border bg-muted/30 p-4 text-sm">
+                <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                    <div className="mb-6 rounded-lg border border-border bg-muted/30 p-4 text-sm">
                         <p className="font-medium">Privileged correction</p>
 
                         <p className="mt-1 text-muted-foreground">
@@ -91,8 +167,10 @@ export default function InventoryAdjustmentCreate({
                     </div>
 
                     <Form
+                        id="inventory-adjustment-form"
                         action={InventoryAdjustmentController.store().url}
                         method="post"
+                        onSuccess={() => setConfirmOpen(false)}
                     >
                         {({ errors, processing }) => (
                             <div className="grid gap-6">
@@ -105,13 +183,12 @@ export default function InventoryAdjustmentCreate({
                                 <InputError message={errors.operation_id} />
 
                                 <div className="grid gap-5 md:grid-cols-2">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="location_id">
-                                            Location
-                                        </Label>
-
-                                        <select
-                                            id="location_id"
+                                    <Field
+                                        id="location_id"
+                                        label="Location"
+                                        error={errors.location_id}
+                                    >
+                                        <NativeSelect
                                             name="location_id"
                                             value={locationId}
                                             onChange={(event) => {
@@ -120,7 +197,6 @@ export default function InventoryAdjustmentCreate({
                                                 );
                                                 setStorageLocationId('');
                                             }}
-                                            className="h-9 rounded-md border bg-background px-3 text-sm"
                                             required
                                         >
                                             <option value="">
@@ -135,20 +211,15 @@ export default function InventoryAdjustmentCreate({
                                                     {location.name}
                                                 </option>
                                             ))}
-                                        </select>
+                                        </NativeSelect>
+                                    </Field>
 
-                                        <InputError
-                                            message={errors.location_id}
-                                        />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="storage_location_id">
-                                            Storage location
-                                        </Label>
-
-                                        <select
-                                            id="storage_location_id"
+                                    <Field
+                                        id="storage_location_id"
+                                        label="Storage location"
+                                        error={errors.storage_location_id}
+                                    >
+                                        <NativeSelect
                                             name="storage_location_id"
                                             value={storageLocationId}
                                             onChange={(event) =>
@@ -156,7 +227,6 @@ export default function InventoryAdjustmentCreate({
                                                     event.target.value,
                                                 )
                                             }
-                                            className="h-9 rounded-md border bg-background px-3 text-sm"
                                             required
                                             disabled={locationId === ''}
                                         >
@@ -176,20 +246,15 @@ export default function InventoryAdjustmentCreate({
                                                     </option>
                                                 ),
                                             )}
-                                        </select>
+                                        </NativeSelect>
+                                    </Field>
 
-                                        <InputError
-                                            message={errors.storage_location_id}
-                                        />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="inventory_item_id">
-                                            Inventory item
-                                        </Label>
-
-                                        <select
-                                            id="inventory_item_id"
+                                    <Field
+                                        id="inventory_item_id"
+                                        label="Inventory item"
+                                        error={errors.inventory_item_id}
+                                    >
+                                        <NativeSelect
                                             name="inventory_item_id"
                                             value={inventoryItemId}
                                             onChange={(event) => {
@@ -210,7 +275,6 @@ export default function InventoryAdjustmentCreate({
                                                         '',
                                                 );
                                             }}
-                                            className="h-9 rounded-md border bg-background px-3 text-sm"
                                             required
                                         >
                                             <option value="">
@@ -227,48 +291,40 @@ export default function InventoryAdjustmentCreate({
                                                     </option>
                                                 ),
                                             )}
-                                        </select>
+                                        </NativeSelect>
+                                    </Field>
 
-                                        <InputError
-                                            message={errors.inventory_item_id}
-                                        />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="quantity">
-                                            Adjustment quantity
-                                        </Label>
-
+                                    <Field
+                                        id="quantity"
+                                        label="Adjustment quantity"
+                                        helper="Positive quantities add stock, negative quantities remove stock."
+                                        error={errors.quantity}
+                                    >
                                         <Input
-                                            id="quantity"
                                             name="quantity"
                                             type="number"
                                             step="0.000001"
                                             placeholder="e.g. 2 or -3"
+                                            value={quantity}
+                                            onChange={(event) =>
+                                                setQuantity(event.target.value)
+                                            }
+                                            className="tabular-nums"
                                             required
                                         />
+                                    </Field>
 
-                                        <p className="text-xs text-muted-foreground">
-                                            Positive quantities add stock,
-                                            negative quantities remove stock.
-                                        </p>
-
-                                        <InputError message={errors.quantity} />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="unit_id">
-                                            Quantity unit
-                                        </Label>
-
-                                        <select
-                                            id="unit_id"
+                                    <Field
+                                        id="unit_id"
+                                        label="Quantity unit"
+                                        error={errors.unit_id}
+                                    >
+                                        <NativeSelect
                                             name="unit_id"
                                             value={unitId}
                                             onChange={(event) =>
                                                 setUnitId(event.target.value)
                                             }
-                                            className="h-9 rounded-md border bg-background px-3 text-sm"
                                             required
                                         >
                                             <option value="">
@@ -283,45 +339,59 @@ export default function InventoryAdjustmentCreate({
                                                     {unit.name} ({unit.symbol})
                                                 </option>
                                             ))}
-                                        </select>
+                                        </NativeSelect>
+                                    </Field>
 
-                                        <InputError message={errors.unit_id} />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="occurred_at">
-                                            Adjustment date
-                                        </Label>
-
+                                    <Field
+                                        id="occurred_at"
+                                        label="Adjustment date"
+                                        helper={`Recorded in the organization timezone (${timezone}).`}
+                                        error={errors.occurred_at}
+                                    >
                                         <Input
-                                            id="occurred_at"
                                             name="occurred_at"
                                             type="datetime-local"
-                                            defaultValue={defaultOccurredAt}
+                                            value={occurredAt}
+                                            onChange={(event) =>
+                                                setOccurredAt(
+                                                    event.target.value,
+                                                )
+                                            }
                                             required
                                         />
+                                    </Field>
+                                </div>
 
-                                        <InputError
-                                            message={errors.occurred_at}
+                                <div className="rounded-lg border border-border bg-muted/20 p-4">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-sm font-medium">
+                                            Movement direction
+                                        </span>
+                                        <StatusBadge
+                                            label={direction.label}
+                                            variant={direction.variant}
                                         />
                                     </div>
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="reason">Reason</Label>
-
+                                <Field
+                                    id="reason"
+                                    label="Reason"
+                                    error={errors.reason}
+                                >
                                     <textarea
-                                        id="reason"
                                         name="reason"
                                         rows={4}
                                         maxLength={2000}
-                                        className="rounded-md border bg-background px-3 py-2 text-sm"
+                                        className={textareaClassName}
                                         placeholder="Explain why this correction is necessary"
+                                        value={reason}
+                                        onChange={(event) =>
+                                            setReason(event.target.value)
+                                        }
                                         required
                                     />
-
-                                    <InputError message={errors.reason} />
-                                </div>
+                                </Field>
 
                                 {!hasRequiredOptions && (
                                     <p className="text-sm text-destructive">
@@ -332,16 +402,120 @@ export default function InventoryAdjustmentCreate({
                                 )}
 
                                 <div className="flex gap-2">
-                                    <Button
-                                        type="submit"
-                                        disabled={
-                                            processing || !hasRequiredOptions
-                                        }
+                                    <Dialog
+                                        open={confirmOpen}
+                                        onOpenChange={setConfirmOpen}
                                     >
-                                        {processing
-                                            ? 'Recording...'
-                                            : 'Record adjustment'}
-                                    </Button>
+                                        <DialogTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                disabled={
+                                                    processing || !canReview
+                                                }
+                                            >
+                                                Review adjustment
+                                            </Button>
+                                        </DialogTrigger>
+
+                                        <DialogContent>
+                                            <DialogHeader>
+                                                <DialogTitle>
+                                                    Post this adjustment?
+                                                </DialogTitle>
+                                                <DialogDescription>
+                                                    This posts an audited
+                                                    movement to the immutable
+                                                    stock ledger. It cannot be
+                                                    edited afterward.
+                                                </DialogDescription>
+                                            </DialogHeader>
+
+                                            <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <span className="font-medium">
+                                                        {selectedItem?.name ??
+                                                            'Item'}
+                                                    </span>
+                                                    <StatusBadge
+                                                        label={direction.label}
+                                                        variant={
+                                                            direction.variant
+                                                        }
+                                                    />
+                                                </div>
+
+                                                <dl className="mt-3 grid gap-1.5">
+                                                    <div className="flex justify-between gap-4">
+                                                        <dt className="text-muted-foreground">
+                                                            Location
+                                                        </dt>
+                                                        <dd className="text-right">
+                                                            {
+                                                                selectedLocation?.name
+                                                            }{' '}
+                                                            /{' '}
+                                                            {
+                                                                selectedStorageLocation?.name
+                                                            }
+                                                        </dd>
+                                                    </div>
+                                                    <div className="flex justify-between gap-4">
+                                                        <dt className="text-muted-foreground">
+                                                            Quantity
+                                                        </dt>
+                                                        <dd className="text-right tabular-nums">
+                                                            {quantity}{' '}
+                                                            {
+                                                                selectedUnit?.symbol
+                                                            }
+                                                        </dd>
+                                                    </div>
+                                                    <div className="flex justify-between gap-4">
+                                                        <dt className="text-muted-foreground">
+                                                            Effective time
+                                                        </dt>
+                                                        <dd className="text-right">
+                                                            {formatEffectiveTime(
+                                                                occurredAt,
+                                                                timezone,
+                                                            )}
+                                                        </dd>
+                                                    </div>
+                                                </dl>
+
+                                                <div className="mt-3 border-t border-border pt-3">
+                                                    <div className="text-xs text-muted-foreground">
+                                                        Reason
+                                                    </div>
+                                                    <p className="mt-1">
+                                                        {reason}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <DialogFooter>
+                                                <DialogClose asChild>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        disabled={processing}
+                                                    >
+                                                        Keep editing
+                                                    </Button>
+                                                </DialogClose>
+
+                                                <Button
+                                                    type="submit"
+                                                    form="inventory-adjustment-form"
+                                                    disabled={processing}
+                                                >
+                                                    {processing
+                                                        ? 'Recording...'
+                                                        : 'Confirm and record'}
+                                                </Button>
+                                            </DialogFooter>
+                                        </DialogContent>
+                                    </Dialog>
 
                                     <PreviousPageButton
                                         variant="outline"

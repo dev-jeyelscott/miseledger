@@ -9,6 +9,7 @@ import {
     InputOTPGroup,
     InputOTPSlot,
 } from '@/components/ui/input-otp';
+import { Label } from '@/components/ui/label';
 import { OTP_MAX_LENGTH } from '@/hooks/use-two-factor-auth';
 import { store } from '@/routes/two-factor/login';
 
@@ -63,8 +64,12 @@ export default function TwoFactorChallenge() {
                     {({ errors, processing, clearErrors }) => (
                         <>
                             {showRecoveryInput ? (
-                                <>
+                                <div className="grid gap-2 text-left">
+                                    <Label htmlFor="recovery_code">
+                                        Recovery code
+                                    </Label>
                                     <Input
+                                        id="recovery_code"
                                         name="recovery_code"
                                         type="text"
                                         placeholder="Enter recovery code"
@@ -74,11 +79,18 @@ export default function TwoFactorChallenge() {
                                     <InputError
                                         message={errors.recovery_code}
                                     />
-                                </>
+                                </div>
                             ) : (
                                 <div className="flex flex-col items-center justify-center space-y-3 text-center">
+                                    <Label
+                                        htmlFor="two-factor-code-input"
+                                        className="sr-only"
+                                    >
+                                        Authentication code
+                                    </Label>
                                     <div className="flex w-full items-center justify-center">
                                         <InputOTP
+                                            id="two-factor-code-input"
                                             name="code"
                                             maxLength={OTP_MAX_LENGTH}
                                             value={code}

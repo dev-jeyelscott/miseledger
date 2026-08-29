@@ -1,11 +1,8 @@
 import { Form, Head, Link, useForm, usePage } from '@inertiajs/react';
 import {
-    Ban,
     Boxes,
     CheckCircle2,
     ChevronDown,
-    ChevronLeft,
-    ChevronRight,
     ChevronUp,
     ChevronsUpDown,
     ClipboardList,
@@ -23,7 +20,12 @@ import { useState } from 'react';
 import RecipeController from '@/actions/App/Http/Controllers/Recipes/RecipeController';
 import RecipeCostController from '@/actions/App/Http/Controllers/Recipes/RecipeCostController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
+import { EmptyState } from '@/components/empty-state';
+import { FilterToolbar } from '@/components/filter-toolbar';
 import InputError from '@/components/input-error';
+import { PageHeader } from '@/components/page-header';
+import { PaginationControls } from '@/components/pagination-controls';
+import { StatusBadge } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,8 +36,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 
 type RecipeType = 'menu_item' | 'prepared_item' | 'batch';
@@ -91,6 +94,7 @@ type Props = {
     filters: Filters;
     canManage: boolean;
     canViewCosts: boolean;
+    timezone: string;
 };
 
 type RecipeFormData = {
@@ -113,23 +117,25 @@ const typeLabels: Record<RecipeType, string> = {
     batch: 'Batch',
 };
 
-const selectClassName =
-    'h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50';
-
-/** Format persisted timestamps for compact operational scanning. */
-function formatUpdatedAt(value: string | null): string {
+/** Format persisted timestamps in the active organization's configured timezone. */
+function formatUpdatedAt(value: string | null, timezone: string): string {
     if (value === null) {
-        return '—';
+        return 'Not recorded';
     }
 
     return new Intl.DateTimeFormat('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
+        timeZone: timezone,
     }).format(new Date(value));
 }
 
-/** Render recipe identity type without implying version state. */
+/**
+ * Render recipe identity type using deliberate categorical color. This is a
+ * design-system exception: recipe type is a meaningful, stable classification
+ * rather than a lifecycle status, so it keeps its own color vocabulary.
+ */
 function TypeBadge({ type }: { type: RecipeType }) {
     const classes: Record<RecipeType, string> = {
         menu_item:
@@ -146,25 +152,12 @@ function TypeBadge({ type }: { type: RecipeType }) {
     );
 }
 
-/** Render recipe master activity with text, icon, and color. */
+/** Render recipe master activity with the shared semantic status vocabulary. */
 function ActivityBadge({ active }: { active: boolean }) {
-    if (!active) {
-        return (
-            <Badge variant="secondary">
-                <Ban aria-hidden="true" />
-                Inactive
-            </Badge>
-        );
-    }
-
-    return (
-        <Badge
-            variant="outline"
-            className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
-        >
-            <CheckCircle2 aria-hidden="true" />
-            Active
-        </Badge>
+    return active ? (
+        <StatusBadge label="Active" variant="success" />
+    ) : (
+        <StatusBadge label="Inactive" variant="neutral" />
     );
 }
 
@@ -298,56 +291,57 @@ function RecipeIdentityDialog({
                 </DialogHeader>
 
                 <form
-                    className="space-y-5"
+                    className="grid gap-5"
                     aria-busy={form.processing}
                     onSubmit={(event) => {
                         event.preventDefault();
                         submit();
                     }}
                 >
-                    <div className="grid gap-2">
-                        <Label htmlFor="recipe-dialog-code">Code</Label>
+                    <Field
+                        id="recipe-dialog-code"
+                        label="Code"
+                        error={form.errors.code}
+                    >
                         <Input
-                            id="recipe-dialog-code"
                             value={form.data.code}
                             required
                             autoFocus
                             autoComplete="off"
                             placeholder={isCreate ? 'RCP-00001' : undefined}
                             disabled={form.processing}
-                            aria-invalid={form.errors.code ? true : undefined}
                             onChange={(event) =>
                                 form.setData('code', event.target.value)
                             }
                         />
-                        <InputError message={form.errors.code} />
-                    </div>
+                    </Field>
 
-                    <div className="grid gap-2">
-                        <Label htmlFor="recipe-dialog-name">Name</Label>
+                    <Field
+                        id="recipe-dialog-name"
+                        label="Name"
+                        error={form.errors.name}
+                    >
                         <Input
-                            id="recipe-dialog-name"
                             value={form.data.name}
                             required
                             autoComplete="off"
                             placeholder={isCreate ? 'Cheeseburger' : undefined}
                             disabled={form.processing}
-                            aria-invalid={form.errors.name ? true : undefined}
                             onChange={(event) =>
                                 form.setData('name', event.target.value)
                             }
                         />
-                        <InputError message={form.errors.name} />
-                    </div>
+                    </Field>
 
-                    <div className="grid gap-2">
-                        <Label htmlFor="recipe-dialog-type">Type</Label>
-                        <select
-                            id="recipe-dialog-type"
+                    <Field
+                        id="recipe-dialog-type"
+                        label="Type"
+                        error={form.errors.type}
+                        helper="Stable identity classification. Yield and composition live on recipe versions."
+                    >
+                        <NativeSelect
                             value={form.data.type}
-                            className={selectClassName}
                             disabled={form.processing}
-                            aria-invalid={form.errors.type ? true : undefined}
                             onChange={(event) =>
                                 form.setData(
                                     'type',
@@ -358,21 +352,18 @@ function RecipeIdentityDialog({
                             <option value="menu_item">Menu item</option>
                             <option value="prepared_item">Prepared item</option>
                             <option value="batch">Batch</option>
-                        </select>
-                        <InputError message={form.errors.type} />
-                    </div>
+                        </NativeSelect>
+                    </Field>
 
                     {!isCreate && (
-                        <div className="grid gap-2">
-                            <Label htmlFor="recipe-dialog-active">Status</Label>
-                            <select
-                                id="recipe-dialog-active"
+                        <Field
+                            id="recipe-dialog-active"
+                            label="Status"
+                            error={form.errors.active}
+                        >
+                            <NativeSelect
                                 value={form.data.active ? '1' : '0'}
-                                className={selectClassName}
                                 disabled={form.processing}
-                                aria-invalid={
-                                    form.errors.active ? true : undefined
-                                }
                                 onChange={(event) =>
                                     form.setData(
                                         'active',
@@ -382,9 +373,8 @@ function RecipeIdentityDialog({
                             >
                                 <option value="1">Active</option>
                                 <option value="0">Inactive</option>
-                            </select>
-                            <InputError message={form.errors.active} />
-                        </div>
+                            </NativeSelect>
+                        </Field>
                     )}
 
                     <InputError message={form.errors.return_to} />
@@ -421,6 +411,90 @@ function RecipeIdentityDialog({
     );
 }
 
+/** Render one recipe row as a mobile record card. */
+function RecipeCard({
+    row,
+    canManage,
+    canViewCosts,
+    timezone,
+    onEdit,
+}: {
+    row: RecipeRow;
+    canManage: boolean;
+    canViewCosts: boolean;
+    timezone: string;
+    onEdit: () => void;
+}) {
+    return (
+        <article className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <h3 className="font-medium">{row.name}</h3>
+                    <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                        {row.code}
+                    </p>
+                </div>
+
+                <TypeBadge type={row.type} />
+            </div>
+
+            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div>
+                    <dt className="text-xs text-muted-foreground">Versions</dt>
+                    <dd className="mt-0.5">
+                        <VersionCoverage row={row} />
+                    </dd>
+                </div>
+
+                <div>
+                    <dt className="text-xs text-muted-foreground">Activity</dt>
+                    <dd className="mt-0.5">
+                        <ActivityBadge active={row.active} />
+                    </dd>
+                </div>
+
+                <div className="col-span-2">
+                    <dt className="text-xs text-muted-foreground">Updated</dt>
+                    <dd className="mt-0.5">
+                        {formatUpdatedAt(row.updatedAt, timezone)}
+                    </dd>
+                </div>
+            </dl>
+
+            {(canViewCosts || canManage) && (
+                <div className="mt-4 flex gap-2 border-t border-border pt-3">
+                    {canViewCosts && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            asChild
+                        >
+                            <Link href={RecipeCostController.show(row.id)}>
+                                <Coins className="size-4" aria-hidden="true" />
+                                Cost
+                            </Link>
+                        </Button>
+                    )}
+
+                    {canManage && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={onEdit}
+                        >
+                            <Pencil className="size-4" aria-hidden="true" />
+                            Edit
+                        </Button>
+                    )}
+                </div>
+            )}
+        </article>
+    );
+}
+
 /** Render the server-authoritative Recipes operational index. */
 export default function RecipesIndex({
     rows,
@@ -429,15 +503,21 @@ export default function RecipesIndex({
     filters,
     canManage,
     canViewCosts,
+    timezone,
 }: Props) {
     const currentUrl = usePage().url;
     const [createOpen, setCreateOpen] = useState(false);
     const [editingRecipe, setEditingRecipe] = useState<RecipeRow | null>(null);
 
-    const hasFilters =
-        filters.search !== null ||
-        filters.type !== 'all' ||
-        filters.activity !== 'all';
+    const activeFilterLabels = [
+        filters.search === null ? null : `Search: ${filters.search}`,
+        filters.type === 'all' ? null : `Type: ${typeLabels[filters.type]}`,
+        filters.activity === 'all'
+            ? null
+            : `Activity: ${filters.activity === 'active' ? 'Active' : 'Inactive'}`,
+    ].filter((label): label is string => label !== null);
+
+    const hasFilters = activeFilterLabels.length > 0;
 
     const sortHref = (sort: RecipeSort): string => {
         const params = new URLSearchParams();
@@ -468,27 +548,21 @@ export default function RecipesIndex({
             <Head title="Recipes" />
 
             <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Recipes
-                        </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Manage stable recipe identities and inspect version
-                            coverage before location-aware costing.
-                        </p>
-                    </div>
-
-                    {canManage && (
-                        <Button
-                            type="button"
-                            onClick={() => setCreateOpen(true)}
-                        >
-                            <Plus className="size-4" aria-hidden="true" />
-                            New recipe
-                        </Button>
-                    )}
-                </div>
+                <PageHeader
+                    title="Recipes"
+                    description="Manage stable recipe identities and inspect version coverage before location-aware costing."
+                    actions={
+                        canManage ? (
+                            <Button
+                                type="button"
+                                onClick={() => setCreateOpen(true)}
+                            >
+                                <Plus className="size-4" aria-hidden="true" />
+                                New recipe
+                            </Button>
+                        ) : undefined
+                    }
+                />
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                     <DashboardMetricCard
@@ -528,10 +602,10 @@ export default function RecipesIndex({
                     />
                 </div>
 
-                <section className="min-w-0 overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
-                    <Form action={RecipeController.index().url} method="get">
-                        {({ errors, processing }) => (
-                            <div className="grid gap-4 border-b border-sidebar-border/70 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1.5fr)_0.85fr_0.85fr_0.65fr_auto] dark:border-sidebar-border">
+                <Form action={RecipeController.index().url} method="get">
+                    {({ errors, processing }) => (
+                        <FilterToolbar className="overflow-hidden p-0 shadow-sm">
+                            <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1.5fr)_0.85fr_0.85fr_0.65fr_auto]">
                                 <input
                                     type="hidden"
                                     name="sort"
@@ -543,39 +617,35 @@ export default function RecipesIndex({
                                     value={filters.direction}
                                 />
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="search">Search</Label>
+                                <Field
+                                    id="search"
+                                    label="Search"
+                                    error={errors.search}
+                                >
                                     <div className="relative">
                                         <Search
                                             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
                                             aria-hidden="true"
                                         />
                                         <Input
-                                            id="search"
                                             type="search"
                                             name="search"
                                             defaultValue={filters.search ?? ''}
                                             placeholder="Name or recipe code"
                                             className="pl-9"
                                             autoComplete="off"
-                                            aria-invalid={
-                                                errors.search ? true : undefined
-                                            }
                                         />
                                     </div>
-                                    <InputError message={errors.search} />
-                                </div>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="type">Type</Label>
-                                    <select
-                                        id="type"
+                                <Field
+                                    id="type"
+                                    label="Type"
+                                    error={errors.type}
+                                >
+                                    <NativeSelect
                                         name="type"
                                         defaultValue={filters.type}
-                                        className={selectClassName}
-                                        aria-invalid={
-                                            errors.type ? true : undefined
-                                        }
                                     >
                                         <option value="all">All types</option>
                                         <option value="menu_item">
@@ -585,20 +655,17 @@ export default function RecipesIndex({
                                             Prepared item
                                         </option>
                                         <option value="batch">Batch</option>
-                                    </select>
-                                    <InputError message={errors.type} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="activity">Activity</Label>
-                                    <select
-                                        id="activity"
+                                <Field
+                                    id="activity"
+                                    label="Activity"
+                                    error={errors.activity}
+                                >
+                                    <NativeSelect
                                         name="activity"
                                         defaultValue={filters.activity}
-                                        className={selectClassName}
-                                        aria-invalid={
-                                            errors.activity ? true : undefined
-                                        }
                                     >
                                         <option value="all">
                                             All activity
@@ -607,27 +674,23 @@ export default function RecipesIndex({
                                         <option value="inactive">
                                             Inactive
                                         </option>
-                                    </select>
-                                    <InputError message={errors.activity} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="per_page">Rows</Label>
-                                    <select
-                                        id="per_page"
+                                <Field
+                                    id="per_page"
+                                    label="Rows"
+                                    error={errors.per_page}
+                                >
+                                    <NativeSelect
                                         name="per_page"
                                         defaultValue={filters.perPage}
-                                        className={selectClassName}
-                                        aria-invalid={
-                                            errors.per_page ? true : undefined
-                                        }
                                     >
                                         <option value="10">10</option>
                                         <option value="25">25</option>
                                         <option value="50">50</option>
-                                    </select>
-                                    <InputError message={errors.per_page} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
                                 <div className="flex items-end gap-2 sm:col-span-2 xl:col-span-1">
                                     <Button
@@ -642,28 +705,92 @@ export default function RecipesIndex({
                                         {processing ? 'Applying…' : 'Apply'}
                                     </Button>
 
-                                    {hasFilters && (
-                                        <Button
-                                            variant="outline"
-                                            className="flex-1 xl:flex-none"
-                                            asChild
-                                        >
-                                            <Link
-                                                href={RecipeController.index()}
-                                            >
-                                                <RotateCcw
-                                                    className="size-4"
-                                                    aria-hidden="true"
-                                                />
-                                                Reset
-                                            </Link>
-                                        </Button>
-                                    )}
+                                    <Button
+                                        variant="outline"
+                                        className="flex-1 xl:flex-none"
+                                        asChild
+                                    >
+                                        <Link href={RecipeController.index()}>
+                                            <RotateCcw
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            Reset
+                                        </Link>
+                                    </Button>
                                 </div>
                             </div>
-                        )}
-                    </Form>
 
+                            <div
+                                className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3 text-sm text-muted-foreground"
+                                aria-live="polite"
+                            >
+                                <Filter className="size-4" aria-hidden="true" />
+
+                                {activeFilterLabels.length === 0 ? (
+                                    <Badge variant="outline">
+                                        Active filters: None
+                                    </Badge>
+                                ) : (
+                                    activeFilterLabels.map((label) => (
+                                        <Badge key={label} variant="outline">
+                                            {label}
+                                        </Badge>
+                                    ))
+                                )}
+
+                                {hasFilters && (
+                                    <Link
+                                        href={RecipeController.index()}
+                                        className="font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                    >
+                                        Clear all
+                                    </Link>
+                                )}
+                            </div>
+                        </FilterToolbar>
+                    )}
+                </Form>
+
+                <section
+                    className="grid gap-3 md:hidden"
+                    aria-labelledby="recipes-cards-title"
+                >
+                    <h2 id="recipes-cards-title" className="sr-only">
+                        Recipes
+                    </h2>
+
+                    {rows.length === 0 ? (
+                        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                            <EmptyState
+                                icon={NotebookText}
+                                title={
+                                    summary.totalCount === 0
+                                        ? 'No recipes have been created.'
+                                        : 'No recipes match the current filters.'
+                                }
+                                description={
+                                    summary.totalCount === 0
+                                        ? 'Create a recipe to establish its stable identity before adding versions.'
+                                        : 'Adjust or clear the filters to see other recipes.'
+                                }
+                            />
+                        </div>
+                    ) : (
+                        rows.map((row) => (
+                            <RecipeCard
+                                key={row.id}
+                                row={row}
+                                canManage={canManage}
+                                canViewCosts={canViewCosts}
+                                timezone={timezone}
+                                onEdit={() => setEditingRecipe(row)}
+                            />
+                        ))
+                    )}
+                </section>
+
+                <section className="hidden min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-sm md:block">
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-[820px] text-sm">
                             <thead className="border-b bg-muted/30 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -731,20 +858,27 @@ export default function RecipesIndex({
                             <tbody>
                                 {rows.length === 0 ? (
                                     <tr>
-                                        <td
-                                            colSpan={6}
-                                            className="px-4 py-12 text-center text-muted-foreground"
-                                        >
-                                            {summary.totalCount === 0
-                                                ? 'No recipes have been created.'
-                                                : 'No recipes match the current filters.'}
+                                        <td colSpan={6} className="px-4 py-12">
+                                            <EmptyState
+                                                icon={NotebookText}
+                                                title={
+                                                    summary.totalCount === 0
+                                                        ? 'No recipes have been created.'
+                                                        : 'No recipes match the current filters.'
+                                                }
+                                                description={
+                                                    summary.totalCount === 0
+                                                        ? 'Create a recipe to establish its stable identity before adding versions.'
+                                                        : 'Adjust or clear the filters to see other recipes.'
+                                                }
+                                            />
                                         </td>
                                     </tr>
                                 ) : (
                                     rows.map((row) => (
                                         <tr
                                             key={row.id}
-                                            className="border-b border-sidebar-border/60 last:border-b-0 hover:bg-muted/20 dark:border-sidebar-border"
+                                            className="border-b border-border last:border-b-0 hover:bg-muted/20"
                                         >
                                             <td className="px-4 py-3.5">
                                                 <div className="font-medium">
@@ -767,13 +901,14 @@ export default function RecipesIndex({
                                             </td>
                                             <td className="px-4 py-3.5 text-muted-foreground">
                                                 {row.updatedAt === null ? (
-                                                    '—'
+                                                    'Not recorded'
                                                 ) : (
                                                     <time
                                                         dateTime={row.updatedAt}
                                                     >
                                                         {formatUpdatedAt(
                                                             row.updatedAt,
+                                                            timezone,
                                                         )}
                                                     </time>
                                                 )}
@@ -822,7 +957,7 @@ export default function RecipesIndex({
                                                     {!canViewCosts &&
                                                         !canManage && (
                                                             <span className="text-muted-foreground">
-                                                                —
+                                                                No actions
                                                             </span>
                                                         )}
                                                 </div>
@@ -834,80 +969,18 @@ export default function RecipesIndex({
                         </table>
                     </div>
 
-                    <div className="flex flex-col gap-3 border-t border-sidebar-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-sidebar-border">
-                        <p className="text-xs text-muted-foreground">
-                            {pagination.total === 0
-                                ? '0 recipes'
-                                : `Showing ${pagination.from ?? 0} to ${pagination.to ?? 0} of ${pagination.total.toLocaleString()} recipes`}
-                        </p>
+                    <PaginationControls
+                        currentPage={pagination.currentPage}
+                        lastPage={pagination.lastPage}
+                        from={pagination.from}
+                        to={pagination.to}
+                        total={pagination.total}
+                        previousPageUrl={pagination.previousPageUrl}
+                        nextPageUrl={pagination.nextPageUrl}
+                        itemLabel="recipes"
+                    />
 
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">
-                                Page {pagination.currentPage} of{' '}
-                                {pagination.lastPage}
-                            </span>
-
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                disabled={pagination.previousPageUrl === null}
-                                asChild={pagination.previousPageUrl !== null}
-                            >
-                                {pagination.previousPageUrl === null ? (
-                                    <span>
-                                        <ChevronLeft
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                        <span className="sr-only">
-                                            Previous page
-                                        </span>
-                                    </span>
-                                ) : (
-                                    <Link
-                                        href={pagination.previousPageUrl}
-                                        aria-label="Previous page"
-                                    >
-                                        <ChevronLeft
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                    </Link>
-                                )}
-                            </Button>
-
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                disabled={pagination.nextPageUrl === null}
-                                asChild={pagination.nextPageUrl !== null}
-                            >
-                                {pagination.nextPageUrl === null ? (
-                                    <span>
-                                        <ChevronRight
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                        <span className="sr-only">
-                                            Next page
-                                        </span>
-                                    </span>
-                                ) : (
-                                    <Link
-                                        href={pagination.nextPageUrl}
-                                        aria-label="Next page"
-                                    >
-                                        <ChevronRight
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                    </Link>
-                                )}
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div className="border-t border-sidebar-border/70 bg-muted/20 px-4 py-3 text-xs text-muted-foreground dark:border-sidebar-border">
+                    <div className="border-t border-border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
                         Yield belongs to a specific recipe version. Current cost
                         remains location-specific and is opened through the
                         permitted Cost action instead of being estimated on this

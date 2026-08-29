@@ -1,10 +1,12 @@
 import { Form, Head } from '@inertiajs/react';
+import { useEffect } from 'react';
 import OrganizationLocationController from '@/actions/App/Http/Controllers/OrganizationLocationController';
-import InputError from '@/components/input-error';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 import type { LocationSummary, OrganizationSummary } from '@/types';
 
@@ -12,6 +14,28 @@ type Props = {
     organization: OrganizationSummary;
     location: LocationSummary;
 };
+
+/** Warn before an unguarded tab close or refresh while the form is dirty. */
+function UnsavedChangesGuard({ dirty }: { dirty: boolean }) {
+    useEffect(() => {
+        if (!dirty) {
+            return;
+        }
+
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [dirty]);
+
+    return null;
+}
 
 export default function EditOrganizationLocation({
     organization,
@@ -21,94 +45,99 @@ export default function EditOrganizationLocation({
         <>
             <Head title={`Edit ${location.name}`} />
 
-            <div className="flex flex-1 items-start justify-center p-4">
-                <div className="w-full max-w-xl rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
-                    <div className="mb-6">
-                        <h1 className="text-2xl font-semibold">
-                            Edit location
-                        </h1>
-
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            {organization.name}
-                        </p>
-                    </div>
+            <div className="flex flex-1 items-start justify-center p-4 sm:p-6">
+                <div className="w-full max-w-xl rounded-xl border border-border bg-card p-6 shadow-sm">
+                    <PageHeader
+                        title="Edit location"
+                        description={`${organization.name} · ${location.name}`}
+                        className="mb-6"
+                    />
 
                     <Form
                         {...OrganizationLocationController.update.form([
                             organization.id,
                             location.id,
                         ])}
-                        className="space-y-5"
+                        className="grid gap-5"
                     >
-                        {({ processing, errors }) => (
-                            <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="name">Location name</Label>
+                        {({ processing, errors, isDirty }) => {
+                            return (
+                                <>
+                                    <UnsavedChangesGuard dirty={isDirty} />
 
-                                    <Input
+                                    <Field
                                         id="name"
-                                        name="name"
-                                        required
-                                        defaultValue={location.name}
-                                        autoComplete="off"
-                                    />
+                                        label="Location name"
+                                        error={errors.name}
+                                    >
+                                        <Input
+                                            name="name"
+                                            required
+                                            defaultValue={location.name}
+                                            autoComplete="off"
+                                        />
+                                    </Field>
 
-                                    <InputError message={errors.name} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="code">Location code</Label>
-
-                                    <Input
+                                    <Field
                                         id="code"
-                                        name="code"
-                                        required
-                                        defaultValue={location.code}
-                                        autoComplete="off"
-                                    />
+                                        label="Location code"
+                                        helper="Letters, numbers, hyphens, and underscores only."
+                                        error={errors.code}
+                                    >
+                                        <Input
+                                            name="code"
+                                            required
+                                            defaultValue={location.code}
+                                            autoComplete="off"
+                                        />
+                                    </Field>
 
-                                    <p className="text-xs text-muted-foreground">
-                                        Letters, numbers, hyphens, and
-                                        underscores only.
-                                    </p>
-
-                                    <InputError message={errors.code} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="active">Status</Label>
-
-                                    <select
+                                    <Field
                                         id="active"
-                                        name="active"
-                                        defaultValue={
-                                            location.active ? '1' : '0'
-                                        }
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        label="Status"
+                                        helper="Deactivating this location keeps its storage areas and history but blocks new inventory activity here. Deactivation may be blocked when this location is still required by an active inventory workflow."
+                                        error={errors.active}
                                     >
-                                        <option value="1">Active</option>
-                                        <option value="0">Inactive</option>
-                                    </select>
+                                        <NativeSelect
+                                            name="active"
+                                            defaultValue={
+                                                location.active ? '1' : '0'
+                                            }
+                                        >
+                                            <option value="1">Active</option>
+                                            <option value="0">Inactive</option>
+                                        </NativeSelect>
+                                    </Field>
 
-                                    <InputError message={errors.active} />
-                                </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Button
+                                            type="submit"
+                                            disabled={processing}
+                                        >
+                                            {processing
+                                                ? 'Saving...'
+                                                : 'Save location'}
+                                        </Button>
 
-                                <div className="flex flex-wrap gap-2">
-                                    <Button type="submit" disabled={processing}>
-                                        Save location
-                                    </Button>
+                                        <PreviousPageButton
+                                            fallback={OrganizationLocationController.index.url(
+                                                organization.id,
+                                            )}
+                                            variant="outline"
+                                            disabled={processing}
+                                        >
+                                            Cancel
+                                        </PreviousPageButton>
 
-                                    <PreviousPageButton
-                                        fallback={OrganizationLocationController.index.url(
-                                            organization.id,
+                                        {isDirty && (
+                                            <span className="text-sm text-muted-foreground">
+                                                Unsaved changes
+                                            </span>
                                         )}
-                                        variant="outline"
-                                    >
-                                        Cancel
-                                    </PreviousPageButton>
-                                </div>
-                            </>
-                        )}
+                                    </div>
+                                </>
+                            );
+                        }}
                     </Form>
                 </div>
             </div>
@@ -116,11 +145,22 @@ export default function EditOrganizationLocation({
     );
 }
 
-EditOrganizationLocation.layout = {
+EditOrganizationLocation.layout = (page: Props) => ({
     breadcrumbs: [
         {
             title: 'Dashboard',
             href: dashboard(),
         },
+        {
+            title: 'Organization locations',
+            href: OrganizationLocationController.index(page.organization.id),
+        },
+        {
+            title: page.location.name,
+            href: OrganizationLocationController.edit([
+                page.organization.id,
+                page.location.id,
+            ]),
+        },
     ],
-};
+});

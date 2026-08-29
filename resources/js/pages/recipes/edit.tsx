@@ -2,9 +2,11 @@ import { Form, Head, router, usePage } from '@inertiajs/react';
 
 import RecipeController from '@/actions/App/Http/Controllers/Recipes/RecipeController';
 import InputError from '@/components/input-error';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 import type { RecipeData } from '@/types';
 
@@ -91,19 +93,17 @@ export default function EditRecipe({ recipe }: Props) {
         <>
             <Head title={`Edit ${recipe.name}`} />
 
-            <div className="flex flex-1 flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-2xl font-semibold">Edit recipe</h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        {recipe.name}
-                    </p>
-                </div>
+            <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Edit recipe"
+                    description={`${recipe.name} · stable identity metadata only. Yield, components, and formulation belong to recipe versions.`}
+                />
 
-                <div className="max-w-xl rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
+                <div className="max-w-xl rounded-xl border border-border bg-card p-5 shadow-sm">
                     <Form
                         {...RecipeController.update.form(recipe.id)}
                         errorBag="editRecipe"
-                        className="space-y-5"
+                        className="grid gap-5"
                     >
                         {({ processing, errors, isDirty }) => (
                             <>
@@ -113,47 +113,41 @@ export default function EditRecipe({ recipe }: Props) {
                                     value={currentUrl}
                                 />
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="code">Code</Label>
+                                <Field
+                                    id="code"
+                                    label="Code"
+                                    error={errors.code}
+                                >
                                     <Input
-                                        id="code"
                                         name="code"
                                         defaultValue={recipe.code}
                                         required
                                         disabled={processing}
-                                        aria-invalid={
-                                            errors.code ? true : undefined
-                                        }
                                     />
-                                    <InputError message={errors.code} />
-                                </div>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="name">Name</Label>
+                                <Field
+                                    id="name"
+                                    label="Name"
+                                    error={errors.name}
+                                >
                                     <Input
-                                        id="name"
                                         name="name"
                                         defaultValue={recipe.name}
                                         required
                                         disabled={processing}
-                                        aria-invalid={
-                                            errors.name ? true : undefined
-                                        }
                                     />
-                                    <InputError message={errors.name} />
-                                </div>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="type">Type</Label>
-                                    <select
-                                        id="type"
+                                <Field
+                                    id="type"
+                                    label="Type"
+                                    error={errors.type}
+                                >
+                                    <NativeSelect
                                         name="type"
                                         defaultValue={recipe.type}
                                         disabled={processing}
-                                        aria-invalid={
-                                            errors.type ? true : undefined
-                                        }
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         <option value="menu_item">
                                             Menu item
@@ -162,31 +156,27 @@ export default function EditRecipe({ recipe }: Props) {
                                             Prepared item
                                         </option>
                                         <option value="batch">Batch</option>
-                                    </select>
-                                    <InputError message={errors.type} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="active">Status</Label>
-                                    <select
-                                        id="active"
+                                <Field
+                                    id="active"
+                                    label="Status"
+                                    error={errors.active}
+                                >
+                                    <NativeSelect
                                         name="active"
                                         defaultValue={recipe.active ? '1' : '0'}
                                         disabled={processing}
-                                        aria-invalid={
-                                            errors.active ? true : undefined
-                                        }
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         <option value="1">Active</option>
                                         <option value="0">Inactive</option>
-                                    </select>
-                                    <InputError message={errors.active} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
                                 <InputError message={errors.return_to} />
 
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
                                     <Button type="submit" disabled={processing}>
                                         {processing ? 'Saving…' : 'Save recipe'}
                                     </Button>
@@ -199,6 +189,12 @@ export default function EditRecipe({ recipe }: Props) {
                                     >
                                         Back
                                     </Button>
+
+                                    {isDirty && (
+                                        <span className="text-sm text-muted-foreground">
+                                            Unsaved changes
+                                        </span>
+                                    )}
                                 </div>
                             </>
                         )}
@@ -209,7 +205,7 @@ export default function EditRecipe({ recipe }: Props) {
     );
 }
 
-EditRecipe.layout = {
+EditRecipe.layout = (page: Props) => ({
     breadcrumbs: [
         {
             title: 'Dashboard',
@@ -219,5 +215,9 @@ EditRecipe.layout = {
             title: 'Recipes',
             href: RecipeController.index(),
         },
+        {
+            title: page.recipe.name,
+            href: RecipeController.edit(page.recipe.id),
+        },
     ],
-};
+});

@@ -4,7 +4,9 @@ import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import OrganizationLocationController from '@/actions/App/Http/Controllers/OrganizationLocationController';
 import OrganizationStorageLocationController from '@/actions/App/Http/Controllers/OrganizationStorageLocationController';
-import InputError from '@/components/input-error';
+import { EmptyState } from '@/components/empty-state';
+import { FilterToolbar } from '@/components/filter-toolbar';
+import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,8 +17,9 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { UsageLimitNotice } from '@/components/usage-limit-notice';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
@@ -79,51 +82,39 @@ function CreateLocationDialog({
                     >
                         {({ processing, errors }) => (
                             <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="create-location-name">
-                                        Location name
-                                    </Label>
-
+                                <Field
+                                    id="create-location-name"
+                                    label="Location name"
+                                    error={errors.name}
+                                >
                                     <Input
-                                        id="create-location-name"
                                         name="name"
                                         required
                                         autoFocus
                                         autoComplete="off"
                                         placeholder="e.g., BGC High Street"
                                     />
+                                </Field>
 
-                                    <InputError message={errors.name} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="create-location-code">
-                                        Location code
-                                    </Label>
-
+                                <Field
+                                    id="create-location-code"
+                                    label="Location code"
+                                    helper="Letters, numbers, hyphens, and underscores only. Codes must be unique within this organization."
+                                    error={errors.code}
+                                >
                                     <Input
-                                        id="create-location-code"
                                         name="code"
                                         required
                                         autoComplete="off"
                                         placeholder="e.g., BGC"
-                                        aria-describedby="create-location-code-help"
                                     />
-
-                                    <p
-                                        id="create-location-code-help"
-                                        className="text-xs text-muted-foreground"
-                                    >
-                                        Letters, numbers, hyphens, and
-                                        underscores only. Codes must be unique
-                                        within this organization.
-                                    </p>
-
-                                    <InputError message={errors.code} />
-                                </div>
+                                </Field>
 
                                 <p className="text-xs text-muted-foreground">
-                                    New locations are active by default.
+                                    New locations are active by default. A
+                                    default storage area is created
+                                    automatically and more can be added from
+                                    this location&rsquo;s Storage page.
                                 </p>
 
                                 <div className="flex flex-wrap justify-end gap-2">
@@ -193,73 +184,51 @@ function EditLocationDialog({
                     >
                         {({ processing, errors }) => (
                             <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor={`${fieldPrefix}-name`}>
-                                        Location name
-                                    </Label>
-
+                                <Field
+                                    id={`${fieldPrefix}-name`}
+                                    label="Location name"
+                                    error={errors.name}
+                                >
                                     <Input
-                                        id={`${fieldPrefix}-name`}
                                         name="name"
                                         required
                                         autoFocus
                                         defaultValue={location.name}
                                         autoComplete="off"
                                     />
+                                </Field>
 
-                                    <InputError message={errors.name} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor={`${fieldPrefix}-code`}>
-                                        Location code
-                                    </Label>
-
+                                <Field
+                                    id={`${fieldPrefix}-code`}
+                                    label="Location code"
+                                    helper="Letters, numbers, hyphens, and underscores only."
+                                    error={errors.code}
+                                >
                                     <Input
-                                        id={`${fieldPrefix}-code`}
                                         name="code"
                                         required
                                         defaultValue={location.code}
                                         autoComplete="off"
                                     />
+                                </Field>
 
-                                    <p className="text-xs text-muted-foreground">
-                                        Letters, numbers, hyphens, and
-                                        underscores only.
-                                    </p>
-
-                                    <InputError message={errors.code} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor={`${fieldPrefix}-active`}>
-                                        Status
-                                    </Label>
-
-                                    <select
-                                        id={`${fieldPrefix}-active`}
+                                <Field
+                                    id={`${fieldPrefix}-active`}
+                                    label="Status"
+                                    helper="Deactivating this location keeps its storage areas and history but blocks new inventory activity here. Deactivation may be blocked when this location is still required by an active inventory workflow."
+                                    helperId={statusHelpId}
+                                    error={errors.active}
+                                >
+                                    <NativeSelect
                                         name="active"
                                         defaultValue={
                                             location.active ? '1' : '0'
                                         }
-                                        aria-describedby={statusHelpId}
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="1">Active</option>
                                         <option value="0">Inactive</option>
-                                    </select>
-
-                                    <p
-                                        id={statusHelpId}
-                                        className="text-xs text-muted-foreground"
-                                    >
-                                        Deactivation may be blocked when this
-                                        location is still required by an active
-                                        inventory workflow.
-                                    </p>
-
-                                    <InputError message={errors.active} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
                                 <div className="flex flex-wrap justify-end gap-2">
                                     <Button
@@ -329,79 +298,61 @@ export default function OrganizationLocations({
             <Head title={`${organization.name} locations`} />
 
             <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Organization locations
-                        </h1>
+                <PageHeader
+                    title="Organization locations"
+                    description={`Manage inventory locations and their storage areas for ${organization.name}. Each location contains one or more storage areas — the specific shelves, coolers, or rooms where inventory is tracked.`}
+                    actions={
+                        <div className="flex flex-col items-end gap-2">
+                            <CreateLocationDialog
+                                organization={organization}
+                                trigger={
+                                    <Button>
+                                        <Plus
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        Add location
+                                    </Button>
+                                }
+                            />
 
-                        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                            Manage inventory locations and their storage areas
-                            for {organization.name}.
-                        </p>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-2">
-                        <CreateLocationDialog
-                            organization={organization}
-                            trigger={
-                                <Button>
-                                    <Plus
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    Add location
-                                </Button>
-                            }
-                        />
-
-                        <UsageLimitNotice
-                            limitKey="locations"
-                            resourceLabel="locations"
-                        />
-                    </div>
-                </div>
+                            <UsageLimitNotice
+                                limitKey="locations"
+                                resourceLabel="locations"
+                            />
+                        </div>
+                    }
+                />
 
                 <section
                     aria-label="Organization locations"
-                    className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card dark:border-sidebar-border"
+                    className="overflow-hidden rounded-xl border border-border bg-card"
                 >
-                    <div className="grid gap-3 border-b border-sidebar-border/70 p-4 md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-center dark:border-sidebar-border">
-                        <div className="relative">
-                            <label
-                                htmlFor="location-search"
-                                className="sr-only"
-                            >
-                                Search locations
-                            </label>
+                    <FilterToolbar className="grid gap-3 rounded-none border-0 border-b border-border md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-end">
+                        <Field id="location-search" label="Search locations">
+                            <div className="relative">
+                                <Search
+                                    className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                                    aria-hidden="true"
+                                />
 
-                            <Search
-                                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                                aria-hidden="true"
-                            />
+                                <Input
+                                    type="search"
+                                    value={search}
+                                    onChange={(event) =>
+                                        setSearch(event.target.value)
+                                    }
+                                    placeholder="Search locations by name or code..."
+                                    className="pl-9"
+                                />
+                            </div>
+                        </Field>
 
-                            <Input
-                                id="location-search"
-                                type="search"
-                                value={search}
-                                onChange={(event) =>
-                                    setSearch(event.target.value)
-                                }
-                                placeholder="Search locations by name or code..."
-                                className="pl-9"
-                            />
-                        </div>
-
-                        <div>
-                            <label
-                                htmlFor="location-status-filter"
-                                className="sr-only"
-                            >
-                                Filter locations by status
-                            </label>
-
-                            <select
-                                id="location-status-filter"
+                        <Field
+                            id="location-status-filter"
+                            label="Filter locations by status"
+                        >
+                            <NativeSelect
                                 value={statusFilter}
                                 onChange={(event) =>
                                     setStatusFilter(
@@ -409,13 +360,12 @@ export default function OrganizationLocations({
                                             .value as LocationStatusFilter,
                                     )
                                 }
-                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                             >
                                 <option value="all">All statuses</option>
                                 <option value="active">Active</option>
                                 <option value="inactive">Inactive</option>
-                            </select>
-                        </div>
+                            </NativeSelect>
+                        </Field>
 
                         <div className="flex items-center gap-2 md:justify-end">
                             <p
@@ -439,16 +389,98 @@ export default function OrganizationLocations({
                                 </Button>
                             )}
                         </div>
+                    </FilterToolbar>
+
+                    <div className="grid gap-3 p-4 md:hidden">
+                        {filteredLocations.length === 0 ? (
+                            <EmptyState
+                                title={
+                                    hasFilters
+                                        ? 'No locations match these filters.'
+                                        : 'No locations have been configured yet.'
+                                }
+                                description={
+                                    hasFilters
+                                        ? 'Adjust or reset the filters to see more locations.'
+                                        : 'Add your first location to start organizing inventory storage.'
+                                }
+                            />
+                        ) : (
+                            filteredLocations.map((location) => (
+                                <article
+                                    key={location.id}
+                                    className="rounded-lg border border-border bg-background p-4"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                            <div className="font-medium">
+                                                {location.name}
+                                            </div>
+                                            <span className="mt-1 inline-block rounded-md bg-muted px-2 py-1 font-mono text-xs">
+                                                {location.code}
+                                            </span>
+                                        </div>
+
+                                        <Badge
+                                            variant={
+                                                location.active
+                                                    ? 'secondary'
+                                                    : 'outline'
+                                            }
+                                        >
+                                            {location.active
+                                                ? 'Active'
+                                                : 'Inactive'}
+                                        </Badge>
+                                    </div>
+
+                                    <div className="mt-4 flex gap-2 border-t border-border pt-3">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="flex-1"
+                                            asChild
+                                        >
+                                            <Link
+                                                href={OrganizationStorageLocationController.index(
+                                                    [
+                                                        organization.id,
+                                                        location.id,
+                                                    ],
+                                                )}
+                                            >
+                                                Storage
+                                            </Link>
+                                        </Button>
+
+                                        <EditLocationDialog
+                                            organization={organization}
+                                            location={location}
+                                            trigger={
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="flex-1"
+                                                    aria-label={`Edit ${location.name}`}
+                                                >
+                                                    Edit
+                                                </Button>
+                                            }
+                                        />
+                                    </div>
+                                </article>
+                            ))
+                        )}
                     </div>
 
-                    <div className="overflow-x-auto">
+                    <div className="hidden overflow-x-auto md:block">
                         <table className="w-full min-w-[680px] text-sm">
                             <caption className="sr-only">
                                 Locations configured for {organization.name}
                             </caption>
 
                             <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-                                <tr className="border-b border-sidebar-border/70 dark:border-sidebar-border">
+                                <tr className="border-b border-border">
                                     <th
                                         scope="col"
                                         className="px-4 py-3 font-medium"
@@ -482,30 +514,26 @@ export default function OrganizationLocations({
                             <tbody>
                                 {filteredLocations.length === 0 ? (
                                     <tr>
-                                        <td
-                                            colSpan={4}
-                                            className="px-4 py-12 text-center"
-                                        >
-                                            <div className="mx-auto max-w-sm">
-                                                <p className="font-medium">
-                                                    {hasFilters
+                                        <td colSpan={4} className="px-4 py-12">
+                                            <EmptyState
+                                                title={
+                                                    hasFilters
                                                         ? 'No locations match these filters.'
-                                                        : 'No locations have been configured yet.'}
-                                                </p>
-
-                                                <p className="mt-1 text-sm text-muted-foreground">
-                                                    {hasFilters
+                                                        : 'No locations have been configured yet.'
+                                                }
+                                                description={
+                                                    hasFilters
                                                         ? 'Adjust or reset the filters to see more locations.'
-                                                        : 'Add your first location to start organizing inventory storage.'}
-                                                </p>
-                                            </div>
+                                                        : 'Add your first location to start organizing inventory storage.'
+                                                }
+                                            />
                                         </td>
                                     </tr>
                                 ) : (
                                     filteredLocations.map((location) => (
                                         <tr
                                             key={location.id}
-                                            className="border-b border-sidebar-border/70 transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
+                                            className="border-b border-border transition-colors last:border-b-0 hover:bg-muted/30"
                                         >
                                             <td className="px-4 py-3">
                                                 <span className="font-medium">

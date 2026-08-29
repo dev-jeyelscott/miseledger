@@ -1062,6 +1062,7 @@ class GoodsReceiptController extends Controller
             'storageLocationOptions' => $storageLocations,
             'unitOptions' => $units,
             'currency' => $organization->currency,
+            'timezone' => $organization->timezone,
         ];
     }
 

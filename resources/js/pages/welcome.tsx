@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useRef } from 'react';
 
 import { dashboard, login, register } from '@/routes';
 
@@ -143,6 +144,18 @@ function MarketingHeader({ isAuthenticated }: { isAuthenticated: boolean }) {
         ['Pricing', '#pricing'],
     ] as const;
 
+    const mobileMenuRef = useRef<HTMLDetailsElement>(null);
+    const mobileMenuSummaryRef = useRef<HTMLElement>(null);
+
+    /** Close the mobile menu and return focus to its trigger. */
+    const closeMobileMenu = (): void => {
+        if (mobileMenuRef.current !== null) {
+            mobileMenuRef.current.open = false;
+        }
+
+        mobileMenuSummaryRef.current?.focus();
+    };
+
     return (
         <header className="sticky top-0 z-50 border-b border-[#183247]/15 bg-[#f7f3ea]/95 backdrop-blur-sm">
             <div className="mx-auto flex min-h-18 max-w-[1440px] items-center justify-between gap-5 px-5 sm:px-8 lg:px-12">
@@ -172,8 +185,20 @@ function MarketingHeader({ isAuthenticated }: { isAuthenticated: boolean }) {
                     <AuthActions isAuthenticated={isAuthenticated} />
                 </div>
 
-                <details className="relative md:hidden">
-                    <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 border border-[#173247]/30 bg-white/60 px-3 text-sm font-semibold text-[#10283a] [&::-webkit-details-marker]:hidden">
+                <details
+                    ref={mobileMenuRef}
+                    className="relative md:hidden"
+                    onKeyDown={(event) => {
+                        if (event.key === 'Escape') {
+                            event.preventDefault();
+                            closeMobileMenu();
+                        }
+                    }}
+                >
+                    <summary
+                        ref={mobileMenuSummaryRef}
+                        className="flex min-h-11 cursor-pointer list-none items-center gap-2 border border-[#173247]/30 bg-white/60 px-3 text-sm font-semibold text-[#10283a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b87949] [&::-webkit-details-marker]:hidden"
+                    >
                         <Menu className="size-4" aria-hidden="true" />
                         Menu
                     </summary>
@@ -187,6 +212,7 @@ function MarketingHeader({ isAuthenticated }: { isAuthenticated: boolean }) {
                                 <a
                                     key={href}
                                     href={href}
+                                    onClick={closeMobileMenu}
                                     className="px-3 py-3 text-sm font-medium text-[#294154] hover:bg-[#efe8db] hover:text-[#0f5a43] focus-visible:outline-2 focus-visible:outline-[#b87949]"
                                 >
                                     {label}

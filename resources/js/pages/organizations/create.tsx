@@ -1,10 +1,10 @@
 import { Form, Head } from '@inertiajs/react';
 import OrganizationController from '@/actions/App/Http/Controllers/OrganizationController';
-import InputError from '@/components/input-error';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
 
 export default function CreateOrganization() {
@@ -12,31 +12,27 @@ export default function CreateOrganization() {
         <>
             <Head title="Create organization" />
 
-            <div className="mx-auto w-full max-w-xl p-4">
-                <div className="rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
-                    <div className="mb-6 space-y-2">
-                        <h1 className="text-2xl font-semibold">
-                            Create organization
-                        </h1>
-                        <p className="text-sm text-muted-foreground">
-                            Create the tenant boundary for your restaurant
-                            inventory data.
-                        </p>
-                    </div>
+            <div className="mx-auto w-full max-w-xl p-4 sm:p-6">
+                <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                    <PageHeader
+                        title="Create organization"
+                        description="An organization is a fully isolated tenant boundary: its inventory, locations, recipes, and users are never shared with any other organization."
+                        className="mb-6"
+                    />
 
                     <Form
                         {...OrganizationController.store.form()}
-                        className="space-y-6"
+                        className="grid gap-6"
                     >
                         {({ processing, errors }) => (
                             <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="name">
-                                        Organization name
-                                    </Label>
-
+                                <Field
+                                    id="name"
+                                    label="Organization name"
+                                    helper="You can invite team members and add locations after the organization is created."
+                                    error={errors.name}
+                                >
                                     <Input
-                                        id="name"
                                         name="name"
                                         required
                                         maxLength={160}
@@ -44,18 +40,19 @@ export default function CreateOrganization() {
                                         autoComplete="organization"
                                         placeholder="Example Restaurant Group"
                                     />
-
-                                    <InputError message={errors.name} />
-                                </div>
+                                </Field>
 
                                 <div className="flex items-center gap-3">
                                     <Button type="submit" disabled={processing}>
-                                        Create organization
+                                        {processing
+                                            ? 'Creating…'
+                                            : 'Create organization'}
                                     </Button>
 
                                     <PreviousPageButton
                                         fallback={dashboard.url()}
                                         variant="outline"
+                                        disabled={processing}
                                     >
                                         Cancel
                                     </PreviousPageButton>

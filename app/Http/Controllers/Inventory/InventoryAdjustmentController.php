@@ -43,6 +43,7 @@ class InventoryAdjustmentController extends Controller
                 'defaultOccurredAt' => CarbonImmutable::now(
                     $organization->timezone,
                 )->format('Y-m-d\TH:i'),
+                'timezone' => $organization->timezone,
                 ...$this->formOptions($organization),
             ],
         );

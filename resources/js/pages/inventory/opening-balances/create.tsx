@@ -4,9 +4,21 @@ import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/In
 import OpeningBalanceController from '@/actions/App/Http/Controllers/Inventory/OpeningBalanceController';
 import InputError from '@/components/input-error';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 
 type Option = {
@@ -31,6 +43,7 @@ type UnitOption = Option & {
 type Props = {
     operationId: string;
     defaultOccurredAt: string;
+    timezone: string;
     currency: string;
     locationOptions: Option[];
     storageLocationOptions: StorageLocationOption[];
@@ -38,9 +51,34 @@ type Props = {
     unitOptions: UnitOption[];
 };
 
+const textareaClassName =
+    'border-input bg-background min-h-24 w-full resize-y rounded-md border px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50';
+
+/** Format an organization-local datetime-local value for confirmation review. */
+function formatEffectiveTime(value: string, timezone: string): string {
+    if (value === '') {
+        return 'Not set';
+    }
+
+    const parsed = new Date(value);
+
+    if (Number.isNaN(parsed.getTime())) {
+        return value;
+    }
+
+    return `${new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+    }).format(parsed)} (${timezone})`;
+}
+
 export default function OpeningBalanceCreate({
     operationId,
     defaultOccurredAt,
+    timezone,
     currency,
     locationOptions,
     storageLocationOptions,
@@ -51,6 +89,10 @@ export default function OpeningBalanceCreate({
     const [storageLocationId, setStorageLocationId] = useState('');
     const [inventoryItemId, setInventoryItemId] = useState('');
     const [unitId, setUnitId] = useState('');
+    const [quantity, setQuantity] = useState('');
+    const [baseUnitCost, setBaseUnitCost] = useState('');
+    const [occurredAt, setOccurredAt] = useState(defaultOccurredAt);
+    const [confirmOpen, setConfirmOpen] = useState(false);
 
     const selectedItem = inventoryItemOptions.find(
         (item) => item.id.toString() === inventoryItemId,
@@ -61,44 +103,69 @@ export default function OpeningBalanceCreate({
             storageLocation.locationId.toString() === locationId,
     );
 
+    const selectedLocation = locationOptions.find(
+        (location) => location.id.toString() === locationId,
+    );
+    const selectedStorageLocation = availableStorageLocations.find(
+        (storageLocation) =>
+            storageLocation.id.toString() === storageLocationId,
+    );
+    const selectedUnit = unitOptions.find(
+        (unit) => unit.id.toString() === unitId,
+    );
+
     const hasRequiredOptions =
         locationOptions.length > 0 &&
         storageLocationOptions.length > 0 &&
         inventoryItemOptions.length > 0 &&
         unitOptions.length > 0;
 
+    const canReview =
+        hasRequiredOptions &&
+        locationId !== '' &&
+        storageLocationId !== '' &&
+        inventoryItemId !== '' &&
+        unitId !== '' &&
+        quantity.trim() !== '' &&
+        baseUnitCost.trim() !== '';
+
+    const estimatedTotalCost =
+        selectedItem !== undefined &&
+        quantity.trim() !== '' &&
+        baseUnitCost.trim() !== '' &&
+        !Number.isNaN(Number(quantity)) &&
+        !Number.isNaN(Number(baseUnitCost))
+            ? (Number(quantity) * Number(baseUnitCost)).toFixed(2)
+            : null;
+
     return (
         <>
             <Head title="Opening balance" />
 
-            <div className="flex flex-1 flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-2xl font-semibold">
-                        Record opening balance
-                    </h1>
+            <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title="Record opening balance"
+                    description="Establish initial stock quantity and its starting weighted-average cost."
+                />
 
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        Establish initial stock quantity and its starting
-                        weighted-average cost.
-                    </p>
-                </div>
-
-                <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                    <div className="mb-6 rounded-lg border bg-muted/30 p-4 text-sm">
+                <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                    <div className="mb-6 rounded-lg border border-border bg-muted/30 p-4 text-sm">
                         <p className="font-medium">Initial inventory only</p>
 
                         <p className="mt-1 text-muted-foreground">
                             An opening balance adds stock and establishes its
-                            starting cost. Do not use this form to correct an
-                            existing balance. Later quantity changes should use
-                            receiving, stock-count, waste, transfer, or
-                            adjustment workflows.
+                            starting weighted-average cost. Do not use this form
+                            to correct an existing balance. Later quantity
+                            changes must use receiving, stock-count, waste,
+                            transfer, or adjustment workflows.
                         </p>
                     </div>
 
                     <Form
+                        id="opening-balance-form"
                         action={OpeningBalanceController.store().url}
                         method="post"
+                        onSuccess={() => setConfirmOpen(false)}
                     >
                         {({ errors, processing }) => (
                             <div className="grid gap-6">
@@ -111,13 +178,12 @@ export default function OpeningBalanceCreate({
                                 <InputError message={errors.operation_id} />
 
                                 <div className="grid gap-5 md:grid-cols-2">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="location_id">
-                                            Location
-                                        </Label>
-
-                                        <select
-                                            id="location_id"
+                                    <Field
+                                        id="location_id"
+                                        label="Location"
+                                        error={errors.location_id}
+                                    >
+                                        <NativeSelect
                                             name="location_id"
                                             value={locationId}
                                             onChange={(event) => {
@@ -126,7 +192,6 @@ export default function OpeningBalanceCreate({
                                                 );
                                                 setStorageLocationId('');
                                             }}
-                                            className="h-9 rounded-md border bg-background px-3 text-sm"
                                             required
                                         >
                                             <option value="">
@@ -141,20 +206,15 @@ export default function OpeningBalanceCreate({
                                                     {location.name}
                                                 </option>
                                             ))}
-                                        </select>
+                                        </NativeSelect>
+                                    </Field>
 
-                                        <InputError
-                                            message={errors.location_id}
-                                        />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="storage_location_id">
-                                            Storage location
-                                        </Label>
-
-                                        <select
-                                            id="storage_location_id"
+                                    <Field
+                                        id="storage_location_id"
+                                        label="Storage location"
+                                        error={errors.storage_location_id}
+                                    >
+                                        <NativeSelect
                                             name="storage_location_id"
                                             value={storageLocationId}
                                             onChange={(event) =>
@@ -162,7 +222,6 @@ export default function OpeningBalanceCreate({
                                                     event.target.value,
                                                 )
                                             }
-                                            className="h-9 rounded-md border bg-background px-3 text-sm"
                                             required
                                             disabled={locationId === ''}
                                         >
@@ -182,20 +241,15 @@ export default function OpeningBalanceCreate({
                                                     </option>
                                                 ),
                                             )}
-                                        </select>
+                                        </NativeSelect>
+                                    </Field>
 
-                                        <InputError
-                                            message={errors.storage_location_id}
-                                        />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="inventory_item_id">
-                                            Inventory item
-                                        </Label>
-
-                                        <select
-                                            id="inventory_item_id"
+                                    <Field
+                                        id="inventory_item_id"
+                                        label="Inventory item"
+                                        error={errors.inventory_item_id}
+                                    >
+                                        <NativeSelect
                                             name="inventory_item_id"
                                             value={inventoryItemId}
                                             onChange={(event) => {
@@ -216,7 +270,6 @@ export default function OpeningBalanceCreate({
                                                         '',
                                                 );
                                             }}
-                                            className="h-9 rounded-md border bg-background px-3 text-sm"
                                             required
                                         >
                                             <option value="">
@@ -233,43 +286,39 @@ export default function OpeningBalanceCreate({
                                                     </option>
                                                 ),
                                             )}
-                                        </select>
+                                        </NativeSelect>
+                                    </Field>
 
-                                        <InputError
-                                            message={errors.inventory_item_id}
-                                        />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="quantity">
-                                            Opening quantity
-                                        </Label>
-
+                                    <Field
+                                        id="quantity"
+                                        label="Opening quantity"
+                                        error={errors.quantity}
+                                    >
                                         <Input
-                                            id="quantity"
                                             name="quantity"
                                             type="number"
                                             min="0.000001"
                                             step="0.000001"
+                                            value={quantity}
+                                            onChange={(event) =>
+                                                setQuantity(event.target.value)
+                                            }
+                                            className="tabular-nums"
                                             required
                                         />
+                                    </Field>
 
-                                        <InputError message={errors.quantity} />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="unit_id">
-                                            Quantity unit
-                                        </Label>
-
-                                        <select
-                                            id="unit_id"
+                                    <Field
+                                        id="unit_id"
+                                        label="Quantity unit"
+                                        error={errors.unit_id}
+                                    >
+                                        <NativeSelect
                                             name="unit_id"
                                             value={unitId}
                                             onChange={(event) =>
                                                 setUnitId(event.target.value)
                                             }
-                                            className="h-9 rounded-md border bg-background px-3 text-sm"
                                             required
                                         >
                                             <option value="">
@@ -284,72 +333,72 @@ export default function OpeningBalanceCreate({
                                                     {unit.name} ({unit.symbol})
                                                 </option>
                                             ))}
-                                        </select>
+                                        </NativeSelect>
+                                    </Field>
 
-                                        <InputError message={errors.unit_id} />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="base_unit_cost">
-                                            Cost per base unit
-                                            {selectedItem
+                                    <Field
+                                        id="base_unit_cost"
+                                        label={`Cost per base unit${
+                                            selectedItem
                                                 ? ` (${currency} / ${selectedItem.baseUnitSymbol})`
-                                                : ''}
-                                        </Label>
-
+                                                : ''
+                                        }`}
+                                        helper={
+                                            selectedItem
+                                                ? `Enter the cost of one ${selectedItem.baseUnitSymbol}, even if the opening quantity is entered using another unit. This establishes the starting weighted-average cost.`
+                                                : 'Select an inventory item to see its authoritative base unit.'
+                                        }
+                                        error={errors.base_unit_cost}
+                                    >
                                         <Input
-                                            id="base_unit_cost"
                                             name="base_unit_cost"
                                             type="number"
                                             min="0"
                                             step="0.0001"
+                                            value={baseUnitCost}
+                                            onChange={(event) =>
+                                                setBaseUnitCost(
+                                                    event.target.value,
+                                                )
+                                            }
+                                            className="tabular-nums"
                                             required
                                         />
+                                    </Field>
 
-                                        <p className="text-xs text-muted-foreground">
-                                            {selectedItem
-                                                ? `Enter the cost of one ${selectedItem.baseUnitSymbol}, even if the opening quantity is entered using another unit.`
-                                                : 'Select an inventory item to see its authoritative base unit.'}
-                                        </p>
-
-                                        <InputError
-                                            message={errors.base_unit_cost}
-                                        />
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="occurred_at">
-                                            Opening date
-                                        </Label>
-
+                                    <Field
+                                        id="occurred_at"
+                                        label="Opening date"
+                                        helper={`Recorded in the organization timezone (${timezone}).`}
+                                        error={errors.occurred_at}
+                                    >
                                         <Input
-                                            id="occurred_at"
                                             name="occurred_at"
                                             type="datetime-local"
-                                            defaultValue={defaultOccurredAt}
+                                            value={occurredAt}
+                                            onChange={(event) =>
+                                                setOccurredAt(
+                                                    event.target.value,
+                                                )
+                                            }
                                             required
                                         />
-
-                                        <InputError
-                                            message={errors.occurred_at}
-                                        />
-                                    </div>
+                                    </Field>
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="notes">Notes</Label>
-
+                                <Field
+                                    id="notes"
+                                    label="Notes"
+                                    error={errors.notes}
+                                >
                                     <textarea
-                                        id="notes"
                                         name="notes"
                                         rows={4}
                                         maxLength={2000}
-                                        className="rounded-md border bg-background px-3 py-2 text-sm"
+                                        className={textareaClassName}
                                         placeholder="Optional onboarding or migration reference"
                                     />
-
-                                    <InputError message={errors.notes} />
-                                </div>
+                                </Field>
 
                                 {!hasRequiredOptions && (
                                     <p className="text-sm text-destructive">
@@ -361,16 +410,133 @@ export default function OpeningBalanceCreate({
                                 )}
 
                                 <div className="flex gap-2">
-                                    <Button
-                                        type="submit"
-                                        disabled={
-                                            processing || !hasRequiredOptions
-                                        }
+                                    <Dialog
+                                        open={confirmOpen}
+                                        onOpenChange={setConfirmOpen}
                                     >
-                                        {processing
-                                            ? 'Recording...'
-                                            : 'Record opening balance'}
-                                    </Button>
+                                        <DialogTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                disabled={
+                                                    processing || !canReview
+                                                }
+                                            >
+                                                Review opening balance
+                                            </Button>
+                                        </DialogTrigger>
+
+                                        <DialogContent>
+                                            <DialogHeader>
+                                                <DialogTitle>
+                                                    Create this initial stock?
+                                                </DialogTitle>
+                                                <DialogDescription>
+                                                    This establishes initial
+                                                    inventory and the starting
+                                                    weighted-average cost for
+                                                    this item at this storage
+                                                    location. Later changes must
+                                                    use normal inventory
+                                                    workflows, not this form.
+                                                </DialogDescription>
+                                            </DialogHeader>
+
+                                            <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
+                                                <div className="font-medium">
+                                                    {selectedItem?.name ??
+                                                        'Item'}
+                                                </div>
+
+                                                <dl className="mt-3 grid gap-1.5">
+                                                    <div className="flex justify-between gap-4">
+                                                        <dt className="text-muted-foreground">
+                                                            Location
+                                                        </dt>
+                                                        <dd className="text-right">
+                                                            {
+                                                                selectedLocation?.name
+                                                            }{' '}
+                                                            /{' '}
+                                                            {
+                                                                selectedStorageLocation?.name
+                                                            }
+                                                        </dd>
+                                                    </div>
+                                                    <div className="flex justify-between gap-4">
+                                                        <dt className="text-muted-foreground">
+                                                            Opening quantity
+                                                        </dt>
+                                                        <dd className="text-right tabular-nums">
+                                                            {quantity}{' '}
+                                                            {
+                                                                selectedUnit?.symbol
+                                                            }
+                                                        </dd>
+                                                    </div>
+                                                    <div className="flex justify-between gap-4">
+                                                        <dt className="text-muted-foreground">
+                                                            Cost per{' '}
+                                                            {
+                                                                selectedItem?.baseUnitSymbol
+                                                            }
+                                                        </dt>
+                                                        <dd className="text-right tabular-nums">
+                                                            {currency}{' '}
+                                                            {baseUnitCost}
+                                                        </dd>
+                                                    </div>
+                                                    {estimatedTotalCost !==
+                                                        null && (
+                                                        <div className="flex justify-between gap-4 border-t border-border pt-1.5">
+                                                            <dt className="text-muted-foreground">
+                                                                Estimated total
+                                                                cost
+                                                            </dt>
+                                                            <dd className="text-right font-medium tabular-nums">
+                                                                {currency}{' '}
+                                                                {
+                                                                    estimatedTotalCost
+                                                                }
+                                                            </dd>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex justify-between gap-4">
+                                                        <dt className="text-muted-foreground">
+                                                            Effective time
+                                                        </dt>
+                                                        <dd className="text-right">
+                                                            {formatEffectiveTime(
+                                                                occurredAt,
+                                                                timezone,
+                                                            )}
+                                                        </dd>
+                                                    </div>
+                                                </dl>
+                                            </div>
+
+                                            <DialogFooter>
+                                                <DialogClose asChild>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        disabled={processing}
+                                                    >
+                                                        Keep editing
+                                                    </Button>
+                                                </DialogClose>
+
+                                                <Button
+                                                    type="submit"
+                                                    form="opening-balance-form"
+                                                    disabled={processing}
+                                                >
+                                                    {processing
+                                                        ? 'Recording...'
+                                                        : 'Confirm and record'}
+                                                </Button>
+                                            </DialogFooter>
+                                        </DialogContent>
+                                    </Dialog>
 
                                     <PreviousPageButton
                                         variant="outline"

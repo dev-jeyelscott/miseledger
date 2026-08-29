@@ -3,10 +3,10 @@ import { Link } from '@inertiajs/react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import DeleteUser from '@/components/delete-user';
 import Heading from '@/components/heading';
-import InputError from '@/components/input-error';
+import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/profile';
 import { send } from '@/routes/verification';
 import type { Auth } from '@/types';
@@ -44,13 +44,10 @@ export default function Profile({
                     }}
                     className="space-y-6"
                 >
-                    {({ processing, errors }) => (
+                    {({ processing, errors, recentlySuccessful }) => (
                         <>
-                            <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
-
+                            <Field id="name" label="Name" error={errors.name}>
                                 <Input
-                                    id="name"
                                     className="mt-1 block w-full"
                                     defaultValue={auth.user.name}
                                     name="name"
@@ -58,18 +55,14 @@ export default function Profile({
                                     autoComplete="name"
                                     placeholder="Full name"
                                 />
+                            </Field>
 
-                                <InputError
-                                    className="mt-2"
-                                    message={errors.name}
-                                />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="email">Email address</Label>
-
+                            <Field
+                                id="email"
+                                label="Email address"
+                                error={errors.email}
+                            >
                                 <Input
-                                    id="email"
                                     type="email"
                                     className="mt-1 block w-full"
                                     defaultValue={auth.user.email}
@@ -78,18 +71,17 @@ export default function Profile({
                                     autoComplete="username"
                                     placeholder="Email address"
                                 />
-
-                                <InputError
-                                    className="mt-2"
-                                    message={errors.email}
-                                />
-                            </div>
+                            </Field>
 
                             {mustVerifyEmail &&
                                 auth.user.email_verified_at === null && (
-                                    <div>
-                                        <p className="-mt-4 text-sm text-muted-foreground">
-                                            Your email address is unverified.{' '}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <StatusBadge
+                                            label="Unverified"
+                                            variant="warning"
+                                        />
+
+                                        <p className="text-sm text-muted-foreground">
                                             <Link
                                                 href={send()}
                                                 as="button"
@@ -102,10 +94,13 @@ export default function Profile({
 
                                         {status ===
                                             'verification-link-sent' && (
-                                            <div className="mt-2 text-sm font-medium text-green-600">
+                                            <p
+                                                role="status"
+                                                className="text-sm font-medium text-success-foreground"
+                                            >
                                                 A new verification link has been
                                                 sent to your email address.
-                                            </div>
+                                            </p>
                                         )}
                                     </div>
                                 )}
@@ -115,8 +110,19 @@ export default function Profile({
                                     disabled={processing}
                                     data-test="update-profile-button"
                                 >
-                                    Save
+                                    {processing ? 'Saving…' : 'Save'}
                                 </Button>
+
+                                <p
+                                    role="status"
+                                    aria-live="polite"
+                                    className="text-sm text-muted-foreground transition-opacity duration-300"
+                                    style={{
+                                        opacity: recentlySuccessful ? 1 : 0,
+                                    }}
+                                >
+                                    Saved.
+                                </p>
                             </div>
                         </>
                     )}

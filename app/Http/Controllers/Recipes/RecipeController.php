@@ -73,6 +73,7 @@ class RecipeController extends Controller
                 OrganizationPermission::CostsView->value,
                 $organization,
             ),
+            'timezone' => $organization->timezone,
         ]);
     }
 

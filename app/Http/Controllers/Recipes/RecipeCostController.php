@@ -119,7 +119,8 @@ class RecipeCostController extends Controller
                 'yieldQuantity' => $recipeVersion->yield_quantity,
                 'yieldUnitSymbol' => $recipeVersion->yieldUnit->symbol,
             ],
-            'asOf' => $asOf->toDateTimeString(),
+            'asOf' => $asOf->toIso8601String(),
+            'timezone' => $organization->timezone,
             'currency' => $organization->currency,
             'locationOptions' => $locationOptions,
             'filters' => [

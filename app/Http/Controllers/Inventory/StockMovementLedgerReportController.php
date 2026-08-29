@@ -68,6 +68,7 @@ class StockMovementLedgerReportController extends Controller
             'typeOptions' => $this->typeOptions(),
             'filters' => $filters,
             'currency' => $organization->currency,
+            'timezone' => $organization->timezone,
             'canViewCosts' => $canViewCosts,
         ]);
     }

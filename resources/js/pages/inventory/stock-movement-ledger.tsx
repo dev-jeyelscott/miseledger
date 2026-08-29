@@ -16,10 +16,16 @@ import {
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import StockMovementLedgerReportController from '@/actions/App/Http/Controllers/Inventory/StockMovementLedgerReportController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
+import { EmptyState } from '@/components/empty-state';
+import { FilterToolbar } from '@/components/filter-toolbar';
+import { PageHeader } from '@/components/page-header';
+import { PaginationControls } from '@/components/pagination-controls';
+import { StatusBadge } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 import type { OrganizationContext } from '@/types';
 
@@ -83,11 +89,9 @@ type Props = {
         reference: string | null;
     };
     currency: string;
+    timezone: string;
     canViewCosts: boolean;
 };
-
-const selectClassName =
-    'h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50';
 
 /** Format persisted decimal strings without converting ledger quantities to floats. */
 function formatDecimal(value: string): string {
@@ -114,8 +118,17 @@ function formatCurrency(value: string, currency: string): string {
     return `${currency} ${formatDecimal(value)}`;
 }
 
-function formatDate(value: string): string {
-    return new Date(value).toLocaleString();
+/** Format ledger timestamps in the active organization's configured timezone. */
+function formatOrganizationDate(value: string, timezone: string): string {
+    return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: timezone,
+        timeZoneName: 'short',
+    }).format(new Date(value));
 }
 
 function formatTypeLabel(type: string): string {
@@ -126,21 +139,24 @@ function formatTypeLabel(type: string): string {
         .join(' ');
 }
 
-function movementTypeClassName(type: string): string {
+/** Map persisted ledger movement types to the shared semantic badge vocabulary. */
+function movementTypeVariant(
+    type: string,
+): 'neutral' | 'success' | 'warning' | 'info' | 'danger' {
     switch (type) {
         case 'PURCHASE_RECEIPT':
         case 'TRANSFER_IN':
         case 'OPENING_BALANCE':
-            return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300';
+            return 'success';
         case 'WASTE':
-            return 'border-destructive/30 bg-destructive/10 text-destructive dark:border-destructive/50 dark:bg-destructive/20';
+            return 'danger';
         case 'TRANSFER_OUT':
-            return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300';
+            return 'warning';
         case 'COUNT_ADJUSTMENT':
         case 'MANUAL_ADJUSTMENT':
-            return 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300';
+            return 'info';
         default:
-            return 'bg-muted/50 text-foreground';
+            return 'neutral';
     }
 }
 
@@ -182,6 +198,123 @@ function buildExportUrl(filters: Props['filters']): string {
     return query === '' ? baseUrl : `${baseUrl}?${query}`;
 }
 
+/** Render one ledger movement as a mobile evidence card. */
+function StockMovementCard({
+    row,
+    currency,
+    timezone,
+    canViewCosts,
+}: {
+    row: StockMovementRow;
+    currency: string;
+    timezone: string;
+    canViewCosts: boolean;
+}) {
+    const inbound = !row.quantity.trim().startsWith('-');
+
+    return (
+        <article className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <h3 className="font-medium">{row.itemName}</h3>
+                    <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                        {row.itemSku}
+                    </p>
+                </div>
+
+                <StatusBadge
+                    label={formatTypeLabel(row.type)}
+                    variant={movementTypeVariant(row.type)}
+                />
+            </div>
+
+            <div className="mt-3 flex items-center gap-1.5 font-semibold tabular-nums">
+                {inbound ? (
+                    <CirclePlus
+                        className="size-4 text-success-foreground"
+                        aria-hidden="true"
+                    />
+                ) : (
+                    <CircleMinus
+                        className="size-4 text-destructive"
+                        aria-hidden="true"
+                    />
+                )}
+                <span
+                    className={
+                        inbound ? 'text-success-foreground' : 'text-destructive'
+                    }
+                >
+                    {formatSignedDecimal(row.quantity)} {row.baseUnitSymbol}
+                </span>
+            </div>
+
+            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div>
+                    <dt className="text-xs text-muted-foreground">Occurred</dt>
+                    <dd className="mt-0.5 tabular-nums">
+                        {formatOrganizationDate(row.occurredAt, timezone)}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt className="text-xs text-muted-foreground">
+                        Location / Storage
+                    </dt>
+                    <dd className="mt-0.5">
+                        {row.locationName}
+                        <span className="block text-xs text-muted-foreground">
+                            {row.storageLocationName}
+                        </span>
+                    </dd>
+                </div>
+
+                <div>
+                    <dt className="text-xs text-muted-foreground">
+                        Source / Reference
+                    </dt>
+                    <dd className="mt-0.5 font-mono text-xs">
+                        {row.referenceType} #{row.referenceId}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt className="text-xs text-muted-foreground">Actor</dt>
+                    <dd className="mt-0.5">
+                        {row.actorName ?? 'Not recorded'}
+                    </dd>
+                </div>
+
+                {canViewCosts && (
+                    <>
+                        <div>
+                            <dt className="text-xs text-muted-foreground">
+                                Unit cost
+                            </dt>
+                            <dd className="mt-0.5 tabular-nums">
+                                {row.unitCost === null
+                                    ? 'Not recorded'
+                                    : formatCurrency(row.unitCost, currency)}
+                            </dd>
+                        </div>
+
+                        <div>
+                            <dt className="text-xs text-muted-foreground">
+                                Total cost
+                            </dt>
+                            <dd className="mt-0.5 tabular-nums">
+                                {row.totalCost === null
+                                    ? 'Not recorded'
+                                    : formatCurrency(row.totalCost, currency)}
+                            </dd>
+                        </div>
+                    </>
+                )}
+            </dl>
+        </article>
+    );
+}
+
 /** Render the append-only stock ledger as a dense operational report. */
 export default function StockMovementLedgerReport({
     rows,
@@ -192,6 +325,7 @@ export default function StockMovementLedgerReport({
     typeOptions,
     filters,
     currency,
+    timezone,
     canViewCosts,
 }: Props) {
     const activeFilterLabels = [
@@ -238,42 +372,35 @@ export default function StockMovementLedgerReport({
             <Head title="Stock movement ledger" />
 
             <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Stock movement ledger
-                        </h1>
-
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Immutable stock movement history in deterministic
-                            append order.
-                        </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button variant="outline" asChild>
-                            <Link href={InventoryItemController.index()}>
-                                <Package
-                                    className="size-4"
-                                    aria-hidden="true"
-                                />
-                                Inventory items
-                            </Link>
-                        </Button>
-
-                        {canExportReports && (
+                <PageHeader
+                    title="Stock movement ledger"
+                    description="Immutable stock movement history in deterministic append order."
+                    actions={
+                        <>
                             <Button variant="outline" asChild>
-                                <a href={exportUrl}>
-                                    <Download
+                                <Link href={InventoryItemController.index()}>
+                                    <Package
                                         className="size-4"
                                         aria-hidden="true"
                                     />
-                                    Export CSV
-                                </a>
+                                    Inventory items
+                                </Link>
                             </Button>
-                        )}
-                    </div>
-                </div>
+
+                            {canExportReports && (
+                                <Button variant="outline" asChild>
+                                    <a href={exportUrl}>
+                                        <Download
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        Export CSV
+                                    </a>
+                                </Button>
+                            )}
+                        </>
+                    }
+                />
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <DashboardMetricCard
@@ -314,25 +441,18 @@ export default function StockMovementLedgerReport({
                     method="get"
                 >
                     {({ errors, processing }) => (
-                        <div className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
+                        <FilterToolbar className="overflow-hidden p-0 shadow-sm">
                             <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[1fr_1fr_1fr_1fr_0.9fr_0.9fr_1.35fr_auto]">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="location_id">
-                                        Location
-                                    </Label>
-
-                                    <select
-                                        id="location_id"
+                                <Field
+                                    id="location_id"
+                                    label="Location"
+                                    error={errors.location_id}
+                                >
+                                    <NativeSelect
                                         name="location_id"
                                         defaultValue={
                                             filters.locationId?.toString() ?? ''
                                         }
-                                        aria-invalid={
-                                            errors.location_id
-                                                ? true
-                                                : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         <option value="">All locations</option>
 
@@ -344,27 +464,20 @@ export default function StockMovementLedgerReport({
                                                 {location.name}
                                             </option>
                                         ))}
-                                    </select>
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="storage_location_id">
-                                        Storage location
-                                    </Label>
-
-                                    <select
-                                        id="storage_location_id"
+                                <Field
+                                    id="storage_location_id"
+                                    label="Storage location"
+                                    error={errors.storage_location_id}
+                                >
+                                    <NativeSelect
                                         name="storage_location_id"
                                         defaultValue={
                                             filters.storageLocationId?.toString() ??
                                             ''
                                         }
-                                        aria-invalid={
-                                            errors.storage_location_id
-                                                ? true
-                                                : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         <option value="">
                                             All storage locations
@@ -380,27 +493,20 @@ export default function StockMovementLedgerReport({
                                                 </option>
                                             ),
                                         )}
-                                    </select>
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="inventory_item_id">
-                                        Item
-                                    </Label>
-
-                                    <select
-                                        id="inventory_item_id"
+                                <Field
+                                    id="inventory_item_id"
+                                    label="Item"
+                                    error={errors.inventory_item_id}
+                                >
+                                    <NativeSelect
                                         name="inventory_item_id"
                                         defaultValue={
                                             filters.inventoryItemId?.toString() ??
                                             ''
                                         }
-                                        aria-invalid={
-                                            errors.inventory_item_id
-                                                ? true
-                                                : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         <option value="">All items</option>
 
@@ -412,20 +518,17 @@ export default function StockMovementLedgerReport({
                                                 {item.name}
                                             </option>
                                         ))}
-                                    </select>
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="type">Movement type</Label>
-
-                                    <select
-                                        id="type"
+                                <Field
+                                    id="type"
+                                    label="Movement type"
+                                    error={errors.type}
+                                >
+                                    <NativeSelect
                                         name="type"
                                         defaultValue={filters.type ?? ''}
-                                        aria-invalid={
-                                            errors.type ? true : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         <option value="">All types</option>
 
@@ -434,40 +537,34 @@ export default function StockMovementLedgerReport({
                                                 {formatTypeLabel(type)}
                                             </option>
                                         ))}
-                                    </select>
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="from">From</Label>
+                                <Field
+                                    id="from"
+                                    label="From"
+                                    error={errors.from}
+                                >
                                     <Input
-                                        id="from"
                                         name="from"
                                         type="date"
                                         defaultValue={filters.from ?? ''}
-                                        aria-invalid={
-                                            errors.from ? true : undefined
-                                        }
                                     />
-                                </div>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="to">To</Label>
+                                <Field id="to" label="To" error={errors.to}>
                                     <Input
-                                        id="to"
                                         name="to"
                                         type="date"
                                         defaultValue={filters.to ?? ''}
-                                        aria-invalid={
-                                            errors.to ? true : undefined
-                                        }
                                     />
-                                </div>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="reference">
-                                        Source / reference
-                                    </Label>
-
+                                <Field
+                                    id="reference"
+                                    label="Source / reference"
+                                    error={errors.reference}
+                                >
                                     <div className="relative">
                                         <Search
                                             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
@@ -475,7 +572,6 @@ export default function StockMovementLedgerReport({
                                         />
 
                                         <Input
-                                            id="reference"
                                             name="reference"
                                             type="search"
                                             defaultValue={
@@ -485,14 +581,9 @@ export default function StockMovementLedgerReport({
                                             className="pl-9"
                                             autoComplete="off"
                                             maxLength={100}
-                                            aria-invalid={
-                                                errors.reference
-                                                    ? true
-                                                    : undefined
-                                            }
                                         />
                                     </div>
-                                </div>
+                                </Field>
 
                                 <div className="flex items-end gap-2 md:col-span-2 xl:col-span-1">
                                     <Button
@@ -537,7 +628,7 @@ export default function StockMovementLedgerReport({
                             </div>
 
                             <div
-                                className="flex flex-wrap items-center gap-2 border-t border-sidebar-border/70 px-4 py-3 text-sm text-muted-foreground dark:border-sidebar-border"
+                                className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3 text-sm text-muted-foreground"
                                 aria-live="polite"
                             >
                                 <Filter className="size-4" aria-hidden="true" />
@@ -571,15 +662,52 @@ export default function StockMovementLedgerReport({
                                     </Link>
                                 )}
                             </div>
-                        </div>
+                        </FilterToolbar>
                     )}
                 </Form>
 
                 <section
-                    className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border"
+                    className="grid gap-3 md:hidden"
+                    aria-labelledby="stock-movement-cards-title"
+                >
+                    <h2 id="stock-movement-cards-title" className="sr-only">
+                        Movement history
+                    </h2>
+
+                    {rows.data.length === 0 ? (
+                        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                            <EmptyState
+                                icon={Search}
+                                title={
+                                    hasFilters
+                                        ? 'No stock movements match these filters.'
+                                        : 'No stock movements found.'
+                                }
+                                description={
+                                    hasFilters
+                                        ? 'Adjust or clear the filters to inspect other ledger entries.'
+                                        : 'Stock movements will appear here as inventory transactions are finalized.'
+                                }
+                            />
+                        </div>
+                    ) : (
+                        rows.data.map((row) => (
+                            <StockMovementCard
+                                key={row.id}
+                                row={row}
+                                currency={currency}
+                                timezone={timezone}
+                                canViewCosts={canViewCosts}
+                            />
+                        ))
+                    )}
+                </section>
+
+                <section
+                    className="hidden overflow-hidden rounded-xl border border-border bg-card shadow-sm md:block"
                     aria-labelledby="stock-movement-table-title"
                 >
-                    <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-sidebar-border/70 px-4 py-3 dark:border-sidebar-border">
+                    <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
                         <div>
                             <h2
                                 id="stock-movement-table-title"
@@ -668,26 +796,21 @@ export default function StockMovementLedgerReport({
                                     <tr>
                                         <td
                                             colSpan={canViewCosts ? 9 : 7}
-                                            className="px-6 py-14 text-center"
+                                            className="px-6 py-14"
                                         >
-                                            <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted">
-                                                <Search
-                                                    className="size-5 text-muted-foreground"
-                                                    aria-hidden="true"
-                                                />
-                                            </div>
-
-                                            <p className="mt-3 font-medium">
-                                                {hasFilters
-                                                    ? 'No stock movements match these filters.'
-                                                    : 'No stock movements found.'}
-                                            </p>
-
-                                            <p className="mt-1 text-sm text-muted-foreground">
-                                                {hasFilters
-                                                    ? 'Adjust or clear the filters to inspect other ledger entries.'
-                                                    : 'Stock movements will appear here as inventory transactions are finalized.'}
-                                            </p>
+                                            <EmptyState
+                                                icon={Search}
+                                                title={
+                                                    hasFilters
+                                                        ? 'No stock movements match these filters.'
+                                                        : 'No stock movements found.'
+                                                }
+                                                description={
+                                                    hasFilters
+                                                        ? 'Adjust or clear the filters to inspect other ledger entries.'
+                                                        : 'Stock movements will appear here as inventory transactions are finalized.'
+                                                }
+                                            />
                                         </td>
                                     </tr>
                                 ) : (
@@ -699,10 +822,13 @@ export default function StockMovementLedgerReport({
                                         return (
                                             <tr
                                                 key={row.id}
-                                                className="border-b border-sidebar-border/70 align-top transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
+                                                className="border-b border-border align-top transition-colors last:border-b-0 hover:bg-muted/30"
                                             >
                                                 <td className="px-4 py-3 whitespace-nowrap tabular-nums">
-                                                    {formatDate(row.occurredAt)}
+                                                    {formatOrganizationDate(
+                                                        row.occurredAt,
+                                                        timezone,
+                                                    )}
                                                 </td>
 
                                                 <td className="px-4 py-3">
@@ -726,23 +852,21 @@ export default function StockMovementLedgerReport({
                                                 </td>
 
                                                 <td className="px-4 py-3">
-                                                    <Badge
-                                                        variant="outline"
-                                                        className={movementTypeClassName(
+                                                    <StatusBadge
+                                                        label={formatTypeLabel(
                                                             row.type,
                                                         )}
-                                                    >
-                                                        {formatTypeLabel(
+                                                        variant={movementTypeVariant(
                                                             row.type,
                                                         )}
-                                                    </Badge>
+                                                    />
                                                 </td>
 
                                                 <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
                                                     <span
                                                         className={`inline-flex items-center justify-end gap-1.5 font-semibold ${
                                                             inbound
-                                                                ? 'text-emerald-700 dark:text-emerald-300'
+                                                                ? 'text-success-foreground'
                                                                 : 'text-destructive'
                                                         }`}
                                                     >
@@ -778,7 +902,7 @@ export default function StockMovementLedgerReport({
                                                 <td className="px-4 py-3">
                                                     {row.actorName ?? (
                                                         <span className="text-muted-foreground">
-                                                            —
+                                                            Not recorded
                                                         </span>
                                                     )}
                                                 </td>
@@ -788,7 +912,7 @@ export default function StockMovementLedgerReport({
                                                         <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
                                                             {row.unitCost ===
                                                             null
-                                                                ? '—'
+                                                                ? 'Not recorded'
                                                                 : formatCurrency(
                                                                       row.unitCost,
                                                                       currency,
@@ -798,7 +922,7 @@ export default function StockMovementLedgerReport({
                                                         <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
                                                             {row.totalCost ===
                                                             null
-                                                                ? '—'
+                                                                ? 'Not recorded'
                                                                 : formatCurrency(
                                                                       row.totalCost,
                                                                       currency,
@@ -814,63 +938,18 @@ export default function StockMovementLedgerReport({
                         </table>
                     </div>
 
-                    {rows.total > 0 && (
-                        <div className="flex flex-col gap-3 border-t border-sidebar-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-sidebar-border">
-                            <p className="text-sm text-muted-foreground">
-                                Showing {rows.from ?? 0} to {rows.to ?? 0} of{' '}
-                                {rows.total.toLocaleString()} stock movements.
-                            </p>
-
-                            {rows.last_page > 1 && (
-                                <div className="flex items-center gap-2">
-                                    {rows.prev_page_url !== null ? (
-                                        <Button variant="outline" asChild>
-                                            <Link
-                                                href={rows.prev_page_url}
-                                                preserveScroll
-                                                preserveState
-                                            >
-                                                Previous
-                                            </Link>
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            disabled
-                                        >
-                                            Previous
-                                        </Button>
-                                    )}
-
-                                    <span className="px-2 text-sm text-muted-foreground">
-                                        Page {rows.current_page} of{' '}
-                                        {rows.last_page}
-                                    </span>
-
-                                    {rows.next_page_url !== null ? (
-                                        <Button variant="outline" asChild>
-                                            <Link
-                                                href={rows.next_page_url}
-                                                preserveScroll
-                                                preserveState
-                                            >
-                                                Next
-                                            </Link>
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            disabled
-                                        >
-                                            Next
-                                        </Button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                    <PaginationControls
+                        currentPage={rows.current_page}
+                        lastPage={rows.last_page}
+                        from={rows.from}
+                        to={rows.to}
+                        total={rows.total}
+                        previousPageUrl={rows.prev_page_url}
+                        nextPageUrl={rows.next_page_url}
+                        itemLabel="stock movements"
+                        preserveScroll
+                        preserveState
+                    />
                 </section>
             </div>
         </>

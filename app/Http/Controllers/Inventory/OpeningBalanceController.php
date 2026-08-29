@@ -44,6 +44,7 @@ class OpeningBalanceController extends Controller
                     $organization->timezone,
                 )->format('Y-m-d\TH:i'),
                 'currency' => $organization->currency,
+                'timezone' => $organization->timezone,
                 ...$this->formOptions($organization),
             ],
         );
