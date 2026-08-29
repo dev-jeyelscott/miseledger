@@ -437,6 +437,7 @@ class StockCountController extends Controller
                 'locationOptions' => $locationOptions,
                 'filters' => $filters,
                 'currency' => $organization->currency,
+                'timezone' => $organization->timezone,
                 'canViewCosts' => $canViewCosts,
             ],
         );
@@ -1107,6 +1108,8 @@ class StockCountController extends Controller
     }
 
     /**
+     * Serialize one immutable variance report line while preserving cost authorization.
+     *
      * @return array<string, mixed>
      */
     private function varianceRow(
