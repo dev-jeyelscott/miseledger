@@ -429,21 +429,28 @@ export default function StockTransferVariance({
                     <DashboardMetricCard
                         title="Analyzed lines"
                         value={rows.length.toLocaleString()}
+                        description="Received transfer lines included in the current filtered analysis."
                         icon={Scale}
                     />
+
                     <DashboardMetricCard
                         title="Shortages"
                         value={shortageCount.toLocaleString()}
+                        description="Lines where the received quantity is lower than the shipped quantity."
                         icon={TrendingDown}
                     />
+
                     <DashboardMetricCard
                         title="Overages"
                         value={overageCount.toLocaleString()}
+                        description="Lines where the received quantity is higher than the shipped quantity."
                         icon={TrendingUp}
                     />
+
                     <DashboardMetricCard
                         title="Exact matches"
                         value={exactMatchCount.toLocaleString()}
+                        description="Lines where shipped and received quantities match exactly."
                         icon={CheckCircle2}
                     />
                 </div>
