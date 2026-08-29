@@ -196,6 +196,11 @@ test('unit index frontend uses guarded dialogs filters and dense table', functio
     );
 
     expect($source)
+        ->toContain("import { FilterToolbar } from '@/components/filter-toolbar';")
+        ->toContain("import { PageHeader } from '@/components/page-header';")
+        ->toContain("import { StatusBadge } from '@/components/status-badge';")
+        ->toContain("import { Field } from '@/components/ui/field';")
+        ->toContain("import { NativeSelect } from '@/components/ui/native-select';")
         ->toContain('CreateUnitOfMeasureDialog')
         ->toContain('EditUnitOfMeasureDialog')
         ->toContain('useGuardedDialog')
@@ -204,9 +209,14 @@ test('unit index frontend uses guarded dialogs filters and dense table', functio
         ->toContain('name="search"')
         ->toContain('name="dimension"')
         ->toContain('name="status"')
+        ->toContain('border-border')
+        ->toContain('divide-y divide-border md:hidden')
+        ->toContain('hidden overflow-x-auto md:block')
+        ->toContain("label={active ? 'Active' : 'Inactive'}")
         ->toContain('overflow-x-auto')
         ->toContain('Used by')
         ->toContain('Updated')
         ->toContain('PreviousPageButton')
-        ->not->toContain('CreateUnitOfMeasureSheet');
+        ->not->toContain('CreateUnitOfMeasureSheet')
+        ->not->toContain("import { Badge } from '@/components/ui/badge';");
 });
