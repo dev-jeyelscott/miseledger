@@ -281,7 +281,6 @@ test('inventory modal and return controls use shared navigation primitives', fun
         'js/pages/inventory/categories/index.tsx',
         'js/pages/inventory/categories/edit.tsx',
         'js/pages/inventory/units/index.tsx',
-        'js/pages/inventory/units/edit.tsx',
         'js/pages/inventory/opening-balances/create.tsx',
         'js/pages/inventory/adjustments/create.tsx',
     ];

@@ -174,35 +174,6 @@ class UnitOfMeasureController extends Controller
     }
 
     /**
-     * Show the UOM edit screen.
-     */
-    public function edit(
-        Request $request,
-        string $unitOfMeasure,
-    ): Response {
-        $organization = $this->activeOrganization($request);
-
-        Gate::authorize(
-            OrganizationPermission::InventoryAdjust->value,
-            $organization,
-        );
-
-        $unit = $organization
-            ->unitsOfMeasure()
-            ->findOrFail($unitOfMeasure);
-
-        return Inertia::render('inventory/units/edit', [
-            'unit' => [
-                'id' => $unit->id,
-                'name' => $unit->name,
-                'symbol' => $unit->symbol,
-                'dimension' => $unit->dimension,
-                'active' => $unit->active,
-            ],
-        ]);
-    }
-
-    /**
      * Update an existing tenant-scoped UOM.
      */
     public function update(
@@ -237,10 +208,7 @@ class UnitOfMeasureController extends Controller
             return back();
         }
 
-        return to_route(
-            'inventory.units.edit',
-            $unitOfMeasure,
-        );
+        return to_route('inventory.units.index');
     }
 
     /**

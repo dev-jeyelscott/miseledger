@@ -190,6 +190,85 @@ test('modal unit creation returns to the current filtered index context', functi
     ]);
 });
 
+test('non modal unit update redirects to the unit index', function () {
+    [$user, $organization] = unitOfMeasureIndexContext();
+
+    $unit = UnitOfMeasure::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Each',
+            'symbol' => 'ea',
+            'dimension' => 'count',
+            'active' => true,
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->put(route('inventory.units.update', $unit), [
+            'name' => 'Piece',
+            'symbol' => 'ea',
+            'dimension' => 'count',
+            'active' => true,
+        ])
+        ->assertRedirect(route('inventory.units.index'));
+
+    expect($unit->refresh()->name)->toBe('Piece');
+});
+
+test('the removed unit edit url no longer exists', function () {
+    [$user, $organization] = unitOfMeasureIndexContext();
+
+    $unit = UnitOfMeasure::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Each',
+            'symbol' => 'ea',
+            'dimension' => 'count',
+            'active' => true,
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->get('/inventory/units/'.$unit->id.'/edit')
+        ->assertNotFound();
+});
+
+test('an inventory reader cannot update a unit of measure', function () {
+    [$user, $organization] = unitOfMeasureIndexContext(
+        OrganizationRole::Auditor,
+    );
+
+    $unit = UnitOfMeasure::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Each',
+            'symbol' => 'ea',
+            'dimension' => 'count',
+            'active' => true,
+        ]);
+
+    $this
+        ->withSession([
+            'active_organization_id' => $organization->id,
+        ])
+        ->actingAs($user)
+        ->put(route('inventory.units.update', $unit), [
+            'name' => 'Piece',
+            'symbol' => 'ea',
+            'dimension' => 'count',
+            'active' => true,
+        ])
+        ->assertForbidden();
+
+    expect($unit->refresh()->name)->toBe('Each');
+});
+
 test('unit index frontend uses guarded dialogs filters and dense table', function () {
     $source = file_get_contents(
         resource_path('js/pages/inventory/units/index.tsx'),
@@ -246,19 +325,4 @@ test('unit edit dialog frontend locks referenced semantic fields and active stat
         ->toContain('type="hidden" name="symbol" value={unit.symbol}')
         ->toContain('type="hidden" name="dimension" value={unit.dimension}')
         ->toContain('type="hidden" name="active" value="1"');
-});
-
-test('unit edit page frontend uses shared page and field contracts', function () {
-    $source = file_get_contents(
-        resource_path('js/pages/inventory/units/edit.tsx'),
-    );
-
-    expect($source)
-        ->toContain("import { PageHeader } from '@/components/page-header';")
-        ->toContain("import { Field } from '@/components/ui/field';")
-        ->toContain("import { NativeSelect } from '@/components/ui/native-select';")
-        ->toContain('<PageHeader')
-        ->toContain('border-border')
-        ->toContain("processing ? 'Saving…' : 'Save unit'")
-        ->not->toContain('border-sidebar-border');
 });

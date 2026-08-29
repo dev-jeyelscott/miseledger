@@ -405,11 +405,6 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 [UnitOfMeasureController::class, 'store'],
             )->name('units.store');
 
-            Route::get(
-                'units/{unitOfMeasure}/edit',
-                [UnitOfMeasureController::class, 'edit'],
-            )->name('units.edit');
-
             Route::put(
                 'units/{unitOfMeasure}',
                 [UnitOfMeasureController::class, 'update'],
