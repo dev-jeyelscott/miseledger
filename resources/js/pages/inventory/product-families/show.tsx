@@ -6,7 +6,6 @@ import InventoryProductOptionController from '@/actions/App/Http/Controllers/Inv
 import InventoryProductOptionValueController from '@/actions/App/Http/Controllers/Inventory/InventoryProductOptionValueController';
 import { PageHeader } from '@/components/page-header';
 import { StatusBadge } from '@/components/status-badge';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -216,21 +215,29 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                                                 required
                                                             />
                                                         </Field>
-                                                        <NativeSelect
-                                                            name="active"
-                                                            defaultValue={
-                                                                option.active
-                                                                    ? '1'
-                                                                    : '0'
+                                                        <Field
+                                                            id={`option-active-${option.id}`}
+                                                            label="Status"
+                                                            error={
+                                                                errors.active
                                                             }
                                                         >
-                                                            <option value="1">
-                                                                Active
-                                                            </option>
-                                                            <option value="0">
-                                                                Inactive
-                                                            </option>
-                                                        </NativeSelect>
+                                                            <NativeSelect
+                                                                name="active"
+                                                                defaultValue={
+                                                                    option.active
+                                                                        ? '1'
+                                                                        : '0'
+                                                                }
+                                                            >
+                                                                <option value="1">
+                                                                    Active
+                                                                </option>
+                                                                <option value="0">
+                                                                    Inactive
+                                                                </option>
+                                                            </NativeSelect>
+                                                        </Field>
                                                         <Button
                                                             type="submit"
                                                             variant="outline"
@@ -284,23 +291,31 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                                                     className="h-8 w-28"
                                                                 />
                                                             </Field>
-                                                            <NativeSelect
-                                                                aria-label={`${value.value} status`}
-                                                                name="active"
-                                                                defaultValue={
-                                                                    value.active
-                                                                        ? '1'
-                                                                        : '0'
+                                                            <Field
+                                                                id={`option-value-active-${value.id}`}
+                                                                label={`${value.value} status`}
+                                                                error={
+                                                                    errors.active
                                                                 }
-                                                                className="h-8 px-2 text-xs"
+                                                                className="gap-1"
                                                             >
-                                                                <option value="1">
-                                                                    Active
-                                                                </option>
-                                                                <option value="0">
-                                                                    Inactive
-                                                                </option>
-                                                            </NativeSelect>
+                                                                <NativeSelect
+                                                                    name="active"
+                                                                    defaultValue={
+                                                                        value.active
+                                                                            ? '1'
+                                                                            : '0'
+                                                                    }
+                                                                    className="h-8 px-2 text-xs"
+                                                                >
+                                                                    <option value="1">
+                                                                        Active
+                                                                    </option>
+                                                                    <option value="0">
+                                                                        Inactive
+                                                                    </option>
+                                                                </NativeSelect>
+                                                            </Field>
                                                             <Button
                                                                 type="submit"
                                                                 variant="ghost"
@@ -315,19 +330,24 @@ export default function ProductFamilyShow({ productFamily, canManage }: Props) {
                                                     )}
                                                 </Form>
                                             ) : (
-                                                <Badge
+                                                <span
                                                     key={value.id}
-                                                    variant={
-                                                        value.active
-                                                            ? 'outline'
-                                                            : 'secondary'
-                                                    }
+                                                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-0.5 text-xs"
                                                 >
                                                     {value.value}
-                                                    {!value.active
-                                                        ? ' (inactive)'
-                                                        : ''}
-                                                </Badge>
+                                                    <StatusBadge
+                                                        label={
+                                                            value.active
+                                                                ? 'Active'
+                                                                : 'Inactive'
+                                                        }
+                                                        variant={
+                                                            value.active
+                                                                ? 'success'
+                                                                : 'neutral'
+                                                        }
+                                                    />
+                                                </span>
                                             ),
                                         )}
                                     </div>

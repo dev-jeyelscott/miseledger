@@ -133,6 +133,24 @@ test('the product family index page consumes the shared master-data UI contract'
         ->not->toContain("import { Badge } from '@/components/ui/badge';");
 });
 
+test('the product family show page uses the shared Field, NativeSelect, and StatusBadge contracts for option and value statuses', function () {
+    $source = File::get(resource_path('js/pages/inventory/product-families/show.tsx'));
+
+    expect($source)
+        ->toContain("import { Field } from '@/components/ui/field';")
+        ->toContain("import { NativeSelect } from '@/components/ui/native-select';")
+        ->not->toContain("import { Badge } from '@/components/ui/badge';")
+        ->not->toContain('<Badge');
+
+    $optionStatusField = "<Field\n                                                            id={`option-active-\${option.id}`}";
+    $valueStatusField = "<Field\n                                                                id={`option-value-active-\${value.id}`}";
+
+    expect($source)
+        ->toContain($optionStatusField)
+        ->toContain($valueStatusField)
+        ->toContain('<StatusBadge');
+});
+
 test('the product family interface uses Wayfinder item actions and exposes all required variant columns', function () {
     $source = File::get(resource_path('js/pages/inventory/product-families/show.tsx'));
 
