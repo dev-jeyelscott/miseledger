@@ -1250,6 +1250,7 @@ class StockTransferController extends Controller
                 ->values()
                 ->all(),
             'currency' => $organization->currency,
+            'timezone' => $organization->timezone,
         ];
     }
 
