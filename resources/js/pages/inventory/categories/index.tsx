@@ -1,6 +1,5 @@
-import { Form, Head } from '@inertiajs/react';
+import { Form, Head, Link } from '@inertiajs/react';
 import { Pencil, Plus, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
@@ -24,12 +23,18 @@ import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type { InventoryCategoryData } from '@/types';
 
-type Props = {
-    categories: InventoryCategoryData[];
-    canManage: boolean;
+type CategoryStatus = 'active' | 'inactive';
+
+type Filters = {
+    search: string;
+    status: CategoryStatus | null;
 };
 
-type CategoryStatusFilter = 'all' | 'active' | 'inactive';
+type Props = {
+    categories: InventoryCategoryData[];
+    filters: Filters;
+    canManage: boolean;
+};
 
 type CreateInventoryCategoryDialogProps = {
     trigger: ReactNode;
@@ -39,11 +44,6 @@ type EditInventoryCategoryDialogProps = {
     category: InventoryCategoryData;
     trigger: ReactNode;
 };
-
-/** Format a category count with the correct singular or plural label. */
-function formatCategoryCount(count: number): string {
-    return `${count.toLocaleString()} ${count === 1 ? 'category' : 'categories'}`;
-}
 
 /** Render active and inactive states using canonical semantic status tokens. */
 function InventoryCategoryStatus({ active }: { active: boolean }) {
@@ -238,40 +238,13 @@ function EditInventoryCategoryDialog({
     );
 }
 
-/** Render the organization category master list with lightweight discovery controls. */
+/** Render the organization category list with server-backed discovery controls. */
 export default function InventoryCategoriesIndex({
     categories,
+    filters,
     canManage,
 }: Props) {
-    const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] =
-        useState<CategoryStatusFilter>('all');
-
-    const filteredCategories = useMemo(() => {
-        const normalizedSearch = search.trim().toLowerCase();
-
-        return categories.filter((category) => {
-            const matchesSearch =
-                normalizedSearch === '' ||
-                category.name.toLowerCase().includes(normalizedSearch);
-
-            const matchesStatus =
-                statusFilter === 'all' ||
-                (statusFilter === 'active' && category.active) ||
-                (statusFilter === 'inactive' && !category.active);
-
-            return matchesSearch && matchesStatus;
-        });
-    }, [categories, search, statusFilter]);
-
-    const hasFilters = search.trim() !== '' || statusFilter !== 'all';
-
-    const categoryCount =
-        filteredCategories.length === categories.length
-            ? formatCategoryCount(categories.length)
-            : `${formatCategoryCount(filteredCategories.length)} of ${formatCategoryCount(
-                  categories.length,
-              )}`;
+    const hasQueryState = filters.search !== '' || filters.status !== null;
 
     return (
         <>
@@ -302,89 +275,99 @@ export default function InventoryCategoriesIndex({
                     aria-label="Inventory categories"
                     className="overflow-hidden rounded-xl border border-border bg-card"
                 >
-                    <FilterToolbar className="rounded-b-none border-x-0 border-t-0">
-                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-center">
-                            <div className="relative">
-                                <label
-                                    htmlFor="category-search"
-                                    className="sr-only"
-                                >
-                                    Search categories
-                                </label>
-                                <Search
-                                    className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                                    aria-hidden="true"
-                                />
-                                <Input
-                                    id="category-search"
-                                    type="search"
-                                    value={search}
-                                    onChange={(event) =>
-                                        setSearch(event.target.value)
-                                    }
-                                    placeholder="Search categories..."
-                                    className="pl-9"
-                                />
-                            </div>
+                    <Form
+                        action={InventoryCategoryController.index().url}
+                        method="get"
+                    >
+                        {({ processing }) => (
+                            <FilterToolbar className="rounded-b-none border-x-0 border-t-0">
+                                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-center">
+                                    <div className="relative">
+                                        <label
+                                            htmlFor="category-search"
+                                            className="sr-only"
+                                        >
+                                            Search categories
+                                        </label>
+                                        <Search
+                                            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                                            aria-hidden="true"
+                                        />
+                                        <Input
+                                            id="category-search"
+                                            name="search"
+                                            type="search"
+                                            defaultValue={filters.search}
+                                            placeholder="Search categories..."
+                                            className="pl-9"
+                                        />
+                                    </div>
 
-                            <div>
-                                <label
-                                    htmlFor="category-status-filter"
-                                    className="sr-only"
-                                >
-                                    Filter by status
-                                </label>
-                                <NativeSelect
-                                    id="category-status-filter"
-                                    value={statusFilter}
-                                    onChange={(event) =>
-                                        setStatusFilter(
-                                            event.target
-                                                .value as CategoryStatusFilter,
-                                        )
-                                    }
-                                >
-                                    <option value="all">All statuses</option>
-                                    <option value="active">Active</option>
-                                    <option value="inactive">Inactive</option>
-                                </NativeSelect>
-                            </div>
+                                    <div>
+                                        <label
+                                            htmlFor="category-status-filter"
+                                            className="sr-only"
+                                        >
+                                            Filter by status
+                                        </label>
+                                        <NativeSelect
+                                            id="category-status-filter"
+                                            name="status"
+                                            defaultValue={
+                                                filters.status ?? ''
+                                            }
+                                        >
+                                            <option value="">
+                                                All statuses
+                                            </option>
+                                            <option value="active">
+                                                Active
+                                            </option>
+                                            <option value="inactive">
+                                                Inactive
+                                            </option>
+                                        </NativeSelect>
+                                    </div>
 
-                            <div className="flex items-center gap-2 md:justify-end">
-                                <p
-                                    aria-live="polite"
-                                    className="text-sm whitespace-nowrap text-muted-foreground"
-                                >
-                                    {categoryCount}
-                                </p>
+                                    <div className="flex items-center gap-2 md:justify-end">
+                                        <Button
+                                            type="submit"
+                                            disabled={processing}
+                                        >
+                                            {processing
+                                                ? 'Applying…'
+                                                : 'Apply filters'}
+                                        </Button>
 
-                                {hasFilters && (
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                            setSearch('');
-                                            setStatusFilter('all');
-                                        }}
-                                    >
-                                        Reset
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-                    </FilterToolbar>
+                                        {hasQueryState && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                asChild
+                                            >
+                                                <Link
+                                                    href={InventoryCategoryController.index()}
+                                                >
+                                                    Reset
+                                                </Link>
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            </FilterToolbar>
+                        )}
+                    </Form>
 
-                    {filteredCategories.length === 0 ? (
+                    {categories.length === 0 ? (
                         <div className="px-4 py-12 md:hidden">
                             <div className="mx-auto max-w-sm text-center">
                                 <p className="font-medium">
-                                    {hasFilters
+                                    {hasQueryState
                                         ? 'No categories match these filters.'
                                         : 'No inventory categories have been created.'}
                                 </p>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    {hasFilters
+                                    {hasQueryState
                                         ? 'Adjust or reset the filters to see more categories.'
                                         : canManage
                                           ? 'Create a category to start organizing inventory items.'
@@ -394,7 +377,7 @@ export default function InventoryCategoriesIndex({
                         </div>
                     ) : (
                         <div className="divide-y divide-border md:hidden">
-                            {filteredCategories.map((category) => (
+                            {categories.map((category) => (
                                 <article
                                     key={category.id}
                                     className="space-y-4 p-4"
@@ -467,7 +450,7 @@ export default function InventoryCategoriesIndex({
                             </thead>
 
                             <tbody>
-                                {filteredCategories.length === 0 ? (
+                                {categories.length === 0 ? (
                                     <tr>
                                         <td
                                             colSpan={canManage ? 3 : 2}
@@ -475,12 +458,12 @@ export default function InventoryCategoriesIndex({
                                         >
                                             <div className="mx-auto max-w-sm">
                                                 <p className="font-medium">
-                                                    {hasFilters
+                                                    {hasQueryState
                                                         ? 'No categories match these filters.'
                                                         : 'No inventory categories have been created.'}
                                                 </p>
                                                 <p className="mt-1 text-sm text-muted-foreground">
-                                                    {hasFilters
+                                                    {hasQueryState
                                                         ? 'Adjust or reset the filters to see more categories.'
                                                         : canManage
                                                           ? 'Create a category to start organizing inventory items.'
@@ -490,7 +473,7 @@ export default function InventoryCategoriesIndex({
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredCategories.map((category) => (
+                                    categories.map((category) => (
                                         <tr
                                             key={category.id}
                                             className="border-b border-border transition-colors last:border-b-0 hover:bg-muted/30"
@@ -557,6 +540,10 @@ InventoryCategoriesIndex.layout = {
         {
             title: 'Inventory',
             href: InventoryItemController.index(),
+        },
+        {
+            title: 'Categories',
+            href: InventoryCategoryController.index(),
         },
     ],
 };

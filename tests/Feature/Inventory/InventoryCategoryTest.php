@@ -121,6 +121,80 @@ test('inventory categories index only exposes the active organization categories
         );
 });
 
+test('inventory categories index filters by search and status with normalized props', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+    $otherOrganization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    $category = InventoryCategory::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Dry goods',
+            'active' => true,
+        ]);
+
+    InventoryCategory::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Frozen goods',
+            'active' => false,
+        ]);
+
+    InventoryCategory::factory()
+        ->for($otherOrganization)
+        ->create([
+            'name' => 'Dry goods foreign',
+            'active' => true,
+        ]);
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->get(route('inventory.categories.index', [
+            'search' => '  dry  ',
+            'status' => 'active',
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page) => $page
+                ->component('inventory/categories/index')
+                ->has('categories', 1)
+                ->where('categories.0.id', $category->id)
+                ->where('categories.0.name', 'Dry goods')
+                ->where('filters.search', 'dry')
+                ->where('filters.status', 'active'),
+        );
+});
+
+test('inventory categories index rejects an unsupported status filter', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->get(route('inventory.categories.index', [
+            'status' => 'archived',
+        ]))
+        ->assertSessionHasErrors('status');
+});
+
 test('an auditor can view categories but cannot modify them', function () {
     $user = User::factory()->create();
     $organization = Organization::factory()->create();

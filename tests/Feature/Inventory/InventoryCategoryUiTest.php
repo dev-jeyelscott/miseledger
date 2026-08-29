@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\File;
 
-test('inventory category index uses the approved compact modal-first management layout', function () {
+test('inventory category index uses the approved server-backed responsive discovery layout', function () {
     $source = File::get(
         resource_path('js/pages/inventory/categories/index.tsx'),
     );
@@ -13,11 +13,12 @@ test('inventory category index uses the approved compact modal-first management 
         ->toContain("import { FilterToolbar } from '@/components/filter-toolbar';")
         ->toContain("import { Field } from '@/components/ui/field';")
         ->toContain("import { NativeSelect } from '@/components/ui/native-select';")
-        ->toContain('useMemo')
+        ->toContain('InventoryCategoryController.index().url')
+        ->toContain('method="get"')
+        ->toContain('name="search"')
+        ->toContain('name="status"')
         ->toContain('Search categories...')
         ->toContain('All statuses')
-        ->toContain('filteredCategories')
-        ->toContain('aria-live="polite"')
         ->toContain('Category name')
         ->toContain('Status')
         ->toContain('Actions')
@@ -26,6 +27,7 @@ test('inventory category index uses the approved compact modal-first management 
         ->toContain('border-border')
         ->toContain('divide-y divide-border md:hidden')
         ->toContain('hidden overflow-x-auto md:block')
+        ->toContain('categories.map')
         ->toContain('CreateInventoryCategoryDialog')
         ->toContain('EditInventoryCategoryDialog')
         ->toContain('DialogTrigger')
@@ -34,9 +36,15 @@ test('inventory category index uses the approved compact modal-first management 
         ->toContain('PreviousPageButton')
         ->toContain('Create category')
         ->toContain('name="active"')
+        ->toContain('Applying…')
         ->toContain('Creating…')
         ->toContain('Saving…')
         ->toContain('Inactive categories')
+        ->toContain('hasQueryState')
+        ->toContain('Reset')
+        ->not->toContain('useState')
+        ->not->toContain('useMemo')
+        ->not->toContain('filteredCategories')
         ->not->toContain('create-category-heading')
         ->not->toContain('Create a category using the form on this page.')
         ->not->toContain('Drag to reorder')
@@ -54,6 +62,18 @@ test('inventory category redesign keeps management controls permission gated', f
         ->toContain('{canManage && (')
         ->toContain('InventoryCategoryController.store.form()')
         ->toContain('InventoryCategoryController.update.form(');
+});
+
+test('inventory category index breadcrumbs are dashboard inventory and categories', function () {
+    $source = File::get(
+        resource_path('js/pages/inventory/categories/index.tsx'),
+    );
+
+    expect($source)
+        ->toContain('InventoryCategoriesIndex.layout')
+        ->toContain("title: 'Dashboard'")
+        ->toContain("title: 'Inventory'")
+        ->toContain("title: 'Categories'");
 });
 
 test('inventory category edit page uses shared header and form contracts', function () {

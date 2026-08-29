@@ -1,7 +1,8 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import { Plus } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InventoryProductController from '@/actions/App/Http/Controllers/Inventory/InventoryProductController';
+import { FilterToolbar } from '@/components/filter-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
@@ -17,15 +18,27 @@ type ProductFamily = {
     variantCount: number;
 };
 
+type ProductFamilyStatus = 'active' | 'inactive';
+
+type Filters = {
+    search: string;
+    status: ProductFamilyStatus | null;
+};
+
 type Props = {
     productFamilies: ProductFamily[];
+    filters: Filters;
     canManage: boolean;
 };
 
+/** Render product families with the canonical server-backed master-data composition. */
 export default function ProductFamiliesIndex({
     productFamilies,
+    filters,
     canManage,
 }: Props) {
+    const hasQueryState = filters.search !== '' || filters.status !== null;
+
     return (
         <>
             <Head title="Product families" />
@@ -93,15 +106,102 @@ export default function ProductFamiliesIndex({
                         </h2>
                     </div>
 
+                    <Form
+                        action={InventoryProductController.index().url}
+                        method="get"
+                    >
+                        {({ processing }) => (
+                            <FilterToolbar className="rounded-none border-x-0 border-t-0">
+                                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-center">
+                                    <div className="relative">
+                                        <label
+                                            htmlFor="product-family-search"
+                                            className="sr-only"
+                                        >
+                                            Search product families
+                                        </label>
+                                        <Search
+                                            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                                            aria-hidden="true"
+                                        />
+                                        <Input
+                                            id="product-family-search"
+                                            name="search"
+                                            type="search"
+                                            defaultValue={filters.search}
+                                            placeholder="Search product families..."
+                                            className="pl-9"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label
+                                            htmlFor="product-family-status-filter"
+                                            className="sr-only"
+                                        >
+                                            Filter by status
+                                        </label>
+                                        <NativeSelect
+                                            id="product-family-status-filter"
+                                            name="status"
+                                            defaultValue={
+                                                filters.status ?? ''
+                                            }
+                                        >
+                                            <option value="">
+                                                All statuses
+                                            </option>
+                                            <option value="active">
+                                                Active
+                                            </option>
+                                            <option value="inactive">
+                                                Inactive
+                                            </option>
+                                        </NativeSelect>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 md:justify-end">
+                                        <Button
+                                            type="submit"
+                                            disabled={processing}
+                                        >
+                                            {processing
+                                                ? 'Applying…'
+                                                : 'Apply filters'}
+                                        </Button>
+
+                                        {hasQueryState && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                asChild
+                                            >
+                                                <Link
+                                                    href={InventoryProductController.index()}
+                                                >
+                                                    Reset
+                                                </Link>
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            </FilterToolbar>
+                        )}
+                    </Form>
+
                     {productFamilies.length === 0 ? (
                         <div className="px-4 py-10 text-center md:hidden">
                             <p className="font-medium">
-                                No product families yet
+                                {hasQueryState
+                                    ? 'No product families match these filters.'
+                                    : 'No product families yet'}
                             </p>
                             <p className="mt-1 text-sm text-muted-foreground">
-                                {canManage
-                                    ? 'Create a family to organize related item variants.'
-                                    : 'Product families will appear here when available.'}
+                                {hasQueryState
+                                    ? 'Adjust or reset the filters to see more product families.'
+                                    : canManage
+                                      ? 'Create a family to organize related item variants.'
+                                      : 'Product families will appear here when available.'}
                             </p>
                         </div>
                     ) : (
@@ -136,6 +236,7 @@ export default function ProductFamiliesIndex({
                                             }
                                         />
                                     </div>
+
                                     <p className="text-sm text-muted-foreground">
                                         {productFamily.variantCount} variants
                                     </p>
@@ -179,12 +280,16 @@ export default function ProductFamiliesIndex({
                                             className="px-4 py-10 text-center"
                                         >
                                             <p className="font-medium">
-                                                No product families yet
+                                                {hasQueryState
+                                                    ? 'No product families match these filters.'
+                                                    : 'No product families yet'}
                                             </p>
                                             <p className="mt-1 text-sm text-muted-foreground">
-                                                {canManage
-                                                    ? 'Create a family to organize related item variants.'
-                                                    : 'Product families will appear here when available.'}
+                                                {hasQueryState
+                                                    ? 'Adjust or reset the filters to see more product families.'
+                                                    : canManage
+                                                      ? 'Create a family to organize related item variants.'
+                                                      : 'Product families will appear here when available.'}
                                             </p>
                                         </td>
                                     </tr>

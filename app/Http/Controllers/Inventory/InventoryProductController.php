@@ -14,23 +14,53 @@ use App\Models\Organization;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class InventoryProductController extends Controller
 {
     /**
-     * Show product families for the active organization.
+     * Show product families for the active organization with server-backed discovery filters.
      */
     public function index(Request $request): Response
     {
         $organization = $this->activeOrganization($request);
 
-        Gate::authorize(OrganizationPermission::InventoryView->value, $organization);
+        Gate::authorize(
+            OrganizationPermission::InventoryView->value,
+            $organization,
+        );
+
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:120'],
+            'status' => [
+                'nullable',
+                'string',
+                Rule::in(['active', 'inactive']),
+            ],
+        ]);
+
+        $search = trim((string) ($validated['search'] ?? ''));
+
+        $status = isset($validated['status'])
+            ? (string) $validated['status']
+            : null;
+
+        $productFamiliesQuery = $organization
+            ->inventoryProducts()
+            ->withCount('inventoryItems');
+
+        if ($search !== '') {
+            $productFamiliesQuery->whereLike('name', '%'.$search.'%');
+        }
+
+        if ($status !== null) {
+            $productFamiliesQuery->where('active', $status === 'active');
+        }
 
         return Inertia::render('inventory/product-families/index', [
-            'productFamilies' => $organization->inventoryProducts()
-                ->withCount('inventoryItems')
+            'productFamilies' => $productFamiliesQuery
                 ->orderByDesc('active')
                 ->orderBy('name')
                 ->get()
@@ -42,7 +72,14 @@ class InventoryProductController extends Controller
                 ])
                 ->values()
                 ->all(),
-            'canManage' => Gate::allows(OrganizationPermission::InventoryAdjust->value, $organization),
+            'filters' => [
+                'search' => $search,
+                'status' => $status,
+            ],
+            'canManage' => Gate::allows(
+                OrganizationPermission::InventoryAdjust->value,
+                $organization,
+            ),
         ]);
     }
 
@@ -53,7 +90,10 @@ class InventoryProductController extends Controller
     {
         $organization = $this->activeOrganization($request);
 
-        Gate::authorize(OrganizationPermission::InventoryView->value, $organization);
+        Gate::authorize(
+            OrganizationPermission::InventoryView->value,
+            $organization,
+        );
 
         $product = $organization
             ->inventoryProducts()
@@ -107,7 +147,10 @@ class InventoryProductController extends Controller
                     'active' => $item->active,
                 ])->values()->all(),
             ],
-            'canManage' => Gate::allows(OrganizationPermission::InventoryAdjust->value, $organization),
+            'canManage' => Gate::allows(
+                OrganizationPermission::InventoryAdjust->value,
+                $organization,
+            ),
         ]);
     }
 
