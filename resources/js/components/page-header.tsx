@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
 
-type PageHeaderProps = ComponentProps<'header'> & {
+type PageHeaderProps = Omit<ComponentProps<'header'>, 'title'> & {
     actions?: ReactNode;
     description?: ReactNode;
     title: ReactNode;

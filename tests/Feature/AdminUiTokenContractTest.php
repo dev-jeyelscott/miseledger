@@ -114,6 +114,8 @@ test('shared inventory UI primitives follow the canonical admin contract', funct
         ->not->toContain('sidebar-border');
 
     expect($pageHeader)
+        ->toContain("Omit<ComponentProps<'header'>, 'title'>")
+        ->toContain('title: ReactNode;')
         ->toContain('data-slot="page-header"')
         ->toContain('text-2xl font-semibold tracking-tight')
         ->toContain('mt-1 text-sm text-muted-foreground')
