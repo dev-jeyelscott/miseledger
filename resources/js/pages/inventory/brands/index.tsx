@@ -4,9 +4,10 @@ import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import InventoryBrandController from '@/actions/App/Http/Controllers/Inventory/InventoryBrandController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
-import InputError from '@/components/input-error';
+import { FilterToolbar } from '@/components/filter-toolbar';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
-import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/page-header';
+import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -16,8 +17,9 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type { InventoryBrandData } from '@/types';
@@ -41,6 +43,16 @@ type EditInventoryBrandDialogProps = {
 /** Format a brand count with the correct singular or plural label. */
 function formatBrandCount(count: number): string {
     return `${count.toLocaleString()} ${count === 1 ? 'brand' : 'brands'}`;
+}
+
+/** Render active and inactive states using canonical semantic status tokens. */
+function InventoryBrandStatus({ active }: { active: boolean }) {
+    return (
+        <StatusBadge
+            label={active ? 'Active' : 'Inactive'}
+            variant={active ? 'success' : 'neutral'}
+        />
+    );
 }
 
 /** Create a lightweight brand without leaving the brand index. */
@@ -75,44 +87,33 @@ function CreateInventoryBrandDialog({
                             <>
                                 <input type="hidden" name="_modal" value="1" />
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="create-brand-name">
-                                        Name
-                                    </Label>
+                                <Field
+                                    id="create-brand-name"
+                                    label="Name"
+                                    error={errors.name}
+                                >
                                     <Input
-                                        id="create-brand-name"
                                         name="name"
                                         required
                                         autoFocus
                                         placeholder="e.g., Acme Foods"
                                     />
-                                    <InputError message={errors.name} />
-                                </div>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="create-brand-active">
-                                        Status
-                                    </Label>
-                                    <select
-                                        id="create-brand-active"
+                                <Field
+                                    id="create-brand-active"
+                                    label="Status"
+                                    error={errors.active}
+                                    helper="Inactive brands remain available for existing records but are excluded from new item brand choices."
+                                >
+                                    <NativeSelect
                                         name="active"
                                         defaultValue="1"
-                                        aria-describedby="create-brand-status-help"
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="1">Active</option>
                                         <option value="0">Inactive</option>
-                                    </select>
-                                    <p
-                                        id="create-brand-status-help"
-                                        className="text-xs text-muted-foreground"
-                                    >
-                                        Inactive brands remain available for
-                                        existing records but are excluded from
-                                        new item brand choices.
-                                    </p>
-                                    <InputError message={errors.active} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
                                 <div className="flex flex-wrap justify-end gap-2">
                                     <Button
@@ -132,7 +133,7 @@ function CreateInventoryBrandDialog({
                                             aria-hidden="true"
                                         />
                                         {processing
-                                            ? 'Creating...'
+                                            ? 'Creating…'
                                             : 'Create brand'}
                                     </Button>
                                 </div>
@@ -153,8 +154,6 @@ function EditInventoryBrandDialog({
     const dialog = useGuardedDialog(
         'Discard the inventory brand changes you entered?',
     );
-
-    const statusHelpId = `brand-status-help-${brand.id}`;
 
     return (
         <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
@@ -180,44 +179,33 @@ function EditInventoryBrandDialog({
                             <>
                                 <input type="hidden" name="_modal" value="1" />
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor={`brand-name-${brand.id}`}>
-                                        Name
-                                    </Label>
+                                <Field
+                                    id={`brand-name-${brand.id}`}
+                                    label="Name"
+                                    error={errors.name}
+                                >
                                     <Input
-                                        id={`brand-name-${brand.id}`}
                                         name="name"
                                         defaultValue={brand.name}
                                         required
                                         autoFocus
                                     />
-                                    <InputError message={errors.name} />
-                                </div>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor={`brand-active-${brand.id}`}>
-                                        Status
-                                    </Label>
-                                    <select
-                                        id={`brand-active-${brand.id}`}
+                                <Field
+                                    id={`brand-active-${brand.id}`}
+                                    label="Status"
+                                    error={errors.active}
+                                    helper="Inactive brands remain available for existing records but are excluded from new item brand choices."
+                                >
+                                    <NativeSelect
                                         name="active"
                                         defaultValue={brand.active ? '1' : '0'}
-                                        aria-describedby={statusHelpId}
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="1">Active</option>
                                         <option value="0">Inactive</option>
-                                    </select>
-                                    <p
-                                        id={statusHelpId}
-                                        className="text-xs text-muted-foreground"
-                                    >
-                                        Inactive brands remain available for
-                                        existing records but are excluded from
-                                        new item brand choices.
-                                    </p>
-                                    <InputError message={errors.active} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
                                 <div className="flex flex-wrap justify-end gap-2">
                                     <Button
@@ -232,9 +220,7 @@ function EditInventoryBrandDialog({
                                     </Button>
 
                                     <Button type="submit" disabled={processing}>
-                                        {processing
-                                            ? 'Saving...'
-                                            : 'Save brand'}
+                                        {processing ? 'Saving…' : 'Save brand'}
                                     </Button>
                                 </div>
                             </>
@@ -282,19 +268,11 @@ export default function InventoryBrandsIndex({ brands, canManage }: Props) {
             <Head title="Inventory brands" />
 
             <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Inventory brands
-                        </h1>
-                        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                            Maintain organization-specific brands to keep
-                            inventory master records easy to find and report on.
-                        </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                        {canManage && (
+                <PageHeader
+                    title="Inventory brands"
+                    description="Maintain organization-specific brands to keep inventory master records easy to find and report on."
+                    actions={
+                        canManage ? (
                             <CreateInventoryBrandDialog
                                 trigger={
                                     <Button>
@@ -306,86 +284,154 @@ export default function InventoryBrandsIndex({ brands, canManage }: Props) {
                                     </Button>
                                 }
                             />
-                        )}
-                    </div>
-                </div>
+                        ) : undefined
+                    }
+                />
 
                 <section
                     aria-label="Inventory brands"
-                    className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card dark:border-sidebar-border"
+                    className="overflow-hidden rounded-xl border border-border bg-card"
                 >
-                    <div className="grid gap-3 border-b border-sidebar-border/70 p-4 md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-center dark:border-sidebar-border">
-                        <div className="relative">
-                            <label htmlFor="brand-search" className="sr-only">
-                                Search brands
-                            </label>
-                            <Search
-                                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                                aria-hidden="true"
-                            />
-                            <Input
-                                id="brand-search"
-                                type="search"
-                                value={search}
-                                onChange={(event) =>
-                                    setSearch(event.target.value)
-                                }
-                                placeholder="Search brands..."
-                                className="pl-9"
-                            />
-                        </div>
-
-                        <div>
-                            <label
-                                htmlFor="brand-status-filter"
-                                className="sr-only"
-                            >
-                                Filter by status
-                            </label>
-                            <select
-                                id="brand-status-filter"
-                                value={statusFilter}
-                                onChange={(event) =>
-                                    setStatusFilter(
-                                        event.target.value as BrandStatusFilter,
-                                    )
-                                }
-                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                            >
-                                <option value="all">All statuses</option>
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                            </select>
-                        </div>
-
-                        <div className="flex items-center gap-2 md:justify-end">
-                            <p
-                                aria-live="polite"
-                                className="text-sm whitespace-nowrap text-muted-foreground"
-                            >
-                                {brandCount}
-                            </p>
-
-                            {hasFilters && (
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                        setSearch('');
-                                        setStatusFilter('all');
-                                    }}
+                    <FilterToolbar className="rounded-b-none border-x-0 border-t-0">
+                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-center">
+                            <div className="relative">
+                                <label
+                                    htmlFor="brand-search"
+                                    className="sr-only"
                                 >
-                                    Reset
-                                </Button>
-                            )}
-                        </div>
-                    </div>
+                                    Search brands
+                                </label>
+                                <Search
+                                    className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                                    aria-hidden="true"
+                                />
+                                <Input
+                                    id="brand-search"
+                                    type="search"
+                                    value={search}
+                                    onChange={(event) =>
+                                        setSearch(event.target.value)
+                                    }
+                                    placeholder="Search brands..."
+                                    className="pl-9"
+                                />
+                            </div>
 
-                    <div className="overflow-x-auto">
+                            <div>
+                                <label
+                                    htmlFor="brand-status-filter"
+                                    className="sr-only"
+                                >
+                                    Filter by status
+                                </label>
+                                <NativeSelect
+                                    id="brand-status-filter"
+                                    value={statusFilter}
+                                    onChange={(event) =>
+                                        setStatusFilter(
+                                            event.target
+                                                .value as BrandStatusFilter,
+                                        )
+                                    }
+                                >
+                                    <option value="all">All statuses</option>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                </NativeSelect>
+                            </div>
+
+                            <div className="flex items-center gap-2 md:justify-end">
+                                <p
+                                    aria-live="polite"
+                                    className="text-sm whitespace-nowrap text-muted-foreground"
+                                >
+                                    {brandCount}
+                                </p>
+
+                                {hasFilters && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            setSearch('');
+                                            setStatusFilter('all');
+                                        }}
+                                    >
+                                        Reset
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    </FilterToolbar>
+
+                    {filteredBrands.length === 0 ? (
+                        <div className="px-4 py-12 md:hidden">
+                            <div className="mx-auto max-w-sm text-center">
+                                <p className="font-medium">
+                                    {hasFilters
+                                        ? 'No brands match these filters.'
+                                        : 'No inventory brands have been created.'}
+                                </p>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {hasFilters
+                                        ? 'Adjust or reset the filters to see more brands.'
+                                        : canManage
+                                          ? 'Create a brand to start organizing inventory items.'
+                                          : 'Brands will appear here when they are available.'}
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-border md:hidden">
+                            {filteredBrands.map((brand) => (
+                                <article
+                                    key={brand.id}
+                                    className="space-y-4 p-4"
+                                    aria-labelledby={`brand-${brand.id}-name`}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <h2
+                                            id={`brand-${brand.id}-name`}
+                                            className="font-medium"
+                                        >
+                                            {brand.name}
+                                        </h2>
+
+                                        <InventoryBrandStatus
+                                            active={brand.active}
+                                        />
+                                    </div>
+
+                                    {canManage && (
+                                        <div className="flex justify-end border-t border-border pt-3">
+                                            <EditInventoryBrandDialog
+                                                brand={brand}
+                                                trigger={
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        aria-label={`Edit ${brand.name}`}
+                                                    >
+                                                        <Pencil
+                                                            className="size-3.5"
+                                                            aria-hidden="true"
+                                                        />
+                                                        Edit
+                                                    </Button>
+                                                }
+                                            />
+                                        </div>
+                                    )}
+                                </article>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="hidden overflow-x-auto md:block">
                         <table className="w-full min-w-[560px] text-sm">
                             <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-                                <tr className="border-b border-sidebar-border/70 dark:border-sidebar-border">
+                                <tr className="border-b border-border">
                                     <th
                                         scope="col"
                                         className="px-4 py-3 font-medium"
@@ -437,7 +483,7 @@ export default function InventoryBrandsIndex({ brands, canManage }: Props) {
                                     filteredBrands.map((brand) => (
                                         <tr
                                             key={brand.id}
-                                            className="border-b border-sidebar-border/70 transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
+                                            className="border-b border-border transition-colors last:border-b-0 hover:bg-muted/30"
                                         >
                                             <td className="px-4 py-3">
                                                 <span className="font-medium">
@@ -446,17 +492,9 @@ export default function InventoryBrandsIndex({ brands, canManage }: Props) {
                                             </td>
 
                                             <td className="px-4 py-3">
-                                                <Badge
-                                                    variant={
-                                                        brand.active
-                                                            ? 'secondary'
-                                                            : 'outline'
-                                                    }
-                                                >
-                                                    {brand.active
-                                                        ? 'Active'
-                                                        : 'Inactive'}
-                                                </Badge>
+                                                <InventoryBrandStatus
+                                                    active={brand.active}
+                                                />
                                             </td>
 
                                             {canManage && (

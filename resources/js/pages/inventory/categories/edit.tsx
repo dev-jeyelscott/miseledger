@@ -1,11 +1,12 @@
 import { Form, Head } from '@inertiajs/react';
 import InventoryCategoryController from '@/actions/App/Http/Controllers/Inventory/InventoryCategoryController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
-import InputError from '@/components/input-error';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 import type { InventoryCategoryData } from '@/types';
 
@@ -19,16 +20,12 @@ export default function EditInventoryCategory({ category }: Props) {
             <Head title={`Edit ${category.name}`} />
 
             <div className="flex flex-1 flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-2xl font-semibold">
-                        Edit inventory category
-                    </h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        {category.name}
-                    </p>
-                </div>
+                <PageHeader
+                    title="Edit inventory category"
+                    description={category.name}
+                />
 
-                <div className="max-w-xl rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
+                <div className="max-w-xl rounded-xl border border-border p-5">
                     <Form
                         {...InventoryCategoryController.update.form(
                             category.id,
@@ -37,36 +34,39 @@ export default function EditInventoryCategory({ category }: Props) {
                     >
                         {({ processing, errors }) => (
                             <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="name">Name</Label>
+                                <Field
+                                    id="name"
+                                    label="Name"
+                                    error={errors.name}
+                                >
                                     <Input
-                                        id="name"
                                         name="name"
                                         defaultValue={category.name}
                                         required
                                     />
-                                    <InputError message={errors.name} />
-                                </div>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="active">Status</Label>
-                                    <select
-                                        id="active"
+                                <Field
+                                    id="active"
+                                    label="Status"
+                                    error={errors.active}
+                                >
+                                    <NativeSelect
                                         name="active"
                                         defaultValue={
                                             category.active ? '1' : '0'
                                         }
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="1">Active</option>
                                         <option value="0">Inactive</option>
-                                    </select>
-                                    <InputError message={errors.active} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
                                 <div className="flex gap-2">
                                     <Button type="submit" disabled={processing}>
-                                        Save category
+                                        {processing
+                                            ? 'Saving…'
+                                            : 'Save category'}
                                     </Button>
 
                                     <PreviousPageButton
