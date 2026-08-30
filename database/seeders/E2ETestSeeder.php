@@ -2,12 +2,15 @@
 
 namespace Database\Seeders;
 
+use App\Actions\Inventory\RecordStockMovement;
 use App\Enums\OrganizationRole;
+use App\Enums\StockMovementType;
 use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\StorageLocation;
+use App\Models\Supplier;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -65,11 +68,32 @@ class E2ETestSeeder extends Seeder
             'dimension' => 'weight',
         ]);
 
-        InventoryItem::factory()->create([
+        $item = InventoryItem::factory()->create([
             'organization_id' => $organization->id,
             'base_unit_of_measure_id' => $unit->id,
             'name' => 'E2E Test Ingredient',
             'sku' => 'E2E-0001',
+        ]);
+
+        app(RecordStockMovement::class)->handle(
+            organization: $organization,
+            location: $location,
+            storageLocation: $storageLocation,
+            inventoryItem: $item,
+            type: StockMovementType::OpeningBalance,
+            baseQuantity: '25',
+            baseUnitOfMeasure: $unit,
+            referenceType: 'opening_balance',
+            referenceId: $item->id,
+            occurredAt: now()->subDay(),
+            idempotencyKey: 'e2e-seed:opening-balance',
+            inboundUnitCost: '2.5000',
+        );
+
+        Supplier::factory()->create([
+            'organization_id' => $organization->id,
+            'name' => 'E2E Test Supplier',
+            'code' => 'E2ESUP',
         ]);
     }
 }

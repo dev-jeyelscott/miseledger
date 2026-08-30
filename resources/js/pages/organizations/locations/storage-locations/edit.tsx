@@ -1,4 +1,5 @@
 import { Form, Head } from '@inertiajs/react';
+import { useEffect } from 'react';
 import OrganizationStorageLocationController from '@/actions/App/Http/Controllers/OrganizationStorageLocationController';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { PageHeader } from '@/components/page-header';
@@ -6,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
+import { useDirtyFormNavigation } from '@/hooks/use-dirty-form-navigation';
 import { dashboard } from '@/routes';
 import type {
     LocationSummary,
@@ -19,11 +21,30 @@ type Props = {
     storageLocation: StorageLocationSummary;
 };
 
+/** Sync the Inertia form's dirty state into the shared navigation guard. */
+function DirtyStateTracker({
+    dirty,
+    onChange,
+}: {
+    dirty: boolean;
+    onChange: (dirty: boolean) => void;
+}) {
+    useEffect(() => {
+        onChange(dirty);
+    }, [dirty, onChange]);
+
+    return null;
+}
+
 export default function EditStorageLocation({
     organization,
     location,
     storageLocation,
 }: Props) {
+    const dirtyFormNavigation = useDirtyFormNavigation(
+        'You have unsaved storage location changes. Leave without saving them?',
+    );
+
     return (
         <>
             <Head title={`Edit ${storageLocation.name}`} />
@@ -44,8 +65,13 @@ export default function EditStorageLocation({
                         ])}
                         className="space-y-5"
                     >
-                        {({ processing, errors }) => (
+                        {({ processing, errors, isDirty }) => (
                             <>
+                                <DirtyStateTracker
+                                    dirty={isDirty}
+                                    onChange={dirtyFormNavigation.setIsDirty}
+                                />
+
                                 <Field
                                     id="name"
                                     label="Name"
@@ -98,6 +124,10 @@ export default function EditStorageLocation({
                                             [organization.id, location.id],
                                         )}
                                         variant="outline"
+                                        disabled={processing}
+                                        onNavigate={
+                                            dirtyFormNavigation.confirmNavigation
+                                        }
                                     >
                                         Cancel
                                     </PreviousPageButton>
