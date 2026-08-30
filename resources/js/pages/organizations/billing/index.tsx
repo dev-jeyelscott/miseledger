@@ -41,8 +41,12 @@ import type {
     OrganizationSummary,
 } from '@/types';
 
+type BillingOrganizationSummary = OrganizationSummary & {
+    timezone: string;
+};
+
 type Props = {
-    organization: OrganizationSummary;
+    organization: BillingOrganizationSummary;
     subscription: OrganizationSubscriptionContext;
     entitlements: OrganizationEntitlementContext;
     availablePlans: OrganizationAvailablePlan[];
@@ -74,16 +78,18 @@ function formatLabel(value: string | null): string {
         .join(' ');
 }
 
-function formatDate(value: string | null): string | null {
+/** Format an ISO billing instant as a calendar date in the organization timezone. */
+function formatDate(value: string | null, timezone: string): string | null {
     if (value === null) {
         return null;
     }
 
-    return new Date(value).toLocaleDateString(undefined, {
+    return new Intl.DateTimeFormat('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
-    });
+        timeZone: timezone,
+    }).format(new Date(value));
 }
 
 function expiryLabel(value: string | null, now: number): string | null {
@@ -128,9 +134,15 @@ export default function OrganizationBilling({
     const upgradeableTo = hasActiveSubscription
         ? availablePlans.filter((plan) => plan.eligibleUpgrade)
         : [];
-    const trialEndsAt = formatDate(subscription.trialEndsAt);
-    const endsAt = formatDate(subscription.endsAt);
-    const nextBillingAt = formatDate(subscription.nextBillingAt);
+    const trialEndsAt = formatDate(
+        subscription.trialEndsAt,
+        organization.timezone,
+    );
+    const endsAt = formatDate(subscription.endsAt, organization.timezone);
+    const nextBillingAt = formatDate(
+        subscription.nextBillingAt,
+        organization.timezone,
+    );
     const overLimitKeys = Object.entries(entitlements.usage)
         .filter(([, usage]) => usage.atLimit)
         .map(([key]) => formatLabel(key));
@@ -177,8 +189,12 @@ export default function OrganizationBilling({
             return;
         }
 
+        const prefersReducedMotion = window.matchMedia(
+            '(prefers-reduced-motion: reduce)',
+        ).matches;
+
         qrCardRef.current?.scrollIntoView({
-            behavior: 'smooth',
+            behavior: prefersReducedMotion ? 'auto' : 'smooth',
             block: 'start',
         });
     }, [checkout?.invoice_id, checkout?.payment_id]);
@@ -298,14 +314,10 @@ export default function OrganizationBilling({
         );
     }
 
-    function cancelPayMongoSubscription() {
-        if (
-            !window.confirm(
-                'Cancel renewal? Paid access remains available until the end of the current billing period.',
-            )
-        ) {
-            return;
-        }
+    const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+
+    function confirmCancelPayMongoSubscription() {
+        setCancelDialogOpen(false);
 
         router.post(
             OrganizationBillingCancellationController.store.url(
@@ -496,7 +508,9 @@ export default function OrganizationBilling({
                                     <Button
                                         type="button"
                                         variant="destructive"
-                                        onClick={cancelPayMongoSubscription}
+                                        onClick={() =>
+                                            setCancelDialogOpen(true)
+                                        }
                                     >
                                         <XCircle
                                             className="size-4"
@@ -825,6 +839,30 @@ export default function OrganizationBilling({
                         <DialogClose asChild>
                             <Button type="button">Done</Button>
                         </DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Cancel renewal?</DialogTitle>
+                        <DialogDescription>
+                            Paid access remains available until the end of the
+                            current billing period, then this subscription will
+                            not renew.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Keep renewal</Button>
+                        </DialogClose>
+                        <Button
+                            variant="destructive"
+                            onClick={confirmCancelPayMongoSubscription}
+                        >
+                            Cancel renewal
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

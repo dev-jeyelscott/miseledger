@@ -1,12 +1,10 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import {
-    CircleMinus,
     ClipboardList,
     Clock,
     Coins,
     Filter,
     Package,
-    PackageCheck,
     Plus,
     RotateCcw,
     Search,
@@ -14,11 +12,16 @@ import {
 
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
-import InputError from '@/components/input-error';
-import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/empty-state';
+import { FilterToolbar } from '@/components/filter-toolbar';
+import { PageHeader } from '@/components/page-header';
+import { PaginationControls } from '@/components/pagination-controls';
+import { StatusBadge } from '@/components/status-badge';
+import type { StatusBadgeProps } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 
 type PurchaseOrderStatus =
@@ -78,33 +81,15 @@ type Props = {
     canViewCosts: boolean;
 };
 
-const selectClassName =
-    'h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50';
-
 const statusOptions: Array<{
     value: PurchaseOrderStatus;
     label: string;
 }> = [
-    {
-        value: 'draft',
-        label: 'Draft',
-    },
-    {
-        value: 'approved',
-        label: 'Approved',
-    },
-    {
-        value: 'partially_received',
-        label: 'Partially received',
-    },
-    {
-        value: 'received',
-        label: 'Received',
-    },
-    {
-        value: 'cancelled',
-        label: 'Cancelled',
-    },
+    { value: 'draft', label: 'Draft' },
+    { value: 'approved', label: 'Approved' },
+    { value: 'partially_received', label: 'Partially received' },
+    { value: 'received', label: 'Received' },
+    { value: 'cancelled', label: 'Cancelled' },
 ];
 
 const dateFormatter = new Intl.DateTimeFormat('en-PH', {
@@ -114,9 +99,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-PH', {
     timeZone: 'UTC',
 });
 
-/**
- * Format an authoritative decimal money string without JavaScript floats.
- */
+/** Format an authoritative decimal money string without JavaScript floats. */
 function formatMoney(value: string): string {
     const [rawInteger, rawDecimal = ''] = value.trim().split('.');
     const negative = rawInteger.startsWith('-');
@@ -129,60 +112,30 @@ function formatMoney(value: string): string {
     return `${negative ? '-' : ''}${groupedInteger}.${decimal}`;
 }
 
-/**
- * Format a persisted calendar date without browser timezone drift.
- */
+/** Format a persisted calendar date without browser timezone drift. */
 function formatDate(value: string): string {
     return dateFormatter.format(new Date(`${value}T00:00:00Z`));
 }
 
-/**
- * Return the semantic badge treatment for one persisted PO status.
- */
-function statusClassName(status: PurchaseOrderStatus): string {
+function statusVariant(
+    status: PurchaseOrderStatus,
+): StatusBadgeProps['variant'] {
     switch (status) {
-        case 'draft':
-            return 'border-border bg-muted/60 text-muted-foreground';
-
         case 'approved':
-            return 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300';
-
+            return 'info';
         case 'partially_received':
-            return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300';
-
+            return 'warning';
         case 'received':
-            return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300';
-
+            return 'success';
         case 'cancelled':
-            return 'border-destructive/30 bg-destructive/10 text-destructive dark:border-destructive/50 dark:bg-destructive/20';
+            return 'danger';
+        case 'draft':
+        default:
+            return 'neutral';
     }
 }
 
-/**
- * Render an icon so status meaning never depends on color alone.
- */
-function PurchaseOrderStatusIcon({ status }: { status: PurchaseOrderStatus }) {
-    switch (status) {
-        case 'draft':
-            return <ClipboardList className="size-3" aria-hidden="true" />;
-
-        case 'approved':
-            return <Clock className="size-3" aria-hidden="true" />;
-
-        case 'partially_received':
-            return <Package className="size-3" aria-hidden="true" />;
-
-        case 'received':
-            return <PackageCheck className="size-3" aria-hidden="true" />;
-
-        case 'cancelled':
-            return <CircleMinus className="size-3" aria-hidden="true" />;
-    }
-}
-
-/**
- * Convert the persisted status value into its operational label.
- */
+/** Convert the persisted status value into its operational label. */
 function statusLabel(status: PurchaseOrderStatus): string {
     return (
         statusOptions.find((option) => option.value === status)?.label ?? status
@@ -215,27 +168,23 @@ export default function PurchaseOrderIndex({
             <Head title="Purchase orders" />
 
             <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Purchase orders
-                        </h1>
-
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Order stock from configured suppliers and track PO
-                            fulfillment.
-                        </p>
-                    </div>
-
-                    {canManage && (
-                        <Button asChild>
-                            <Link href={PurchaseOrderController.create()}>
-                                <Plus className="size-4" aria-hidden="true" />
-                                Create purchase order
-                            </Link>
-                        </Button>
-                    )}
-                </div>
+                <PageHeader
+                    title="Purchase orders"
+                    description="Order stock from configured suppliers and track PO fulfillment."
+                    actions={
+                        canManage && (
+                            <Button asChild>
+                                <Link href={PurchaseOrderController.create()}>
+                                    <Plus
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    Create purchase order
+                                </Link>
+                            </Button>
+                        )
+                    }
+                />
 
                 <div
                     className={
@@ -283,11 +232,14 @@ export default function PurchaseOrderIndex({
 
                 <Form action={PurchaseOrderController.index().url} method="get">
                     {({ errors, processing }) => (
-                        <div className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
-                            <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-7">
-                                <div className="grid gap-2 md:col-span-2 xl:col-span-2">
-                                    <Label htmlFor="search">Search</Label>
-
+                        <FilterToolbar>
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
+                                <Field
+                                    id="search"
+                                    label="Search"
+                                    className="md:col-span-2 xl:col-span-2"
+                                    error={errors.search}
+                                >
                                     <div className="relative">
                                         <Search
                                             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
@@ -295,7 +247,6 @@ export default function PurchaseOrderIndex({
                                         />
 
                                         <Input
-                                            id="search"
                                             name="search"
                                             type="search"
                                             defaultValue={filters.search ?? ''}
@@ -303,26 +254,18 @@ export default function PurchaseOrderIndex({
                                             className="pl-9"
                                             maxLength={120}
                                             autoComplete="off"
-                                            aria-invalid={
-                                                errors.search ? true : undefined
-                                            }
                                         />
                                     </div>
+                                </Field>
 
-                                    <InputError message={errors.search} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="status">Status</Label>
-
-                                    <select
-                                        id="status"
+                                <Field
+                                    id="status"
+                                    label="Status"
+                                    error={errors.status}
+                                >
+                                    <NativeSelect
                                         name="status"
                                         defaultValue={filters.status ?? ''}
-                                        aria-invalid={
-                                            errors.status ? true : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         <option value="">All statuses</option>
 
@@ -334,28 +277,19 @@ export default function PurchaseOrderIndex({
                                                 {status.label}
                                             </option>
                                         ))}
-                                    </select>
+                                    </NativeSelect>
+                                </Field>
 
-                                    <InputError message={errors.status} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="supplier_id">
-                                        Supplier
-                                    </Label>
-
-                                    <select
-                                        id="supplier_id"
+                                <Field
+                                    id="supplier_id"
+                                    label="Supplier"
+                                    error={errors.supplier_id}
+                                >
+                                    <NativeSelect
                                         name="supplier_id"
                                         defaultValue={
                                             filters.supplierId?.toString() ?? ''
                                         }
-                                        aria-invalid={
-                                            errors.supplier_id
-                                                ? true
-                                                : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         <option value="">All suppliers</option>
 
@@ -367,28 +301,19 @@ export default function PurchaseOrderIndex({
                                                 {supplier.name}
                                             </option>
                                         ))}
-                                    </select>
+                                    </NativeSelect>
+                                </Field>
 
-                                    <InputError message={errors.supplier_id} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="location_id">
-                                        Location
-                                    </Label>
-
-                                    <select
-                                        id="location_id"
+                                <Field
+                                    id="location_id"
+                                    label="Location"
+                                    error={errors.location_id}
+                                >
+                                    <NativeSelect
                                         name="location_id"
                                         defaultValue={
                                             filters.locationId?.toString() ?? ''
                                         }
-                                        aria-invalid={
-                                            errors.location_id
-                                                ? true
-                                                : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         <option value="">All locations</option>
 
@@ -400,44 +325,32 @@ export default function PurchaseOrderIndex({
                                                 {location.name}
                                             </option>
                                         ))}
-                                    </select>
+                                    </NativeSelect>
+                                </Field>
 
-                                    <InputError message={errors.location_id} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="from">
-                                        Order date from
-                                    </Label>
-
+                                <Field
+                                    id="from"
+                                    label="Order date from"
+                                    error={errors.from}
+                                >
                                     <Input
-                                        id="from"
                                         name="from"
                                         type="date"
                                         defaultValue={filters.from ?? ''}
-                                        aria-invalid={
-                                            errors.from ? true : undefined
-                                        }
                                     />
+                                </Field>
 
-                                    <InputError message={errors.from} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="to">Order date to</Label>
-
+                                <Field
+                                    id="to"
+                                    label="Order date to"
+                                    error={errors.to}
+                                >
                                     <Input
-                                        id="to"
                                         name="to"
                                         type="date"
                                         defaultValue={filters.to ?? ''}
-                                        aria-invalid={
-                                            errors.to ? true : undefined
-                                        }
                                     />
-
-                                    <InputError message={errors.to} />
-                                </div>
+                                </Field>
 
                                 <div className="flex items-end gap-2 md:col-span-2 xl:col-span-7 xl:justify-end">
                                     <Button
@@ -465,15 +378,15 @@ export default function PurchaseOrderIndex({
                                     </Button>
                                 </div>
                             </div>
-                        </div>
+                        </FilterToolbar>
                     )}
                 </Form>
 
                 <section
-                    className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border"
+                    className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground"
                     aria-labelledby="purchase-order-register-title"
                 >
-                    <div className="flex min-h-14 flex-col justify-center gap-1 border-b border-sidebar-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-sidebar-border">
+                    <div className="flex min-h-14 flex-col justify-center gap-1 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <h2
                                 id="purchase-order-register-title"
@@ -498,283 +411,316 @@ export default function PurchaseOrderIndex({
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[1080px] text-sm">
-                            <caption className="sr-only">
-                                Tenant-scoped purchase orders with supplier,
-                                location, delivery, status, item count, and
-                                total.
-                            </caption>
-
-                            <thead className="border-b bg-muted/40 text-left">
-                                <tr>
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 font-medium text-muted-foreground"
+                    {purchaseOrders.data.length === 0 ? (
+                        <EmptyState
+                            className="px-6 py-14"
+                            icon={ClipboardList}
+                            title={
+                                hasFilters
+                                    ? 'No purchase orders found'
+                                    : 'No purchase orders yet'
+                            }
+                            description={
+                                hasFilters
+                                    ? 'Adjust or clear the filters to view other orders.'
+                                    : canManage
+                                      ? 'Create a purchase order when stock needs to be ordered.'
+                                      : 'Purchase orders will appear here when they are created.'
+                            }
+                        />
+                    ) : (
+                        <>
+                            <div
+                                className="divide-y divide-border md:hidden"
+                                data-testid="mobile-purchase-orders"
+                            >
+                                {purchaseOrders.data.map((purchaseOrder) => (
+                                    <article
+                                        key={purchaseOrder.id}
+                                        className="space-y-3 p-4"
+                                        aria-labelledby={`purchase-order-${purchaseOrder.id}`}
                                     >
-                                        PO number
-                                    </th>
-
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 font-medium text-muted-foreground"
-                                    >
-                                        Supplier
-                                    </th>
-
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 font-medium text-muted-foreground"
-                                    >
-                                        Location
-                                    </th>
-
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 font-medium text-muted-foreground"
-                                    >
-                                        Order date
-                                    </th>
-
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 font-medium text-muted-foreground"
-                                    >
-                                        Expected delivery
-                                    </th>
-
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 font-medium text-muted-foreground"
-                                    >
-                                        Status
-                                    </th>
-
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 text-right font-medium text-muted-foreground"
-                                    >
-                                        Items
-                                    </th>
-
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 text-right font-medium text-muted-foreground"
-                                    >
-                                        Total
-                                    </th>
-
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 text-right font-medium text-muted-foreground"
-                                    >
-                                        Action
-                                    </th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                {purchaseOrders.data.length === 0 ? (
-                                    <tr>
-                                        <td
-                                            colSpan={9}
-                                            className="px-6 py-14 text-center"
-                                        >
-                                            <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted">
-                                                <ClipboardList
-                                                    className="size-5 text-muted-foreground"
-                                                    aria-hidden="true"
-                                                />
-                                            </div>
-
-                                            <p className="mt-3 font-medium">
-                                                {hasFilters
-                                                    ? 'No purchase orders found'
-                                                    : 'No purchase orders yet'}
-                                            </p>
-
-                                            <p className="mt-1 text-sm text-muted-foreground">
-                                                {hasFilters
-                                                    ? 'Adjust or clear the filters to view other orders.'
-                                                    : canManage
-                                                      ? 'Create a purchase order when stock needs to be ordered.'
-                                                      : 'Purchase orders will appear here when they are created.'}
-                                            </p>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    purchaseOrders.data.map((purchaseOrder) => (
-                                        <tr
-                                            key={purchaseOrder.id}
-                                            className="border-b transition-colors last:border-b-0 hover:bg-muted/30"
-                                        >
-                                            <td className="px-4 py-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
                                                 <Link
+                                                    id={`purchase-order-${purchaseOrder.id}`}
                                                     href={PurchaseOrderController.edit(
                                                         purchaseOrder.id,
                                                     )}
-                                                    className="font-medium text-blue-700 underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none dark:text-blue-300"
+                                                    className="font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                                 >
                                                     {purchaseOrder.number}
                                                 </Link>
-                                            </td>
-
-                                            <td className="px-4 py-3 font-medium">
-                                                {purchaseOrder.supplierName}
-                                            </td>
-
-                                            <td className="px-4 py-3">
-                                                {purchaseOrder.locationName}
-                                            </td>
-
-                                            <td className="px-4 py-3 whitespace-nowrap">
-                                                {formatDate(
-                                                    purchaseOrder.orderDate,
+                                                <p className="mt-1 truncate text-sm text-muted-foreground">
+                                                    {purchaseOrder.supplierName}{' '}
+                                                    ·{' '}
+                                                    {purchaseOrder.locationName}
+                                                </p>
+                                            </div>
+                                            <StatusBadge
+                                                label={statusLabel(
+                                                    purchaseOrder.status,
                                                 )}
-                                            </td>
-
-                                            <td className="px-4 py-3 whitespace-nowrap">
-                                                {purchaseOrder.expectedDeliveryDate ===
-                                                null ? (
-                                                    <span className="text-muted-foreground">
-                                                        —
-                                                    </span>
-                                                ) : (
-                                                    formatDate(
-                                                        purchaseOrder.expectedDeliveryDate,
-                                                    )
+                                                variant={statusVariant(
+                                                    purchaseOrder.status,
                                                 )}
-                                            </td>
+                                            />
+                                        </div>
 
-                                            <td className="px-4 py-3">
-                                                <Badge
-                                                    variant="outline"
-                                                    className={statusClassName(
-                                                        purchaseOrder.status,
+                                        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                                            <div>
+                                                <dt className="text-xs text-muted-foreground">
+                                                    Order date
+                                                </dt>
+                                                <dd className="mt-1">
+                                                    {formatDate(
+                                                        purchaseOrder.orderDate,
                                                     )}
-                                                >
-                                                    <PurchaseOrderStatusIcon
-                                                        status={
-                                                            purchaseOrder.status
-                                                        }
-                                                    />
-
-                                                    {statusLabel(
-                                                        purchaseOrder.status,
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-xs text-muted-foreground">
+                                                    Expected delivery
+                                                </dt>
+                                                <dd className="mt-1">
+                                                    {purchaseOrder.expectedDeliveryDate ===
+                                                    null
+                                                        ? '—'
+                                                        : formatDate(
+                                                              purchaseOrder.expectedDeliveryDate,
+                                                          )}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-xs text-muted-foreground">
+                                                    Items
+                                                </dt>
+                                                <dd className="mt-1 tabular-nums">
+                                                    {purchaseOrder.lineCount.toLocaleString()}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-xs text-muted-foreground">
+                                                    Total
+                                                </dt>
+                                                <dd className="mt-1 font-medium tabular-nums">
+                                                    {currency}{' '}
+                                                    {formatMoney(
+                                                        purchaseOrder.total,
                                                     )}
-                                                </Badge>
-                                            </td>
+                                                </dd>
+                                            </div>
+                                        </dl>
 
-                                            <td className="px-4 py-3 text-right tabular-nums">
-                                                {purchaseOrder.lineCount.toLocaleString()}
-                                            </td>
-
-                                            <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
-                                                {currency}{' '}
-                                                {formatMoney(
-                                                    purchaseOrder.total,
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full"
+                                            asChild
+                                        >
+                                            <Link
+                                                href={PurchaseOrderController.edit(
+                                                    purchaseOrder.id,
                                                 )}
-                                            </td>
+                                            >
+                                                {canManage &&
+                                                purchaseOrder.status === 'draft'
+                                                    ? 'Edit'
+                                                    : 'Open'}
+                                            </Link>
+                                        </Button>
+                                    </article>
+                                ))}
+                            </div>
 
-                                            <td className="px-4 py-3 text-right">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    asChild
-                                                >
-                                                    <Link
-                                                        href={PurchaseOrderController.edit(
-                                                            purchaseOrder.id,
-                                                        )}
-                                                    >
-                                                        {canManage &&
-                                                        purchaseOrder.status ===
-                                                            'draft'
-                                                            ? 'Edit'
-                                                            : 'Open'}
-                                                    </Link>
-                                                </Button>
-                                            </td>
+                            <div className="hidden overflow-x-auto md:block">
+                                <table className="w-full min-w-[1080px] text-sm">
+                                    <caption className="sr-only">
+                                        Tenant-scoped purchase orders with
+                                        supplier, location, delivery, status,
+                                        item count, and total.
+                                    </caption>
+
+                                    <thead className="border-b bg-muted/40 text-left">
+                                        <tr>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium text-muted-foreground"
+                                            >
+                                                PO number
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium text-muted-foreground"
+                                            >
+                                                Supplier
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium text-muted-foreground"
+                                            >
+                                                Location
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium text-muted-foreground"
+                                            >
+                                                Order date
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium text-muted-foreground"
+                                            >
+                                                Expected delivery
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium text-muted-foreground"
+                                            >
+                                                Status
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 text-right font-medium text-muted-foreground"
+                                            >
+                                                Items
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 text-right font-medium text-muted-foreground"
+                                            >
+                                                Total
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 text-right font-medium text-muted-foreground"
+                                            >
+                                                Action
+                                            </th>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                    </thead>
 
-                    {purchaseOrders.total > 0 && (
-                        <div className="flex flex-col gap-3 border-t border-sidebar-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-sidebar-border">
-                            <p className="text-sm text-muted-foreground">
-                                Showing {purchaseOrders.from ?? 0} to{' '}
-                                {purchaseOrders.to ?? 0} of{' '}
-                                {purchaseOrders.total.toLocaleString()} purchase
-                                orders
-                            </p>
+                                    <tbody>
+                                        {purchaseOrders.data.map(
+                                            (purchaseOrder) => (
+                                                <tr
+                                                    key={purchaseOrder.id}
+                                                    className="border-b border-border transition-colors last:border-b-0 hover:bg-muted/30"
+                                                >
+                                                    <td className="px-4 py-3">
+                                                        <Link
+                                                            href={PurchaseOrderController.edit(
+                                                                purchaseOrder.id,
+                                                            )}
+                                                            className="font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                                                        >
+                                                            {
+                                                                purchaseOrder.number
+                                                            }
+                                                        </Link>
+                                                    </td>
 
-                            {purchaseOrders.last_page > 1 && (
-                                <div className="flex items-center gap-2">
-                                    {purchaseOrders.prev_page_url !== null ? (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            asChild
-                                        >
-                                            <Link
-                                                href={
-                                                    purchaseOrders.prev_page_url
-                                                }
-                                                preserveScroll
-                                                preserveState
-                                            >
-                                                Previous
-                                            </Link>
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            disabled
-                                        >
-                                            Previous
-                                        </Button>
-                                    )}
+                                                    <td className="px-4 py-3 font-medium">
+                                                        {
+                                                            purchaseOrder.supplierName
+                                                        }
+                                                    </td>
 
-                                    <span className="min-w-24 text-center text-sm text-muted-foreground">
-                                        Page {purchaseOrders.current_page} of{' '}
-                                        {purchaseOrders.last_page}
-                                    </span>
+                                                    <td className="px-4 py-3">
+                                                        {
+                                                            purchaseOrder.locationName
+                                                        }
+                                                    </td>
 
-                                    {purchaseOrders.next_page_url !== null ? (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            asChild
-                                        >
-                                            <Link
-                                                href={
-                                                    purchaseOrders.next_page_url
-                                                }
-                                                preserveScroll
-                                                preserveState
-                                            >
-                                                Next
-                                            </Link>
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            disabled
-                                        >
-                                            Next
-                                        </Button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        {formatDate(
+                                                            purchaseOrder.orderDate,
+                                                        )}
+                                                    </td>
+
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        {purchaseOrder.expectedDeliveryDate ===
+                                                        null ? (
+                                                            <span className="text-muted-foreground">
+                                                                —
+                                                            </span>
+                                                        ) : (
+                                                            formatDate(
+                                                                purchaseOrder.expectedDeliveryDate,
+                                                            )
+                                                        )}
+                                                    </td>
+
+                                                    <td className="px-4 py-3">
+                                                        <StatusBadge
+                                                            label={statusLabel(
+                                                                purchaseOrder.status,
+                                                            )}
+                                                            variant={statusVariant(
+                                                                purchaseOrder.status,
+                                                            )}
+                                                        />
+                                                    </td>
+
+                                                    <td className="px-4 py-3 text-right tabular-nums">
+                                                        {purchaseOrder.lineCount.toLocaleString()}
+                                                    </td>
+
+                                                    <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
+                                                        {currency}{' '}
+                                                        {formatMoney(
+                                                            purchaseOrder.total,
+                                                        )}
+                                                    </td>
+
+                                                    <td className="px-4 py-3 text-right">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            asChild
+                                                        >
+                                                            <Link
+                                                                href={PurchaseOrderController.edit(
+                                                                    purchaseOrder.id,
+                                                                )}
+                                                            >
+                                                                {canManage &&
+                                                                purchaseOrder.status ===
+                                                                    'draft'
+                                                                    ? 'Edit'
+                                                                    : 'Open'}
+                                                            </Link>
+                                                        </Button>
+                                                    </td>
+                                                </tr>
+                                            ),
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
                     )}
+
+                    <PaginationControls
+                        currentPage={purchaseOrders.current_page}
+                        from={purchaseOrders.from}
+                        to={purchaseOrders.to}
+                        total={purchaseOrders.total}
+                        lastPage={purchaseOrders.last_page}
+                        previousPageUrl={purchaseOrders.prev_page_url}
+                        nextPageUrl={purchaseOrders.next_page_url}
+                        itemLabel="purchase orders"
+                        preserveScroll
+                        preserveState
+                    />
                 </section>
             </div>
         </>

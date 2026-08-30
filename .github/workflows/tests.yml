@@ -101,3 +101,90 @@ jobs:
 
       - name: Run Tests
         run: composer test
+
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    services:
+      pgsql:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: miseledger_testing
+          POSTGRES_USER: miseledger
+          POSTGRES_PASSWORD: miseledger
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U miseledger -d miseledger_testing"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: miseledger_testing
+      DB_USERNAME: miseledger
+      DB_PASSWORD: miseledger
+
+      CACHE_STORE: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
+
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:8002
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@157b36a476930944ed837c3758e866476ef9f240
+        with:
+          php-version: '8.5.9'
+          extensions: bcmath, curl, dom, fileinfo, mbstring, openssl, pcntl, pdo_pgsql, posix, redis
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Prepare Application Environment
+        run: cp .env.example .env
+
+      - name: Install Composer Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Setup Application
+        run: |
+          php artisan key:generate
+          npm ci
+          npm run build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Start application server
+        run: php artisan serve --host=127.0.0.1 --port=8002 &
+
+      - name: Run Playwright E2E suite
+        run: npm run test:e2e

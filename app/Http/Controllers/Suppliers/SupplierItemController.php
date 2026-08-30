@@ -214,6 +214,7 @@ class SupplierItemController extends Controller
 
             'itemOptions' => $itemOptions,
             'unitOptions' => $unitOptions,
+            'timezone' => $organization->timezone,
 
             'canManage' => Gate::allows(
                 OrganizationPermission::PurchasingManage->value,

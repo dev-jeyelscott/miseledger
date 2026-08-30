@@ -55,7 +55,7 @@ class OrganizationBillingController extends Controller
     }
 
     /**
-     * @return array{id: int, name: string, slug: string}
+     * @return array{id: int, name: string, slug: string, timezone: string}
      */
     private function organizationData(Organization $organization): array
     {
@@ -63,6 +63,7 @@ class OrganizationBillingController extends Controller
             'id' => $organization->id,
             'name' => $organization->name,
             'slug' => $organization->slug,
+            'timezone' => $organization->timezone,
         ];
     }
 

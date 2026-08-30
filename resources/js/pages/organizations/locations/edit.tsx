@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
+import { useDirtyFormNavigation } from '@/hooks/use-dirty-form-navigation';
 import { dashboard } from '@/routes';
 import type { LocationSummary, OrganizationSummary } from '@/types';
 
@@ -15,24 +16,17 @@ type Props = {
     location: LocationSummary;
 };
 
-/** Warn before an unguarded tab close or refresh while the form is dirty. */
-function UnsavedChangesGuard({ dirty }: { dirty: boolean }) {
+/** Sync the Inertia form's dirty state into the shared navigation guard. */
+function DirtyStateTracker({
+    dirty,
+    onChange,
+}: {
+    dirty: boolean;
+    onChange: (dirty: boolean) => void;
+}) {
     useEffect(() => {
-        if (!dirty) {
-            return;
-        }
-
-        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-            event.preventDefault();
-            event.returnValue = '';
-        };
-
-        window.addEventListener('beforeunload', handleBeforeUnload);
-
-        return () => {
-            window.removeEventListener('beforeunload', handleBeforeUnload);
-        };
-    }, [dirty]);
+        onChange(dirty);
+    }, [dirty, onChange]);
 
     return null;
 }
@@ -41,6 +35,10 @@ export default function EditOrganizationLocation({
     organization,
     location,
 }: Props) {
+    const dirtyFormNavigation = useDirtyFormNavigation(
+        'You have unsaved location changes. Leave without saving them?',
+    );
+
     return (
         <>
             <Head title={`Edit ${location.name}`} />
@@ -63,7 +61,12 @@ export default function EditOrganizationLocation({
                         {({ processing, errors, isDirty }) => {
                             return (
                                 <>
-                                    <UnsavedChangesGuard dirty={isDirty} />
+                                    <DirtyStateTracker
+                                        dirty={isDirty}
+                                        onChange={
+                                            dirtyFormNavigation.setIsDirty
+                                        }
+                                    />
 
                                     <Field
                                         id="name"
@@ -115,7 +118,7 @@ export default function EditOrganizationLocation({
                                             disabled={processing}
                                         >
                                             {processing
-                                                ? 'Saving...'
+                                                ? 'Saving…'
                                                 : 'Save location'}
                                         </Button>
 
@@ -125,6 +128,9 @@ export default function EditOrganizationLocation({
                                             )}
                                             variant="outline"
                                             disabled={processing}
+                                            onNavigate={
+                                                dirtyFormNavigation.confirmNavigation
+                                            }
                                         >
                                             Cancel
                                         </PreviousPageButton>

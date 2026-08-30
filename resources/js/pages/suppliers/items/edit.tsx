@@ -65,14 +65,28 @@ type Props = {
 
     itemOptions: ItemOption[];
     unitOptions: UnitOption[];
+    timezone: string;
     canManage: boolean;
 };
+
+/** Format an ISO price-history instant in the organization timezone. */
+function formatEffectiveAt(value: string, timezone: string): string {
+    return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: timezone,
+    }).format(new Date(value));
+}
 
 export default function EditSupplierItem({
     supplier,
     supplierItem,
     itemOptions,
     unitOptions,
+    timezone,
     canManage,
 }: Props) {
     return (
@@ -390,9 +404,10 @@ export default function EditSupplierItem({
                                             </span>
 
                                             <span className="text-sm text-muted-foreground">
-                                                {new Date(
+                                                {formatEffectiveAt(
                                                     price.effectiveAt,
-                                                ).toLocaleString()}
+                                                    timezone,
+                                                )}
                                             </span>
                                         </div>
                                     ))}

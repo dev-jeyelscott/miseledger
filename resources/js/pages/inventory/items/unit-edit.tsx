@@ -1,11 +1,14 @@
 import { Form, Head } from '@inertiajs/react';
+import { useEffect } from 'react';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InventoryItemUnitController from '@/actions/App/Http/Controllers/Inventory/InventoryItemUnitController';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
+import { useDirtyFormNavigation } from '@/hooks/use-dirty-form-navigation';
 import { dashboard } from '@/routes';
 import type { InventoryItemUnitData, UnitOfMeasureData } from '@/types';
 
@@ -19,21 +22,40 @@ type Props = {
     conversion: InventoryItemUnitData;
 };
 
+/** Sync the Inertia form's dirty state into the shared navigation guard. */
+function DirtyStateTracker({
+    dirty,
+    onChange,
+}: {
+    dirty: boolean;
+    onChange: (dirty: boolean) => void;
+}) {
+    useEffect(() => {
+        onChange(dirty);
+    }, [dirty, onChange]);
+
+    return null;
+}
+
 export default function EditInventoryItemUnit({ item, conversion }: Props) {
+    const dirtyFormNavigation = useDirtyFormNavigation(
+        'You have unsaved unit conversion changes. Leave without saving them?',
+    );
+
     return (
         <>
             <Head title={`${item.name} - ${conversion.unitOfMeasure.symbol}`} />
 
             <div className="flex flex-1 flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-2xl font-semibold">
-                        Edit unit conversion
-                    </h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        {item.name}: 1 {conversion.unitOfMeasure.symbol} to{' '}
-                        {item.baseUnitOfMeasure.symbol}
-                    </p>
-                </div>
+                <PageHeader
+                    title="Edit unit conversion"
+                    description={
+                        <>
+                            {item.name}: 1 {conversion.unitOfMeasure.symbol} to{' '}
+                            {item.baseUnitOfMeasure.symbol}
+                        </>
+                    }
+                />
 
                 <div className="max-w-xl rounded-xl border border-border bg-card p-5">
                     <Form
@@ -43,8 +65,13 @@ export default function EditInventoryItemUnit({ item, conversion }: Props) {
                         ])}
                         className="space-y-5"
                     >
-                        {({ processing, errors }) => (
+                        {({ processing, errors, isDirty }) => (
                             <>
+                                <DirtyStateTracker
+                                    dirty={isDirty}
+                                    onChange={dirtyFormNavigation.setIsDirty}
+                                />
+
                                 <Field
                                     id="quantity_in_base_unit"
                                     label="Quantity in base unit"
@@ -100,6 +127,9 @@ export default function EditInventoryItemUnit({ item, conversion }: Props) {
                                             ).url
                                         }
                                         disabled={processing}
+                                        onNavigate={
+                                            dirtyFormNavigation.confirmNavigation
+                                        }
                                     >
                                         Back
                                     </PreviousPageButton>

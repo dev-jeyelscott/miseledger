@@ -61,6 +61,8 @@ export default function OrganizationCheckoutSuccess({
 }: Props) {
     const [pollAttempts, setPollAttempts] = useState(0);
     const pollExhausted = pollAttempts >= MAX_POLL_ATTEMPTS;
+    const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+    const [paymentError, setPaymentError] = useState<string | null>(null);
 
     const poll = usePoll(
         POLL_INTERVAL_MS,
@@ -82,81 +84,99 @@ export default function OrganizationCheckoutSuccess({
     ) {
         event.preventDefault();
 
-        if (payment === null) {
+        if (payment === null || paymentSubmitting) {
             return;
         }
 
-        const formData = new FormData(event.currentTarget);
-        const authorization = `Basic ${btoa(`${payment.publicKey}:`)}`;
+        setPaymentError(null);
+        setPaymentSubmitting(true);
 
-        const paymentMethodResponse = await fetch(
-            `${payment.apiBaseUrl}/payment_methods`,
-            {
-                method: 'POST',
-                headers: {
-                    Accept: 'application/json',
-                    Authorization: authorization,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    data: {
-                        attributes: {
-                            type: 'card',
-                            details: {
-                                card_number: formData.get('cardNumber'),
-                                exp_month: Number(formData.get('expiryMonth')),
-                                exp_year: Number(formData.get('expiryYear')),
-                                cvc: formData.get('cvc'),
+        try {
+            const formData = new FormData(event.currentTarget);
+            const authorization = `Basic ${btoa(`${payment.publicKey}:`)}`;
+
+            const paymentMethodResponse = await fetch(
+                `${payment.apiBaseUrl}/payment_methods`,
+                {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        Authorization: authorization,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        data: {
+                            attributes: {
+                                type: 'card',
+                                details: {
+                                    card_number: formData.get('cardNumber'),
+                                    exp_month: Number(
+                                        formData.get('expiryMonth'),
+                                    ),
+                                    exp_year: Number(
+                                        formData.get('expiryYear'),
+                                    ),
+                                    cvc: formData.get('cvc'),
+                                },
                             },
                         },
-                    },
-                }),
-            },
-        );
-
-        const paymentMethod = await paymentMethodResponse.json();
-        const paymentMethodId = paymentMethod?.data?.id;
-
-        if (!paymentMethodResponse.ok || typeof paymentMethodId !== 'string') {
-            throw new Error('Unable to create the payment method.');
-        }
-
-        const paymentIntentResponse = await fetch(
-            `${payment.apiBaseUrl}/payment_intents/${payment.paymentIntentId}/attach`,
-            {
-                method: 'POST',
-                headers: {
-                    Accept: 'application/json',
-                    Authorization: authorization,
-                    'Content-Type': 'application/json',
+                    }),
                 },
-                body: JSON.stringify({
-                    data: {
-                        attributes: {
-                            payment_method: paymentMethodId,
-                            client_key: payment.clientKey,
-                            return_url: window.location.href,
-                        },
+            );
+
+            const paymentMethod = await paymentMethodResponse.json();
+            const paymentMethodId = paymentMethod?.data?.id;
+
+            if (
+                !paymentMethodResponse.ok ||
+                typeof paymentMethodId !== 'string'
+            ) {
+                throw new Error('Unable to create the payment method.');
+            }
+
+            const paymentIntentResponse = await fetch(
+                `${payment.apiBaseUrl}/payment_intents/${payment.paymentIntentId}/attach`,
+                {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        Authorization: authorization,
+                        'Content-Type': 'application/json',
                     },
-                }),
-            },
-        );
+                    body: JSON.stringify({
+                        data: {
+                            attributes: {
+                                payment_method: paymentMethodId,
+                                client_key: payment.clientKey,
+                                return_url: window.location.href,
+                            },
+                        },
+                    }),
+                },
+            );
 
-        const paymentIntent = await paymentIntentResponse.json();
-        const redirectUrl =
-            paymentIntent?.data?.attributes?.next_action?.redirect?.url;
+            const paymentIntent = await paymentIntentResponse.json();
+            const redirectUrl =
+                paymentIntent?.data?.attributes?.next_action?.redirect?.url;
 
-        if (!paymentIntentResponse.ok) {
-            throw new Error('Unable to start the payment.');
+            if (!paymentIntentResponse.ok) {
+                throw new Error('Unable to start the payment.');
+            }
+
+            if (typeof redirectUrl === 'string') {
+                window.location.assign(redirectUrl);
+
+                return;
+            }
+
+            router.reload({ only: ['subscription', 'synchronized'] });
+        } catch {
+            setPaymentError(
+                'We could not start this payment. Check your card details and try again.',
+            );
+        } finally {
+            setPaymentSubmitting(false);
         }
-
-        if (typeof redirectUrl === 'string') {
-            window.location.assign(redirectUrl);
-
-            return;
-        }
-
-        router.reload({ only: ['subscription', 'synchronized'] });
     }
 
     return (
@@ -276,9 +296,22 @@ export default function OrganizationCheckoutSuccess({
                                                 type="password"
                                             />
                                         </label>
-                                        <Button type="submit">
+                                        {paymentError !== null && (
+                                            <p
+                                                role="alert"
+                                                className="text-sm text-destructive"
+                                            >
+                                                {paymentError}
+                                            </p>
+                                        )}
+                                        <Button
+                                            type="submit"
+                                            disabled={paymentSubmitting}
+                                        >
                                             <CreditCard aria-hidden="true" />
-                                            Continue to payment
+                                            {paymentSubmitting
+                                                ? 'Processing…'
+                                                : 'Continue to payment'}
                                         </Button>
                                     </form>
                                 )}
