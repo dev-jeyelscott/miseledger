@@ -1,10 +1,11 @@
 import { Form, Head } from '@inertiajs/react';
 import OrganizationStorageLocationController from '@/actions/App/Http/Controllers/OrganizationStorageLocationController';
-import InputError from '@/components/input-error';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 import type {
     LocationSummary,
@@ -29,15 +30,11 @@ export default function EditStorageLocation({
 
             <div className="flex flex-1 items-start justify-center p-4">
                 <div className="w-full max-w-xl rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border">
-                    <div className="mb-6">
-                        <h1 className="text-2xl font-semibold">
-                            Edit storage location
-                        </h1>
-
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            {organization.name} · {location.name}
-                        </p>
-                    </div>
+                    <PageHeader
+                        title="Edit storage location"
+                        description={`${organization.name} · ${location.name}`}
+                        className="mb-6"
+                    />
 
                     <Form
                         {...OrganizationStorageLocationController.update.form([
@@ -49,49 +46,51 @@ export default function EditStorageLocation({
                     >
                         {({ processing, errors }) => (
                             <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="name">Name</Label>
+                                <Field
+                                    id="name"
+                                    label="Name"
+                                    error={errors.name}
+                                >
                                     <Input
-                                        id="name"
                                         name="name"
                                         required
                                         defaultValue={storageLocation.name}
                                     />
-                                    <InputError message={errors.name} />
-                                </div>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="code">Code</Label>
+                                <Field
+                                    id="code"
+                                    label="Code"
+                                    error={errors.code}
+                                >
                                     <Input
-                                        id="code"
                                         name="code"
                                         required
                                         defaultValue={storageLocation.code}
                                     />
-                                    <InputError message={errors.code} />
-                                </div>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="active">Status</Label>
-
-                                    <select
-                                        id="active"
+                                <Field
+                                    id="active"
+                                    label="Status"
+                                    error={errors.active}
+                                >
+                                    <NativeSelect
                                         name="active"
                                         defaultValue={
                                             storageLocation.active ? '1' : '0'
                                         }
-                                        className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="1">Active</option>
                                         <option value="0">Inactive</option>
-                                    </select>
-
-                                    <InputError message={errors.active} />
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
                                 <div className="flex gap-2">
                                     <Button type="submit" disabled={processing}>
-                                        Save storage location
+                                        {processing
+                                            ? 'Saving…'
+                                            : 'Save storage location'}
                                     </Button>
 
                                     <PreviousPageButton

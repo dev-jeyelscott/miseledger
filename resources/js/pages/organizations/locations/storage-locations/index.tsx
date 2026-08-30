@@ -6,6 +6,7 @@ import OrganizationLocationController from '@/actions/App/Http/Controllers/Organ
 import OrganizationStorageLocationController from '@/actions/App/Http/Controllers/OrganizationStorageLocationController';
 import InputError from '@/components/input-error';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
+import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,6 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type {
@@ -252,18 +254,17 @@ function EditStorageLocationDialog({
                                         Status
                                     </Label>
 
-                                    <select
+                                    <NativeSelect
                                         id={`${fieldPrefix}-active`}
                                         name="active"
                                         defaultValue={
                                             storageLocation.active ? '1' : '0'
                                         }
                                         aria-describedby={statusHelpId}
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                     >
                                         <option value="1">Active</option>
                                         <option value="0">Inactive</option>
-                                    </select>
+                                    </NativeSelect>
 
                                     <p
                                         id={statusHelpId}
@@ -350,29 +351,30 @@ export default function StorageLocationsIndex({
             <Head title={`${location.name} storage locations`} />
 
             <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Storage locations
-                        </h1>
-
-                        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                <PageHeader
+                    title="Storage locations"
+                    description={
+                        <>
                             Manage storage areas for {organization.name} ·{' '}
                             {location.name}.
-                        </p>
-                    </div>
-
-                    <CreateStorageLocationDialog
-                        organization={organization}
-                        location={location}
-                        trigger={
-                            <Button>
-                                <Plus className="size-4" aria-hidden="true" />
-                                Add storage location
-                            </Button>
-                        }
-                    />
-                </div>
+                        </>
+                    }
+                    actions={
+                        <CreateStorageLocationDialog
+                            organization={organization}
+                            location={location}
+                            trigger={
+                                <Button>
+                                    <Plus
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    Add storage location
+                                </Button>
+                            }
+                        />
+                    }
+                />
 
                 <section
                     aria-label="Storage location summary"
@@ -437,7 +439,7 @@ export default function StorageLocationsIndex({
                                 Filter storage locations by status
                             </label>
 
-                            <select
+                            <NativeSelect
                                 id="storage-location-status-filter"
                                 value={statusFilter}
                                 onChange={(event) =>
@@ -446,12 +448,11 @@ export default function StorageLocationsIndex({
                                             .value as StorageLocationStatusFilter,
                                     )
                                 }
-                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                             >
                                 <option value="all">All statuses</option>
                                 <option value="active">Active</option>
                                 <option value="inactive">Inactive</option>
-                            </select>
+                            </NativeSelect>
                         </div>
 
                         <div className="flex items-center gap-2 md:justify-end">
@@ -478,7 +479,80 @@ export default function StorageLocationsIndex({
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    {filteredStorageLocations.length === 0 ? (
+                        <div className="px-4 py-12 text-center">
+                            <div className="mx-auto max-w-sm">
+                                <p className="font-medium">
+                                    {hasFilters
+                                        ? 'No storage locations match these filters.'
+                                        : 'No storage locations have been configured yet.'}
+                                </p>
+
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {hasFilters
+                                        ? 'Adjust or reset the filters to see more storage locations.'
+                                        : 'Add your first storage location to organize inventory inside this restaurant location.'}
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div
+                            className="divide-y divide-sidebar-border/70 md:hidden dark:divide-sidebar-border"
+                            data-testid="mobile-storage-locations"
+                        >
+                            {filteredStorageLocations.map((storageLocation) => (
+                                <article
+                                    key={storageLocation.id}
+                                    className="space-y-3 p-4"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="truncate font-medium">
+                                                {storageLocation.name}
+                                            </p>
+                                            <span className="mt-1 inline-block rounded-md bg-muted px-2 py-1 font-mono text-xs">
+                                                {storageLocation.code}
+                                            </span>
+                                        </div>
+                                        <Badge
+                                            variant={
+                                                storageLocation.active
+                                                    ? 'secondary'
+                                                    : 'outline'
+                                            }
+                                            className={
+                                                storageLocation.active
+                                                    ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                                    : 'text-muted-foreground'
+                                            }
+                                        >
+                                            {storageLocation.active
+                                                ? 'Active'
+                                                : 'Inactive'}
+                                        </Badge>
+                                    </div>
+
+                                    <EditStorageLocationDialog
+                                        organization={organization}
+                                        location={location}
+                                        storageLocation={storageLocation}
+                                        trigger={
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full"
+                                                aria-label={`Edit ${storageLocation.name}`}
+                                            >
+                                                Edit
+                                            </Button>
+                                        }
+                                    />
+                                </article>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="hidden overflow-x-auto md:block">
                         <table className="w-full min-w-[680px] text-sm">
                             <caption className="sr-only">
                                 Storage locations configured for {location.name}

@@ -1,6 +1,5 @@
 import { Form, Head, Link, usePage } from '@inertiajs/react';
 import {
-    CircleMinus,
     ClipboardList,
     Clock,
     Coins,
@@ -10,17 +9,22 @@ import {
     PackageCheck,
     RotateCcw,
     Search,
-    TriangleAlert,
 } from 'lucide-react';
 
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import PurchasingHistoryReportController from '@/actions/App/Http/Controllers/Inventory/PurchasingHistoryReportController';
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
+import { EmptyState } from '@/components/empty-state';
+import { FilterToolbar } from '@/components/filter-toolbar';
+import { PageHeader } from '@/components/page-header';
+import { StatusBadge } from '@/components/status-badge';
+import type { StatusBadgeProps } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 import type { OrganizationContext } from '@/types';
 
@@ -120,9 +124,6 @@ const receiptStateOptions: Array<{
     },
 ];
 
-const selectClassName =
-    'h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50';
-
 /** Format persisted decimal strings without converting quantities or costs to floats. */
 function formatDecimal(value: string): string {
     const [rawInteger, rawDecimal = ''] = value.trim().split('.');
@@ -150,37 +151,17 @@ function formatLabel(value: string): string {
         .join(' ');
 }
 
-/** Return accessible semantic styling for one receipt state. */
-function receiptStateClassName(state: ReceiptState): string {
+function receiptStateVariant(state: ReceiptState): StatusBadgeProps['variant'] {
     switch (state) {
         case 'received':
-            return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300';
-
+            return 'success';
         case 'partial':
-            return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300';
-
+            return 'warning';
         case 'over_received':
-            return 'border-destructive/30 bg-destructive/10 text-destructive dark:border-destructive/50 dark:bg-destructive/20';
-
+            return 'danger';
         case 'not_received':
-            return 'border-border bg-muted/50 text-muted-foreground';
-    }
-}
-
-/** Render a non-color-only icon for each receipt-state badge. */
-function ReceiptStateIcon({ state }: { state: ReceiptState }) {
-    switch (state) {
-        case 'received':
-            return <PackageCheck className="size-3" aria-hidden="true" />;
-
-        case 'partial':
-            return <Clock className="size-3" aria-hidden="true" />;
-
-        case 'over_received':
-            return <TriangleAlert className="size-3" aria-hidden="true" />;
-
-        case 'not_received':
-            return <CircleMinus className="size-3" aria-hidden="true" />;
+        default:
+            return 'neutral';
     }
 }
 
@@ -273,25 +254,21 @@ export default function PurchasingHistoryReport({
             <Head title="Purchasing history" />
 
             <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Purchasing history
-                        </h1>
-
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Purchase orders and receiving history with
-                            ordered-versus-received quantities.
-                        </p>
-                    </div>
-
-                    <Button variant="outline" asChild>
-                        <Link href={InventoryItemController.index()}>
-                            <Package className="size-4" aria-hidden="true" />
-                            Inventory items
-                        </Link>
-                    </Button>
-                </div>
+                <PageHeader
+                    title="Purchasing history"
+                    description="Purchase orders and receiving history with ordered-versus-received quantities."
+                    actions={
+                        <Button variant="outline" asChild>
+                            <Link href={InventoryItemController.index()}>
+                                <Package
+                                    className="size-4"
+                                    aria-hidden="true"
+                                />
+                                Inventory items
+                            </Link>
+                        </Button>
+                    }
+                />
 
                 <div
                     className={
@@ -340,25 +317,18 @@ export default function PurchasingHistoryReport({
                     method="get"
                 >
                     {({ errors, processing }) => (
-                        <div className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
-                            <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-5">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="supplier_id">
-                                        Supplier
-                                    </Label>
-
-                                    <select
-                                        id="supplier_id"
+                        <FilterToolbar>
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                                <Field
+                                    id="supplier_id"
+                                    label="Supplier"
+                                    error={errors.supplier_id}
+                                >
+                                    <NativeSelect
                                         name="supplier_id"
                                         defaultValue={
                                             filters.supplierId?.toString() ?? ''
                                         }
-                                        aria-invalid={
-                                            errors.supplier_id
-                                                ? true
-                                                : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         <option value="">All suppliers</option>
 
@@ -370,26 +340,19 @@ export default function PurchasingHistoryReport({
                                                 {supplier.name}
                                             </option>
                                         ))}
-                                    </select>
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="location_id">
-                                        Location
-                                    </Label>
-
-                                    <select
-                                        id="location_id"
+                                <Field
+                                    id="location_id"
+                                    label="Location"
+                                    error={errors.location_id}
+                                >
+                                    <NativeSelect
                                         name="location_id"
                                         defaultValue={
                                             filters.locationId?.toString() ?? ''
                                         }
-                                        aria-invalid={
-                                            errors.location_id
-                                                ? true
-                                                : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         <option value="">All locations</option>
 
@@ -401,40 +364,34 @@ export default function PurchasingHistoryReport({
                                                 {location.name}
                                             </option>
                                         ))}
-                                    </select>
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="from">From</Label>
-
+                                <Field
+                                    id="from"
+                                    label="From"
+                                    error={errors.from}
+                                >
                                     <Input
-                                        id="from"
                                         name="from"
                                         type="date"
                                         defaultValue={filters.from ?? ''}
-                                        aria-invalid={
-                                            errors.from ? true : undefined
-                                        }
                                     />
-                                </div>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="to">To</Label>
-
+                                <Field id="to" label="To" error={errors.to}>
                                     <Input
-                                        id="to"
                                         name="to"
                                         type="date"
                                         defaultValue={filters.to ?? ''}
-                                        aria-invalid={
-                                            errors.to ? true : undefined
-                                        }
                                     />
-                                </div>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="search">Search</Label>
-
+                                <Field
+                                    id="search"
+                                    label="Search"
+                                    error={errors.search}
+                                >
                                     <div className="relative">
                                         <Search
                                             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
@@ -442,7 +399,6 @@ export default function PurchasingHistoryReport({
                                         />
 
                                         <Input
-                                            id="search"
                                             name="search"
                                             type="search"
                                             defaultValue={filters.search ?? ''}
@@ -450,12 +406,9 @@ export default function PurchasingHistoryReport({
                                             className="pl-9"
                                             maxLength={120}
                                             autoComplete="off"
-                                            aria-invalid={
-                                                errors.search ? true : undefined
-                                            }
                                         />
                                     </div>
-                                </div>
+                                </Field>
 
                                 <fieldset className="min-w-0 md:col-span-2 xl:col-span-4">
                                     <legend className="mb-2 text-sm font-medium">
@@ -548,7 +501,7 @@ export default function PurchasingHistoryReport({
                             </div>
 
                             <div
-                                className="flex flex-wrap items-center gap-2 border-t border-sidebar-border/70 px-4 py-3 text-sm text-muted-foreground dark:border-sidebar-border"
+                                className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4 text-sm text-muted-foreground"
                                 aria-live="polite"
                             >
                                 <Filter className="size-4" aria-hidden="true" />
@@ -567,15 +520,15 @@ export default function PurchasingHistoryReport({
                                         : activeFilterCount}
                                 </Badge>
                             </div>
-                        </div>
+                        </FilterToolbar>
                     )}
                 </Form>
 
                 <section
-                    className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border"
+                    className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground"
                     aria-labelledby="purchasing-history-table-title"
                 >
-                    <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-sidebar-border/70 px-4 py-2 dark:border-sidebar-border">
+                    <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2">
                         <div>
                             <h2
                                 id="purchasing-history-table-title"
@@ -603,242 +556,363 @@ export default function PurchasingHistoryReport({
                         )}
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <table
-                            className={`w-full text-sm ${
-                                canViewCosts
-                                    ? 'min-w-[1320px]'
-                                    : 'min-w-[1080px]'
-                            }`}
-                        >
-                            <caption className="sr-only">
-                                Purchasing history showing purchase order,
-                                supplier, location, item, ordered quantity,
-                                received quantity, receipt state, and permitted
-                                historical cost information.
-                            </caption>
-
-                            <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                                <tr>
-                                    <th scope="col" className="px-4 py-3">
-                                        PO number
-                                    </th>
-
-                                    <th scope="col" className="px-4 py-3">
-                                        Order date
-                                    </th>
-
-                                    <th scope="col" className="px-4 py-3">
-                                        Supplier
-                                    </th>
-
-                                    <th scope="col" className="px-4 py-3">
-                                        Location
-                                    </th>
-
-                                    <th scope="col" className="px-4 py-3">
-                                        Item
-                                    </th>
-
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 text-right"
+                    {rows.length === 0 ? (
+                        <EmptyState
+                            className="px-6 py-14"
+                            icon={Search}
+                            title={
+                                hasFilters
+                                    ? 'No purchasing history matches these filters.'
+                                    : 'No purchasing history found.'
+                            }
+                            description={
+                                hasFilters
+                                    ? 'Adjust or clear the filters to view other purchase activity.'
+                                    : 'Purchase-order and receiving history will appear here when available.'
+                            }
+                        />
+                    ) : (
+                        <>
+                            <div
+                                className="divide-y divide-border md:hidden"
+                                data-testid="mobile-purchasing-history"
+                            >
+                                {rows.map((row) => (
+                                    <article
+                                        key={row.id}
+                                        className="space-y-3 p-4"
+                                        aria-labelledby={`purchasing-history-${row.id}`}
                                     >
-                                        Ordered
-                                    </th>
-
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 text-right"
-                                    >
-                                        Received
-                                    </th>
-
-                                    <th scope="col" className="px-4 py-3">
-                                        Receipt state
-                                    </th>
-
-                                    {canViewCosts && (
-                                        <>
-                                            <th
-                                                scope="col"
-                                                className="px-4 py-3 text-right"
-                                            >
-                                                Unit price
-                                            </th>
-
-                                            <th
-                                                scope="col"
-                                                className="px-4 py-3 text-right"
-                                            >
-                                                Line total
-                                            </th>
-                                        </>
-                                    )}
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                {rows.length === 0 ? (
-                                    <tr>
-                                        <td
-                                            colSpan={canViewCosts ? 10 : 8}
-                                            className="px-6 py-14 text-center"
-                                        >
-                                            <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted">
-                                                <Search
-                                                    className="size-5 text-muted-foreground"
-                                                    aria-hidden="true"
-                                                />
-                                            </div>
-
-                                            <p className="mt-3 font-medium">
-                                                {hasFilters
-                                                    ? 'No purchasing history matches these filters.'
-                                                    : 'No purchasing history found.'}
-                                            </p>
-
-                                            <p className="mt-1 text-sm text-muted-foreground">
-                                                {hasFilters
-                                                    ? 'Adjust or clear the filters to view other purchase activity.'
-                                                    : 'Purchase-order and receiving history will appear here when available.'}
-                                            </p>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    rows.map((row) => (
-                                        <tr
-                                            key={row.id}
-                                            className="border-b border-sidebar-border/70 align-top transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
-                                        >
-                                            <td className="px-4 py-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
                                                 {canViewPurchaseOrders ? (
                                                     <Link
+                                                        id={`purchasing-history-${row.id}`}
                                                         href={PurchaseOrderController.edit(
                                                             row.purchaseOrderId,
                                                         )}
-                                                        className="font-semibold text-blue-700 underline-offset-4 hover:underline dark:text-blue-300"
+                                                        className="font-semibold underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                                     >
                                                         {
                                                             row.purchaseOrderNumber
                                                         }
                                                     </Link>
                                                 ) : (
-                                                    <div className="font-semibold">
+                                                    <p
+                                                        id={`purchasing-history-${row.id}`}
+                                                        className="font-semibold"
+                                                    >
                                                         {
                                                             row.purchaseOrderNumber
                                                         }
-                                                    </div>
+                                                    </p>
                                                 )}
+                                                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                    {row.itemName} ·{' '}
+                                                    {row.supplierName}
+                                                </p>
+                                            </div>
+                                            <StatusBadge
+                                                label={
+                                                    receiptStateLabels[
+                                                        row.receiptState
+                                                    ]
+                                                }
+                                                variant={receiptStateVariant(
+                                                    row.receiptState,
+                                                )}
+                                            />
+                                        </div>
 
-                                                <div className="mt-0.5 text-xs text-muted-foreground">
-                                                    {formatLabel(
-                                                        row.purchaseOrderStatus,
-                                                    )}
-                                                </div>
-                                            </td>
-
-                                            <td className="px-4 py-3 whitespace-nowrap">
-                                                {row.orderDate}
-                                            </td>
-
-                                            <td className="px-4 py-3">
-                                                {row.supplierName}
-                                            </td>
-
-                                            <td className="px-4 py-3">
-                                                {row.locationName}
-                                            </td>
-
-                                            <td className="px-4 py-3">
-                                                <div className="font-medium">
-                                                    {row.itemName}
-                                                </div>
-
-                                                <div className="mt-0.5 text-xs text-muted-foreground">
-                                                    {row.supplierSku}
-                                                </div>
-                                            </td>
-
-                                            <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
-                                                <div className="font-medium">
+                                        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                                            <div>
+                                                <dt className="text-xs text-muted-foreground">
+                                                    Order date
+                                                </dt>
+                                                <dd className="mt-1">
+                                                    {row.orderDate}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-xs text-muted-foreground">
+                                                    Location
+                                                </dt>
+                                                <dd className="mt-1">
+                                                    {row.locationName}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-xs text-muted-foreground">
+                                                    Ordered
+                                                </dt>
+                                                <dd className="mt-1 tabular-nums">
                                                     {formatDecimal(
                                                         row.orderedQuantity,
                                                     )}{' '}
-                                                    <span className="font-normal text-muted-foreground">
-                                                        {row.purchaseUnitSymbol}
-                                                    </span>
-                                                </div>
-
-                                                <div className="mt-0.5 text-xs text-muted-foreground">
-                                                    Base:{' '}
-                                                    {formatDecimal(
-                                                        row.baseQuantity,
-                                                    )}{' '}
-                                                    {row.baseUnitSymbol}
-                                                </div>
-                                            </td>
-
-                                            <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
-                                                <div className="font-medium">
+                                                    {row.purchaseUnitSymbol}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-xs text-muted-foreground">
+                                                    Received
+                                                </dt>
+                                                <dd className="mt-1 tabular-nums">
                                                     {formatDecimal(
                                                         row.receivedBaseQuantity,
                                                     )}{' '}
-                                                    <span className="font-normal text-muted-foreground">
-                                                        {row.baseUnitSymbol}
-                                                    </span>
-                                                </div>
-
-                                                <div className="mt-0.5 text-xs text-muted-foreground">
-                                                    {receiptProgressLabel(row)}
-                                                </div>
-                                            </td>
-
-                                            <td className="px-4 py-3">
-                                                <Badge
-                                                    variant="outline"
-                                                    className={receiptStateClassName(
-                                                        row.receiptState,
-                                                    )}
-                                                >
-                                                    <ReceiptStateIcon
-                                                        state={row.receiptState}
-                                                    />
-                                                    {
-                                                        receiptStateLabels[
-                                                            row.receiptState
-                                                        ]
-                                                    }
-                                                </Badge>
-                                            </td>
-
+                                                    {row.baseUnitSymbol}
+                                                </dd>
+                                            </div>
                                             {canViewCosts && (
-                                                <>
-                                                    <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
-                                                        {row.unitPrice === null
-                                                            ? '—'
-                                                            : formatCurrency(
-                                                                  row.unitPrice,
-                                                                  currency,
-                                                              )}
-                                                    </td>
-
-                                                    <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
+                                                <div>
+                                                    <dt className="text-xs text-muted-foreground">
+                                                        Line total
+                                                    </dt>
+                                                    <dd className="mt-1 font-medium tabular-nums">
                                                         {row.lineTotal === null
                                                             ? '—'
                                                             : formatCurrency(
                                                                   row.lineTotal,
                                                                   currency,
                                                               )}
-                                                    </td>
+                                                    </dd>
+                                                </div>
+                                            )}
+                                        </dl>
+                                    </article>
+                                ))}
+                            </div>
+
+                            <div className="hidden overflow-x-auto md:block">
+                                <table
+                                    className={`w-full text-sm ${
+                                        canViewCosts
+                                            ? 'min-w-[1320px]'
+                                            : 'min-w-[1080px]'
+                                    }`}
+                                >
+                                    <caption className="sr-only">
+                                        Purchasing history showing purchase
+                                        order, supplier, location, item, ordered
+                                        quantity, received quantity, receipt
+                                        state, and permitted historical cost
+                                        information.
+                                    </caption>
+
+                                    <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+                                        <tr>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3"
+                                            >
+                                                PO number
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3"
+                                            >
+                                                Order date
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3"
+                                            >
+                                                Supplier
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3"
+                                            >
+                                                Location
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3"
+                                            >
+                                                Item
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 text-right"
+                                            >
+                                                Ordered
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 text-right"
+                                            >
+                                                Received
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3"
+                                            >
+                                                Receipt state
+                                            </th>
+
+                                            {canViewCosts && (
+                                                <>
+                                                    <th
+                                                        scope="col"
+                                                        className="px-4 py-3 text-right"
+                                                    >
+                                                        Unit price
+                                                    </th>
+
+                                                    <th
+                                                        scope="col"
+                                                        className="px-4 py-3 text-right"
+                                                    >
+                                                        Line total
+                                                    </th>
                                                 </>
                                             )}
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                    </thead>
+
+                                    <tbody>
+                                        {rows.map((row) => (
+                                            <tr
+                                                key={row.id}
+                                                className="border-b border-border align-top transition-colors last:border-b-0 hover:bg-muted/30"
+                                            >
+                                                <td className="px-4 py-3">
+                                                    {canViewPurchaseOrders ? (
+                                                        <Link
+                                                            href={PurchaseOrderController.edit(
+                                                                row.purchaseOrderId,
+                                                            )}
+                                                            className="font-semibold underline-offset-4 hover:underline"
+                                                        >
+                                                            {
+                                                                row.purchaseOrderNumber
+                                                            }
+                                                        </Link>
+                                                    ) : (
+                                                        <div className="font-semibold">
+                                                            {
+                                                                row.purchaseOrderNumber
+                                                            }
+                                                        </div>
+                                                    )}
+
+                                                    <div className="mt-0.5 text-xs text-muted-foreground">
+                                                        {formatLabel(
+                                                            row.purchaseOrderStatus,
+                                                        )}
+                                                    </div>
+                                                </td>
+
+                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                    {row.orderDate}
+                                                </td>
+
+                                                <td className="px-4 py-3">
+                                                    {row.supplierName}
+                                                </td>
+
+                                                <td className="px-4 py-3">
+                                                    {row.locationName}
+                                                </td>
+
+                                                <td className="px-4 py-3">
+                                                    <div className="font-medium">
+                                                        {row.itemName}
+                                                    </div>
+
+                                                    <div className="mt-0.5 text-xs text-muted-foreground">
+                                                        {row.supplierSku}
+                                                    </div>
+                                                </td>
+
+                                                <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+                                                    <div className="font-medium">
+                                                        {formatDecimal(
+                                                            row.orderedQuantity,
+                                                        )}{' '}
+                                                        <span className="font-normal text-muted-foreground">
+                                                            {
+                                                                row.purchaseUnitSymbol
+                                                            }
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="mt-0.5 text-xs text-muted-foreground">
+                                                        Base:{' '}
+                                                        {formatDecimal(
+                                                            row.baseQuantity,
+                                                        )}{' '}
+                                                        {row.baseUnitSymbol}
+                                                    </div>
+                                                </td>
+
+                                                <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+                                                    <div className="font-medium">
+                                                        {formatDecimal(
+                                                            row.receivedBaseQuantity,
+                                                        )}{' '}
+                                                        <span className="font-normal text-muted-foreground">
+                                                            {row.baseUnitSymbol}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="mt-0.5 text-xs text-muted-foreground">
+                                                        {receiptProgressLabel(
+                                                            row,
+                                                        )}
+                                                    </div>
+                                                </td>
+
+                                                <td className="px-4 py-3">
+                                                    <StatusBadge
+                                                        label={
+                                                            receiptStateLabels[
+                                                                row.receiptState
+                                                            ]
+                                                        }
+                                                        variant={receiptStateVariant(
+                                                            row.receiptState,
+                                                        )}
+                                                    />
+                                                </td>
+
+                                                {canViewCosts && (
+                                                    <>
+                                                        <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+                                                            {row.unitPrice ===
+                                                            null
+                                                                ? '—'
+                                                                : formatCurrency(
+                                                                      row.unitPrice,
+                                                                      currency,
+                                                                  )}
+                                                        </td>
+
+                                                        <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
+                                                            {row.lineTotal ===
+                                                            null
+                                                                ? '—'
+                                                                : formatCurrency(
+                                                                      row.lineTotal,
+                                                                      currency,
+                                                                  )}
+                                                        </td>
+                                                    </>
+                                                )}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    )}
                 </section>
             </div>
         </>

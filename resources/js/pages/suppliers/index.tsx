@@ -15,7 +15,11 @@ import {
 
 import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
+import { EmptyState } from '@/components/empty-state';
+import { FilterToolbar } from '@/components/filter-toolbar';
 import InputError from '@/components/input-error';
+import { PageHeader } from '@/components/page-header';
+import { StatusBadge } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,8 +30,10 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 
@@ -100,9 +106,6 @@ type EditSupplierDialogProps = {
     supplier: Supplier;
     trigger: React.ReactNode;
 };
-
-const selectClassName =
-    'h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
 /** Format a persisted currency string without converting it to floating point. */
 function formatCurrency(value: string, currency: string): string {
@@ -462,17 +465,16 @@ function EditSupplierDialog({ supplier, trigger }: EditSupplierDialogProps) {
                                         >
                                             Status
                                         </Label>
-                                        <select
+                                        <NativeSelect
                                             id={`edit-supplier-active-${supplier.id}`}
                                             name="active"
                                             defaultValue={
                                                 supplier.active ? '1' : '0'
                                             }
-                                            className={selectClassName}
                                         >
                                             <option value="1">Active</option>
                                             <option value="0">Inactive</option>
-                                        </select>
+                                        </NativeSelect>
                                         <InputError message={errors.active} />
                                     </div>
                                 </div>
@@ -530,32 +532,25 @@ export default function SuppliersIndex({
             <Head title="Suppliers" />
 
             <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Suppliers
-                        </h1>
-
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Manage vendors, purchase packs, and supplier
-                            pricing.
-                        </p>
-                    </div>
-
-                    {canManage && (
-                        <CreateSupplierDialog
-                            trigger={
-                                <Button type="button">
-                                    <Plus
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    New supplier
-                                </Button>
-                            }
-                        />
-                    )}
-                </div>
+                <PageHeader
+                    title="Suppliers"
+                    description="Manage vendors, purchase packs, and supplier pricing."
+                    actions={
+                        canManage && (
+                            <CreateSupplierDialog
+                                trigger={
+                                    <Button type="button">
+                                        <Plus
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        New supplier
+                                    </Button>
+                                }
+                            />
+                        )
+                    }
+                />
 
                 <div
                     className={
@@ -619,113 +614,102 @@ export default function SuppliersIndex({
                     }}
                 >
                     {({ processing }) => (
-                        <div className="grid gap-4 rounded-xl border border-sidebar-border/70 bg-card p-4 shadow-sm lg:grid-cols-2 xl:grid-cols-[minmax(280px,1.6fr)_minmax(150px,0.7fr)_minmax(190px,0.8fr)_110px_auto] dark:border-sidebar-border">
-                            <div className="grid gap-2">
-                                <Label htmlFor="supplier-search">Search</Label>
+                        <FilterToolbar>
+                            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(280px,1.6fr)_minmax(150px,0.7fr)_minmax(190px,0.8fr)_110px_auto]">
+                                <Field id="supplier-search" label="Search">
+                                    <div className="relative">
+                                        <Search
+                                            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                                            aria-hidden="true"
+                                        />
 
-                                <div className="relative">
-                                    <Search
-                                        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                                        aria-hidden="true"
-                                    />
+                                        <Input
+                                            type="search"
+                                            name="search"
+                                            defaultValue={filters.search ?? ''}
+                                            placeholder="Search name, code, contact, email, or phone"
+                                            className="pl-9"
+                                            autoComplete="off"
+                                        />
+                                    </div>
+                                </Field>
 
-                                    <Input
-                                        id="supplier-search"
-                                        type="search"
-                                        name="search"
-                                        defaultValue={filters.search ?? ''}
-                                        placeholder="Search name, code, contact, email, or phone"
-                                        className="pl-9"
-                                        autoComplete="off"
-                                    />
-                                </div>
-                            </div>
+                                <Field id="supplier-status" label="Status">
+                                    <NativeSelect
+                                        name="status"
+                                        defaultValue={filters.status ?? ''}
+                                    >
+                                        <option value="">All statuses</option>
+                                        <option value="active">Active</option>
+                                        <option value="inactive">
+                                            Inactive
+                                        </option>
+                                    </NativeSelect>
+                                </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="supplier-status">Status</Label>
+                                <Field id="supplier-sort" label="Sort by">
+                                    <NativeSelect
+                                        name="sort"
+                                        defaultValue={filters.sort}
+                                    >
+                                        <option value="name_asc">
+                                            Supplier name (A-Z)
+                                        </option>
+                                        <option value="name_desc">
+                                            Supplier name (Z-A)
+                                        </option>
+                                        <option value="code_asc">
+                                            Supplier code (A-Z)
+                                        </option>
+                                        <option value="code_desc">
+                                            Supplier code (Z-A)
+                                        </option>
+                                        <option value="items_desc">
+                                            Most linked items
+                                        </option>
+                                    </NativeSelect>
+                                </Field>
 
-                                <select
-                                    id="supplier-status"
-                                    name="status"
-                                    defaultValue={filters.status ?? ''}
-                                    className={selectClassName}
-                                >
-                                    <option value="">All statuses</option>
-                                    <option value="active">Active</option>
-                                    <option value="inactive">Inactive</option>
-                                </select>
-                            </div>
+                                <Field id="supplier-per-page" label="Rows">
+                                    <NativeSelect
+                                        name="per_page"
+                                        defaultValue={filters.perPage.toString()}
+                                    >
+                                        <option value="10">10</option>
+                                        <option value="25">25</option>
+                                        <option value="50">50</option>
+                                    </NativeSelect>
+                                </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="supplier-sort">Sort by</Label>
-
-                                <select
-                                    id="supplier-sort"
-                                    name="sort"
-                                    defaultValue={filters.sort}
-                                    className={selectClassName}
-                                >
-                                    <option value="name_asc">
-                                        Supplier name (A-Z)
-                                    </option>
-                                    <option value="name_desc">
-                                        Supplier name (Z-A)
-                                    </option>
-                                    <option value="code_asc">
-                                        Supplier code (A-Z)
-                                    </option>
-                                    <option value="code_desc">
-                                        Supplier code (Z-A)
-                                    </option>
-                                    <option value="items_desc">
-                                        Most linked items
-                                    </option>
-                                </select>
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="supplier-per-page">Rows</Label>
-
-                                <select
-                                    id="supplier-per-page"
-                                    name="per_page"
-                                    defaultValue={filters.perPage.toString()}
-                                    className={selectClassName}
-                                >
-                                    <option value="10">10</option>
-                                    <option value="25">25</option>
-                                    <option value="50">50</option>
-                                </select>
-                            </div>
-
-                            <div className="flex items-end gap-2 lg:col-span-2 xl:col-span-1">
-                                <Button
-                                    type="submit"
-                                    disabled={processing}
-                                    className="min-w-24 flex-1 xl:flex-none"
-                                >
-                                    <Filter
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    {processing ? 'Applying…' : 'Apply'}
-                                </Button>
-
-                                <Button
-                                    variant="outline"
-                                    className="flex-1 xl:flex-none"
-                                    asChild
-                                >
-                                    <Link href={SupplierController.index()}>
-                                        <RotateCcw
+                                <div className="flex items-end gap-2 lg:col-span-2 xl:col-span-1">
+                                    <Button
+                                        type="submit"
+                                        disabled={processing}
+                                        className="min-w-24 flex-1 xl:flex-none"
+                                    >
+                                        <Filter
                                             className="size-4"
                                             aria-hidden="true"
                                         />
-                                        Clear
-                                    </Link>
-                                </Button>
+                                        {processing ? 'Applying…' : 'Apply'}
+                                    </Button>
+
+                                    <Button
+                                        variant="outline"
+                                        className="flex-1 xl:flex-none"
+                                        asChild
+                                    >
+                                        <Link href={SupplierController.index()}>
+                                            <RotateCcw
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            Clear
+                                        </Link>
+                                    </Button>
+                                </div>
                             </div>
-                        </div>
+                        </FilterToolbar>
                     )}
                 </Form>
 
@@ -749,7 +733,123 @@ export default function SuppliersIndex({
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    {suppliers.length === 0 ? (
+                        <EmptyState
+                            className="px-6 py-14"
+                            icon={Search}
+                            title={
+                                hasFilters
+                                    ? 'No suppliers match the current filters'
+                                    : 'No suppliers have been created'
+                            }
+                            description={
+                                hasFilters
+                                    ? 'Adjust or clear the filters to view available suppliers.'
+                                    : 'Create a supplier to begin configuring purchase packs and pricing.'
+                            }
+                        />
+                    ) : (
+                        <div
+                            className="divide-y divide-sidebar-border/70 md:hidden dark:divide-sidebar-border"
+                            data-testid="mobile-suppliers"
+                        >
+                            {suppliers.map((supplier) => (
+                                <article
+                                    key={supplier.id}
+                                    className="space-y-3 p-4"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <Link
+                                                href={SupplierController.edit(
+                                                    supplier.id,
+                                                )}
+                                                className="font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                            >
+                                                {supplier.name}
+                                            </Link>
+                                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                {supplier.code} ·{' '}
+                                                {supplierMetadata(supplier)}
+                                            </p>
+                                        </div>
+                                        <StatusBadge
+                                            label={
+                                                supplier.active
+                                                    ? 'Active'
+                                                    : 'Inactive'
+                                            }
+                                            variant={
+                                                supplier.active
+                                                    ? 'success'
+                                                    : 'neutral'
+                                            }
+                                        />
+                                    </div>
+
+                                    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">
+                                                Contact
+                                            </dt>
+                                            <dd className="mt-1">
+                                                {supplier.contactName ?? '—'}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">
+                                                Items
+                                            </dt>
+                                            <dd className="mt-1 tabular-nums">
+                                                {supplier.itemCount.toLocaleString()}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">
+                                                Last PO
+                                            </dt>
+                                            <dd className="mt-1">
+                                                {supplier.lastPurchaseOrderNumber ??
+                                                    '—'}
+                                            </dd>
+                                        </div>
+                                    </dl>
+
+                                    {canManage ? (
+                                        <EditSupplierDialog
+                                            supplier={supplier}
+                                            trigger={
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="w-full"
+                                                >
+                                                    Edit
+                                                </Button>
+                                            }
+                                        />
+                                    ) : (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full"
+                                            asChild
+                                        >
+                                            <Link
+                                                href={SupplierController.edit(
+                                                    supplier.id,
+                                                )}
+                                            >
+                                                View
+                                            </Link>
+                                        </Button>
+                                    )}
+                                </article>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="hidden overflow-x-auto md:block">
                         <table className="w-full min-w-[1080px] text-sm">
                             <caption className="sr-only">
                                 Organization-scoped suppliers with purchasing
@@ -810,162 +910,130 @@ export default function SuppliersIndex({
                             </thead>
 
                             <tbody>
-                                {suppliers.length === 0 ? (
-                                    <tr>
-                                        <td
-                                            colSpan={7}
-                                            className="px-6 py-14 text-center"
-                                        >
-                                            <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted">
-                                                <Search
-                                                    className="size-5 text-muted-foreground"
+                                {suppliers.map((supplier) => (
+                                    <tr
+                                        key={supplier.id}
+                                        className="border-b transition-colors last:border-b-0 hover:bg-muted/30"
+                                    >
+                                        <td className="px-4 py-3">
+                                            <div className="min-w-0">
+                                                <Link
+                                                    href={SupplierController.edit(
+                                                        supplier.id,
+                                                    )}
+                                                    className="font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                >
+                                                    {supplier.name}
+                                                </Link>
+
+                                                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                    {supplierMetadata(supplier)}
+                                                </p>
+                                            </div>
+                                        </td>
+
+                                        <td className="px-4 py-3 font-medium whitespace-nowrap">
+                                            {supplier.code}
+                                        </td>
+
+                                        <td className="px-4 py-3">
+                                            <div className="max-w-[280px]">
+                                                <p className="truncate font-medium">
+                                                    {supplier.contactName ??
+                                                        '—'}
+                                                </p>
+
+                                                {supplier.email !== null && (
+                                                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                        {supplier.email}
+                                                    </p>
+                                                )}
+
+                                                {supplier.phone !== null && (
+                                                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                        {supplier.phone}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </td>
+
+                                        <td className="px-4 py-3 text-right font-medium tabular-nums">
+                                            {supplier.itemCount.toLocaleString()}
+                                        </td>
+
+                                        <td className="px-4 py-3">
+                                            {supplier.lastPurchaseOrderNumber ===
+                                            null ? (
+                                                <span className="text-muted-foreground">
+                                                    —
+                                                </span>
+                                            ) : (
+                                                <div>
+                                                    <p className="font-medium whitespace-nowrap">
+                                                        {
+                                                            supplier.lastPurchaseOrderNumber
+                                                        }
+                                                    </p>
+
+                                                    {supplier.lastPurchaseOrderDate !==
+                                                        null && (
+                                                        <p className="mt-0.5 text-xs whitespace-nowrap text-muted-foreground">
+                                                            {formatDate(
+                                                                supplier.lastPurchaseOrderDate,
+                                                            )}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </td>
+
+                                        <td className="px-4 py-3">
+                                            <Badge
+                                                variant="outline"
+                                                className={supplierStatusClassName(
+                                                    supplier.active,
+                                                )}
+                                            >
+                                                <span
+                                                    className={
+                                                        supplier.active
+                                                            ? 'size-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400'
+                                                            : 'size-1.5 rounded-full bg-muted-foreground'
+                                                    }
                                                     aria-hidden="true"
                                                 />
-                                            </div>
+                                                {supplier.active
+                                                    ? 'Active'
+                                                    : 'Inactive'}
+                                            </Badge>
+                                        </td>
 
-                                            <p className="mt-3 font-medium">
-                                                {hasFilters
-                                                    ? 'No suppliers match the current filters'
-                                                    : 'No suppliers have been created'}
-                                            </p>
-
-                                            <p className="mt-1 text-sm text-muted-foreground">
-                                                {hasFilters
-                                                    ? 'Adjust or clear the filters to view available suppliers.'
-                                                    : 'Create a supplier to begin configuring purchase packs and pricing.'}
-                                            </p>
+                                        <td className="px-4 py-3 text-right">
+                                            {canManage ? (
+                                                <EditSupplierDialog
+                                                    supplier={supplier}
+                                                    trigger={
+                                                        <button
+                                                            type="button"
+                                                            className="text-sm font-medium text-muted-foreground hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                    }
+                                                />
+                                            ) : (
+                                                <Link
+                                                    href={SupplierController.edit(
+                                                        supplier.id,
+                                                    )}
+                                                    className="text-sm font-medium text-muted-foreground hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                >
+                                                    View
+                                                </Link>
+                                            )}
                                         </td>
                                     </tr>
-                                ) : (
-                                    suppliers.map((supplier) => (
-                                        <tr
-                                            key={supplier.id}
-                                            className="border-b transition-colors last:border-b-0 hover:bg-muted/30"
-                                        >
-                                            <td className="px-4 py-3">
-                                                <div className="min-w-0">
-                                                    <Link
-                                                        href={SupplierController.edit(
-                                                            supplier.id,
-                                                        )}
-                                                        className="font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                                    >
-                                                        {supplier.name}
-                                                    </Link>
-
-                                                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                                                        {supplierMetadata(
-                                                            supplier,
-                                                        )}
-                                                    </p>
-                                                </div>
-                                            </td>
-
-                                            <td className="px-4 py-3 font-medium whitespace-nowrap">
-                                                {supplier.code}
-                                            </td>
-
-                                            <td className="px-4 py-3">
-                                                <div className="max-w-[280px]">
-                                                    <p className="truncate font-medium">
-                                                        {supplier.contactName ??
-                                                            '—'}
-                                                    </p>
-
-                                                    {supplier.email !==
-                                                        null && (
-                                                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                                                            {supplier.email}
-                                                        </p>
-                                                    )}
-
-                                                    {supplier.phone !==
-                                                        null && (
-                                                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                                                            {supplier.phone}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </td>
-
-                                            <td className="px-4 py-3 text-right font-medium tabular-nums">
-                                                {supplier.itemCount.toLocaleString()}
-                                            </td>
-
-                                            <td className="px-4 py-3">
-                                                {supplier.lastPurchaseOrderNumber ===
-                                                null ? (
-                                                    <span className="text-muted-foreground">
-                                                        —
-                                                    </span>
-                                                ) : (
-                                                    <div>
-                                                        <p className="font-medium whitespace-nowrap">
-                                                            {
-                                                                supplier.lastPurchaseOrderNumber
-                                                            }
-                                                        </p>
-
-                                                        {supplier.lastPurchaseOrderDate !==
-                                                            null && (
-                                                            <p className="mt-0.5 text-xs whitespace-nowrap text-muted-foreground">
-                                                                {formatDate(
-                                                                    supplier.lastPurchaseOrderDate,
-                                                                )}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </td>
-
-                                            <td className="px-4 py-3">
-                                                <Badge
-                                                    variant="outline"
-                                                    className={supplierStatusClassName(
-                                                        supplier.active,
-                                                    )}
-                                                >
-                                                    <span
-                                                        className={
-                                                            supplier.active
-                                                                ? 'size-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400'
-                                                                : 'size-1.5 rounded-full bg-muted-foreground'
-                                                        }
-                                                        aria-hidden="true"
-                                                    />
-                                                    {supplier.active
-                                                        ? 'Active'
-                                                        : 'Inactive'}
-                                                </Badge>
-                                            </td>
-
-                                            <td className="px-4 py-3 text-right">
-                                                {canManage ? (
-                                                    <EditSupplierDialog
-                                                        supplier={supplier}
-                                                        trigger={
-                                                            <button
-                                                                type="button"
-                                                                className="text-sm font-medium text-muted-foreground hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                                            >
-                                                                Edit
-                                                            </button>
-                                                        }
-                                                    />
-                                                ) : (
-                                                    <Link
-                                                        href={SupplierController.edit(
-                                                            supplier.id,
-                                                        )}
-                                                        className="text-sm font-medium text-muted-foreground hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                                    >
-                                                        View
-                                                    </Link>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
+                                ))}
                             </tbody>
                         </table>
                     </div>

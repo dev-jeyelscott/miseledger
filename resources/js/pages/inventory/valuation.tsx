@@ -14,8 +14,12 @@ import {
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InventoryValuationReportController from '@/actions/App/Http/Controllers/Inventory/InventoryValuationReportController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
+import { EmptyState } from '@/components/empty-state';
+import { FilterToolbar } from '@/components/filter-toolbar';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { Field } from '@/components/ui/field';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 import type { OrganizationContext } from '@/types';
 
@@ -65,9 +69,6 @@ type Props = {
     currency: string;
     canViewCosts: boolean;
 };
-
-const selectClassName =
-    'h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50';
 
 /** Format persisted decimal strings without converting quantities or money to floats. */
 function formatDecimal(value: string): string {
@@ -161,25 +162,21 @@ export default function InventoryValuationReport({
             <Head title="Inventory valuation" />
 
             <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Inventory valuation
-                        </h1>
-
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Current inventory value aggregated by location and
-                            category.
-                        </p>
-                    </div>
-
-                    <Button variant="outline" asChild>
-                        <Link href={InventoryItemController.index()}>
-                            <Package className="size-4" aria-hidden="true" />
-                            Inventory items
-                        </Link>
-                    </Button>
-                </div>
+                <PageHeader
+                    title="Inventory valuation"
+                    description="Current inventory value aggregated by location and category."
+                    actions={
+                        <Button variant="outline" asChild>
+                            <Link href={InventoryItemController.index()}>
+                                <Package
+                                    className="size-4"
+                                    aria-hidden="true"
+                                />
+                                Inventory items
+                            </Link>
+                        </Button>
+                    }
+                />
 
                 <div
                     className={
@@ -228,25 +225,18 @@ export default function InventoryValuationReport({
                     method="get"
                 >
                     {({ errors, processing }) => (
-                        <div className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border">
-                            <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_auto]">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="location_id">
-                                        Location
-                                    </Label>
-
-                                    <select
-                                        id="location_id"
+                        <FilterToolbar>
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_auto]">
+                                <Field
+                                    id="location_id"
+                                    label="Location"
+                                    error={errors.location_id}
+                                >
+                                    <NativeSelect
                                         name="location_id"
                                         defaultValue={
                                             filters.locationId?.toString() ?? ''
                                         }
-                                        aria-invalid={
-                                            errors.location_id
-                                                ? true
-                                                : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         <option value="">All locations</option>
 
@@ -258,27 +248,20 @@ export default function InventoryValuationReport({
                                                 {location.name}
                                             </option>
                                         ))}
-                                    </select>
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="inventory_category_id">
-                                        Category
-                                    </Label>
-
-                                    <select
-                                        id="inventory_category_id"
+                                <Field
+                                    id="inventory_category_id"
+                                    label="Category"
+                                    error={errors.inventory_category_id}
+                                >
+                                    <NativeSelect
                                         name="inventory_category_id"
                                         defaultValue={
                                             filters.inventoryCategoryId?.toString() ??
                                             ''
                                         }
-                                        aria-invalid={
-                                            errors.inventory_category_id
-                                                ? true
-                                                : undefined
-                                        }
-                                        className={selectClassName}
                                     >
                                         <option value="">All categories</option>
 
@@ -290,8 +273,8 @@ export default function InventoryValuationReport({
                                                 {category.name}
                                             </option>
                                         ))}
-                                    </select>
-                                </div>
+                                    </NativeSelect>
+                                </Field>
 
                                 <div className="flex items-end gap-2 md:col-span-2 xl:col-span-1">
                                     <Button
@@ -334,17 +317,17 @@ export default function InventoryValuationReport({
                                     </div>
                                 )}
                             </div>
-                        </div>
+                        </FilterToolbar>
                     )}
                 </Form>
 
                 {canViewCosts && (
                     <div className="grid gap-4 lg:grid-cols-2">
                         <section
-                            className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border"
+                            className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground"
                             aria-labelledby="valuation-by-location-title"
                         >
-                            <div className="flex min-h-12 items-center gap-2 border-b border-sidebar-border/70 px-4 dark:border-sidebar-border">
+                            <div className="flex min-h-12 items-center gap-2 border-b border-border px-4">
                                 <Building2
                                     className="size-4 text-muted-foreground"
                                     aria-hidden="true"
@@ -405,7 +388,7 @@ export default function InventoryValuationReport({
                                             locationTotals.map((total) => (
                                                 <tr
                                                     key={total.locationId}
-                                                    className="border-b last:border-b-0"
+                                                    className="border-b border-border last:border-b-0"
                                                 >
                                                     <td className="px-4 py-3 font-medium">
                                                         {total.locationName}
@@ -456,10 +439,10 @@ export default function InventoryValuationReport({
                         </section>
 
                         <section
-                            className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border"
+                            className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground"
                             aria-labelledby="valuation-by-category-title"
                         >
-                            <div className="flex min-h-12 items-center gap-2 border-b border-sidebar-border/70 px-4 dark:border-sidebar-border">
+                            <div className="flex min-h-12 items-center gap-2 border-b border-border px-4">
                                 <Tags
                                     className="size-4 text-muted-foreground"
                                     aria-hidden="true"
@@ -525,7 +508,7 @@ export default function InventoryValuationReport({
                                                 return (
                                                     <tr
                                                         key={key}
-                                                        className="border-b last:border-b-0"
+                                                        className="border-b border-border last:border-b-0"
                                                     >
                                                         <td className="px-4 py-3 font-medium">
                                                             {total.categoryName ??
@@ -580,10 +563,10 @@ export default function InventoryValuationReport({
                 )}
 
                 <section
-                    className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border"
+                    className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground"
                     aria-labelledby="valuation-details-title"
                 >
-                    <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-sidebar-border/70 px-4 py-2 dark:border-sidebar-border">
+                    <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2">
                         <div>
                             <h2
                                 id="valuation-details-title"
@@ -614,179 +597,245 @@ export default function InventoryValuationReport({
                         )}
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[900px] text-sm">
-                            <caption className="sr-only">
-                                Current inventory valuation by item and
-                                location. Quantities remain in each item's base
-                                unit.
-                            </caption>
-
-                            <thead className="border-b bg-muted/40 text-left">
-                                <tr>
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 font-medium text-muted-foreground"
+                    {rows.length === 0 ? (
+                        <EmptyState
+                            className="px-6 py-14"
+                            icon={Search}
+                            title="No inventory balances found"
+                            description="Adjust or clear the filters to view current inventory valuation."
+                        />
+                    ) : (
+                        <>
+                            <div
+                                className="divide-y divide-border md:hidden"
+                                data-testid="mobile-valuation"
+                            >
+                                {rows.map((row) => (
+                                    <article
+                                        key={row.id}
+                                        className="space-y-3 p-4"
+                                        aria-labelledby={`valuation-${row.id}`}
                                     >
-                                        Item
-                                    </th>
-
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 font-medium text-muted-foreground"
-                                    >
-                                        Category
-                                    </th>
-
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 font-medium text-muted-foreground"
-                                    >
-                                        Location
-                                    </th>
-
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 text-right font-medium text-muted-foreground"
-                                    >
-                                        Quantity
-                                    </th>
-
-                                    {canViewCosts && (
-                                        <>
-                                            <th
-                                                scope="col"
-                                                className="px-4 py-3 text-right font-medium text-muted-foreground"
+                                        <div className="min-w-0">
+                                            <p
+                                                id={`valuation-${row.id}`}
+                                                className="truncate font-medium"
                                             >
-                                                Avg. cost
-                                            </th>
+                                                {row.itemName}
+                                            </p>
+                                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                {row.itemSku} ·{' '}
+                                                {row.categoryName ??
+                                                    'Uncategorized'}
+                                            </p>
+                                        </div>
 
-                                            <th
-                                                scope="col"
-                                                className="px-4 py-3 text-right font-medium text-muted-foreground"
-                                            >
-                                                Value
-                                            </th>
-                                        </>
-                                    )}
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                {rows.length === 0 ? (
-                                    <tr>
-                                        <td
-                                            colSpan={canViewCosts ? 6 : 4}
-                                            className="px-6 py-14 text-center"
-                                        >
-                                            <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted">
-                                                <Search
-                                                    className="size-5 text-muted-foreground"
-                                                    aria-hidden="true"
-                                                />
+                                        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                                            <div>
+                                                <dt className="text-xs text-muted-foreground">
+                                                    Location
+                                                </dt>
+                                                <dd className="mt-1">
+                                                    {row.locationName}
+                                                </dd>
                                             </div>
-
-                                            <p className="mt-3 font-medium">
-                                                No inventory balances found
-                                            </p>
-
-                                            <p className="mt-1 text-sm text-muted-foreground">
-                                                Adjust or clear the filters to
-                                                view current inventory
-                                                valuation.
-                                            </p>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    rows.map((row) => (
-                                        <tr
-                                            key={row.id}
-                                            className="border-b border-sidebar-border/70 transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
-                                        >
-                                            <td className="px-4 py-3">
-                                                <div className="min-w-0">
-                                                    <div className="truncate font-medium">
-                                                        {row.itemName}
-                                                    </div>
-
-                                                    <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                                                        {row.itemSku}
-                                                    </div>
-                                                </div>
-                                            </td>
-
-                                            <td className="px-4 py-3">
-                                                {row.categoryName ?? (
-                                                    <span className="text-muted-foreground">
-                                                        Uncategorized
-                                                    </span>
-                                                )}
-                                            </td>
-
-                                            <td className="px-4 py-3">
-                                                {row.locationName}
-                                            </td>
-
-                                            <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
-                                                {formatDecimal(
-                                                    row.quantityOnHand,
-                                                )}{' '}
-                                                <span className="font-normal text-muted-foreground">
+                                            <div>
+                                                <dt className="text-xs text-muted-foreground">
+                                                    Quantity
+                                                </dt>
+                                                <dd className="mt-1 tabular-nums">
+                                                    {formatDecimal(
+                                                        row.quantityOnHand,
+                                                    )}{' '}
                                                     {row.baseUnitSymbol}
-                                                </span>
-                                            </td>
+                                                </dd>
+                                            </div>
+                                            {canViewCosts && (
+                                                <>
+                                                    <div>
+                                                        <dt className="text-xs text-muted-foreground">
+                                                            Avg. cost
+                                                        </dt>
+                                                        <dd className="mt-1 tabular-nums">
+                                                            {row.averageUnitCost ===
+                                                            null
+                                                                ? '—'
+                                                                : formatCurrency(
+                                                                      row.averageUnitCost,
+                                                                      currency,
+                                                                  )}
+                                                        </dd>
+                                                    </div>
+                                                    <div>
+                                                        <dt className="text-xs text-muted-foreground">
+                                                            Value
+                                                        </dt>
+                                                        <dd className="mt-1 font-medium tabular-nums">
+                                                            {row.inventoryValue ===
+                                                            null
+                                                                ? '—'
+                                                                : formatCurrency(
+                                                                      row.inventoryValue,
+                                                                      currency,
+                                                                  )}
+                                                        </dd>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </dl>
+                                    </article>
+                                ))}
+                            </div>
+
+                            <div className="hidden overflow-x-auto md:block">
+                                <table className="w-full min-w-[900px] text-sm">
+                                    <caption className="sr-only">
+                                        Current inventory valuation by item and
+                                        location. Quantities remain in each
+                                        item's base unit.
+                                    </caption>
+
+                                    <thead className="border-b bg-muted/40 text-left">
+                                        <tr>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium text-muted-foreground"
+                                            >
+                                                Item
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium text-muted-foreground"
+                                            >
+                                                Category
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium text-muted-foreground"
+                                            >
+                                                Location
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 text-right font-medium text-muted-foreground"
+                                            >
+                                                Quantity
+                                            </th>
 
                                             {canViewCosts && (
                                                 <>
-                                                    <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
-                                                        {row.averageUnitCost ===
-                                                        null
-                                                            ? '—'
-                                                            : formatCurrency(
-                                                                  row.averageUnitCost,
-                                                                  currency,
-                                                              )}
-                                                    </td>
+                                                    <th
+                                                        scope="col"
+                                                        className="px-4 py-3 text-right font-medium text-muted-foreground"
+                                                    >
+                                                        Avg. cost
+                                                    </th>
 
-                                                    <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
-                                                        {row.inventoryValue ===
-                                                        null
-                                                            ? '—'
-                                                            : formatCurrency(
-                                                                  row.inventoryValue,
-                                                                  currency,
-                                                              )}
-                                                    </td>
+                                                    <th
+                                                        scope="col"
+                                                        className="px-4 py-3 text-right font-medium text-muted-foreground"
+                                                    >
+                                                        Value
+                                                    </th>
                                                 </>
                                             )}
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
+                                    </thead>
 
-                            {canViewCosts &&
-                                grandTotal !== null &&
-                                rows.length > 0 && (
-                                    <tfoot>
-                                        <tr className="border-t bg-muted/30 font-medium">
-                                            <td
-                                                className="px-4 py-3"
-                                                colSpan={5}
+                                    <tbody>
+                                        {rows.map((row) => (
+                                            <tr
+                                                key={row.id}
+                                                className="border-b border-border transition-colors last:border-b-0 hover:bg-muted/30"
                                             >
-                                                Total inventory value
-                                            </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="min-w-0">
+                                                        <div className="truncate font-medium">
+                                                            {row.itemName}
+                                                        </div>
 
-                                            <td className="px-4 py-3 text-right font-semibold whitespace-nowrap tabular-nums">
-                                                {formatCurrency(
-                                                    grandTotal,
-                                                    currency,
+                                                        <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                            {row.itemSku}
+                                                        </div>
+                                                    </div>
+                                                </td>
+
+                                                <td className="px-4 py-3">
+                                                    {row.categoryName ?? (
+                                                        <span className="text-muted-foreground">
+                                                            Uncategorized
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                <td className="px-4 py-3">
+                                                    {row.locationName}
+                                                </td>
+
+                                                <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
+                                                    {formatDecimal(
+                                                        row.quantityOnHand,
+                                                    )}{' '}
+                                                    <span className="font-normal text-muted-foreground">
+                                                        {row.baseUnitSymbol}
+                                                    </span>
+                                                </td>
+
+                                                {canViewCosts && (
+                                                    <>
+                                                        <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+                                                            {row.averageUnitCost ===
+                                                            null
+                                                                ? '—'
+                                                                : formatCurrency(
+                                                                      row.averageUnitCost,
+                                                                      currency,
+                                                                  )}
+                                                        </td>
+
+                                                        <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
+                                                            {row.inventoryValue ===
+                                                            null
+                                                                ? '—'
+                                                                : formatCurrency(
+                                                                      row.inventoryValue,
+                                                                      currency,
+                                                                  )}
+                                                        </td>
+                                                    </>
                                                 )}
-                                            </td>
-                                        </tr>
-                                    </tfoot>
-                                )}
-                        </table>
-                    </div>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+
+                                    {canViewCosts &&
+                                        grandTotal !== null &&
+                                        rows.length > 0 && (
+                                            <tfoot>
+                                                <tr className="border-t bg-muted/30 font-medium">
+                                                    <td
+                                                        className="px-4 py-3"
+                                                        colSpan={5}
+                                                    >
+                                                        Total inventory value
+                                                    </td>
+
+                                                    <td className="px-4 py-3 text-right font-semibold whitespace-nowrap tabular-nums">
+                                                        {formatCurrency(
+                                                            grandTotal,
+                                                            currency,
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        )}
+                                </table>
+                            </div>
+                        </>
+                    )}
                 </section>
             </div>
         </>

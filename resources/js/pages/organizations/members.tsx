@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import OrganizationMemberController from '@/actions/App/Http/Controllers/OrganizationMemberController';
 import InputError from '@/components/input-error';
+import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { UsageLimitNotice } from '@/components/usage-limit-notice';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
@@ -128,12 +130,11 @@ function AddRegisteredUserDialog({
                                 <div className="grid gap-2">
                                     <Label htmlFor="member-role">Role</Label>
 
-                                    <select
+                                    <NativeSelect
                                         id="member-role"
                                         name="role"
                                         defaultValue="inventory_staff"
                                         required
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         {roles.map((role) => (
                                             <option
@@ -143,7 +144,7 @@ function AddRegisteredUserDialog({
                                                 {role.label}
                                             </option>
                                         ))}
-                                    </select>
+                                    </NativeSelect>
 
                                     <InputError message={errors.role} />
                                 </div>
@@ -226,38 +227,37 @@ export default function OrganizationMembers({
             <Head title={`${organization.name} members`} />
 
             <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Organization members
-                        </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
+                <PageHeader
+                    title="Organization members"
+                    description={
+                        <>
                             Manage registered users who can access{' '}
                             {organization.name}.
-                        </p>
-                    </div>
+                        </>
+                    }
+                    actions={
+                        <div className="flex flex-col items-end gap-2">
+                            <AddRegisteredUserDialog
+                                organization={organization}
+                                roles={roles}
+                                trigger={
+                                    <Button className="w-full sm:w-auto">
+                                        <UserPlus
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        Add member
+                                    </Button>
+                                }
+                            />
 
-                    <div className="flex flex-col items-end gap-2">
-                        <AddRegisteredUserDialog
-                            organization={organization}
-                            roles={roles}
-                            trigger={
-                                <Button className="w-full sm:w-auto">
-                                    <UserPlus
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    Add member
-                                </Button>
-                            }
-                        />
-
-                        <UsageLimitNotice
-                            limitKey="seats"
-                            resourceLabel="members"
-                        />
-                    </div>
-                </div>
+                            <UsageLimitNotice
+                                limitKey="seats"
+                                resourceLabel="members"
+                            />
+                        </div>
+                    }
+                />
 
                 <section
                     aria-label="Organization members"
@@ -313,7 +313,7 @@ export default function OrganizationMembers({
                                     Filter members by role
                                 </label>
 
-                                <select
+                                <NativeSelect
                                     id="member-role-filter"
                                     value={roleFilter}
                                     onChange={(event) =>
@@ -322,7 +322,6 @@ export default function OrganizationMembers({
                                                 .value as MemberRoleFilter,
                                         )
                                     }
-                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                 >
                                     <option value="all">All roles</option>
 
@@ -334,7 +333,7 @@ export default function OrganizationMembers({
                                             {role.label}
                                         </option>
                                     ))}
-                                </select>
+                                </NativeSelect>
                             </div>
 
                             <div className="flex sm:justify-end">
@@ -355,110 +354,138 @@ export default function OrganizationMembers({
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[680px] text-sm">
-                            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-                                <tr className="border-b border-sidebar-border/70 dark:border-sidebar-border">
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 font-medium"
+                    {filteredMembers.length === 0 ? (
+                        <div className="px-4 py-12 text-center">
+                            <div className="mx-auto max-w-sm">
+                                <p className="font-medium">
+                                    {hasFilters
+                                        ? 'No members match these filters.'
+                                        : 'No organization members found.'}
+                                </p>
+
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {hasFilters
+                                        ? 'Adjust or reset your search and role filter.'
+                                        : 'Add a registered user to start building this organization team.'}
+                                </p>
+
+                                {hasFilters && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="mt-4"
+                                        onClick={() => {
+                                            setSearch('');
+                                            setRoleFilter('all');
+                                        }}
                                     >
-                                        Member
-                                    </th>
-                                    <th
-                                        scope="col"
-                                        className="px-4 py-3 font-medium"
-                                    >
-                                        Email
-                                    </th>
-                                    <th
-                                        scope="col"
-                                        className="w-48 px-4 py-3 font-medium"
-                                    >
-                                        Role
-                                    </th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                {filteredMembers.length === 0 ? (
-                                    <tr>
-                                        <td
-                                            colSpan={3}
-                                            className="px-4 py-12 text-center"
-                                        >
-                                            <div className="mx-auto max-w-sm">
-                                                <p className="font-medium">
-                                                    {hasFilters
-                                                        ? 'No members match these filters.'
-                                                        : 'No organization members found.'}
-                                                </p>
-
-                                                <p className="mt-1 text-sm text-muted-foreground">
-                                                    {hasFilters
-                                                        ? 'Adjust or reset your search and role filter.'
-                                                        : 'Add a registered user to start building this organization team.'}
-                                                </p>
-
-                                                {hasFilters && (
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="mt-4"
-                                                        onClick={() => {
-                                                            setSearch('');
-                                                            setRoleFilter(
-                                                                'all',
-                                                            );
-                                                        }}
-                                                    >
-                                                        Reset filters
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredMembers.map((member) => (
-                                        <tr
-                                            key={member.id}
-                                            className="border-b border-sidebar-border/70 transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
-                                        >
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center gap-3">
-                                                    <div
-                                                        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground"
-                                                        aria-hidden="true"
-                                                    >
-                                                        {getMemberInitials(
-                                                            member.name,
-                                                        )}
-                                                    </div>
-
-                                                    <span className="font-medium">
-                                                        {member.name}
-                                                    </span>
-                                                </div>
-                                            </td>
-
-                                            <td className="px-4 py-3 text-muted-foreground">
-                                                {member.email}
-                                            </td>
-
-                                            <td className="px-4 py-3">
-                                                <Badge variant="secondary">
-                                                    {roleLabels.get(
-                                                        member.role,
-                                                    ) ?? member.role}
-                                                </Badge>
-                                            </td>
-                                        </tr>
-                                    ))
+                                        Reset filters
+                                    </Button>
                                 )}
-                            </tbody>
-                        </table>
-                    </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div
+                                className="divide-y divide-sidebar-border/70 md:hidden dark:divide-sidebar-border"
+                                data-testid="mobile-organization-members"
+                            >
+                                {filteredMembers.map((member) => (
+                                    <article
+                                        key={member.id}
+                                        className="flex items-center gap-3 p-4"
+                                    >
+                                        <div
+                                            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground"
+                                            aria-hidden="true"
+                                        >
+                                            {getMemberInitials(member.name)}
+                                        </div>
+
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate font-medium">
+                                                {member.name}
+                                            </p>
+                                            <p className="truncate text-xs text-muted-foreground">
+                                                {member.email}
+                                            </p>
+                                        </div>
+
+                                        <Badge variant="secondary">
+                                            {roleLabels.get(member.role) ??
+                                                member.role}
+                                        </Badge>
+                                    </article>
+                                ))}
+                            </div>
+
+                            <div className="hidden overflow-x-auto md:block">
+                                <table className="w-full min-w-[680px] text-sm">
+                                    <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                                        <tr className="border-b border-sidebar-border/70 dark:border-sidebar-border">
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium"
+                                            >
+                                                Member
+                                            </th>
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 font-medium"
+                                            >
+                                                Email
+                                            </th>
+                                            <th
+                                                scope="col"
+                                                className="w-48 px-4 py-3 font-medium"
+                                            >
+                                                Role
+                                            </th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        {filteredMembers.map((member) => (
+                                            <tr
+                                                key={member.id}
+                                                className="border-b border-sidebar-border/70 transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
+                                            >
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <div
+                                                            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground"
+                                                            aria-hidden="true"
+                                                        >
+                                                            {getMemberInitials(
+                                                                member.name,
+                                                            )}
+                                                        </div>
+
+                                                        <span className="font-medium">
+                                                            {member.name}
+                                                        </span>
+                                                    </div>
+                                                </td>
+
+                                                <td className="px-4 py-3 text-muted-foreground">
+                                                    {member.email}
+                                                </td>
+
+                                                <td className="px-4 py-3">
+                                                    <Badge variant="secondary">
+                                                        {roleLabels.get(
+                                                            member.role,
+                                                        ) ?? member.role}
+                                                    </Badge>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    )}
 
                     <div className="border-t border-sidebar-border/70 bg-muted/20 px-4 py-3 text-xs text-muted-foreground dark:border-sidebar-border">
                         Only registered MiseLedger users can be added. Access is
