@@ -132,6 +132,9 @@ class PurchaseOrderController extends Controller
 
         return Inertia::render('purchase-orders/form', [
             'purchaseOrder' => null,
+            'defaultOrderDate' => CarbonImmutable::now(
+                $organization->timezone,
+            )->toDateString(),
             ...$this->formOptions($organization),
             'canManage' => true,
             'canReceive' => false,

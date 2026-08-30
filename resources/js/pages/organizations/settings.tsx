@@ -7,6 +7,7 @@ import {
     Link2,
     Save,
 } from 'lucide-react';
+import { useRef, useState } from 'react';
 import OrganizationController from '@/actions/App/Http/Controllers/OrganizationController';
 import InputError from '@/components/input-error';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
@@ -20,8 +21,18 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { dashboard } from '@/routes';
 
 type Props = {
@@ -33,9 +44,31 @@ type Props = {
         currency: string;
         active: boolean;
     };
+    timezoneOptions: string[];
+    currencyOptions: string[];
 };
 
-export default function OrganizationSettings({ organization }: Props) {
+export default function OrganizationSettings({
+    organization,
+    timezoneOptions,
+    currencyOptions,
+}: Props) {
+    const [pendingActive, setPendingActive] = useState(organization.active);
+    const [confirmDeactivateOpen, setConfirmDeactivateOpen] = useState(false);
+    const confirmedSubmission = useRef(false);
+
+    /** Submit only after the user explicitly confirms deactivating an active organization. */
+    function confirmDeactivation(): void {
+        const form = document.getElementById('organization-settings-form');
+
+        if (!(form instanceof HTMLFormElement)) {
+            return;
+        }
+
+        confirmedSubmission.current = true;
+        setConfirmDeactivateOpen(false);
+        form.requestSubmit();
+    }
     const overviewItems = [
         {
             label: 'Organization name',
@@ -158,10 +191,23 @@ export default function OrganizationSettings({ organization }: Props) {
                         </CardHeader>
 
                         <Form
+                            id="organization-settings-form"
                             {...OrganizationController.update.form(
                                 organization.id,
                             )}
                             className="flex flex-col gap-6"
+                            onSubmit={(event) => {
+                                if (confirmedSubmission.current) {
+                                    confirmedSubmission.current = false;
+
+                                    return;
+                                }
+
+                                if (organization.active && !pendingActive) {
+                                    event.preventDefault();
+                                    setConfirmDeactivateOpen(true);
+                                }
+                            }}
                         >
                             {({ processing, errors }) => (
                                 <>
@@ -259,33 +305,36 @@ export default function OrganizationSettings({ organization }: Props) {
                                                 >
                                                     Used when displaying and
                                                     interpreting operational
-                                                    dates and times.
+                                                    dates and times. Use a valid
+                                                    IANA timezone, for example
+                                                    Asia/Manila.
                                                 </p>
                                             </div>
 
                                             <div className="grid gap-2">
-                                                <Input
+                                                <NativeSelect
                                                     id="timezone"
                                                     name="timezone"
                                                     defaultValue={
                                                         organization.timezone
                                                     }
                                                     required
-                                                    maxLength={64}
-                                                    placeholder="Asia/Manila"
-                                                    autoComplete="off"
-                                                    aria-describedby="timezone-help timezone-format-help"
+                                                    aria-describedby="timezone-help"
                                                     aria-invalid={Boolean(
                                                         errors.timezone,
                                                     )}
-                                                />
-                                                <p
-                                                    id="timezone-format-help"
-                                                    className="text-xs text-muted-foreground"
                                                 >
-                                                    Use a valid IANA timezone,
-                                                    for example Asia/Manila.
-                                                </p>
+                                                    {timezoneOptions.map(
+                                                        (timezone) => (
+                                                            <option
+                                                                key={timezone}
+                                                                value={timezone}
+                                                            >
+                                                                {timezone}
+                                                            </option>
+                                                        ),
+                                                    )}
+                                                </NativeSelect>
                                                 <InputError
                                                     message={errors.timezone}
                                                 />
@@ -305,33 +354,36 @@ export default function OrganizationSettings({ organization }: Props) {
                                                 >
                                                     The default currency used
                                                     for organization monetary
-                                                    values.
+                                                    values. Use a 3-letter ISO
+                                                    currency code, for example
+                                                    PHP.
                                                 </p>
                                             </div>
 
                                             <div className="grid gap-2">
-                                                <Input
+                                                <NativeSelect
                                                     id="currency"
                                                     name="currency"
                                                     defaultValue={
                                                         organization.currency
                                                     }
                                                     required
-                                                    maxLength={3}
-                                                    placeholder="PHP"
-                                                    autoComplete="off"
-                                                    aria-describedby="currency-help currency-format-help"
+                                                    aria-describedby="currency-help"
                                                     aria-invalid={Boolean(
                                                         errors.currency,
                                                     )}
-                                                />
-                                                <p
-                                                    id="currency-format-help"
-                                                    className="text-xs text-muted-foreground"
                                                 >
-                                                    Use a 3-letter ISO currency
-                                                    code, for example PHP.
-                                                </p>
+                                                    {currencyOptions.map(
+                                                        (currency) => (
+                                                            <option
+                                                                key={currency}
+                                                                value={currency}
+                                                            >
+                                                                {currency}
+                                                            </option>
+                                                        ),
+                                                    )}
+                                                </NativeSelect>
                                                 <InputError
                                                     message={errors.currency}
                                                 />
@@ -374,6 +426,11 @@ export default function OrganizationSettings({ organization }: Props) {
                                                                 defaultChecked={
                                                                     organization.active
                                                                 }
+                                                                onChange={() =>
+                                                                    setPendingActive(
+                                                                        true,
+                                                                    )
+                                                                }
                                                                 className="peer sr-only"
                                                                 aria-invalid={Boolean(
                                                                     errors.active,
@@ -395,6 +452,11 @@ export default function OrganizationSettings({ organization }: Props) {
                                                                 value="0"
                                                                 defaultChecked={
                                                                     !organization.active
+                                                                }
+                                                                onChange={() =>
+                                                                    setPendingActive(
+                                                                        false,
+                                                                    )
                                                                 }
                                                                 className="peer sr-only"
                                                                 aria-invalid={Boolean(
@@ -447,6 +509,35 @@ export default function OrganizationSettings({ organization }: Props) {
                     </Card>
                 </div>
             </div>
+
+            <Dialog
+                open={confirmDeactivateOpen}
+                onOpenChange={setConfirmDeactivateOpen}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Deactivate this organization?</DialogTitle>
+                        <DialogDescription>
+                            Deactivating {organization.name} immediately blocks
+                            operational access for its members until it is
+                            reactivated. This does not affect billing.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Keep editing</Button>
+                        </DialogClose>
+
+                        <Button
+                            variant="destructive"
+                            onClick={confirmDeactivation}
+                        >
+                            Deactivate organization
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

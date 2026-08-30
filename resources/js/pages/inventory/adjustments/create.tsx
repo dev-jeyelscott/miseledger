@@ -70,25 +70,38 @@ function adjustmentDirection(quantity: string): {
         : { label: 'Increase', variant: 'success' };
 }
 
-/** Format an organization-local datetime-local value for confirmation review. */
+/**
+ * Format a `datetime-local` input value for confirmation review without
+ * reinterpreting it through the browser's local timezone. The value is the
+ * exact organization-local wall-clock instant the user entered.
+ */
 function formatEffectiveTime(value: string, timezone: string): string {
-    if (value === '') {
-        return 'Not set';
+    const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value);
+
+    if (match === null) {
+        return value === '' ? 'Not set' : value;
     }
 
-    const parsed = new Date(value);
+    const [, year, month, day, hour, minute] = match;
+    const monthNames = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+    ];
+    const hourNumber = Number(hour);
+    const period = hourNumber >= 12 ? 'PM' : 'AM';
+    const displayHour = hourNumber % 12 === 0 ? 12 : hourNumber % 12;
 
-    if (Number.isNaN(parsed.getTime())) {
-        return value;
-    }
-
-    return `${new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-    }).format(parsed)} (${timezone})`;
+    return `${monthNames[Number(month) - 1]} ${Number(day)}, ${year}, ${displayHour}:${minute} ${period} (${timezone})`;
 }
 
 export default function InventoryAdjustmentCreate({

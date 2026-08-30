@@ -81,6 +81,7 @@ type LineState = {
 
 type Props = {
     purchaseOrder: PurchaseOrder | null;
+    defaultOrderDate?: string;
     supplierOptions: SupplierOption[];
     locationOptions: LocationOption[];
     currency: string;
@@ -145,6 +146,7 @@ function firstActionError(errors: Record<string, string>): string | null {
 
 export default function PurchaseOrderForm({
     purchaseOrder,
+    defaultOrderDate,
     supplierOptions,
     locationOptions,
     currency,
@@ -399,9 +401,7 @@ export default function PurchaseOrderForm({
                                             type="date"
                                             defaultValue={
                                                 purchaseOrder?.orderDate ??
-                                                new Date()
-                                                    .toISOString()
-                                                    .slice(0, 10)
+                                                defaultOrderDate
                                             }
                                             required
                                         />

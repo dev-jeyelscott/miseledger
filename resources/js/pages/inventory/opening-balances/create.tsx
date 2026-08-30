@@ -54,25 +54,38 @@ type Props = {
 const textareaClassName =
     'border-input bg-background min-h-24 w-full resize-y rounded-md border px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50';
 
-/** Format an organization-local datetime-local value for confirmation review. */
+/**
+ * Format a `datetime-local` input value for confirmation review without
+ * reinterpreting it through the browser's local timezone. The value is the
+ * exact organization-local wall-clock instant the user entered.
+ */
 function formatEffectiveTime(value: string, timezone: string): string {
-    if (value === '') {
-        return 'Not set';
+    const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value);
+
+    if (match === null) {
+        return value === '' ? 'Not set' : value;
     }
 
-    const parsed = new Date(value);
+    const [, year, month, day, hour, minute] = match;
+    const monthNames = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+    ];
+    const hourNumber = Number(hour);
+    const period = hourNumber >= 12 ? 'PM' : 'AM';
+    const displayHour = hourNumber % 12 === 0 ? 12 : hourNumber % 12;
 
-    if (Number.isNaN(parsed.getTime())) {
-        return value;
-    }
-
-    return `${new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-    }).format(parsed)} (${timezone})`;
+    return `${monthNames[Number(month) - 1]} ${Number(day)}, ${year}, ${displayHour}:${minute} ${period} (${timezone})`;
 }
 
 export default function OpeningBalanceCreate({
@@ -128,15 +141,6 @@ export default function OpeningBalanceCreate({
         unitId !== '' &&
         quantity.trim() !== '' &&
         baseUnitCost.trim() !== '';
-
-    const estimatedTotalCost =
-        selectedItem !== undefined &&
-        quantity.trim() !== '' &&
-        baseUnitCost.trim() !== '' &&
-        !Number.isNaN(Number(quantity)) &&
-        !Number.isNaN(Number(baseUnitCost))
-            ? (Number(quantity) * Number(baseUnitCost)).toFixed(2)
-            : null;
 
     return (
         <>
@@ -485,21 +489,6 @@ export default function OpeningBalanceCreate({
                                                             {baseUnitCost}
                                                         </dd>
                                                     </div>
-                                                    {estimatedTotalCost !==
-                                                        null && (
-                                                        <div className="flex justify-between gap-4 border-t border-border pt-1.5">
-                                                            <dt className="text-muted-foreground">
-                                                                Estimated total
-                                                                cost
-                                                            </dt>
-                                                            <dd className="text-right font-medium tabular-nums">
-                                                                {currency}{' '}
-                                                                {
-                                                                    estimatedTotalCost
-                                                                }
-                                                            </dd>
-                                                        </div>
-                                                    )}
                                                     <div className="flex justify-between gap-4">
                                                         <dt className="text-muted-foreground">
                                                             Effective time

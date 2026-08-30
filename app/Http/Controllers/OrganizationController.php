@@ -87,6 +87,8 @@ class OrganizationController extends Controller
                 'currency' => $organization->currency,
                 'active' => $organization->active,
             ],
+            'timezoneOptions' => UpdateOrganizationSettingsRequest::timezoneOptions(),
+            'currencyOptions' => UpdateOrganizationSettingsRequest::currencyOptions(),
         ]);
     }
 
