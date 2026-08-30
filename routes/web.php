@@ -42,6 +42,7 @@ use App\Http\Controllers\Recipes\RecipeController;
 use App\Http\Controllers\Recipes\RecipeCostController;
 use App\Http\Controllers\Suppliers\SupplierController;
 use App\Http\Controllers\Suppliers\SupplierItemController;
+use App\Http\Controllers\Testing\E2ECheckoutPaymentFixtureController;
 use App\Http\Controllers\WelcomeController;
 use App\Support\Billing\FeatureCode;
 use Illuminate\Support\Facades\Route;
@@ -124,6 +125,13 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         'organizations/{organization}/billing/checkout/cancel',
         [OrganizationCheckoutStatusController::class, 'cancel'],
     )->name('organizations.billing.checkout.cancel');
+
+    if (app()->environment('testing')) {
+        Route::get(
+            'organizations/{organization}/billing/checkout/e2e-payment-fixture',
+            [E2ECheckoutPaymentFixtureController::class, 'show'],
+        )->name('organizations.billing.checkout.e2e-payment-fixture');
+    }
 
     Route::get(
         'organizations/{organization}/settings',

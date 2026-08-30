@@ -22,6 +22,16 @@ test('deactivating an active organization requires explicit confirmation', async
     await page.getByRole('button', { name: /keep editing/i }).click();
     await expect(dialog).toBeHidden();
 
-    // The organization must remain active until the deactivation is confirmed.
+    // Dismissing the dialog only closes it: no update request was submitted,
+    // so the unsaved Inactive selection remains on-screen and the page never
+    // navigated away from the settings form.
+    await expect(
+        page.getByRole('radio', { name: /^inactive$/i }),
+    ).toBeChecked();
+    await expect(page).toHaveURL(/\/organizations\/1\/settings$/);
+
+    // Reloading re-reads the persisted server state, proving the organization
+    // was never actually deactivated by the dismissed confirmation.
+    await page.reload();
     await expect(page.getByRole('radio', { name: /^active$/i })).toBeChecked();
 });

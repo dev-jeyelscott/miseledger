@@ -35,16 +35,8 @@ for (const { url, mobileTestId } of pages) {
         await page.setViewportSize({ width: 375, height: 812 });
         await page.goto(url);
 
-        if (page.url().includes('/login')) {
-            test.skip(true, `${url} is not reachable with seeded fixtures.`);
-        }
-
         const mobileRegion = page.getByTestId(mobileTestId);
         const table = page.locator('table').first();
-
-        if ((await table.count()) === 0) {
-            test.skip(true, `${url} rendered an empty state with no rows.`);
-        }
 
         await expect(mobileRegion).toBeVisible();
         await expect(table).toBeHidden();
