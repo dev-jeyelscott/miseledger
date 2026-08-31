@@ -1006,13 +1006,13 @@ export default function Dashboard() {
                 {(canViewReports || hasPendingWork) && (
                     <div
                         className={cn(
-                            'grid items-start gap-4',
+                            'grid gap-4',
                             splitOperationalPanels &&
                                 'xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]',
                         )}
                     >
                         {canViewReports && (
-                            <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                            <section className="h-full overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                                 <PanelHeader
                                     title="Low-stock alerts"
                                     action={
@@ -1169,7 +1169,7 @@ export default function Dashboard() {
                         )}
 
                         {hasPendingWork && (
-                            <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                            <section className="h-full overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                                 <PanelHeader title="Pending work" />
 
                                 {hasPendingTasks && (
