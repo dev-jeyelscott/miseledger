@@ -164,6 +164,12 @@ test('the product family index uses the canonical server backed master data comp
         ->toContain(
             "import { NativeSelect } from '@/components/ui/native-select';",
         )
+        ->toContain(
+            "import { useGuardedDialog } from '@/hooks/use-guarded-dialog';",
+        )
+        ->toContain('DialogTrigger')
+        ->toContain('DialogContent')
+        ->toContain('CreateProductFamilyDialog')
         ->toContain('<PageHeader')
         ->toContain('<FilterToolbar')
         ->toContain('<StatusBadge')
@@ -181,7 +187,18 @@ test('the product family index uses the canonical server backed master data comp
         ->toContain('hidden overflow-x-auto md:block')
         ->toContain('productFamilies.map')
         ->toContain('canManage')
-        ->toContain('{canManage && (')
+        ->toContain('canManage ? (')
+        ->toContain('Create product family')
+        ->toContain('InventoryProductController.store.form()')
+        ->toContain('label="Name"')
+        ->toContain('label="Status"')
+        ->toContain('autoFocus')
+        ->toContain('disabled={processing}')
+        ->toContain("{processing ? 'Creating…' : 'Create'}")
+        ->toContain('resetOnSuccess')
+        ->toContain('onSuccess={dialog.closeAfterSuccess}')
+        ->toContain('onChange={dialog.markDirty}')
+        ->toContain('dialog.onOpenChange(false)')
         ->not->toContain('useState')
         ->not->toContain('useMemo')
         ->not->toContain(
