@@ -34,7 +34,7 @@ export function DashboardMetricCard({
     tone = 'emerald',
 }: DashboardMetricCardProps) {
     const cardClassName =
-        'flex h-full min-h-32 flex-col rounded-xl border border-border bg-card p-4 shadow-sm';
+        'flex h-full min-h-32 flex-col rounded-xl bg-card p-4 shadow-sm';
 
     const content = (
         <>

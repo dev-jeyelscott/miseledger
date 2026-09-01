@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\File;
 
 test('admin theme keeps generic content tokens separate from sidebar tokens', function () {
     $theme = File::get(resource_path('css/app.css'));
+    $designSystem = File::get(base_path('design-system.html'));
     $card = File::get(resource_path('js/components/ui/card.tsx'));
     $metricCard = File::get(
         resource_path('js/components/dashboard/dashboard-metric-card.tsx'),
@@ -25,18 +26,26 @@ test('admin theme keeps generic content tokens separate from sidebar tokens', fu
         ->toContain('--radius-2xl: calc(var(--radius) * 1.8);')
         ->toContain('--radius-3xl: calc(var(--radius) * 2.2);')
         ->toContain('--radius-4xl: calc(var(--radius) * 2.6);')
-        ->toContain('--background: oklch(1 0 0);')
-        ->toContain('--background: oklch(0.145 0 0);')
+        ->toContain('--background: oklch(0.975 0.004 95);')
+        ->toContain('--card: oklch(1 0 0);')
+        ->toContain('--popover: oklch(1 0 0);')
+        ->toContain('--border: oklch(0.91 0.004 95);')
+        ->toContain('--input: oklch(0.84 0.006 95);')
+        ->toContain('--background: oklch(0.12 0.004 264);')
+        ->toContain('--card: oklch(0.18 0.006 264);')
+        ->toContain('--popover: oklch(0.18 0.006 264);')
+        ->toContain('--border: oklch(0.29 0.006 264);')
+        ->toContain('--input: oklch(0.38 0.008 264);')
         ->toContain('--sidebar: oklch(0.985 0 0);')
         ->toContain('--sidebar: oklch(0.205 0 0);');
 
     expect($card)
         ->toContain('bg-card text-card-foreground')
-        ->toContain('rounded-xl border')
+        ->toContain('rounded-xl py-6 shadow-sm')
+        ->not->toContain('rounded-xl border')
         ->not->toContain('sidebar-border');
 
     expect($metricCard)
-        ->toContain('border-border')
         ->toContain('bg-card')
         ->toContain('href?: InertiaLinkHref')
         ->toContain('focus-visible:ring-[3px]')
@@ -46,6 +55,20 @@ test('admin theme keeps generic content tokens separate from sidebar tokens', fu
         ->toContain('bg-sidebar')
         ->toContain('border-sidebar-border')
         ->toContain('ring-sidebar-ring');
+
+    expect($designSystem)
+        ->toContain('<link rel="stylesheet" href="./resources/css/app.css" />')
+        ->toContain("const tokenNames = ['background', 'card', 'popover', 'border', 'input', 'sidebar'];")
+        ->toContain('getComputedStyle(element)')
+        ->toContain('const renderedTheme = container.lastElementChild;')
+        ->not->toContain('fetch(')
+        ->toContain('Canvas')
+        ->toContain('Elevated surface')
+        ->toContain('Structural border')
+        ->toContain('Input boundary')
+        ->toContain('Sidebar navigation surface')
+        ->toContain("['Light mode', 'Dark mode'].forEach((label) => {")
+        ->toContain("theme.classList.add('dark');");
 });
 
 test('admin theme exposes the canonical operational status semantics', function () {
@@ -124,7 +147,8 @@ test('shared inventory UI primitives follow the canonical admin contract', funct
 
     expect($filterToolbar)
         ->toContain('data-slot="filter-toolbar"')
-        ->toContain('rounded-xl border border-border bg-card')
+        ->toContain('rounded-xl bg-card p-4 text-card-foreground shadow-sm')
+        ->not->toContain('rounded-xl border border-border bg-card')
         ->not->toContain('sidebar-border');
 
     expect($paginationControls)

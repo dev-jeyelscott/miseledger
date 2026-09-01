@@ -1,14 +1,24 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { Plus, Search } from 'lucide-react';
-import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
-import InventoryProductController from '@/actions/App/Http/Controllers/Inventory/InventoryProductController';
+import type { ReactNode } from 'react';
 import { FilterToolbar } from '@/components/filter-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
+import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
+import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
+import InventoryProductController from '@/actions/App/Http/Controllers/Inventory/InventoryProductController';
 import { dashboard } from '@/routes';
 
 type ProductFamily = {
@@ -31,6 +41,96 @@ type Props = {
     canManage: boolean;
 };
 
+type CreateProductFamilyDialogProps = {
+    trigger: ReactNode;
+};
+
+/** Create a product family without leaving the product-family index. */
+function CreateProductFamilyDialog({
+    trigger,
+}: CreateProductFamilyDialogProps) {
+    const dialog = useGuardedDialog(
+        'Discard the new product family you entered?',
+    );
+
+    return (
+        <Dialog open={dialog.open} onOpenChange={dialog.onOpenChange}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Create product family</DialogTitle>
+                    <DialogDescription>
+                        Group related inventory variants and define the
+                        controlled options they use.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div onChange={dialog.markDirty}>
+                    <Form
+                        {...InventoryProductController.store.form()}
+                        className="space-y-5"
+                        resetOnSuccess
+                        onSuccess={dialog.closeAfterSuccess}
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <Field
+                                    id="create-product-family-name"
+                                    label="Name"
+                                    error={errors.name}
+                                >
+                                    <Input
+                                        name="name"
+                                        required
+                                        autoFocus
+                                        placeholder="e.g., Cordless drills"
+                                    />
+                                </Field>
+
+                                <Field
+                                    id="create-product-family-active"
+                                    label="Status"
+                                    error={errors.active}
+                                >
+                                    <NativeSelect
+                                        name="active"
+                                        defaultValue="1"
+                                    >
+                                        <option value="1">Active</option>
+                                        <option value="0">Inactive</option>
+                                    </NativeSelect>
+                                </Field>
+
+                                <div className="flex flex-wrap justify-end gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={processing}
+                                        onClick={() =>
+                                            dialog.onOpenChange(false)
+                                        }
+                                    >
+                                        Cancel
+                                    </Button>
+
+                                    <Button type="submit" disabled={processing}>
+                                        <Plus
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        {processing ? 'Creating…' : 'Create'}
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 /** Render product families with the canonical server-backed master-data composition. */
 export default function ProductFamiliesIndex({
     productFamilies,
@@ -47,57 +147,22 @@ export default function ProductFamiliesIndex({
                 <PageHeader
                     title="Product families"
                     description="Group related inventory variants and define the controlled options they use."
-                />
-
-                {canManage && (
-                    <section className="rounded-xl border border-border bg-card p-5">
-                        <h2 className="text-sm font-semibold">
-                            Create product family
-                        </h2>
-                        <Form
-                            {...InventoryProductController.store.form()}
-                            className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-end"
-                        >
-                            {({ processing, errors }) => (
-                                <>
-                                    <Field
-                                        id="product-family-name"
-                                        label="Name"
-                                        error={errors.name}
-                                    >
-                                        <Input
-                                            name="name"
-                                            required
-                                            placeholder="e.g., Cordless drills"
-                                        />
-                                    </Field>
-
-                                    <Field
-                                        id="product-family-active"
-                                        label="Status"
-                                        error={errors.active}
-                                    >
-                                        <NativeSelect
-                                            name="active"
-                                            defaultValue="1"
-                                        >
-                                            <option value="1">Active</option>
-                                            <option value="0">Inactive</option>
-                                        </NativeSelect>
-                                    </Field>
-
-                                    <Button type="submit" disabled={processing}>
+                    actions={
+                        canManage ? (
+                            <CreateProductFamilyDialog
+                                trigger={
+                                    <Button>
                                         <Plus
                                             className="size-4"
                                             aria-hidden="true"
                                         />
-                                        {processing ? 'Creating…' : 'Create'}
+                                        Create product family
                                     </Button>
-                                </>
-                            )}
-                        </Form>
-                    </section>
-                )}
+                                }
+                            />
+                        ) : undefined
+                    }
+                />
 
                 <section className="overflow-hidden rounded-xl border border-border bg-card">
                     <div className="border-b border-border px-4 py-3">
