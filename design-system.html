@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>MiseLedger surface reference</title>
+        <link rel="stylesheet" href="./resources/css/app.css" />
+        <style>
+            :root {
+                color-scheme: light dark;
+                font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+                background: #f5f5f5;
+                color: #171717;
+            }
+
+            body {
+                margin: 0;
+                padding: 2rem;
+            }
+
+            main {
+                max-width: 70rem;
+                margin: 0 auto;
+            }
+
+            h1,
+            h2,
+            p {
+                margin-top: 0;
+            }
+
+            .intro {
+                max-width: 42rem;
+                color: #525252;
+            }
+
+            .themes {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+                gap: 1.5rem;
+            }
+
+            .theme {
+                border-radius: 0.75rem;
+                overflow: hidden;
+                background: var(--background);
+                color: var(--foreground);
+                box-shadow: 0 1px 3px rgb(0 0 0 / 0.14);
+            }
+
+            .theme-header,
+            .row {
+                display: grid;
+                grid-template-columns: 8.5rem 1fr;
+                gap: 1rem;
+                padding: 1rem;
+            }
+
+            .theme-header {
+                background: var(--sidebar);
+                border-bottom: 1px solid var(--border);
+            }
+
+            .row + .row {
+                border-top: 1px solid var(--border);
+            }
+
+            .sample {
+                min-height: 3.25rem;
+                padding: 0.75rem;
+                border-radius: 0.5rem;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.75rem;
+            }
+
+            .surface {
+                background: var(--card);
+                box-shadow: 0 1px 3px rgb(0 0 0 / 0.14);
+            }
+
+            .popover {
+                background: var(--popover);
+                box-shadow: 0 3px 10px rgb(0 0 0 / 0.18);
+            }
+
+            .border {
+                border: 1px solid var(--border);
+            }
+
+            .input {
+                background: var(--background);
+                border: 1px solid var(--input);
+            }
+
+            code {
+                font-size: 0.75rem;
+                overflow-wrap: anywhere;
+            }
+        </style>
+    </head>
+    <body>
+        <main>
+            <h1>MiseLedger surface reference</h1>
+            <p class="intro">
+                This reference loads its values directly from
+                <code>resources/css/app.css</code>. The canvas establishes the
+                page plane; cards and popovers are elevated working surfaces;
+                borders are reserved for structural boundaries and inputs. It
+                can be opened directly from the repository.
+            </p>
+
+            <div class="themes" id="themes" aria-live="polite"></div>
+        </main>
+
+        <template id="theme-template">
+            <section class="theme">
+                <header class="theme-header">
+                    <strong class="theme-name"></strong>
+                    <span>Sidebar navigation surface</span>
+                </header>
+                <div class="row">
+                    <strong>Canvas</strong>
+                    <div class="sample"><span>Page background</span><code data-token="background"></code></div>
+                </div>
+                <div class="row">
+                    <strong>Elevated surface</strong>
+                    <div class="sample surface"><span>Cards, tables, panels, widgets</span><code data-token="card"></code></div>
+                </div>
+                <div class="row">
+                    <strong>Popover</strong>
+                    <div class="sample popover"><span>Selects, menus, dialogs</span><code data-token="popover"></code></div>
+                </div>
+                <div class="row">
+                    <strong>Structural border</strong>
+                    <div class="sample border"><span>Tables, grouping, sidebar edges</span><code data-token="border"></code></div>
+                </div>
+                <div class="row">
+                    <strong>Input boundary</strong>
+                    <div class="sample input"><span>Editable controls and fields</span><code data-token="input"></code></div>
+                </div>
+                <div class="row">
+                    <strong>Sidebar</strong>
+                    <div class="sample" style="background: var(--sidebar)"><span>Persistent navigation</span><code data-token="sidebar"></code></div>
+                </div>
+            </section>
+        </template>
+
+        <script>
+            const tokenNames = ['background', 'card', 'popover', 'border', 'input', 'sidebar'];
+
+            function readTokens(element) {
+                const styles = getComputedStyle(element);
+
+                return Object.fromEntries(tokenNames.map((token) => [token, styles.getPropertyValue(`--${token}`).trim()]));
+            }
+
+            const template = document.querySelector('#theme-template');
+            const container = document.querySelector('#themes');
+
+            ['Light mode', 'Dark mode'].forEach((label) => {
+                const fragment = template.content.cloneNode(true);
+                const theme = fragment.querySelector('.theme');
+
+                if (label === 'Dark mode') {
+                    theme.classList.add('dark');
+                }
+
+                fragment.querySelector('.theme-name').textContent = label;
+                container.append(fragment);
+
+                const renderedTheme = container.lastElementChild;
+                const tokens = readTokens(renderedTheme);
+
+                renderedTheme.querySelectorAll('[data-token]').forEach((element) => {
+                    element.textContent = tokens[element.dataset.token];
+                });
+            });
+        </script>
+    </body>
+</html>
