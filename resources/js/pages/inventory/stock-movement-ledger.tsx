@@ -704,7 +704,7 @@ export default function StockMovementLedgerReport({
                 </section>
 
                 <section
-                    className="hidden overflow-hidden rounded-xl border border-border bg-card shadow-sm md:block"
+                    className="hidden overflow-hidden rounded-xl bg-card shadow-sm md:block"
                     aria-labelledby="stock-movement-table-title"
                 >
                     <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">

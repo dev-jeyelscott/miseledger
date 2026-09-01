@@ -68,7 +68,7 @@ export default function CreateInventoryItem({
                 />
 
                 {units.length === 0 ? (
-                    <div className="max-w-xl rounded-xl border border-border bg-card p-4 md:p-6">
+                    <div className="max-w-xl rounded-xl bg-card p-4 shadow-sm md:p-6">
                         <p className="text-sm text-muted-foreground">
                             Create at least one active unit of measure before
                             creating an inventory item.
@@ -103,7 +103,7 @@ export default function CreateInventoryItem({
 
                                     <section
                                         aria-labelledby="identity-heading"
-                                        className="rounded-xl border border-border bg-card p-4 md:p-6"
+                                        className="rounded-xl bg-card p-4 shadow-sm md:p-6"
                                     >
                                         <div>
                                             <h2
@@ -150,7 +150,7 @@ export default function CreateInventoryItem({
 
                                     <section
                                         aria-labelledby="classification-heading"
-                                        className="rounded-xl border border-border bg-card p-4 md:p-6"
+                                        className="rounded-xl bg-card p-4 shadow-sm md:p-6"
                                     >
                                         <div>
                                             <h2
@@ -286,7 +286,7 @@ export default function CreateInventoryItem({
 
                                     <section
                                         aria-labelledby="product-details-heading"
-                                        className="rounded-xl border border-border bg-card p-4 md:p-6"
+                                        className="rounded-xl bg-card p-4 shadow-sm md:p-6"
                                     >
                                         <div>
                                             <h2
@@ -341,7 +341,7 @@ export default function CreateInventoryItem({
 
                                     <section
                                         aria-labelledby="stock-configuration-heading"
-                                        className="rounded-xl border border-border bg-card p-4 md:p-6"
+                                        className="rounded-xl bg-card p-4 shadow-sm md:p-6"
                                     >
                                         <div>
                                             <h2

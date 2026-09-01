@@ -740,7 +740,7 @@ export default function InventoryItemsIndex({
                     </div>
                 </section>
 
-                <section className="overflow-hidden rounded-xl border border-border bg-card">
+                <section className="overflow-hidden rounded-xl bg-card shadow-sm">
                     <Form
                         action={InventoryItemController.index().url}
                         method="get"

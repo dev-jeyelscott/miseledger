@@ -1012,7 +1012,7 @@ export default function Dashboard() {
                         )}
                     >
                         {canViewReports && (
-                            <section className="h-full overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                            <section className="h-full overflow-hidden rounded-xl bg-card shadow-sm">
                                 <PanelHeader
                                     title="Low-stock alerts"
                                     action={
@@ -1169,7 +1169,7 @@ export default function Dashboard() {
                         )}
 
                         {hasPendingWork && (
-                            <section className="h-full overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                            <section className="h-full overflow-hidden rounded-xl bg-card shadow-sm">
                                 <PanelHeader title="Pending work" />
 
                                 {hasPendingTasks && (
@@ -1306,7 +1306,7 @@ export default function Dashboard() {
                 )}
 
                 {canViewReports && (
-                    <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                    <section className="overflow-hidden rounded-xl bg-card shadow-sm">
                         <PanelHeader
                             title="Recent inventory activity"
                             action={
@@ -1589,7 +1589,7 @@ export default function Dashboard() {
                     </section>
                 )}
 
-                <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                <section className="overflow-hidden rounded-xl bg-card shadow-sm">
                     <PanelHeader title="Organization summary" />
 
                     <dl className="grid sm:grid-cols-2 lg:grid-cols-4">
