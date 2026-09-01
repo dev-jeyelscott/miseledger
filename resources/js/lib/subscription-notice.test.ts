@@ -44,6 +44,7 @@ test('a past_due organization receives a persistent high-priority warning that r
     });
 
     assert.equal(notice?.variant, 'destructive');
+    assert.equal(notice?.dismissible, false);
     assert.match(notice!.description, /write access is retained/i);
 });
 
@@ -55,6 +56,7 @@ test('an unpaid organization receives a persistent explanation that mutations ar
     });
 
     assert.equal(notice?.variant, 'destructive');
+    assert.equal(notice?.dismissible, false);
     assert.match(notice!.description, /mutations are unavailable/i);
 });
 
@@ -66,6 +68,7 @@ test('a read-only organization receives a persistent explanation that mutations 
     });
 
     assert.equal(notice?.variant, 'destructive');
+    assert.equal(notice?.dismissible, false);
     assert.match(notice!.description, /mutations are unavailable/i);
 });
 
@@ -76,6 +79,7 @@ test('a scheduled cancellation surfaces the ends-at date while remaining writabl
     });
 
     assert.equal(notice?.variant, 'default');
+    assert.equal(notice?.dismissible, false);
     assert.match(notice!.description, /scheduled to end/i);
 });
 
@@ -87,6 +91,7 @@ test('a trial ending soon surfaces the trial-ends-at date', () => {
     });
 
     assert.equal(notice?.variant, 'default');
+    assert.equal(notice?.dismissible, true);
     assert.match(notice!.description, /trial ends/i);
 });
 

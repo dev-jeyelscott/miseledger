@@ -7,6 +7,7 @@ export type SubscriptionNoticeContent = {
     variant: 'default' | 'destructive';
     title: string;
     description: string;
+    dismissible: boolean;
 };
 
 export type SubscriptionNoticeCallToAction =
@@ -45,6 +46,7 @@ export function resolveNotice(
             title: 'Subscription unpaid',
             description:
                 'This organization is read-only because its subscription is unpaid. Mutations are unavailable until billing is resolved.',
+            dismissible: false,
         };
     }
 
@@ -54,6 +56,7 @@ export function resolveNotice(
             title: 'Read-only organization',
             description:
                 'This organization is commercially read-only. Mutations are unavailable until an active subscription is restored.',
+            dismissible: false,
         };
     }
 
@@ -63,6 +66,7 @@ export function resolveNotice(
             title: 'Payment past due',
             description:
                 'This organization has a payment problem. Write access is retained for now, but please resolve billing soon to avoid losing it.',
+            dismissible: false,
         };
     }
 
@@ -71,6 +75,7 @@ export function resolveNotice(
             variant: 'default',
             title: 'Subscription ending',
             description: `This organization's subscription is scheduled to end on ${endsAt}. Write access is retained until then.`,
+            dismissible: false,
         };
     }
 
@@ -79,6 +84,7 @@ export function resolveNotice(
             variant: 'default',
             title: 'Trial ending soon',
             description: `This organization's trial ends on ${trialEndsAt}. Subscribe to keep write access afterward.`,
+            dismissible: true,
         };
     }
 
