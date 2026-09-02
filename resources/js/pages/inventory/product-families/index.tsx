@@ -1,6 +1,8 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { Plus, Search } from 'lucide-react';
 import type { ReactNode } from 'react';
+import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
+import InventoryProductController from '@/actions/App/Http/Controllers/Inventory/InventoryProductController';
 import { FilterToolbar } from '@/components/filter-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { StatusBadge } from '@/components/status-badge';
@@ -17,8 +19,6 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
-import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
-import InventoryProductController from '@/actions/App/Http/Controllers/Inventory/InventoryProductController';
 import { dashboard } from '@/routes';
 
 type ProductFamily = {
