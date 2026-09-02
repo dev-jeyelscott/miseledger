@@ -103,7 +103,7 @@ export default function CreateInventoryItem({
 
                                     <section
                                         aria-labelledby="identity-heading"
-                                        className="rounded-xl bg-card p-4 shadow-sm md:p-6"
+                                        className="rounded-xl border border-border bg-card p-4 shadow-sm md:p-6"
                                     >
                                         <div>
                                             <h2
@@ -150,7 +150,7 @@ export default function CreateInventoryItem({
 
                                     <section
                                         aria-labelledby="classification-heading"
-                                        className="rounded-xl bg-card p-4 shadow-sm md:p-6"
+                                        className="rounded-xl border border-border bg-card p-4 shadow-sm md:p-6"
                                     >
                                         <div>
                                             <h2
@@ -286,7 +286,7 @@ export default function CreateInventoryItem({
 
                                     <section
                                         aria-labelledby="product-details-heading"
-                                        className="rounded-xl bg-card p-4 shadow-sm md:p-6"
+                                        className="rounded-xl border border-border bg-card p-4 shadow-sm md:p-6"
                                     >
                                         <div>
                                             <h2
@@ -341,7 +341,7 @@ export default function CreateInventoryItem({
 
                                     <section
                                         aria-labelledby="stock-configuration-heading"
-                                        className="rounded-xl bg-card p-4 shadow-sm md:p-6"
+                                        className="rounded-xl border border-border bg-card p-4 shadow-sm md:p-6"
                                     >
                                         <div>
                                             <h2
