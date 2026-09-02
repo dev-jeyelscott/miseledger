@@ -22,11 +22,11 @@ Do not use `php artisan serve` as the permanent production HTTP server.
 
 One production image is used for three independent long-running process types:
 
-| Process | Command | Public HTTP |
-| --- | --- | --- |
-| Web | `apache2-foreground` | Yes, through Coolify only |
-| Worker | `php artisan queue:work redis --sleep=1 --tries=3 --timeout=90` | No |
-| Scheduler | `php artisan schedule:work` | No |
+| Process   | Command                                                         | Public HTTP               |
+| --------- | --------------------------------------------------------------- | ------------------------- |
+| Web       | `apache2-foreground`                                            | Yes, through Coolify only |
+| Worker    | `php artisan queue:work redis --sleep=1 --tries=3 --timeout=90` | No                        |
+| Scheduler | `php artisan schedule:work`                                     | No                        |
 
 The web process listens on container port `8080`.
 
@@ -73,20 +73,20 @@ Never use `docker compose down -v` unless deliberately deleting local PostgreSQL
 
 The PostgreSQL volume name remains `sail-pgsql` deliberately.
 
-Fresh volumes create `miseledger_testing` automatically. An older existing Sail volume may predate the repository-owned initializer.
+Fresh volumes create `miseledger_test` automatically. An older existing Sail volume may predate the repository-owned initializer.
 
 Verify the test database:
 
 ```bash
 docker compose exec pgsql sh -lc \
-'psql -U "$POSTGRES_USER" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '\''miseledger_testing'\''"'
+'psql -U "$POSTGRES_USER" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '\''miseledger_test'\''"'
 ```
 
 If no row is returned, create it once:
 
 ```bash
 docker compose exec pgsql sh -lc \
-'createdb -U "$POSTGRES_USER" miseledger_testing'
+'createdb -U "$POSTGRES_USER" miseledger_test'
 ```
 
 ### Vite HMR
@@ -166,13 +166,13 @@ Current repository evidence does not require durable user-uploaded application f
 
 Current production boundaries:
 
-| Path/data | Persistence requirement |
-| --- | --- |
-| `public/build` | Immutable image |
-| `storage/framework` | Ephemeral |
-| `bootstrap/cache` | Ephemeral |
-| logs | Container stdout/stderr |
-| `storage/app` | Persist only when a real durable-file feature requires it |
+| Path/data           | Persistence requirement                                   |
+| ------------------- | --------------------------------------------------------- |
+| `public/build`      | Immutable image                                           |
+| `storage/framework` | Ephemeral                                                 |
+| `bootstrap/cache`   | Ephemeral                                                 |
+| logs                | Container stdout/stderr                                   |
+| `storage/app`       | Persist only when a real durable-file feature requires it |
 
 If a future feature stores durable business files on the local filesystem, either:
 
@@ -291,15 +291,15 @@ This runbook recovers MiseLedger from a verified PostgreSQL backup after data lo
 1. **Stop writes.** Put MiseLedger in maintenance mode (`php artisan down --retry=60`) and stop or pause the worker and scheduler resources so no queued job or scheduled command writes during the restore.
 2. **Provision a clean PostgreSQL target.** Create a new, isolated PostgreSQL database dedicated to the restore. Never restore in place over the existing database; a clean target ensures a partial or failed restore never leaves the prior database in a torn state.
 3. **Restore the verified backup.** Using the `RESTIC_REPOSITORY` and `RESTIC_PASSWORD` runtime secrets obtained from the Coolify secret store (never recorded in this document), the database operator:
-   - lists candidate snapshots with `restic snapshots --tag miseledger-postgresql` and selects the snapshot matching the required point in time and its noted verification timestamp;
-   - retrieves only that snapshot into a transient, non-persistent path (for example `restic dump <snapshot-id> <archive-path> > /tmp/miseledger-restore.dump`), never into a Compose volume, `storage/app`, or any tracked location;
-   - restores the retrieved archive into the clean target only, using `pg_restore`;
-   - deletes the transient retrieved archive immediately after the restore completes, whether it succeeded or failed.
+    - lists candidate snapshots with `restic snapshots --tag miseledger-postgresql` and selects the snapshot matching the required point in time and its noted verification timestamp;
+    - retrieves only that snapshot into a transient, non-persistent path (for example `restic dump <snapshot-id> <archive-path> > /tmp/miseledger-restore.dump`), never into a Compose volume, `storage/app`, or any tracked location;
+    - restores the retrieved archive into the clean target only, using `pg_restore`;
+    - deletes the transient retrieved archive immediately after the restore completes, whether it succeeded or failed.
 4. **Validate the application** against the restored database:
-   - update the private PostgreSQL connection configuration in Coolify secrets to point at the restored target;
-   - deploy or restart the web, worker, and scheduler resources on the same application image commit;
-   - verify `GET /up` returns HTTP 200;
-   - verify `php artisan migrate:status` shows no pending migrations.
+    - update the private PostgreSQL connection configuration in Coolify secrets to point at the restored target;
+    - deploy or restart the web, worker, and scheduler resources on the same application image commit;
+    - verify `GET /up` returns HTTP 200;
+    - verify `php artisan migrate:status` shows no pending migrations.
 5. **Run the post-restore checks** below and capture their results as evidence.
 6. **Check ledger integrity.** Confirm StockMovement history is present and that StockBalance figures reconcile against StockMovement for a sample of items. Do not reconstruct StockMovement from StockBalance and do not repair StockBalance directly; this preserves the same invariant defined in [Backup Scope and Recovery Boundary](#backup-scope-and-recovery-boundary).
 7. **Resume writes** only after the second approver confirms every post-restore check passes: take the application out of maintenance mode (`php artisan up`) and resume worker and scheduler processing.
@@ -609,4 +609,3 @@ Do not assume:
 - the HTTP-serving model.
 
 An unresolved UpShop repository is an implementation blocker, not permission to invent an architecture.
-

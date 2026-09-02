@@ -28,5 +28,5 @@ yarn-error.log
 /.vscode
 /.zed
 /miseledger
-/miseledger_testing
+/miseledger_test
 /database/*.sqlite

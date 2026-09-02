@@ -26,13 +26,13 @@ jobs:
       pgsql:
         image: postgres:18-alpine
         env:
-          POSTGRES_DB: miseledger_testing
+          POSTGRES_DB: miseledger_test
           POSTGRES_USER: miseledger
           POSTGRES_PASSWORD: miseledger
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U miseledger -d miseledger_testing"
+          --health-cmd "pg_isready -U miseledger -d miseledger_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -51,7 +51,7 @@ jobs:
       DB_CONNECTION: pgsql
       DB_HOST: 127.0.0.1
       DB_PORT: 5432
-      DB_DATABASE: miseledger_testing
+      DB_DATABASE: miseledger_test
       DB_USERNAME: miseledger
       DB_PASSWORD: miseledger
 
@@ -110,13 +110,13 @@ jobs:
       pgsql:
         image: postgres:18-alpine
         env:
-          POSTGRES_DB: miseledger_testing
+          POSTGRES_DB: miseledger_test
           POSTGRES_USER: miseledger
           POSTGRES_PASSWORD: miseledger
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U miseledger -d miseledger_testing"
+          --health-cmd "pg_isready -U miseledger -d miseledger_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -136,7 +136,7 @@ jobs:
       DB_CONNECTION: pgsql
       DB_HOST: 127.0.0.1
       DB_PORT: 5432
-      DB_DATABASE: miseledger_testing
+      DB_DATABASE: miseledger_test
       DB_USERNAME: miseledger
       DB_PASSWORD: miseledger
 
