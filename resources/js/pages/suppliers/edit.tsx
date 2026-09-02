@@ -1,11 +1,16 @@
 import { Form, Head, Link } from '@inertiajs/react';
+import { PackageOpen } from 'lucide-react';
+import { useEffect } from 'react';
 import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
 import SupplierItemController from '@/actions/App/Http/Controllers/Suppliers/SupplierItemController';
+import { EmptyState } from '@/components/empty-state';
 import { PageHeader } from '@/components/page-header';
+import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
+import { useDirtyFormNavigation } from '@/hooks/use-dirty-form-navigation';
 import { dashboard } from '@/routes';
 
 type InventoryItemOption = {
@@ -60,14 +65,39 @@ type Props = {
     itemOptions: InventoryItemOption[];
     unitOptions: UnitOption[];
     canManage: boolean;
+    canViewCosts: boolean;
 };
+
+function DirtyStateTracker({
+    dirty,
+    successful,
+    onChange,
+}: {
+    dirty: boolean;
+    successful: boolean;
+    onChange: (dirty: boolean) => void;
+}) {
+    useEffect(() => {
+        onChange(dirty && !successful);
+    }, [dirty, onChange, successful]);
+
+    return null;
+}
 
 export default function EditSupplier({
     supplier,
     itemOptions,
     unitOptions,
     canManage,
+    canViewCosts,
 }: Props) {
+    const masterDirtyNavigation = useDirtyFormNavigation(
+        'You have unsaved supplier changes. Leave without saving them?',
+    );
+    const itemDirtyNavigation = useDirtyFormNavigation(
+        'You have unsaved supplier item changes. Leave without saving them?',
+    );
+
     return (
         <>
             <Head title={supplier.name} />
@@ -76,16 +106,36 @@ export default function EditSupplier({
                 <PageHeader title={supplier.name} description={supplier.code} />
 
                 <div className="grid gap-6 xl:grid-cols-2">
-                    <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                        <h2 className="mb-5 font-medium">Supplier master</h2>
+                    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                        <div className="mb-5 flex items-start justify-between gap-4">
+                            <h2 className="font-medium">Supplier master</h2>
+                            <StatusBadge
+                                label={supplier.active ? 'Active' : 'Inactive'}
+                                variant={
+                                    supplier.active ? 'success' : 'neutral'
+                                }
+                            />
+                        </div>
 
                         {canManage ? (
                             <Form
                                 {...SupplierController.update.form(supplier.id)}
                                 className="space-y-5"
                             >
-                                {({ processing, errors }) => (
+                                {({
+                                    processing,
+                                    errors,
+                                    isDirty,
+                                    wasSuccessful,
+                                }) => (
                                     <>
+                                        <DirtyStateTracker
+                                            dirty={isDirty}
+                                            successful={wasSuccessful}
+                                            onChange={
+                                                masterDirtyNavigation.setIsDirty
+                                            }
+                                        />
                                         <div className="grid gap-5 sm:grid-cols-2">
                                             <Field
                                                 id="name"
@@ -263,9 +313,18 @@ export default function EditSupplier({
                                         Status
                                     </dt>
                                     <dd>
-                                        {supplier.active
-                                            ? 'Active'
-                                            : 'Inactive'}
+                                        <StatusBadge
+                                            label={
+                                                supplier.active
+                                                    ? 'Active'
+                                                    : 'Inactive'
+                                            }
+                                            variant={
+                                                supplier.active
+                                                    ? 'success'
+                                                    : 'neutral'
+                                            }
+                                        />
                                     </dd>
                                 </div>
                             </dl>
@@ -273,17 +332,24 @@ export default function EditSupplier({
                     </div>
 
                     <div className="space-y-6">
-                        <div className="overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                            <div className="border-b border-sidebar-border/70 px-5 py-4 dark:border-sidebar-border">
+                        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                            <div className="border-b border-border px-5 py-4">
                                 <h2 className="font-medium">Supplier items</h2>
                             </div>
 
                             {supplier.items.length === 0 ? (
-                                <div className="px-5 py-8 text-sm text-muted-foreground">
-                                    No supplier items configured.
-                                </div>
+                                <EmptyState
+                                    className="px-5 py-8"
+                                    icon={PackageOpen}
+                                    title="No supplier items yet"
+                                    description={
+                                        canManage && supplier.active
+                                            ? 'Add a supplier item below to connect this supplier to inventory.'
+                                            : 'This supplier has no item mappings available to review.'
+                                    }
+                                />
                             ) : (
-                                <div className="divide-y divide-sidebar-border/70 dark:divide-sidebar-border">
+                                <div className="divide-y divide-border">
                                     {supplier.items.map((item) => (
                                         <div
                                             key={item.id}
@@ -306,18 +372,28 @@ export default function EditSupplier({
                                                     units
                                                 </p>
 
-                                                <p className="mt-1 text-sm">
-                                                    {item.currentPrice === null
-                                                        ? 'No price'
-                                                        : `${item.currency} ${item.currentPrice}`}
-                                                </p>
+                                                {canViewCosts ? (
+                                                    <p className="mt-1 text-sm">
+                                                        {item.currentPrice ===
+                                                        null
+                                                            ? 'No current price'
+                                                            : `${item.currency} ${item.currentPrice}`}
+                                                    </p>
+                                                ) : null}
                                             </div>
 
-                                            <span className="text-sm">
-                                                {item.active
-                                                    ? 'Active'
-                                                    : 'Inactive'}
-                                            </span>
+                                            <StatusBadge
+                                                label={
+                                                    item.active
+                                                        ? 'Active'
+                                                        : 'Inactive'
+                                                }
+                                                variant={
+                                                    item.active
+                                                        ? 'success'
+                                                        : 'neutral'
+                                                }
+                                            />
                                         </div>
                                     ))}
                                 </div>
@@ -328,7 +404,7 @@ export default function EditSupplier({
                             supplier.active &&
                             itemOptions.length > 0 &&
                             unitOptions.length > 0 && (
-                                <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
+                                <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
                                     <h2 className="mb-5 font-medium">
                                         Add supplier item
                                     </h2>
@@ -340,8 +416,20 @@ export default function EditSupplier({
                                         className="space-y-5"
                                         resetOnSuccess
                                     >
-                                        {({ processing, errors }) => (
+                                        {({
+                                            processing,
+                                            errors,
+                                            isDirty,
+                                            wasSuccessful,
+                                        }) => (
                                             <>
+                                                <DirtyStateTracker
+                                                    dirty={isDirty}
+                                                    successful={wasSuccessful}
+                                                    onChange={
+                                                        itemDirtyNavigation.setIsDirty
+                                                    }
+                                                />
                                                 <input
                                                     type="hidden"
                                                     name="active"
@@ -485,6 +573,24 @@ export default function EditSupplier({
                                     </Form>
                                 </div>
                             )}
+
+                        {canManage &&
+                            (!supplier.active ||
+                                itemOptions.length === 0 ||
+                                unitOptions.length === 0) && (
+                                <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                                    <h2 className="font-medium">
+                                        Add supplier item
+                                    </h2>
+                                    <p className="mt-2 text-sm text-muted-foreground">
+                                        {!supplier.active
+                                            ? 'Activate this supplier before adding item mappings.'
+                                            : itemOptions.length === 0
+                                              ? 'No active inventory items are available to map.'
+                                              : 'No purchase units are available to complete a supplier item mapping.'}
+                                    </p>
+                                </div>
+                            )}
                     </div>
                 </div>
             </div>
@@ -492,7 +598,7 @@ export default function EditSupplier({
     );
 }
 
-EditSupplier.layout = {
+EditSupplier.layout = (page: Props) => ({
     breadcrumbs: [
         {
             title: 'Dashboard',
@@ -502,5 +608,9 @@ EditSupplier.layout = {
             title: 'Suppliers',
             href: SupplierController.index(),
         },
+        {
+            title: page.supplier.name,
+            href: SupplierController.edit(page.supplier.id),
+        },
     ],
-};
+});

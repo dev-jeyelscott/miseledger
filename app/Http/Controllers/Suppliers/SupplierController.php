@@ -461,6 +461,11 @@ class SupplierController extends Controller
             $organization,
         );
 
+        $canViewCosts = Gate::allows(
+            OrganizationPermission::CostsView->value,
+            $organization,
+        );
+
         $supplierRecord = $organization
             ->suppliers()
             ->with([
@@ -526,7 +531,9 @@ class SupplierController extends Controller
                             'supplierSku' => $supplierItem->supplier_sku,
                             'description' => $supplierItem->description,
                             'baseQuantity' => $supplierItem->base_quantity,
-                            'currentPrice' => $supplierItem->current_price,
+                            'currentPrice' => $canViewCosts
+                                ? $supplierItem->current_price
+                                : null,
                             'currency' => $supplierItem->currency,
                             'active' => $supplierItem->active,
 
@@ -555,6 +562,7 @@ class SupplierController extends Controller
 
             'itemOptions' => $itemOptions,
             'unitOptions' => $unitOptions,
+            'canViewCosts' => $canViewCosts,
 
             'canManage' => Gate::allows(
                 OrganizationPermission::PurchasingManage->value,
