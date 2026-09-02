@@ -201,3 +201,23 @@ test('dashboard follows the canonical operational UI contract', function () {
         ->not->toContain('text-amber-600')
         ->not->toContain('dark:text-amber-400');
 });
+
+test('supplier directory follows the canonical operational UI contract', function () {
+    $suppliers = File::get(resource_path('js/pages/suppliers/index.tsx'));
+
+    expect($suppliers)
+        ->toContain('border border-border bg-card')
+        ->toContain('divide-y divide-border md:hidden')
+        ->toContain('hidden overflow-x-auto md:block')
+        ->toContain('scope="col"')
+        ->toContain('<StatusBadge')
+        ->toContain("? 'success'")
+        ->toContain(": 'neutral'")
+        ->toContain('<PaginationControls')
+        ->toContain('preserveScroll')
+        ->toContain('preserveState')
+        ->not->toContain('sidebar-border')
+        ->not->toContain('<Badge')
+        ->not->toContain('bg-emerald-')
+        ->not->toContain('text-emerald-');
+});

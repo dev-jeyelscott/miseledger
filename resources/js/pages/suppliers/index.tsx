@@ -2,8 +2,6 @@ import { Form, Head, Link } from '@inertiajs/react';
 import {
     Building2,
     CheckCircle2,
-    ChevronLeft,
-    ChevronRight,
     ClipboardList,
     DollarSign,
     Filter,
@@ -19,8 +17,8 @@ import { EmptyState } from '@/components/empty-state';
 import { FilterToolbar } from '@/components/filter-toolbar';
 import InputError from '@/components/input-error';
 import { PageHeader } from '@/components/page-header';
+import { PaginationControls } from '@/components/pagination-controls';
 import { StatusBadge } from '@/components/status-badge';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -149,13 +147,6 @@ function supplierMetadata(supplier: Supplier): string {
     ].filter((value): value is string => value !== null);
 
     return metadata.length > 0 ? metadata.join(' · ') : 'No purchasing terms';
-}
-
-/** Return accessible status styling while retaining a visible text label. */
-function supplierStatusClassName(active: boolean): string {
-    return active
-        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
-        : 'border-border bg-muted/50 text-muted-foreground';
 }
 
 /** Create a supplier master record without leaving the directory context. */
@@ -714,10 +705,10 @@ export default function SuppliersIndex({
                 </Form>
 
                 <section
-                    className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm dark:border-sidebar-border"
+                    className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
                     aria-labelledby="supplier-results-title"
                 >
-                    <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-sidebar-border/70 px-4 py-3 dark:border-sidebar-border">
+                    <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
                         <div>
                             <h2
                                 id="supplier-results-title"
@@ -750,7 +741,7 @@ export default function SuppliersIndex({
                         />
                     ) : (
                         <div
-                            className="divide-y divide-sidebar-border/70 md:hidden dark:divide-sidebar-border"
+                            className="divide-y divide-border md:hidden"
                             data-testid="mobile-suppliers"
                         >
                             {suppliers.map((supplier) => (
@@ -988,24 +979,18 @@ export default function SuppliersIndex({
                                         </td>
 
                                         <td className="px-4 py-3">
-                                            <Badge
-                                                variant="outline"
-                                                className={supplierStatusClassName(
-                                                    supplier.active,
-                                                )}
-                                            >
-                                                <span
-                                                    className={
-                                                        supplier.active
-                                                            ? 'size-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400'
-                                                            : 'size-1.5 rounded-full bg-muted-foreground'
-                                                    }
-                                                    aria-hidden="true"
-                                                />
-                                                {supplier.active
-                                                    ? 'Active'
-                                                    : 'Inactive'}
-                                            </Badge>
+                                            <StatusBadge
+                                                label={
+                                                    supplier.active
+                                                        ? 'Active'
+                                                        : 'Inactive'
+                                                }
+                                                variant={
+                                                    supplier.active
+                                                        ? 'success'
+                                                        : 'neutral'
+                                                }
+                                            />
                                         </td>
 
                                         <td className="px-4 py-3 text-right">
@@ -1038,112 +1023,18 @@ export default function SuppliersIndex({
                         </table>
                     </div>
 
-                    <div className="flex min-h-14 flex-wrap items-center justify-between gap-4 border-t border-sidebar-border/70 px-4 py-3 dark:border-sidebar-border">
-                        <p className="text-sm text-muted-foreground">
-                            {pagination.total === 0
-                                ? 'Showing 0 suppliers'
-                                : `Showing ${pagination.from ?? 0} to ${
-                                      pagination.to ?? 0
-                                  } of ${pagination.total.toLocaleString()} suppliers`}
-                        </p>
-
-                        {pagination.lastPage > 1 && (
-                            <nav
-                                className="flex items-center gap-2"
-                                aria-label="Supplier pagination"
-                            >
-                                {pagination.previousPageUrl !== null ? (
-                                    <Button
-                                        variant="outline"
-                                        className="h-9 px-3"
-                                        asChild
-                                    >
-                                        <Link
-                                            href={pagination.previousPageUrl}
-                                            preserveScroll
-                                            aria-label="Previous supplier page"
-                                        >
-                                            <ChevronLeft
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                        </Link>
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="h-9 px-3"
-                                        disabled
-                                        aria-label="Previous supplier page"
-                                    >
-                                        <ChevronLeft
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                    </Button>
-                                )}
-
-                                {pagination.pages.map((page) =>
-                                    page.active ? (
-                                        <span
-                                            key={page.page}
-                                            className="flex h-9 min-w-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground"
-                                            aria-current="page"
-                                        >
-                                            {page.page}
-                                        </span>
-                                    ) : (
-                                        <Button
-                                            key={page.page}
-                                            variant="outline"
-                                            className="h-9 min-w-9 px-3"
-                                            asChild
-                                        >
-                                            <Link
-                                                href={page.url}
-                                                preserveScroll
-                                            >
-                                                {page.page}
-                                            </Link>
-                                        </Button>
-                                    ),
-                                )}
-
-                                {pagination.nextPageUrl !== null ? (
-                                    <Button
-                                        variant="outline"
-                                        className="h-9 px-3"
-                                        asChild
-                                    >
-                                        <Link
-                                            href={pagination.nextPageUrl}
-                                            preserveScroll
-                                            aria-label="Next supplier page"
-                                        >
-                                            <ChevronRight
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                        </Link>
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="h-9 px-3"
-                                        disabled
-                                        aria-label="Next supplier page"
-                                    >
-                                        <ChevronRight
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                    </Button>
-                                )}
-                            </nav>
-                        )}
-                    </div>
+                    <PaginationControls
+                        currentPage={pagination.currentPage}
+                        lastPage={pagination.lastPage}
+                        from={pagination.from}
+                        to={pagination.to}
+                        total={pagination.total}
+                        previousPageUrl={pagination.previousPageUrl}
+                        nextPageUrl={pagination.nextPageUrl}
+                        preserveScroll
+                        preserveState
+                        itemLabel="suppliers"
+                    />
                 </section>
             </div>
         </>
