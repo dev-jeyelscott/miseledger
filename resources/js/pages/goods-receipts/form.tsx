@@ -77,6 +77,10 @@ type ReceiptLine = {
     } | null;
 };
 
+function generateClientLineKey(): string {
+    return `draft:${crypto.getRandomValues(new Uint8Array(8)).reduce((hex, byte) => hex + byte.toString(16).padStart(2, '0'), '')}`;
+}
+
 type AuditEntry = {
     id: number;
     action: string;
@@ -107,6 +111,7 @@ type UnitOption = {
 };
 
 type LineState = {
+    key: string;
     purchaseOrderLineId: string;
     storageLocationId: string;
     receivedQuantity: string;
@@ -126,6 +131,7 @@ type Props = {
     currency: string;
     timezone: string;
     canFinalize: boolean;
+    canViewCosts: boolean;
     auditTrail: AuditEntry[];
 };
 
@@ -135,9 +141,10 @@ type DirtyStateTrackerProps = {
 };
 
 const emptyLine = (): LineState => ({
+    key: generateClientLineKey(),
     purchaseOrderLineId: '',
     storageLocationId: '',
-    receivedQuantity: '1',
+    receivedQuantity: '',
     receivedUnitId: '',
     rejectedQuantity: '0',
     rejectedUnitId: '',
@@ -195,12 +202,14 @@ function receiptStatusVariant(
     status: string,
 ): 'neutral' | 'success' | 'warning' | 'info' | 'danger' {
     switch (status) {
+        case 'draft':
+            return 'warning';
         case 'finalized':
             return 'success';
         case 'cancelled':
-            return 'danger';
-        default:
             return 'neutral';
+        default:
+            return 'info';
     }
 }
 
@@ -223,10 +232,12 @@ function ReceiptLineCards({
     goodsReceipt,
     currency,
     timezone,
+    canViewCosts,
 }: {
     goodsReceipt: GoodsReceipt;
     currency: string;
     timezone: string;
+    canViewCosts: boolean;
 }) {
     return (
         <div className="grid gap-3 md:hidden">
@@ -303,18 +314,20 @@ function ReceiptLineCards({
                             </dd>
                         </div>
 
-                        <div>
-                            <dt className="text-xs text-muted-foreground">
-                                Unit cost
-                            </dt>
-                            <dd className="mt-0.5 tabular-nums">
-                                {isPositiveQuantity(line.receivedQuantity)
-                                    ? `${currency} ${formatDecimal(
-                                          line.unitCost,
-                                      )}`
-                                    : 'Not recorded'}
-                            </dd>
-                        </div>
+                        {canViewCosts ? (
+                            <div>
+                                <dt className="text-xs text-muted-foreground">
+                                    Unit cost
+                                </dt>
+                                <dd className="mt-0.5 tabular-nums">
+                                    {isPositiveQuantity(line.receivedQuantity)
+                                        ? `${currency} ${formatDecimal(
+                                              line.unitCost,
+                                          )}`
+                                        : 'Not recorded'}
+                                </dd>
+                            </div>
+                        ) : null}
 
                         <div>
                             <dt className="text-xs text-muted-foreground">
@@ -347,6 +360,7 @@ export default function GoodsReceiptForm({
     currency,
     timezone,
     canFinalize,
+    canViewCosts,
     auditTrail,
 }: Props) {
     const editable = goodsReceipt === null || goodsReceipt.status === 'draft';
@@ -410,6 +424,7 @@ export default function GoodsReceiptForm({
 
     const [lines, setLines] = useState<LineState[]>(
         goodsReceipt?.lines.map((line) => ({
+            key: line.key,
             purchaseOrderLineId: line.purchaseOrderLineId.toString(),
             storageLocationId: line.storageLocationId?.toString() ?? '',
             receivedQuantity: line.receivedQuantity,
@@ -560,38 +575,46 @@ export default function GoodsReceiptForm({
 
                     <div className="hidden overflow-x-auto md:block">
                         <table className="w-full text-sm">
+                            <caption className="sr-only">
+                                Purchase order fulfillment summary showing ordered, accepted, remaining, and over-received quantities.
+                            </caption>
                             <thead className="border-b border-border text-left">
                                 <tr>
-                                    <th className="py-2">Item</th>
-                                    <th className="py-2">Ordered base</th>
-                                    <th className="py-2">Accepted base</th>
-                                    <th className="py-2">Remaining</th>
-                                    <th className="py-2">Over received</th>
+                                    <th scope="col" className="px-2 py-2">Item</th>
+                                    <th scope="col" className="px-2 py-2">Ordered base</th>
+                                    <th scope="col" className="px-2 py-2">Accepted base</th>
+                                    <th scope="col" className="px-2 py-2">Remaining</th>
+                                    <th scope="col" className="px-2 py-2">Over received</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {purchaseOrder.lines.map((line) => (
                                     <tr
                                         key={line.id}
-                                        className="border-b border-border last:border-b-0"
+                                        className={`border-b border-border last:border-b-0 ${
+                                            line.overReceivedBaseQuantity !==
+                                            '0.000000'
+                                                ? 'bg-amber-50 dark:bg-amber-950/20'
+                                                : ''
+                                        }`}
                                     >
-                                        <td className="py-2">
+                                        <td className="px-2 py-2">
                                             {line.itemName}
                                         </td>
-                                        <td className="py-2 tabular-nums">
+                                        <td className="px-2 py-2 tabular-nums">
                                             {formatDecimal(line.baseQuantity)}
                                         </td>
-                                        <td className="py-2 tabular-nums">
+                                        <td className="px-2 py-2 tabular-nums">
                                             {formatDecimal(
                                                 line.receivedBaseQuantity,
                                             )}
                                         </td>
-                                        <td className="py-2 tabular-nums">
+                                        <td className="px-2 py-2 tabular-nums">
                                             {formatDecimal(
                                                 line.remainingBaseQuantity,
                                             )}
                                         </td>
-                                        <td className="py-2 tabular-nums">
+                                        <td className="px-2 py-2 tabular-nums">
                                             {line.overReceivedBaseQuantity ===
                                             '0.000000'
                                                 ? 'None'
@@ -604,6 +627,15 @@ export default function GoodsReceiptForm({
                             </tbody>
                         </table>
                     </div>
+
+                    {purchaseOrder.lines.some(
+                        (line) => line.overReceivedBaseQuantity !== '0.000000',
+                    ) && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-100">
+                            <strong>Over-receipt detected:</strong> One or more
+                            lines have been received beyond the ordered quantity.
+                        </div>
+                    )}
                 </section>
 
                 {editable ? (
@@ -728,7 +760,7 @@ export default function GoodsReceiptForm({
 
                                         return (
                                             <article
-                                                key={index}
+                                                key={line.key}
                                                 className="grid gap-4 rounded-lg border border-border bg-background p-4"
                                             >
                                                 <div className="flex items-center justify-between gap-3">
@@ -1309,21 +1341,21 @@ export default function GoodsReceiptForm({
                             </div>
                             <div>
                                 <div className="text-sm text-muted-foreground">
-                                    Received by
-                                </div>
-                                <div className="font-medium">
-                                    {goodsReceipt?.receivedBy ?? 'Not recorded'}
-                                </div>
-                            </div>
-                            <div>
-                                <div className="text-sm text-muted-foreground">
-                                    Received at
+                                    Received date
                                 </div>
                                 <div className="font-medium">
                                     {formatOrganizationDate(
                                         goodsReceipt?.receivedAt ?? null,
                                         timezone,
                                     )}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-sm text-muted-foreground">
+                                    Received by
+                                </div>
+                                <div className="font-medium">
+                                    {goodsReceipt?.receivedBy ?? 'Not recorded'}
                                 </div>
                             </div>
                         </div>
@@ -1333,23 +1365,29 @@ export default function GoodsReceiptForm({
                                 goodsReceipt={goodsReceipt}
                                 currency={currency}
                                 timezone={timezone}
+                                canViewCosts={canViewCosts}
                             />
                         )}
 
                         <div className="hidden overflow-x-auto md:block">
                             <table className="w-full text-sm">
+                                <caption className="sr-only">
+                                    Finalized receipt evidence showing accepted, rejected, and damaged quantities with stock movement details.
+                                </caption>
                                 <thead className="border-b border-border text-left">
                                     <tr>
-                                        <th className="py-2">Item</th>
-                                        <th className="py-2">Storage</th>
-                                        <th className="py-2">Accepted</th>
-                                        <th className="py-2">Rejected</th>
-                                        <th className="py-2">Damaged</th>
-                                        <th className="py-2">Accepted base</th>
-                                        <th className="py-2">Movement</th>
-                                        <th className="py-2 text-right">
-                                            Unit cost
-                                        </th>
+                                        <th scope="col" className="px-2 py-2">Item</th>
+                                        <th scope="col" className="px-2 py-2">Storage</th>
+                                        <th scope="col" className="px-2 py-2">Accepted</th>
+                                        <th scope="col" className="px-2 py-2">Rejected</th>
+                                        <th scope="col" className="px-2 py-2">Damaged</th>
+                                        <th scope="col" className="px-2 py-2">Accepted base</th>
+                                        <th scope="col" className="px-2 py-2">Movement</th>
+                                        {canViewCosts ? (
+                                            <th scope="col" className="px-2 py-2 text-right">
+                                                Unit cost
+                                            </th>
+                                        ) : null}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1358,14 +1396,14 @@ export default function GoodsReceiptForm({
                                             key={line.key}
                                             className="border-b border-border last:border-b-0"
                                         >
-                                            <td className="py-2">
+                                            <td className="px-2 py-2">
                                                 {line.itemName}
                                             </td>
-                                            <td className="py-2">
+                                            <td className="px-2 py-2">
                                                 {line.storageLocationName ??
                                                     'Not recorded'}
                                             </td>
-                                            <td className="py-2 tabular-nums">
+                                            <td className="px-2 py-2 tabular-nums">
                                                 {isPositiveQuantity(
                                                     line.receivedQuantity,
                                                 ) && line.receivedUnitSymbol
@@ -1374,7 +1412,7 @@ export default function GoodsReceiptForm({
                                                       )} ${line.receivedUnitSymbol}`
                                                     : 'None'}
                                             </td>
-                                            <td className="py-2 tabular-nums">
+                                            <td className="px-2 py-2 tabular-nums">
                                                 {isPositiveQuantity(
                                                     line.rejectedQuantity,
                                                 ) && line.rejectedUnitSymbol
@@ -1383,7 +1421,7 @@ export default function GoodsReceiptForm({
                                                       )} ${line.rejectedUnitSymbol}`
                                                     : 'None'}
                                             </td>
-                                            <td className="py-2 tabular-nums">
+                                            <td className="px-2 py-2 tabular-nums">
                                                 {isPositiveQuantity(
                                                     line.damagedQuantity,
                                                 ) && line.damagedUnitSymbol
@@ -1392,7 +1430,7 @@ export default function GoodsReceiptForm({
                                                       )} ${line.damagedUnitSymbol}`
                                                     : 'None'}
                                             </td>
-                                            <td className="py-2 tabular-nums">
+                                            <td className="px-2 py-2 tabular-nums">
                                                 {isPositiveQuantity(
                                                     line.receivedQuantity,
                                                 )
@@ -1401,7 +1439,7 @@ export default function GoodsReceiptForm({
                                                       )
                                                     : 'None'}
                                             </td>
-                                            <td className="py-2">
+                                            <td className="px-2 py-2">
                                                 {line.movement ? (
                                                     <div>
                                                         <div>
@@ -1423,15 +1461,17 @@ export default function GoodsReceiptForm({
                                                     'Not recorded'
                                                 )}
                                             </td>
-                                            <td className="py-2 text-right tabular-nums">
-                                                {isPositiveQuantity(
-                                                    line.receivedQuantity,
-                                                )
-                                                    ? `${currency} ${formatDecimal(
-                                                          line.unitCost,
-                                                      )}`
-                                                    : 'Not recorded'}
-                                            </td>
+                                            {canViewCosts ? (
+                                                <td className="px-2 py-2 text-right tabular-nums">
+                                                    {isPositiveQuantity(
+                                                        line.receivedQuantity,
+                                                    )
+                                                        ? `${currency} ${formatDecimal(
+                                                              line.unitCost,
+                                                          )}`
+                                                        : 'Not recorded'}
+                                                </td>
+                                            ) : null}
                                         </tr>
                                     ))}
                                 </tbody>
@@ -1446,11 +1486,14 @@ export default function GoodsReceiptForm({
 
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-sm">
+                                        <caption className="sr-only">
+                                            Audit history of receipt actions and state changes.
+                                        </caption>
                                         <thead className="border-b border-border text-left">
                                             <tr>
-                                                <th className="py-2">Action</th>
-                                                <th className="py-2">Actor</th>
-                                                <th className="py-2">
+                                                <th scope="col" className="px-2 py-2">Action</th>
+                                                <th scope="col" className="px-2 py-2">Actor</th>
+                                                <th scope="col" className="px-2 py-2">
                                                     Timestamp
                                                 </th>
                                             </tr>
@@ -1461,14 +1504,14 @@ export default function GoodsReceiptForm({
                                                     key={entry.id}
                                                     className="border-b border-border last:border-b-0"
                                                 >
-                                                    <td className="py-2">
+                                                    <td className="px-2 py-2">
                                                         {entry.action}
                                                     </td>
-                                                    <td className="py-2">
+                                                    <td className="px-2 py-2">
                                                         {entry.actorName ??
                                                             'System'}
                                                     </td>
-                                                    <td className="py-2">
+                                                    <td className="px-2 py-2">
                                                         {formatOrganizationDate(
                                                             entry.createdAt,
                                                             timezone,
@@ -1566,10 +1609,13 @@ export default function GoodsReceiptForm({
                                                                                 line.itemName
                                                                             }
                                                                         </span>
-                                                                        <span className="shrink-0 tabular-nums">
+                                                                        <span className="shrink-0 tabular-nums font-medium">
                                                                             {formatDecimal(
                                                                                 line.baseQuantity,
-                                                                            )}
+                                                                            )}{' '}
+                                                                            {
+                                                                                line.receivedUnitSymbol
+                                                                            }
                                                                         </span>
                                                                     </li>
                                                                 ),

@@ -159,6 +159,10 @@ class GoodsReceiptController extends Controller
             'purchaseOrder' => $this->purchaseOrderData($po),
             ...$this->formOptions($organization, $po),
             'canFinalize' => true,
+            'canViewCosts' => Gate::allows(
+                OrganizationPermission::CostsView->value,
+                $organization,
+            ),
             'auditTrail' => [],
         ]);
     }
@@ -250,6 +254,10 @@ class GoodsReceiptController extends Controller
                 $receipt->purchaseOrder,
             ),
             'canFinalize' => $canFinalize,
+            'canViewCosts' => Gate::allows(
+                OrganizationPermission::CostsView->value,
+                $organization,
+            ),
             'auditTrail' => $this->auditTrailData(
                 $organization,
                 $receipt,

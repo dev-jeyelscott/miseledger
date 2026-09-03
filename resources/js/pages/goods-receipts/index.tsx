@@ -140,7 +140,7 @@ function statusVariant(
             return 'success';
 
         case 'cancelled':
-            return 'danger';
+            return 'neutral';
     }
 }
 
@@ -320,7 +320,13 @@ export default function GoodsReceiptIndex({
                     actions={
                         canFinalize ? (
                             <Button asChild>
-                                <Link href={PurchaseOrderController.index()}>
+                                <Link
+                                    href={PurchaseOrderController.index({
+                                        query: {
+                                            status: 'approved',
+                                        },
+                                    }).url}
+                                >
                                     <Package
                                         className="size-4"
                                         aria-hidden="true"
@@ -573,9 +579,35 @@ export default function GoodsReceiptIndex({
                     className="grid gap-3 md:hidden"
                     aria-labelledby="receiving-register-cards-title"
                 >
-                    <h2 id="receiving-register-cards-title" className="sr-only">
-                        Receiving register
-                    </h2>
+                    <div className="flex items-center justify-between gap-3 px-1">
+                        <div>
+                            <h2
+                                id="receiving-register-cards-title"
+                                className="text-sm font-semibold"
+                            >
+                                Receiving register
+                            </h2>
+
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                                {receipts.total.toLocaleString()}{' '}
+                                {receipts.total === 1 ? 'receipt' : 'receipts'}
+                                {hasFilters
+                                    ? ` match ${activeFilterLabels.length} active ${
+                                          activeFilterLabels.length === 1
+                                              ? 'filter'
+                                              : 'filters'
+                                      }`
+                                    : ' in this organization'}
+                            </p>
+                        </div>
+
+                        {receipts.last_page > 1 && (
+                            <div className="text-xs text-muted-foreground">
+                                Page {receipts.current_page} of{' '}
+                                {receipts.last_page}
+                            </div>
+                        )}
+                    </div>
 
                     {receipts.data.length === 0 ? (
                         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
@@ -604,6 +636,21 @@ export default function GoodsReceiptIndex({
                                 receivedAtFormatter={receivedAtFormatter}
                             />
                         ))
+                    )}
+
+                    {receipts.last_page > 1 && receipts.data.length > 0 && (
+                        <PaginationControls
+                            currentPage={receipts.current_page}
+                            lastPage={receipts.last_page}
+                            from={receipts.from}
+                            to={receipts.to}
+                            total={receipts.total}
+                            previousPageUrl={receipts.prev_page_url}
+                            nextPageUrl={receipts.next_page_url}
+                            itemLabel="receipts"
+                            preserveScroll
+                            preserveState
+                        />
                     )}
                 </section>
 
