@@ -92,14 +92,16 @@ function formatOrganizationDate(value: string, timezone: string): string {
 
 function DirtyStateTracker({
     dirty,
+    successful,
     onChange,
 }: {
     dirty: boolean;
+    successful: boolean;
     onChange: (dirty: boolean) => void;
 }) {
     useEffect(() => {
-        onChange(dirty);
-    }, [dirty, onChange]);
+        onChange(dirty && !successful);
+    }, [dirty, onChange, successful]);
 
     return null;
 }
@@ -137,7 +139,7 @@ export default function EditSupplierItem({
         <>
             <Head title={supplierItem.inventoryItem.name} />
 
-            <div className="flex flex-1 flex-col gap-6 p-4">
+            <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
                 <PageHeader
                     title={supplierItem.inventoryItem.name}
                     description={
@@ -165,10 +167,11 @@ export default function EditSupplierItem({
                                 ])}
                                 className="space-y-5"
                             >
-                                {({ processing, errors, isDirty }) => (
+                                {({ processing, errors, isDirty, wasSuccessful }) => (
                                     <>
                                         <DirtyStateTracker
                                             dirty={isDirty}
+                                            successful={wasSuccessful}
                                             onChange={
                                                 dirtyFormNavigation.setIsDirty
                                             }
