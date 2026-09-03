@@ -89,6 +89,11 @@ class SupplierItemController extends Controller
             $organization,
         );
 
+        $canViewCosts = Gate::allows(
+            OrganizationPermission::CostsView->value,
+            $organization,
+        );
+
         $supplierRecord = $organization
             ->suppliers()
             ->findOrFail($supplier);
@@ -168,7 +173,9 @@ class SupplierItemController extends Controller
                 'supplierSku' => $supplierItemRecord->supplier_sku,
                 'description' => $supplierItemRecord->description,
                 'baseQuantity' => $supplierItemRecord->base_quantity,
-                'currentPrice' => $supplierItemRecord->current_price,
+                'currentPrice' => $canViewCosts
+                    ? $supplierItemRecord->current_price
+                    : null,
                 'currency' => $supplierItemRecord->currency,
                 'active' => $supplierItemRecord->active,
 
@@ -194,27 +201,30 @@ class SupplierItemController extends Controller
                         ->active,
                 ],
 
-                'prices' => $supplierItemRecord
-                    ->prices
-                    ->map(
-                        static fn (
-                            SupplierItemPrice $price,
-                        ): array => [
-                            'id' => $price->id,
-                            'price' => $price->price,
-                            'currency' => $price->currency,
-                            'effectiveAt' => $price
-                                ->effective_at
-                                ->toISOString(),
-                        ],
-                    )
-                    ->values()
-                    ->all(),
+                'prices' => $canViewCosts
+                    ? $supplierItemRecord
+                        ->prices
+                        ->map(
+                            static fn (
+                                SupplierItemPrice $price,
+                            ): array => [
+                                'id' => $price->id,
+                                'price' => $price->price,
+                                'currency' => $price->currency,
+                                'effectiveAt' => $price
+                                    ->effective_at
+                                    ->toISOString(),
+                            ],
+                        )
+                        ->values()
+                        ->all()
+                    : [],
             ],
 
             'itemOptions' => $itemOptions,
             'unitOptions' => $unitOptions,
             'timezone' => $organization->timezone,
+            'canViewCosts' => $canViewCosts,
 
             'canManage' => Gate::allows(
                 OrganizationPermission::PurchasingManage->value,

@@ -1,11 +1,17 @@
 import { Form, Head } from '@inertiajs/react';
+import { History, Lock } from 'lucide-react';
+import { useEffect } from 'react';
 import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
 import SupplierItemController from '@/actions/App/Http/Controllers/Suppliers/SupplierItemController';
-import InputError from '@/components/input-error';
+import { EmptyState } from '@/components/empty-state';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
+import { PageHeader } from '@/components/page-header';
+import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
+import { useDirtyFormNavigation } from '@/hooks/use-dirty-form-navigation';
 import { dashboard } from '@/routes';
 
 type ItemOption = {
@@ -29,6 +35,32 @@ type Price = {
     effectiveAt: string;
 };
 
+type SupplierItem = {
+    id: number;
+    supplierSku: string;
+    description: string | null;
+    baseQuantity: string;
+    currentPrice: string | null;
+    currency: string;
+    active: boolean;
+
+    inventoryItem: {
+        id: number;
+        name: string;
+        sku: string;
+        active: boolean;
+    };
+
+    purchaseUnit: {
+        id: number;
+        name: string;
+        symbol: string;
+        active: boolean;
+    };
+
+    prices: Price[];
+};
+
 type Props = {
     supplier: {
         id: number;
@@ -37,40 +69,16 @@ type Props = {
         active: boolean;
     };
 
-    supplierItem: {
-        id: number;
-        supplierSku: string;
-        description: string | null;
-        baseQuantity: string;
-        currentPrice: string | null;
-        currency: string;
-        active: boolean;
-
-        inventoryItem: {
-            id: number;
-            name: string;
-            sku: string;
-            active: boolean;
-        };
-
-        purchaseUnit: {
-            id: number;
-            name: string;
-            symbol: string;
-            active: boolean;
-        };
-
-        prices: Price[];
-    };
-
+    supplierItem: SupplierItem;
     itemOptions: ItemOption[];
     unitOptions: UnitOption[];
     timezone: string;
     canManage: boolean;
+    canViewCosts: boolean;
 };
 
-/** Format an ISO price-history instant in the organization timezone. */
-function formatEffectiveAt(value: string, timezone: string): string {
+/** Format an ISO instant in the organization timezone with a consistent locale. */
+function formatOrganizationDate(value: string, timezone: string): string {
     return new Intl.DateTimeFormat('en-US', {
         year: 'numeric',
         month: 'short',
@@ -78,7 +86,22 @@ function formatEffectiveAt(value: string, timezone: string): string {
         hour: 'numeric',
         minute: '2-digit',
         timeZone: timezone,
+        timeZoneName: 'short',
     }).format(new Date(value));
+}
+
+function DirtyStateTracker({
+    dirty,
+    onChange,
+}: {
+    dirty: boolean;
+    onChange: (dirty: boolean) => void;
+}) {
+    useEffect(() => {
+        onChange(dirty);
+    }, [dirty, onChange]);
+
+    return null;
 }
 
 export default function EditSupplierItem({
@@ -88,23 +111,48 @@ export default function EditSupplierItem({
     unitOptions,
     timezone,
     canManage,
+    canViewCosts,
 }: Props) {
+    const dirtyFormNavigation = useDirtyFormNavigation(
+        'You have unsaved supplier item changes. Leave without saving them?',
+    );
+
+    const headerActions = (
+        <>
+            <StatusBadge
+                label={supplierItem.active ? 'Active' : 'Inactive'}
+                variant={supplierItem.active ? 'success' : 'neutral'}
+            />
+            <PreviousPageButton
+                variant="outline"
+                fallback={SupplierController.edit(supplier.id).url}
+                onNavigate={dirtyFormNavigation.confirmNavigation}
+            >
+                Back to supplier
+            </PreviousPageButton>
+        </>
+    );
+
     return (
         <>
-            <Head title={supplierItem.supplierSku} />
+            <Head title={supplierItem.inventoryItem.name} />
 
             <div className="flex flex-1 flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-2xl font-semibold">
-                        {supplierItem.inventoryItem.name}
-                    </h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        {supplier.name} · {supplierItem.supplierSku}
-                    </p>
-                </div>
+                <PageHeader
+                    title={supplierItem.inventoryItem.name}
+                    description={
+                        <>
+                            {supplier.name} ·{' '}
+                            <span className="font-mono">
+                                {supplierItem.supplierSku}
+                            </span>
+                        </>
+                    }
+                    actions={headerActions}
+                />
 
                 <div className="grid gap-6 xl:grid-cols-2">
-                    <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
+                    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
                         <h2 className="mb-5 font-medium">
                             Supplier item mapping
                         </h2>
@@ -117,21 +165,27 @@ export default function EditSupplierItem({
                                 ])}
                                 className="space-y-5"
                             >
-                                {({ processing, errors }) => (
+                                {({ processing, errors, isDirty }) => (
                                     <>
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="inventory_item_id">
-                                                Inventory item
-                                            </Label>
+                                        <DirtyStateTracker
+                                            dirty={isDirty}
+                                            onChange={
+                                                dirtyFormNavigation.setIsDirty
+                                            }
+                                        />
 
-                                            <select
-                                                id="inventory_item_id"
+                                        <Field
+                                            id="inventory_item_id"
+                                            label="Inventory item"
+                                            error={errors.inventory_item_id}
+                                        >
+                                            <NativeSelect
                                                 name="inventory_item_id"
                                                 defaultValue={
                                                     supplierItem.inventoryItem
                                                         .id
                                                 }
-                                                className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                                required
                                             >
                                                 {itemOptions.map((item) => (
                                                     <option
@@ -144,61 +198,50 @@ export default function EditSupplierItem({
                                                             : ''}
                                                     </option>
                                                 ))}
-                                            </select>
+                                            </NativeSelect>
+                                        </Field>
 
-                                            <InputError
-                                                message={
-                                                    errors.inventory_item_id
-                                                }
-                                            />
-                                        </div>
-
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="supplier_sku">
-                                                Supplier SKU
-                                            </Label>
+                                        <Field
+                                            id="supplier_sku"
+                                            label="Supplier SKU"
+                                            error={errors.supplier_sku}
+                                        >
                                             <Input
-                                                id="supplier_sku"
                                                 name="supplier_sku"
                                                 required
                                                 defaultValue={
                                                     supplierItem.supplierSku
                                                 }
                                             />
-                                            <InputError
-                                                message={errors.supplier_sku}
-                                            />
-                                        </div>
+                                        </Field>
 
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="description">
-                                                Description
-                                            </Label>
+                                        <Field
+                                            id="description"
+                                            label="Description"
+                                            error={errors.description}
+                                        >
                                             <Input
-                                                id="description"
                                                 name="description"
                                                 defaultValue={
                                                     supplierItem.description ??
                                                     ''
                                                 }
                                             />
-                                            <InputError
-                                                message={errors.description}
-                                            />
-                                        </div>
+                                        </Field>
 
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="purchase_unit_of_measure_id">
-                                                Purchase unit
-                                            </Label>
-
-                                            <select
-                                                id="purchase_unit_of_measure_id"
+                                        <Field
+                                            id="purchase_unit_of_measure_id"
+                                            label="Purchase unit"
+                                            error={
+                                                errors.purchase_unit_of_measure_id
+                                            }
+                                        >
+                                            <NativeSelect
                                                 name="purchase_unit_of_measure_id"
                                                 defaultValue={
                                                     supplierItem.purchaseUnit.id
                                                 }
-                                                className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                                required
                                             >
                                                 {unitOptions.map((unit) => (
                                                     <option
@@ -212,21 +255,16 @@ export default function EditSupplierItem({
                                                             : ''}
                                                     </option>
                                                 ))}
-                                            </select>
+                                            </NativeSelect>
+                                        </Field>
 
-                                            <InputError
-                                                message={
-                                                    errors.purchase_unit_of_measure_id
-                                                }
-                                            />
-                                        </div>
-
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="base_quantity">
-                                                Base quantity
-                                            </Label>
+                                        <Field
+                                            id="base_quantity"
+                                            label="Base quantity"
+                                            helper="Quantity in the inventory item's base unit represented by one purchase unit."
+                                            error={errors.base_quantity}
+                                        >
                                             <Input
-                                                id="base_quantity"
                                                 name="base_quantity"
                                                 type="number"
                                                 required
@@ -236,25 +274,20 @@ export default function EditSupplierItem({
                                                     supplierItem.baseQuantity
                                                 }
                                             />
-                                            <InputError
-                                                message={errors.base_quantity}
-                                            />
-                                        </div>
+                                        </Field>
 
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="active">
-                                                Status
-                                            </Label>
-
-                                            <select
-                                                id="active"
+                                        <Field
+                                            id="active"
+                                            label="Status"
+                                            error={errors.active}
+                                        >
+                                            <NativeSelect
                                                 name="active"
                                                 defaultValue={
                                                     supplierItem.active
                                                         ? '1'
                                                         : '0'
                                                 }
-                                                className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                             >
                                                 <option value="1">
                                                     Active
@@ -262,24 +295,22 @@ export default function EditSupplierItem({
                                                 <option value="0">
                                                     Inactive
                                                 </option>
-                                            </select>
-
-                                            <InputError
-                                                message={errors.active}
-                                            />
-                                        </div>
+                                            </NativeSelect>
+                                        </Field>
 
                                         <Button
                                             type="submit"
                                             disabled={processing}
                                         >
-                                            Save supplier item
+                                            {processing
+                                                ? 'Saving…'
+                                                : 'Save supplier item'}
                                         </Button>
                                     </>
                                 )}
                             </Form>
                         ) : (
-                            <dl className="space-y-4 text-sm">
+                            <dl className="grid gap-4 text-sm sm:grid-cols-2">
                                 <div>
                                     <dt className="text-muted-foreground">
                                         Internal item
@@ -312,108 +343,146 @@ export default function EditSupplierItem({
                                         Status
                                     </dt>
                                     <dd>
-                                        {supplierItem.active
-                                            ? 'Active'
-                                            : 'Inactive'}
+                                        <StatusBadge
+                                            label={
+                                                supplierItem.active
+                                                    ? 'Active'
+                                                    : 'Inactive'
+                                            }
+                                            variant={
+                                                supplierItem.active
+                                                    ? 'success'
+                                                    : 'neutral'
+                                            }
+                                        />
                                     </dd>
                                 </div>
                             </dl>
                         )}
-
-                        <PreviousPageButton
-                            variant="outline"
-                            className="mt-5"
-                            fallback={SupplierController.edit(supplier.id).url}
-                        >
-                            Back to supplier
-                        </PreviousPageButton>
                     </div>
 
                     <div className="space-y-6">
-                        <div className="rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                            <h2 className="font-medium">Current price</h2>
+                        {canViewCosts ? (
+                            <>
+                                <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                                    <h2 className="font-medium">
+                                        Current price
+                                    </h2>
 
-                            <p className="mt-3 text-2xl font-semibold">
-                                {supplierItem.currentPrice === null
-                                    ? 'Not set'
-                                    : `${supplierItem.currency} ${supplierItem.currentPrice}`}
-                            </p>
+                                    <p className="mt-3 text-2xl font-semibold tabular-nums">
+                                        {supplierItem.currentPrice === null
+                                            ? 'Not set'
+                                            : `${supplierItem.currency} ${supplierItem.currentPrice}`}
+                                    </p>
 
-                            {canManage &&
-                                supplier.active &&
-                                supplierItem.active && (
-                                    <Form
-                                        {...SupplierItemController.storePrice.form(
-                                            [supplier.id, supplierItem.id],
-                                        )}
-                                        className="mt-5 flex max-w-sm items-end gap-3"
-                                        resetOnSuccess
-                                    >
-                                        {({ processing, errors }) => (
-                                            <>
-                                                <div className="grid flex-1 gap-2">
-                                                    <Label htmlFor="price">
-                                                        New price
-                                                    </Label>
-                                                    <Input
-                                                        id="price"
-                                                        name="price"
-                                                        type="number"
-                                                        required
-                                                        min="0"
-                                                        step="0.0001"
-                                                    />
-                                                    <InputError
-                                                        message={errors.price}
-                                                    />
-                                                </div>
-
-                                                <Button
-                                                    type="submit"
-                                                    disabled={processing}
-                                                >
-                                                    Record price
-                                                </Button>
-                                            </>
-                                        )}
-                                    </Form>
-                                )}
-                        </div>
-
-                        <div className="overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                            <div className="border-b border-sidebar-border/70 px-5 py-4 dark:border-sidebar-border">
-                                <h2 className="font-medium">Price history</h2>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                    Historical prices are append-only.
-                                </p>
-                            </div>
-
-                            {supplierItem.prices.length === 0 ? (
-                                <div className="px-5 py-8 text-sm text-muted-foreground">
-                                    No supplier prices recorded.
-                                </div>
-                            ) : (
-                                <div className="divide-y divide-sidebar-border/70 dark:divide-sidebar-border">
-                                    {supplierItem.prices.map((price) => (
-                                        <div
-                                            key={price.id}
-                                            className="flex items-center justify-between gap-4 px-5 py-4"
-                                        >
-                                            <span className="font-medium">
-                                                {price.currency} {price.price}
-                                            </span>
-
-                                            <span className="text-sm text-muted-foreground">
-                                                {formatEffectiveAt(
-                                                    price.effectiveAt,
-                                                    timezone,
+                                    {canManage &&
+                                        supplier.active &&
+                                        supplierItem.active && (
+                                            <Form
+                                                {...SupplierItemController.storePrice.form(
+                                                    [
+                                                        supplier.id,
+                                                        supplierItem.id,
+                                                    ],
                                                 )}
-                                            </span>
-                                        </div>
-                                    ))}
+                                                className="mt-5 flex max-w-sm items-end gap-3"
+                                                resetOnSuccess
+                                            >
+                                                {({ processing, errors }) => (
+                                                    <>
+                                                        <Field
+                                                            id="price"
+                                                            label="New price"
+                                                            helper="Adds a new price entry. It does not edit or delete previous prices."
+                                                            error={errors.price}
+                                                            className="flex-1"
+                                                        >
+                                                            <Input
+                                                                name="price"
+                                                                type="number"
+                                                                required
+                                                                min="0"
+                                                                step="0.0001"
+                                                            />
+                                                        </Field>
+
+                                                        <Button
+                                                            type="submit"
+                                                            disabled={
+                                                                processing
+                                                            }
+                                                        >
+                                                            {processing
+                                                                ? 'Recording…'
+                                                                : 'Record price'}
+                                                        </Button>
+                                                    </>
+                                                )}
+                                            </Form>
+                                        )}
                                 </div>
-                            )}
-                        </div>
+
+                                <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                                    <div className="border-b border-border px-5 py-4">
+                                        <h2 className="font-medium">
+                                            Price history
+                                        </h2>
+                                        <p className="mt-1 text-sm text-muted-foreground">
+                                            Every supplier price is preserved
+                                            permanently. Recording a new price
+                                            adds an entry here; it never edits
+                                            or removes a previous price.
+                                        </p>
+                                    </div>
+
+                                    {supplierItem.prices.length === 0 ? (
+                                        <EmptyState
+                                            className="px-5 py-8"
+                                            icon={History}
+                                            title="No supplier prices recorded"
+                                            description="Record a price above to start this item's append-only price history."
+                                        />
+                                    ) : (
+                                        <div className="divide-y divide-border">
+                                            {supplierItem.prices.map(
+                                                (price) => (
+                                                    <div
+                                                        key={price.id}
+                                                        className="flex items-center justify-between gap-4 px-5 py-4"
+                                                    >
+                                                        <span className="font-medium tabular-nums">
+                                                            {price.currency}{' '}
+                                                            {price.price}
+                                                        </span>
+
+                                                        <time
+                                                            dateTime={
+                                                                price.effectiveAt
+                                                            }
+                                                            className="text-sm text-muted-foreground"
+                                                        >
+                                                            {formatOrganizationDate(
+                                                                price.effectiveAt,
+                                                                timezone,
+                                                            )}
+                                                        </time>
+                                                    </div>
+                                                ),
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="rounded-xl border border-border bg-card shadow-sm">
+                                <EmptyState
+                                    className="px-5 py-8"
+                                    icon={Lock}
+                                    title="Pricing is hidden"
+                                    description="You don't have permission to view supplier costs."
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -421,7 +490,7 @@ export default function EditSupplierItem({
     );
 }
 
-EditSupplierItem.layout = {
+EditSupplierItem.layout = (page: Props) => ({
     breadcrumbs: [
         {
             title: 'Dashboard',
@@ -431,5 +500,16 @@ EditSupplierItem.layout = {
             title: 'Suppliers',
             href: SupplierController.index(),
         },
+        {
+            title: page.supplier.name,
+            href: SupplierController.edit(page.supplier.id),
+        },
+        {
+            title: page.supplierItem.supplierSku,
+            href: SupplierItemController.edit([
+                page.supplier.id,
+                page.supplierItem.id,
+            ]),
+        },
     ],
-};
+});
