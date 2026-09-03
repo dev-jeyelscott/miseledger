@@ -2,7 +2,9 @@ import { Form, Head, Link, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/GoodsReceiptController';
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
-import InputError from '@/components/input-error';
+import { PageHeader } from '@/components/page-header';
+import { StatusBadge } from '@/components/status-badge';
+import type { StatusBadgeProps } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -14,8 +16,9 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { navigateToPreviousPage } from '@/lib/navigation-history';
 import { dashboard } from '@/routes';
 
@@ -25,7 +28,7 @@ type SupplierItemOption = {
     itemName: string;
     purchaseUnit: string;
     baseQuantity: string;
-    currentPrice: string;
+    currentPrice: string | null;
 };
 
 type SupplierOption = {
@@ -50,8 +53,8 @@ type PurchaseOrderLine = {
         symbol: string;
     };
     baseQuantity: string;
-    unitPrice: string;
-    lineTotal: string;
+    unitPrice: string | null;
+    lineTotal: string | null;
     receivedBaseQuantity: string;
 };
 
@@ -65,16 +68,17 @@ type PurchaseOrder = {
     locationName: string;
     orderDate: string;
     expectedDeliveryDate: string | null;
-    subtotal: string;
-    taxTotal: string;
-    discountTotal: string;
-    total: string;
+    subtotal: string | null;
+    taxTotal: string | null;
+    discountTotal: string | null;
+    total: string | null;
     notes: string | null;
     approvedAt: string | null;
     lines: PurchaseOrderLine[];
 };
 
 type LineState = {
+    clientId: number;
     supplierItemId: string;
     orderedQuantity: string;
 };
@@ -87,7 +91,20 @@ type Props = {
     currency: string;
     canManage: boolean;
     canReceive: boolean;
+    canViewCosts: boolean;
 };
+
+let nextLineClientId = 0;
+
+function createLine(): LineState {
+    nextLineClientId += 1;
+
+    return {
+        clientId: nextLineClientId,
+        supplierItemId: '',
+        orderedQuantity: '1',
+    };
+}
 
 type DirtyStateTrackerProps = {
     dirty: boolean;
@@ -144,6 +161,34 @@ function firstActionError(errors: Record<string, string>): string | null {
     return Object.values(errors)[0] ?? null;
 }
 
+function statusLabel(status: string): string {
+    const labels: Record<string, string> = {
+        approved: 'Approved',
+        cancelled: 'Cancelled',
+        draft: 'Draft',
+        partially_received: 'Partially received',
+        received: 'Received',
+    };
+
+    return labels[status] ?? status;
+}
+
+function statusVariant(status: string): StatusBadgeProps['variant'] {
+    switch (status) {
+        case 'approved':
+            return 'info';
+        case 'partially_received':
+            return 'warning';
+        case 'received':
+            return 'success';
+        case 'cancelled':
+            return 'danger';
+        case 'draft':
+        default:
+            return 'neutral';
+    }
+}
+
 export default function PurchaseOrderForm({
     purchaseOrder,
     defaultOrderDate,
@@ -152,6 +197,7 @@ export default function PurchaseOrderForm({
     currency,
     canManage,
     canReceive,
+    canViewCosts,
 }: Props) {
     const editable =
         purchaseOrder === null ||
@@ -161,6 +207,11 @@ export default function PurchaseOrderForm({
     const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
     const [approveDialogOpen, setApproveDialogOpen] = useState(false);
     const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+    const [supplierChangeDialogOpen, setSupplierChangeDialogOpen] =
+        useState(false);
+    const [pendingSupplierId, setPendingSupplierId] = useState<string | null>(
+        null,
+    );
     const allowNextNavigation = useRef(false);
 
     useEffect(() => {
@@ -220,14 +271,10 @@ export default function PurchaseOrderForm({
 
     const [lines, setLines] = useState<LineState[]>(
         purchaseOrder?.lines.map((line) => ({
+            clientId: createLine().clientId,
             supplierItemId: line.supplierItemId.toString(),
             orderedQuantity: line.orderedQuantity,
-        })) ?? [
-            {
-                supplierItemId: '',
-                orderedQuantity: '1',
-            },
-        ],
+        })) ?? [createLine()],
     );
 
     const selectedSupplier = supplierOptions.find(
@@ -235,13 +282,7 @@ export default function PurchaseOrderForm({
     );
 
     const addLine = () => {
-        setLines((current) => [
-            ...current,
-            {
-                supplierItemId: '',
-                orderedQuantity: '1',
-            },
-        ]);
+        setLines((current) => [...current, createLine()]);
     };
 
     const removeLine = (index: number) => {
@@ -270,6 +311,38 @@ export default function PurchaseOrderForm({
     const title =
         purchaseOrder === null ? 'Create purchase order' : purchaseOrder.number;
 
+    const receivingAvailable =
+        purchaseOrder !== null &&
+        canReceive &&
+        ['approved', 'partially_received'].includes(purchaseOrder.status);
+
+    const requestSupplierChange = (nextSupplierId: string) => {
+        if (nextSupplierId === supplierId) {
+            return;
+        }
+
+        if (lines.some((line) => line.supplierItemId !== '')) {
+            setPendingSupplierId(nextSupplierId);
+            setSupplierChangeDialogOpen(true);
+
+            return;
+        }
+
+        setSupplierId(nextSupplierId);
+        setLines([createLine()]);
+    };
+
+    const confirmSupplierChange = () => {
+        if (pendingSupplierId === null) {
+            return;
+        }
+
+        setSupplierId(pendingSupplierId);
+        setLines([createLine()]);
+        setPendingSupplierId(null);
+        setSupplierChangeDialogOpen(false);
+    };
+
     const formAttributes =
         purchaseOrder === null
             ? PurchaseOrderController.store.form()
@@ -279,15 +352,37 @@ export default function PurchaseOrderForm({
         <>
             <Head title={title} />
 
-            <div className="flex flex-1 flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-2xl font-semibold">{title}</h1>
-                    {purchaseOrder && (
-                        <p className="mt-1 text-sm text-muted-foreground capitalize">
-                            {purchaseOrder.status.replaceAll('_', ' ')}
-                        </p>
-                    )}
-                </div>
+            <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
+                <PageHeader
+                    title={title}
+                    description={
+                        purchaseOrder === null
+                            ? 'Create a draft order using active supplier items.'
+                            : `Review this ${statusLabel(
+                                  purchaseOrder.status,
+                              )} purchase order and its fulfillment state.`
+                    }
+                    actions={
+                        receivingAvailable ? (
+                            <Button asChild>
+                                <Link
+                                    href={GoodsReceiptController.create(
+                                        purchaseOrder.id,
+                                    )}
+                                >
+                                    Receive stock
+                                </Link>
+                            </Button>
+                        ) : undefined
+                    }
+                />
+
+                {purchaseOrder ? (
+                    <StatusBadge
+                        label={statusLabel(purchaseOrder.status)}
+                        variant={statusVariant(purchaseOrder.status)}
+                    />
+                ) : null}
 
                 {editable ? (
                     <Form
@@ -306,43 +401,35 @@ export default function PurchaseOrderForm({
                                     onChange={setDraftDirty}
                                 />
 
-                                <div className="grid gap-5 rounded-xl border border-sidebar-border/70 p-5 md:grid-cols-2 dark:border-sidebar-border">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="number">
-                                            PO number
-                                        </Label>
+                                <div className="grid gap-5 rounded-xl border border-border bg-card p-5 shadow-sm md:grid-cols-2">
+                                    <Field
+                                        id="number"
+                                        label="PO number"
+                                        error={errors.number}
+                                    >
                                         <Input
-                                            id="number"
                                             name="number"
                                             defaultValue={
                                                 purchaseOrder?.number ?? ''
                                             }
                                             required
                                         />
-                                        <InputError message={errors.number} />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="supplier_id">
-                                            Supplier
-                                        </Label>
-                                        <select
-                                            id="supplier_id"
+                                    <Field
+                                        id="supplier_id"
+                                        label="Supplier"
+                                        error={errors.supplier_id}
+                                    >
+                                        <NativeSelect
                                             name="supplier_id"
                                             value={supplierId}
-                                            onChange={(event) => {
-                                                setSupplierId(
+                                            onChange={(event) =>
+                                                requestSupplierChange(
                                                     event.target.value,
-                                                );
-                                                setLines([
-                                                    {
-                                                        supplierItemId: '',
-                                                        orderedQuantity: '1',
-                                                    },
-                                                ]);
-                                            }}
+                                                )
+                                            }
                                             required
-                                            className="h-9 rounded-md border bg-background px-3 text-sm"
                                         >
                                             <option value="">
                                                 Select supplier
@@ -355,24 +442,20 @@ export default function PurchaseOrderForm({
                                                     {supplier.name}
                                                 </option>
                                             ))}
-                                        </select>
-                                        <InputError
-                                            message={errors.supplier_id}
-                                        />
-                                    </div>
+                                        </NativeSelect>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="location_id">
-                                            Destination location
-                                        </Label>
-                                        <select
-                                            id="location_id"
+                                    <Field
+                                        id="location_id"
+                                        label="Destination location"
+                                        error={errors.location_id}
+                                    >
+                                        <NativeSelect
                                             name="location_id"
                                             defaultValue={
                                                 purchaseOrder?.locationId ?? ''
                                             }
                                             required
-                                            className="h-9 rounded-md border bg-background px-3 text-sm"
                                         >
                                             <option value="">
                                                 Select location
@@ -385,18 +468,15 @@ export default function PurchaseOrderForm({
                                                     {location.name}
                                                 </option>
                                             ))}
-                                        </select>
-                                        <InputError
-                                            message={errors.location_id}
-                                        />
-                                    </div>
+                                        </NativeSelect>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="order_date">
-                                            Order date
-                                        </Label>
+                                    <Field
+                                        id="order_date"
+                                        label="Order date"
+                                        error={errors.order_date}
+                                    >
                                         <Input
-                                            id="order_date"
                                             name="order_date"
                                             type="date"
                                             defaultValue={
@@ -405,17 +485,14 @@ export default function PurchaseOrderForm({
                                             }
                                             required
                                         />
-                                        <InputError
-                                            message={errors.order_date}
-                                        />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="expected_delivery_date">
-                                            Expected delivery
-                                        </Label>
+                                    <Field
+                                        id="expected_delivery_date"
+                                        label="Expected delivery"
+                                        error={errors.expected_delivery_date}
+                                    >
                                         <Input
-                                            id="expected_delivery_date"
                                             name="expected_delivery_date"
                                             type="date"
                                             defaultValue={
@@ -423,79 +500,77 @@ export default function PurchaseOrderForm({
                                                 ''
                                             }
                                         />
-                                        <InputError
-                                            message={
-                                                errors.expected_delivery_date
-                                            }
-                                        />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="tax_total">
-                                            Tax total
-                                        </Label>
-                                        <Input
-                                            id="tax_total"
-                                            name="tax_total"
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            defaultValue={
-                                                purchaseOrder?.taxTotal ??
-                                                '0.00'
-                                            }
-                                            required
-                                        />
-                                        <InputError
-                                            message={errors.tax_total}
-                                        />
-                                    </div>
+                                    {canViewCosts ? (
+                                        <>
+                                            <Field
+                                                id="tax_total"
+                                                label={`Tax total (${currency})`}
+                                                error={errors.tax_total}
+                                            >
+                                                <Input
+                                                    name="tax_total"
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    defaultValue={
+                                                        purchaseOrder?.taxTotal ??
+                                                        '0.00'
+                                                    }
+                                                    required
+                                                />
+                                            </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="discount_total">
-                                            Discount total
-                                        </Label>
-                                        <Input
-                                            id="discount_total"
-                                            name="discount_total"
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            defaultValue={
-                                                purchaseOrder?.discountTotal ??
-                                                '0.00'
-                                            }
-                                            required
-                                        />
-                                        <InputError
-                                            message={errors.discount_total}
-                                        />
-                                    </div>
+                                            <Field
+                                                id="discount_total"
+                                                label={`Discount total (${currency})`}
+                                                error={errors.discount_total}
+                                            >
+                                                <Input
+                                                    name="discount_total"
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    defaultValue={
+                                                        purchaseOrder?.discountTotal ??
+                                                        '0.00'
+                                                    }
+                                                    required
+                                                />
+                                            </Field>
+                                        </>
+                                    ) : null}
 
-                                    <div className="grid gap-2 md:col-span-2">
-                                        <Label htmlFor="notes">Notes</Label>
+                                    <Field
+                                        id="notes"
+                                        label="Notes"
+                                        error={errors.notes}
+                                        className="md:col-span-2"
+                                    >
                                         <textarea
-                                            id="notes"
                                             name="notes"
                                             defaultValue={
                                                 purchaseOrder?.notes ?? ''
                                             }
                                             rows={3}
-                                            className="rounded-md border bg-background px-3 py-2 text-sm"
+                                            className="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                         />
-                                        <InputError message={errors.notes} />
-                                    </div>
+                                    </Field>
                                 </div>
 
                                 <div className="space-y-4 rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
                                         <div>
                                             <h2 className="font-semibold">
                                                 Purchase lines
                                             </h2>
                                             <p className="text-sm text-muted-foreground">
-                                                Prices and pack conversions are
-                                                snapshotted server-side.
+                                                Pack conversions are snapshotted
+                                                server-side.
+                                                {canViewCosts
+                                                    ? ` Amounts are in ${currency}.`
+                                                    : ''}
                                             </p>
                                         </div>
 
@@ -511,12 +586,19 @@ export default function PurchaseOrderForm({
 
                                     {lines.map((line, index) => (
                                         <div
-                                            key={index}
+                                            key={line.clientId}
                                             className="grid gap-4 border-t pt-4 md:grid-cols-[1fr_180px_auto]"
                                         >
-                                            <div className="grid gap-2">
-                                                <Label>Supplier item</Label>
-                                                <select
+                                            <Field
+                                                id={`line-${line.clientId}-supplier-item`}
+                                                label="Supplier item"
+                                                error={
+                                                    errors[
+                                                        `lines.${index}.supplier_item_id`
+                                                    ]
+                                                }
+                                            >
+                                                <NativeSelect
                                                     name={`lines[${index}][supplier_item_id]`}
                                                     value={line.supplierItemId}
                                                     onChange={(event) =>
@@ -527,7 +609,6 @@ export default function PurchaseOrderForm({
                                                         )
                                                     }
                                                     required
-                                                    className="h-9 rounded-md border bg-background px-3 text-sm"
                                                 >
                                                     <option value="">
                                                         Select item
@@ -547,26 +628,27 @@ export default function PurchaseOrderForm({
                                                                 {
                                                                     item.purchaseUnit
                                                                 }
-                                                                , {currency}{' '}
-                                                                {formatMoney(
-                                                                    item.currentPrice,
-                                                                )}
+                                                                {canViewCosts &&
+                                                                item.currentPrice !==
+                                                                    null
+                                                                    ? `, ${currency} ${formatMoney(item.currentPrice)}`
+                                                                    : ''}
                                                                 )
                                                             </option>
                                                         ),
                                                     )}
-                                                </select>
-                                                <InputError
-                                                    message={
-                                                        errors[
-                                                            `lines.${index}.supplier_item_id`
-                                                        ]
-                                                    }
-                                                />
-                                            </div>
+                                                </NativeSelect>
+                                            </Field>
 
-                                            <div className="grid gap-2">
-                                                <Label>Quantity</Label>
+                                            <Field
+                                                id={`line-${line.clientId}-quantity`}
+                                                label="Quantity"
+                                                error={
+                                                    errors[
+                                                        `lines.${index}.ordered_quantity`
+                                                    ]
+                                                }
+                                            >
                                                 <Input
                                                     name={`lines[${index}][ordered_quantity]`}
                                                     type="number"
@@ -582,14 +664,7 @@ export default function PurchaseOrderForm({
                                                     }
                                                     required
                                                 />
-                                                <InputError
-                                                    message={
-                                                        errors[
-                                                            `lines.${index}.ordered_quantity`
-                                                        ]
-                                                    }
-                                                />
-                                            </div>
+                                            </Field>
 
                                             <div className="flex items-end">
                                                 <Button
@@ -608,7 +683,14 @@ export default function PurchaseOrderForm({
                                         </div>
                                     ))}
 
-                                    <InputError message={errors.lines} />
+                                    {errors.lines ? (
+                                        <p
+                                            role="alert"
+                                            className="text-sm text-destructive"
+                                        >
+                                            {errors.lines}
+                                        </p>
+                                    ) : null}
                                 </div>
 
                                 <div className="flex flex-wrap gap-2">
@@ -633,84 +715,143 @@ export default function PurchaseOrderForm({
                         )}
                     </Form>
                 ) : (
-                    <div className="space-y-5 rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
-                        <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-5 rounded-xl border border-border bg-card p-5 shadow-sm">
+                        <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                             <div>
-                                <div className="text-sm text-muted-foreground">
+                                <dt className="text-xs text-muted-foreground">
                                     Supplier
-                                </div>
-                                <div className="font-medium">
+                                </dt>
+                                <dd className="mt-1 font-medium">
                                     {purchaseOrder?.supplierName}
-                                </div>
+                                </dd>
                             </div>
                             <div>
-                                <div className="text-sm text-muted-foreground">
+                                <dt className="text-xs text-muted-foreground">
                                     Location
-                                </div>
-                                <div className="font-medium">
+                                </dt>
+                                <dd className="mt-1 font-medium">
                                     {purchaseOrder?.locationName}
-                                </div>
+                                </dd>
                             </div>
-                        </div>
+                            <div>
+                                <dt className="text-xs text-muted-foreground">
+                                    Order date
+                                </dt>
+                                <dd className="mt-1 font-medium tabular-nums">
+                                    {purchaseOrder?.orderDate}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt className="text-xs text-muted-foreground">
+                                    Expected delivery
+                                </dt>
+                                <dd className="mt-1 font-medium tabular-nums">
+                                    {purchaseOrder?.expectedDeliveryDate ?? '—'}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt className="text-xs text-muted-foreground">
+                                    Approved at
+                                </dt>
+                                <dd className="mt-1 font-medium tabular-nums">
+                                    {purchaseOrder?.approvedAt ??
+                                        'Not approved'}
+                                </dd>
+                            </div>
+                        </dl>
 
-                        <div className="grid gap-4 rounded-lg bg-muted/40 p-4 sm:grid-cols-2 lg:grid-cols-4">
+                        {purchaseOrder?.notes ? (
                             <div>
-                                <div className="text-sm text-muted-foreground">
-                                    Subtotal
-                                </div>
-                                <div className="font-medium">
-                                    {currency}{' '}
-                                    {formatMoney(
-                                        purchaseOrder?.subtotal ?? '0.00',
-                                    )}
-                                </div>
+                                <h2 className="text-sm font-semibold">Notes</h2>
+                                <p className="mt-1 text-sm whitespace-pre-wrap text-muted-foreground">
+                                    {purchaseOrder.notes}
+                                </p>
                             </div>
-                            <div>
-                                <div className="text-sm text-muted-foreground">
-                                    Tax
-                                </div>
-                                <div className="font-medium">
-                                    {currency}{' '}
-                                    {formatMoney(
-                                        purchaseOrder?.taxTotal ?? '0.00',
-                                    )}
-                                </div>
-                            </div>
-                            <div>
-                                <div className="text-sm text-muted-foreground">
-                                    Discount
-                                </div>
-                                <div className="font-medium">
-                                    {currency}{' '}
-                                    {formatMoney(
-                                        purchaseOrder?.discountTotal ?? '0.00',
-                                    )}
-                                </div>
-                            </div>
-                            <div>
-                                <div className="text-sm text-muted-foreground">
-                                    Final total
-                                </div>
-                                <div className="font-semibold">
-                                    {currency}{' '}
-                                    {formatMoney(
-                                        purchaseOrder?.total ?? '0.00',
-                                    )}
-                                </div>
-                            </div>
-                        </div>
+                        ) : null}
 
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
+                        {canViewCosts ? (
+                            <div className="grid gap-4 rounded-lg bg-muted/40 p-4 sm:grid-cols-2 lg:grid-cols-4">
+                                <div>
+                                    <div className="text-sm text-muted-foreground">
+                                        Subtotal
+                                    </div>
+                                    <div className="font-medium">
+                                        {currency}{' '}
+                                        {formatMoney(
+                                            purchaseOrder?.subtotal ?? '0.00',
+                                        )}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="text-sm text-muted-foreground">
+                                        Tax
+                                    </div>
+                                    <div className="font-medium">
+                                        {currency}{' '}
+                                        {formatMoney(
+                                            purchaseOrder?.taxTotal ?? '0.00',
+                                        )}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="text-sm text-muted-foreground">
+                                        Discount
+                                    </div>
+                                    <div className="font-medium">
+                                        {currency}{' '}
+                                        {formatMoney(
+                                            purchaseOrder?.discountTotal ??
+                                                '0.00',
+                                        )}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="text-sm text-muted-foreground">
+                                        Final total
+                                    </div>
+                                    <div className="font-semibold">
+                                        {currency}{' '}
+                                        {formatMoney(
+                                            purchaseOrder?.total ?? '0.00',
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
+
+                        <div className="hidden overflow-x-auto md:block">
+                            <table className="w-full min-w-180 text-sm">
+                                <caption className="sr-only">
+                                    Purchase order line details
+                                </caption>
                                 <thead className="border-b text-left">
                                     <tr>
-                                        <th className="py-2">Item</th>
-                                        <th className="py-2">SKU</th>
-                                        <th className="py-2">Ordered</th>
-                                        <th className="py-2">Received base</th>
-                                        <th className="py-2 text-right">
-                                            Price
+                                        <th scope="col" className="px-4 py-3">
+                                            Item
                                         </th>
+                                        <th scope="col" className="px-4 py-3">
+                                            SKU
+                                        </th>
+                                        <th
+                                            scope="col"
+                                            className="px-4 py-3 text-right"
+                                        >
+                                            Ordered
+                                        </th>
+                                        <th
+                                            scope="col"
+                                            className="px-4 py-3 text-right"
+                                        >
+                                            Received base
+                                        </th>
+                                        {canViewCosts ? (
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-3 text-right"
+                                            >
+                                                Unit price ({currency})
+                                            </th>
+                                        ) : null}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -719,31 +860,89 @@ export default function PurchaseOrderForm({
                                             key={line.id}
                                             className="border-b last:border-b-0"
                                         >
-                                            <td className="py-2">
+                                            <td className="px-4 py-3">
                                                 {line.itemName}
                                             </td>
-                                            <td className="py-2">
+                                            <td className="px-4 py-3 font-mono text-xs">
                                                 {line.supplierSku}
                                             </td>
-                                            <td className="py-2">
+                                            <td className="px-4 py-3 text-right tabular-nums">
                                                 {formatDecimal(
                                                     line.orderedQuantity,
                                                 )}{' '}
                                                 {line.purchaseUnit.symbol}
                                             </td>
-                                            <td className="py-2">
+                                            <td className="px-4 py-3 text-right tabular-nums">
                                                 {formatDecimal(
                                                     line.receivedBaseQuantity,
                                                 )}
                                             </td>
-                                            <td className="py-2 text-right">
-                                                {currency}{' '}
-                                                {formatMoney(line.unitPrice)}
-                                            </td>
+                                            {canViewCosts &&
+                                            line.unitPrice !== null ? (
+                                                <td className="px-4 py-3 text-right tabular-nums">
+                                                    {formatMoney(
+                                                        line.unitPrice,
+                                                    )}
+                                                </td>
+                                            ) : null}
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+
+                        <div className="divide-y divide-border md:hidden">
+                            {purchaseOrder?.lines.map((line) => (
+                                <article
+                                    key={line.id}
+                                    className="space-y-3 py-4"
+                                >
+                                    <div>
+                                        <h2 className="font-medium">
+                                            {line.itemName}
+                                        </h2>
+                                        <p className="mt-1 font-mono text-xs text-muted-foreground">
+                                            {line.supplierSku}
+                                        </p>
+                                    </div>
+                                    <dl className="grid grid-cols-2 gap-3 text-sm">
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">
+                                                Ordered
+                                            </dt>
+                                            <dd className="mt-1 tabular-nums">
+                                                {formatDecimal(
+                                                    line.orderedQuantity,
+                                                )}{' '}
+                                                {line.purchaseUnit.symbol}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">
+                                                Received base
+                                            </dt>
+                                            <dd className="mt-1 tabular-nums">
+                                                {formatDecimal(
+                                                    line.receivedBaseQuantity,
+                                                )}
+                                            </dd>
+                                        </div>
+                                        {canViewCosts &&
+                                        line.unitPrice !== null ? (
+                                            <div>
+                                                <dt className="text-xs text-muted-foreground">
+                                                    Unit price ({currency})
+                                                </dt>
+                                                <dd className="mt-1 tabular-nums">
+                                                    {formatMoney(
+                                                        line.unitPrice,
+                                                    )}
+                                                </dd>
+                                            </div>
+                                        ) : null}
+                                    </dl>
+                                </article>
+                            ))}
                         </div>
                     </div>
                 )}
@@ -953,22 +1152,6 @@ export default function PurchaseOrderForm({
                         </div>
                     )}
 
-                {purchaseOrder &&
-                    canReceive &&
-                    ['approved', 'partially_received'].includes(
-                        purchaseOrder.status,
-                    ) && (
-                        <Button asChild className="w-fit">
-                            <Link
-                                href={GoodsReceiptController.create(
-                                    purchaseOrder.id,
-                                )}
-                            >
-                                Receive stock
-                            </Link>
-                        </Button>
-                    )}
-
                 {!editable && (
                     <Button
                         type="button"
@@ -1009,19 +1192,64 @@ export default function PurchaseOrderForm({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <Dialog
+                open={supplierChangeDialogOpen}
+                onOpenChange={(open) => {
+                    setSupplierChangeDialogOpen(open);
+
+                    if (!open) {
+                        setPendingSupplierId(null);
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            Change supplier and discard lines?
+                        </DialogTitle>
+                        <DialogDescription>
+                            Changing the supplier removes the populated purchase
+                            lines because supplier items belong to a specific
+                            supplier. This only changes your unsaved draft.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button type="button" variant="outline">
+                                Keep current supplier
+                            </Button>
+                        </DialogClose>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={confirmSupplierChange}
+                        >
+                            Change supplier and discard lines
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }
 
-PurchaseOrderForm.layout = {
+PurchaseOrderForm.layout = (page: Props) => ({
     breadcrumbs: [
         {
             title: 'Dashboard',
             href: dashboard(),
         },
         {
-            title: 'Purchase orders',
-            href: PurchaseOrderController.index(),
+            title:
+                page.purchaseOrder === null
+                    ? 'Create purchase order'
+                    : page.purchaseOrder.number,
+            href:
+                page.purchaseOrder === null
+                    ? PurchaseOrderController.create()
+                    : PurchaseOrderController.edit(page.purchaseOrder.id),
         },
     ],
-};
+});

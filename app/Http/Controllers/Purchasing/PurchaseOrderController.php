@@ -91,7 +91,9 @@ class PurchaseOrderController extends Controller
                     'lineCount' => (int) $purchaseOrder->getAttribute(
                         'lines_count',
                     ),
-                    'total' => $purchaseOrder->total,
+                    'total' => $canViewCosts
+                        ? $purchaseOrder->total
+                        : null,
                 ],
             )
             ->toArray();
@@ -130,14 +132,20 @@ class PurchaseOrderController extends Controller
             $organization,
         );
 
+        $canViewCosts = Gate::allows(
+            OrganizationPermission::CostsView->value,
+            $organization,
+        );
+
         return Inertia::render('purchase-orders/form', [
             'purchaseOrder' => null,
             'defaultOrderDate' => CarbonImmutable::now(
                 $organization->timezone,
             )->toDateString(),
-            ...$this->formOptions($organization),
+            ...$this->formOptions($organization, $canViewCosts),
             'canManage' => true,
             'canReceive' => false,
+            'canViewCosts' => $canViewCosts,
         ]);
     }
 
@@ -208,11 +216,20 @@ class PurchaseOrderController extends Controller
             $organization,
         ) && $record->status->canReceive();
 
+        $canViewCosts = Gate::allows(
+            OrganizationPermission::CostsView->value,
+            $organization,
+        );
+
         return Inertia::render('purchase-orders/form', [
-            'purchaseOrder' => $this->purchaseOrderData($record),
-            ...$this->formOptions($organization),
+            'purchaseOrder' => $this->purchaseOrderData(
+                $record,
+                $canViewCosts,
+            ),
+            ...$this->formOptions($organization, $canViewCosts),
             'canManage' => $canManage,
             'canReceive' => $canReceive,
+            'canViewCosts' => $canViewCosts,
         ]);
     }
 
@@ -673,8 +690,10 @@ class PurchaseOrderController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function formOptions(Organization $organization): array
-    {
+    private function formOptions(
+        Organization $organization,
+        bool $canViewCosts,
+    ): array {
         $supplierItems = SupplierItem::query()
             ->with([
                 'inventoryItem:id,name,sku,active',
@@ -707,7 +726,7 @@ class PurchaseOrderController extends Controller
             ->get()
             ->map(function (
                 Supplier $supplier,
-            ) use ($supplierItems): array {
+            ) use ($canViewCosts, $supplierItems): array {
                 $items = $supplierItems->get(
                     $supplier->id,
                     collect(),
@@ -732,8 +751,9 @@ class PurchaseOrderController extends Controller
                                     ->symbol,
                                 'baseQuantity' => $supplierItem
                                     ->base_quantity,
-                                'currentPrice' => $supplierItem
-                                    ->current_price,
+                                'currentPrice' => $canViewCosts
+                                    ? $supplierItem->current_price
+                                    : null,
                             ],
                         )
                         ->values()
@@ -777,6 +797,7 @@ class PurchaseOrderController extends Controller
      */
     private function purchaseOrderData(
         PurchaseOrder $purchaseOrder,
+        bool $canViewCosts,
     ): array {
         return [
             'id' => $purchaseOrder->id,
@@ -792,10 +813,18 @@ class PurchaseOrderController extends Controller
             'expectedDeliveryDate' => $purchaseOrder
                 ->expected_delivery_date
                 ?->toDateString(),
-            'subtotal' => $purchaseOrder->subtotal,
-            'taxTotal' => $purchaseOrder->tax_total,
-            'discountTotal' => $purchaseOrder->discount_total,
-            'total' => $purchaseOrder->total,
+            'subtotal' => $canViewCosts
+                ? $purchaseOrder->subtotal
+                : null,
+            'taxTotal' => $canViewCosts
+                ? $purchaseOrder->tax_total
+                : null,
+            'discountTotal' => $canViewCosts
+                ? $purchaseOrder->discount_total
+                : null,
+            'total' => $canViewCosts
+                ? $purchaseOrder->total
+                : null,
             'notes' => $purchaseOrder->notes,
             'approvedAt' => $purchaseOrder
                 ->approved_at
@@ -824,8 +853,12 @@ class PurchaseOrderController extends Controller
                                 ->symbol,
                         ],
                         'baseQuantity' => $line->base_quantity,
-                        'unitPrice' => $line->unit_price,
-                        'lineTotal' => $line->line_total,
+                        'unitPrice' => $canViewCosts
+                            ? $line->unit_price
+                            : null,
+                        'lineTotal' => $canViewCosts
+                            ? $line->line_total
+                            : null,
                         'receivedBaseQuantity' => $line
                             ->received_base_quantity,
                     ],

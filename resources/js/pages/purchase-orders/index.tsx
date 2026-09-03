@@ -7,7 +7,6 @@ import {
     Package,
     Plus,
     RotateCcw,
-    Search,
 } from 'lucide-react';
 
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
@@ -36,7 +35,7 @@ type PurchaseOrderRow = {
     orderDate: string;
     expectedDeliveryDate: string | null;
     lineCount: number;
-    total: string;
+    total: string | null;
 };
 
 type PaginatedPurchaseOrders = {
@@ -162,6 +161,26 @@ export default function PurchaseOrderIndex({
     ].filter((value) => value !== null).length;
 
     const hasFilters = activeFilterCount > 0;
+    const activeFilterLabels = [
+        filters.search ? `Search: ${filters.search}` : null,
+        filters.status ? `Status: ${statusLabel(filters.status)}` : null,
+        filters.supplierId
+            ? `Supplier: ${
+                  supplierOptions.find(
+                      (supplier) => supplier.id === filters.supplierId,
+                  )?.name ?? 'Selected supplier'
+              }`
+            : null,
+        filters.locationId
+            ? `Location: ${
+                  locationOptions.find(
+                      (location) => location.id === filters.locationId,
+                  )?.name ?? 'Selected location'
+              }`
+            : null,
+        filters.from ? `From: ${formatDate(filters.from)}` : null,
+        filters.to ? `To: ${formatDate(filters.to)}` : null,
+    ].filter((label): label is string => label !== null);
 
     return (
         <>
@@ -240,22 +259,14 @@ export default function PurchaseOrderIndex({
                                     className="md:col-span-2 xl:col-span-2"
                                     error={errors.search}
                                 >
-                                    <div className="relative">
-                                        <Search
-                                            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                                            aria-hidden="true"
-                                        />
-
-                                        <Input
-                                            name="search"
-                                            type="search"
-                                            defaultValue={filters.search ?? ''}
-                                            placeholder="PO number or supplier"
-                                            className="pl-9"
-                                            maxLength={120}
-                                            autoComplete="off"
-                                        />
-                                    </div>
+                                    <Input
+                                        name="search"
+                                        type="search"
+                                        defaultValue={filters.search ?? ''}
+                                        placeholder="PO number or supplier"
+                                        maxLength={120}
+                                        autoComplete="off"
+                                    />
                                 </Field>
 
                                 <Field
@@ -408,6 +419,12 @@ export default function PurchaseOrderIndex({
                                       }`
                                     : ' in this organization'}
                             </p>
+                            {hasFilters ? (
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                    Active filters:{' '}
+                                    {activeFilterLabels.join(' · ')}
+                                </p>
+                            ) : null}
                         </div>
                     </div>
 
@@ -499,17 +516,19 @@ export default function PurchaseOrderIndex({
                                                     {purchaseOrder.lineCount.toLocaleString()}
                                                 </dd>
                                             </div>
-                                            <div>
-                                                <dt className="text-xs text-muted-foreground">
-                                                    Total
-                                                </dt>
-                                                <dd className="mt-1 font-medium tabular-nums">
-                                                    {currency}{' '}
-                                                    {formatMoney(
-                                                        purchaseOrder.total,
-                                                    )}
-                                                </dd>
-                                            </div>
+                                            {canViewCosts &&
+                                            purchaseOrder.total !== null ? (
+                                                <div>
+                                                    <dt className="text-xs text-muted-foreground">
+                                                        Total ({currency})
+                                                    </dt>
+                                                    <dd className="mt-1 font-medium tabular-nums">
+                                                        {formatMoney(
+                                                            purchaseOrder.total,
+                                                        )}
+                                                    </dd>
+                                                </div>
+                                            ) : null}
                                         </dl>
 
                                         <Button
@@ -534,11 +553,20 @@ export default function PurchaseOrderIndex({
                             </div>
 
                             <div className="hidden overflow-x-auto md:block">
-                                <table className="w-full min-w-[1080px] text-sm">
+                                <table
+                                    className={`w-full text-sm ${
+                                        canViewCosts
+                                            ? 'min-w-[1080px]'
+                                            : 'min-w-[920px]'
+                                    }`}
+                                >
                                     <caption className="sr-only">
                                         Tenant-scoped purchase orders with
                                         supplier, location, delivery, status,
-                                        item count, and total.
+                                        and item count.
+                                        {canViewCosts
+                                            ? ' Includes totals.'
+                                            : ''}
                                     </caption>
 
                                     <thead className="border-b bg-muted/40 text-left">
@@ -592,12 +620,14 @@ export default function PurchaseOrderIndex({
                                                 Items
                                             </th>
 
-                                            <th
-                                                scope="col"
-                                                className="px-4 py-3 text-right font-medium text-muted-foreground"
-                                            >
-                                                Total
-                                            </th>
+                                            {canViewCosts ? (
+                                                <th
+                                                    scope="col"
+                                                    className="px-4 py-3 text-right font-medium text-muted-foreground"
+                                                >
+                                                    Total ({currency})
+                                                </th>
+                                            ) : null}
 
                                             <th
                                                 scope="col"
@@ -674,12 +704,15 @@ export default function PurchaseOrderIndex({
                                                         {purchaseOrder.lineCount.toLocaleString()}
                                                     </td>
 
-                                                    <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
-                                                        {currency}{' '}
-                                                        {formatMoney(
-                                                            purchaseOrder.total,
-                                                        )}
-                                                    </td>
+                                                    {canViewCosts &&
+                                                    purchaseOrder.total !==
+                                                        null ? (
+                                                        <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
+                                                            {formatMoney(
+                                                                purchaseOrder.total,
+                                                            )}
+                                                        </td>
+                                                    ) : null}
 
                                                     <td className="px-4 py-3 text-right">
                                                         <Button

@@ -589,7 +589,7 @@ test(
                     )
                     ->where(
                         'purchaseOrders.data.0.total',
-                        '75.00',
+                        null,
                     ),
             );
 

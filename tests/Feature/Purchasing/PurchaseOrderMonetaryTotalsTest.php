@@ -123,6 +123,50 @@ test('purchase orders default tax and discount to zero', function () {
         ->toBe('100.00');
 });
 
+test('purchase order form omits monetary props without cost permission', function () {
+    $payload = purchaseOrderMonetaryPayloadForTest(
+        $this->supplier,
+        $this->location,
+        $this->supplierItem,
+        [
+            'tax_total' => '5.55',
+            'discount_total' => '2.25',
+        ],
+    );
+
+    $this->actingAs($this->actor)
+        ->post(route('purchase-orders.store'), $payload)
+        ->assertRedirect();
+
+    $purchaseOrder = PurchaseOrder::query()
+        ->where('number', $payload['number'])
+        ->sole();
+
+    $inventoryStaff = User::factory()->create();
+
+    OrganizationMembership::factory()->create([
+        'organization_id' => $this->organization->id,
+        'user_id' => $inventoryStaff->id,
+        'role' => OrganizationRole::InventoryStaff,
+    ]);
+
+    $this->actingAs($inventoryStaff)
+        ->get(route('purchase-orders.edit', $purchaseOrder))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page) => $page
+                ->component('purchase-orders/form')
+                ->where('canViewCosts', false)
+                ->where('purchaseOrder.subtotal', null)
+                ->where('purchaseOrder.taxTotal', null)
+                ->where('purchaseOrder.discountTotal', null)
+                ->where('purchaseOrder.total', null)
+                ->where('purchaseOrder.lines.0.unitPrice', null)
+                ->where('purchaseOrder.lines.0.lineTotal', null)
+                ->where('supplierOptions.0.items.0.currentPrice', null),
+        );
+});
+
 test('purchase order total includes non-zero tax', function () {
     $payload = purchaseOrderMonetaryPayloadForTest(
         $this->supplier,

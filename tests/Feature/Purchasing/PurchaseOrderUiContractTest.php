@@ -14,6 +14,12 @@ test('purchase order detail uses confirmation dialogs and history-aware navigati
         ->toContain('Discard unsaved changes?')
         ->toContain('PurchaseOrderController.approve.form(')
         ->toContain('PurchaseOrderController.cancel.form(')
+        ->toContain('Change supplier and discard lines?')
+        ->toContain('key={line.clientId}')
+        ->toContain('<Field')
+        ->toContain('line.unitPrice !==')
+        ->toContain('md:hidden')
+        ->toContain('GoodsReceiptController.create(')
         ->toContain('replace: purchaseOrder === null')
         ->toContain("router.on('before'")
         ->toContain("window.addEventListener('beforeunload'")
@@ -28,6 +34,9 @@ test('purchase order index keeps complex create and detail flows on dedicated ro
         ->toContain('PurchaseOrderController.create()')
         ->toContain('PurchaseOrderController.edit(')
         ->toContain('<Form action={PurchaseOrderController.index().url} method="get">')
+        ->toContain('Active filters:')
+        ->toContain("activeFilterLabels.join(' · ')")
+        ->toContain("value: 'cancelled', label: 'Cancelled'")
         ->toContain('preserveScroll')
         ->toContain('preserveState');
 });
