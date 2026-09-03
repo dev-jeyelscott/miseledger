@@ -1,30 +1,57 @@
 import { Form, Head } from '@inertiajs/react';
+import { useEffect } from 'react';
 import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
 import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { useDirtyFormNavigation } from '@/hooks/use-dirty-form-navigation';
 import { dashboard } from '@/routes';
 
+function DirtyStateTracker({
+    dirty,
+    successful,
+    onChange,
+}: {
+    dirty: boolean;
+    successful: boolean;
+    onChange: (dirty: boolean) => void;
+}) {
+    useEffect(() => {
+        onChange(dirty && !successful);
+    }, [dirty, onChange, successful]);
+
+    return null;
+}
+
 export default function CreateSupplier() {
+    const dirtyNavigation = useDirtyFormNavigation(
+        'You have unsaved supplier changes. Leave without saving them?',
+    );
+
     return (
         <>
             <Head title="Create supplier" />
 
-            <div className="flex flex-1 flex-col gap-6 p-4">
+            <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
                 <PageHeader
                     title="Create supplier"
                     description="Add a vendor to the active organization."
                 />
 
-                <div className="max-w-2xl rounded-xl border border-sidebar-border/70 p-5 dark:border-sidebar-border">
+                <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
                     <Form
                         {...SupplierController.store.form()}
                         className="space-y-5"
                     >
-                        {({ processing, errors }) => (
+                        {({ processing, errors, isDirty, wasSuccessful }) => (
                             <>
+                                <DirtyStateTracker
+                                    dirty={isDirty}
+                                    successful={wasSuccessful}
+                                    onChange={dirtyNavigation.setIsDirty}
+                                />
                                 <input type="hidden" name="active" value="1" />
 
                                 <div className="grid gap-5 sm:grid-cols-2">
@@ -137,6 +164,10 @@ CreateSupplier.layout = {
         {
             title: 'Suppliers',
             href: SupplierController.index(),
+        },
+        {
+            title: 'Create supplier',
+            href: SupplierController.create(),
         },
     ],
 };
