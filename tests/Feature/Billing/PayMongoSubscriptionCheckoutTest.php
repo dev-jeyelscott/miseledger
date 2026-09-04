@@ -9,9 +9,11 @@ use App\Models\OrganizationMembership;
 use App\Models\User;
 use App\Support\Billing\OrganizationSubscriptionAccessResolver;
 use App\Support\Billing\Providers\PayMongoBillingProvider;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
@@ -398,5 +400,47 @@ test(
                     ->count(),
             )
             ->toBe(1);
+    },
+);
+
+test(
+    'rethrows a PayMongo subscription insert failure when the race-resolution lookup finds no row',
+    function (): void {
+        fakePayMongoCheckout();
+
+        [$user, $organization] = payMongoBillingOwner();
+
+        $insertAttempts = 0;
+        $shouldFailInsert = true;
+
+        DB::connection()->beforeExecuting(
+            function (string $query, array $bindings) use (&$insertAttempts, &$shouldFailInsert): void {
+                if (! $shouldFailInsert || ! str_starts_with(strtolower(trim($query)), 'insert') || ! str_contains($query, 'billing_subscriptions')) {
+                    return;
+                }
+
+                $insertAttempts++;
+
+                throw new QueryException(
+                    DB::getDefaultConnection(),
+                    $query,
+                    $bindings,
+                    new RuntimeException('forced PayMongo subscription insert failure'),
+                );
+            },
+        );
+
+        expect(fn (): mixed => $this->actingAs($user)->post(
+            route('organizations.billing.checkout', $organization),
+            [
+                'plan' => 'starter',
+                'interval' => 'monthly',
+            ],
+        ))->toThrow(QueryException::class);
+
+        $shouldFailInsert = false;
+
+        expect($insertAttempts)->toBe(1)
+            ->and(BillingSubscription::query()->count())->toBe(0);
     },
 );

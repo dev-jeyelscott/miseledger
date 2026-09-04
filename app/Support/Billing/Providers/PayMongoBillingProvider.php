@@ -329,8 +329,19 @@ final class PayMongoBillingProvider implements BillingProvider
                 'next_billing_at' => $this->date($attributes['next_billing_schedule'] ?? null),
                 'cancelled_at' => $this->timestamp($attributes['cancelled_at'] ?? null),
             ]);
-        } catch (QueryException) {
-            $this->persistSubscription($organization, $customer, $externalPlanId, $subscription);
+        } catch (QueryException $exception) {
+            $existing = BillingSubscription::query()
+                ->where('provider', BillingProviderEnum::PayMongo)
+                ->where('external_subscription_id', $subscription['id'])
+                ->first();
+
+            if ($existing === null) {
+                throw $exception;
+            }
+
+            if ($existing->organization_id !== $organization->getKey() || $existing->billing_customer_id !== $customer->getKey() || $existing->external_plan_id !== $externalPlanId) {
+                throw new RuntimeException('PayMongo subscription ownership conflicts with this organization.');
+            }
         }
     }
 
