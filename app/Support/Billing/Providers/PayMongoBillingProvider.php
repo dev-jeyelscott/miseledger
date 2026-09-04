@@ -8,6 +8,7 @@ use App\Models\BillingSubscription;
 use App\Models\Organization;
 use App\Models\User;
 use App\Support\Billing\PlanCatalog;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use RuntimeException;
@@ -33,6 +34,8 @@ final class PayMongoBillingProvider implements BillingProvider
         array $metadata,
         User $actor,
     ): BillingCheckoutOutcome {
+        $this->assertNoActiveSubscription($organization);
+
         $customer = $this->ensureCustomer($organization, $actor);
         $subscription = $this->createSubscription($organization, $customer, $externalPriceId);
         $paymentIntentId = $this->paymentIntentId($subscription);
@@ -121,6 +124,25 @@ final class PayMongoBillingProvider implements BillingProvider
 
         if (($resource['id'] ?? null) !== $subscription->external_subscription_id || ! in_array($status, ['cancelled', 'canceled'], true)) {
             throw new RuntimeException('PayMongo returned an invalid cancellation response.');
+        }
+    }
+
+    private function assertNoActiveSubscription(Organization $organization): void
+    {
+        $hasActiveSubscription = BillingSubscription::query()
+            ->where('organization_id', $organization->getKey())
+            ->where('type', (string) config('billing.subscription_type'))
+            ->whereNull('cancelled_at')
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNull('ends_at')
+                    ->orWhere('ends_at', '>', now());
+            })
+            ->limit(2)
+            ->exists();
+
+        if ($hasActiveSubscription) {
+            throw new RuntimeException('This organization already has an active subscription.');
         }
     }
 

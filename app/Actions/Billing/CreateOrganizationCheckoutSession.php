@@ -6,12 +6,14 @@ use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\BillingProvider;
 use App\Enums\PlanCode;
 use App\Models\BillingCustomer;
+use App\Models\BillingSubscription;
 use App\Models\Organization;
 use App\Models\User;
 use App\Support\Billing\BillingObservability;
 use App\Support\Billing\PlanCatalog;
 use App\Support\Billing\Providers\BillingCheckoutOutcome;
 use App\Support\Billing\Providers\BillingProviderManager;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 
@@ -21,12 +23,11 @@ use Illuminate\Validation\ValidationException;
  * only path through which a Checkout session may be created, so no caller
  * can pass a raw provider plan ID through this boundary.
  *
- * Creating a Stripe Checkout Session does not create a local Cashier
- * subscription record, so `$organization->subscribed()` stays false until
- * the webhook syncs the completed subscription. Repeated requests made
- * during that window are serialized per-organization with a cache lock and
- * reuse the still-pending Checkout Session URL instead of creating a
- * parallel one.
+ * Repeated requests made while a provider checkout is pending are serialized
+ * per organization with a cache lock and reuse the still-pending checkout
+ * outcome instead of creating a parallel one. The durable provider-neutral
+ * projection is checked inside that lock before starting a new checkout;
+ * Cashier remains an explicit migration fallback for legacy Stripe rows.
  */
 final class CreateOrganizationCheckoutSession
 {
@@ -52,22 +53,22 @@ final class CreateOrganizationCheckoutSession
 
         $type = (string) config('billing.subscription_type');
 
-        if ($organization->subscribed($type)) {
-            throw ValidationException::withMessages([
-                'organization' => __('This organization already has an active subscription.'),
-            ]);
-        }
-
         $organizationId = (string) $organization->getKey();
         $pendingCacheKey = self::pendingCheckoutCacheKey($organizationId, $type);
 
         return Cache::lock('billing:checkout:lock:'.$organizationId, 10)->block(
             5,
-            function () use ($organization, $actor, $plan, $interval, $provider, $externalPlanId, $organizationId, $pendingCacheKey): BillingCheckoutOutcome {
+            function () use ($organization, $actor, $plan, $interval, $provider, $externalPlanId, $organizationId, $pendingCacheKey, $type): BillingCheckoutOutcome {
                 $pendingOutcome = Cache::get($pendingCacheKey);
 
                 if (is_array($pendingOutcome)) {
                     return BillingCheckoutOutcome::fromCacheValue($pendingOutcome);
+                }
+
+                if ($this->hasActiveSubscription($organization, $type)) {
+                    throw ValidationException::withMessages([
+                        'organization' => __('This organization already has an active subscription.'),
+                    ]);
                 }
 
                 try {
@@ -112,6 +113,23 @@ final class CreateOrganizationCheckoutSession
     private static function pendingCheckoutCacheKey(string $organizationId, string $type): string
     {
         return "billing:checkout:pending:{$organizationId}:{$type}";
+    }
+
+    private function hasActiveSubscription(Organization $organization, string $type): bool
+    {
+        $hasProjectedSubscription = BillingSubscription::query()
+            ->where('organization_id', $organization->getKey())
+            ->where('type', $type)
+            ->whereNull('cancelled_at')
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNull('ends_at')
+                    ->orWhere('ends_at', '>', now());
+            })
+            ->limit(2)
+            ->exists();
+
+        return $hasProjectedSubscription || $organization->subscribed($type);
     }
 
     private function persistStripeCustomerAfterCheckout(Organization $organization, BillingProvider $provider): void

@@ -404,6 +404,48 @@ test(
 );
 
 test(
+    'rejects a new PayMongo checkout when a durable subscription projection already exists',
+    function (): void {
+        [$user, $organization] = payMongoBillingOwner();
+
+        $customer = BillingCustomer::factory()
+            ->for($organization)
+            ->create([
+                'provider' => BillingProvider::PayMongo,
+                'external_customer_id' => 'cus_existing_123',
+            ]);
+
+        BillingSubscription::factory()
+            ->for($customer, 'billingCustomer')
+            ->create([
+                'organization_id' => $organization->getKey(),
+                'provider' => BillingProvider::PayMongo,
+                'type' => config('billing.subscription_type'),
+                'external_plan_id' => 'plan_starter_monthly',
+                'plan_code' => 'starter',
+                'interval' => 'monthly',
+                'provider_status' => 'incomplete',
+                'ends_at' => null,
+                'cancelled_at' => null,
+            ]);
+
+        fakePayMongoCheckout();
+
+        $this->actingAs($user)
+            ->post(
+                route('organizations.billing.checkout', $organization),
+                [
+                    'plan' => 'starter',
+                    'interval' => 'monthly',
+                ],
+            )
+            ->assertInvalid(['organization']);
+
+        Http::assertNothingSent();
+    },
+);
+
+test(
     'rethrows a PayMongo subscription insert failure when the race-resolution lookup finds no row',
     function (): void {
         fakePayMongoCheckout();
