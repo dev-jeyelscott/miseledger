@@ -115,7 +115,7 @@ class StockMovementLedgerReportController extends Controller
                 $query
                     ->orderBy('occurred_at')
                     ->orderBy('id')
-                    ->cursor() as $movement
+                    ->lazy() as $movement
             ) {
                 $data = $this->rowData($movement, $canViewCosts);
                 $row = [

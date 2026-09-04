@@ -125,7 +125,7 @@ class PurchasingHistoryReportController extends Controller
                 $query
                     ->orderByDesc('order_date')
                     ->orderByDesc('id')
-                    ->cursor() as $purchaseOrder
+                    ->lazy() as $purchaseOrder
             ) {
                 foreach ($purchaseOrder->lines as $line) {
                     $data = $this->lineData(

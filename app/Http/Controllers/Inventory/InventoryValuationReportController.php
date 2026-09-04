@@ -106,7 +106,7 @@ class InventoryValuationReportController extends Controller
             foreach (
                 $query
                     ->orderBy('location_id')
-                    ->cursor() as $balance
+                    ->lazy() as $balance
             ) {
                 $data = $this->rowData($balance, $canViewCosts);
 

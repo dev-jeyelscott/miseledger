@@ -107,7 +107,7 @@ class StockOnHandReportController extends Controller
                     ->orderBy('location_id')
                     ->orderBy('storage_location_id')
                     ->orderBy('inventory_item_id')
-                    ->cursor() as $balance
+                    ->lazy() as $balance
             ) {
                 $data = $this->rowData($balance, $canViewCosts);
 

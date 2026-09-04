@@ -7,9 +7,11 @@ use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
+use App\Models\StockMovement;
 use App\Models\StorageLocation;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function makeStorageLocationForLedgerTest(
@@ -428,6 +430,50 @@ test('export shows cost fields to members with cost visibility', function () {
 
     expect($content)->toContain('4.0000');
     expect($content)->toContain($this->manager->name);
+});
+
+test('export eager loads relationships without queries per movement row', function () {
+    $now = now();
+
+    StockMovement::query()->insert(
+        collect(range(1, 101))
+            ->map(fn (int $number): array => [
+                'organization_id' => $this->organization->id,
+                'location_id' => $this->location->id,
+                'storage_location_id' => $this->storageLocation->id,
+                'inventory_item_id' => $this->item->id,
+                'type' => StockMovementType::ManualAdjustment->value,
+                'quantity' => '1.000000',
+                'base_unit_of_measure_id' => $this->unit->id,
+                'unit_cost' => '4.0000',
+                'total_cost' => '4.0000',
+                'reference_type' => 'test_export',
+                'reference_id' => $number,
+                'occurred_at' => $now,
+                'created_by' => $this->manager->id,
+                'idempotency_key' => "ledger-export-query-count:{$number}",
+                'notes' => null,
+                'created_at' => $now,
+            ])
+            ->all(),
+    );
+
+    $queryCount = 0;
+    DB::listen(static function () use (&$queryCount): void {
+        $queryCount++;
+    });
+
+    $content = $this
+        ->actingAs($this->manager)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('inventory.stock-movements.export'))
+        ->assertOk()
+        ->streamedContent();
+
+    expect($content)->toContain('Ledger Test Item');
+    expect($queryCount)->toBeLessThan(40);
 });
 
 test('export is tenant isolated across organizations', function () {

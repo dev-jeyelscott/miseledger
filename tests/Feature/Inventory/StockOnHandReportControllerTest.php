@@ -8,9 +8,11 @@ use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
+use App\Models\StockBalance;
 use App\Models\StorageLocation;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function makeStorageLocationForStockOnHandTest(
@@ -510,6 +512,50 @@ test('export streams a CSV with cost fields to members with cost visibility', fu
 
     expect($content)->toContain($this->item->name);
     expect($content)->toContain('4.0000');
+});
+
+test('export eager loads relationships without queries per balance row', function () {
+    $now = now();
+    $items = InventoryItem::factory()->count(101)->create([
+        'organization_id' => $this->organization->id,
+        'base_unit_of_measure_id' => $this->unit->id,
+        'inventory_category_id' => $this->category->id,
+        'active' => true,
+    ]);
+
+    StockBalance::query()->insert(
+        $items
+            ->map(fn (InventoryItem $item): array => [
+                'organization_id' => $this->organization->id,
+                'location_id' => $this->location->id,
+                'storage_location_id' => $this->storageLocation->id,
+                'inventory_item_id' => $item->id,
+                'quantity_on_hand' => '1.000000',
+                'average_unit_cost' => '4.0000',
+                'inventory_value' => '4.0000',
+                'last_movement_at' => $now,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])
+            ->all(),
+    );
+
+    $queryCount = 0;
+    DB::listen(static function () use (&$queryCount): void {
+        $queryCount++;
+    });
+
+    $content = $this
+        ->actingAs($this->manager)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('inventory.stock-on-hand.export'))
+        ->assertOk()
+        ->streamedContent();
+
+    expect($content)->toContain($items->last()->name);
+    expect($queryCount)->toBeLessThan(40);
 });
 
 test('export is tenant isolated across organizations', function () {

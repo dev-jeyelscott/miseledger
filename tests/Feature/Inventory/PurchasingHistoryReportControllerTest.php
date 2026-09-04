@@ -15,6 +15,7 @@ use App\Models\Supplier;
 use App\Models\SupplierItem;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function createPurchasingHistoryStorageLocation(
@@ -447,6 +448,61 @@ test('export streams the same rows as a CSV download', function () {
 
     expect($content)->toContain('PO-PURCH-HIST');
     expect($content)->toContain('not_received');
+});
+
+test('export eager loads relationships without queries per purchase order row', function () {
+    $now = now();
+
+    foreach (range(1, 101) as $number) {
+        $purchaseOrder = PurchaseOrder::query()->create([
+            'organization_id' => $this->organization->id,
+            'location_id' => $this->location->id,
+            'supplier_id' => $this->supplier->id,
+            'number' => "PO-QUERY-COUNT-{$number}",
+            'status' => PurchaseOrderStatus::Approved,
+            'order_date' => '2026-08-01',
+            'expected_delivery_date' => null,
+            'subtotal' => '10.00',
+            'tax_total' => '0.00',
+            'discount_total' => '0.00',
+            'total' => '10.00',
+            'notes' => null,
+            'created_by' => $this->actor->id,
+            'approved_by' => $this->actor->id,
+            'approved_at' => $now,
+        ]);
+
+        PurchaseOrderLine::query()->create([
+            'purchase_order_id' => $purchaseOrder->id,
+            'supplier_item_id' => $this->supplierItem->id,
+            'inventory_item_id' => $this->inventoryItem->id,
+            'item_name_snapshot' => $this->inventoryItem->name,
+            'supplier_sku_snapshot' => $this->supplierItem->supplier_sku,
+            'ordered_quantity' => '1.000000',
+            'purchase_unit_of_measure_id' => $this->unit->id,
+            'base_quantity' => '1.000000',
+            'unit_price' => '10.0000',
+            'line_total' => '10.00',
+            'received_base_quantity' => '0.000000',
+        ]);
+    }
+
+    $queryCount = 0;
+    DB::listen(static function () use (&$queryCount): void {
+        $queryCount++;
+    });
+
+    $content = $this
+        ->actingAs($this->actor)
+        ->withSession([
+            'active_organization_id' => $this->organization->id,
+        ])
+        ->get(route('inventory.purchasing-history.export'))
+        ->assertOk()
+        ->streamedContent();
+
+    expect($content)->toContain('PO-QUERY-COUNT-101');
+    expect($queryCount)->toBeLessThan(40);
 });
 
 test('export is tenant isolated across organizations', function () {
