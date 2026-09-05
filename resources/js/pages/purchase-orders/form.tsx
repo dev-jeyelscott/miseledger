@@ -1,4 +1,4 @@
-import { Form, Head, Link, router } from '@inertiajs/react';
+import { Form, Head, Link, router, useHttp } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/GoodsReceiptController';
 import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
@@ -34,7 +34,6 @@ type SupplierItemOption = {
 type SupplierOption = {
     id: number;
     name: string;
-    items: SupplierItemOption[];
 };
 
 type LocationOption = {
@@ -87,11 +86,20 @@ type Props = {
     purchaseOrder: PurchaseOrder | null;
     defaultOrderDate?: string;
     supplierOptions: SupplierOption[];
+    selectedSupplierItems: SupplierItemOption[];
     locationOptions: LocationOption[];
     currency: string;
     canManage: boolean;
     canReceive: boolean;
     canViewCosts: boolean;
+};
+
+type SupplierItemPage = {
+    data: SupplierItemOption[];
+    meta: {
+        currentPage: number;
+        nextPage: number | null;
+    };
 };
 
 let nextLineClientId = 0;
@@ -193,6 +201,7 @@ export default function PurchaseOrderForm({
     purchaseOrder,
     defaultOrderDate,
     supplierOptions,
+    selectedSupplierItems,
     locationOptions,
     currency,
     canManage,
@@ -281,6 +290,65 @@ export default function PurchaseOrderForm({
         (supplier) => supplier.id.toString() === supplierId,
     );
 
+    const supplierItemsRequest = useHttp<
+        Record<string, never>,
+        SupplierItemPage
+    >();
+    const [supplierItems, setSupplierItems] = useState<SupplierItemOption[]>(
+        selectedSupplierItems,
+    );
+    const [supplierItemSearch, setSupplierItemSearch] = useState('');
+    const [nextSupplierItemPage, setNextSupplierItemPage] = useState<
+        number | null
+    >(null);
+
+    const mergeSupplierItems = (
+        current: SupplierItemOption[],
+        incoming: SupplierItemOption[],
+    ): SupplierItemOption[] => {
+        const itemsById = new Map(current.map((item) => [item.id, item]));
+
+        incoming.forEach((item) => {
+            itemsById.set(item.id, item);
+        });
+
+        return Array.from(itemsById.values());
+    };
+
+    const loadSupplierItems = async (
+        page: number,
+        append: boolean,
+        search = supplierItemSearch,
+    ) => {
+        if (supplierId === '') {
+            return;
+        }
+
+        supplierItemsRequest.cancel();
+
+        const response = await supplierItemsRequest.get(
+            PurchaseOrderController.supplierItems.url({
+                query: {
+                    supplier: Number(supplierId),
+                    search: search === '' ? undefined : search,
+                    page,
+                },
+            }),
+        );
+
+        setSupplierItems((current) =>
+            append
+                ? mergeSupplierItems(current, response.data)
+                : mergeSupplierItems(
+                      purchaseOrder?.supplierId === Number(supplierId)
+                          ? selectedSupplierItems
+                          : [],
+                      response.data,
+                  ),
+        );
+        setNextSupplierItemPage(response.meta.nextPage);
+    };
+
     const addLine = () => {
         setLines((current) => [...current, createLine()]);
     };
@@ -330,6 +398,9 @@ export default function PurchaseOrderForm({
 
         setSupplierId(nextSupplierId);
         setLines([createLine()]);
+        setSupplierItems([]);
+        setSupplierItemSearch('');
+        setNextSupplierItemPage(null);
     };
 
     const confirmSupplierChange = () => {
@@ -339,6 +410,9 @@ export default function PurchaseOrderForm({
 
         setSupplierId(pendingSupplierId);
         setLines([createLine()]);
+        setSupplierItems([]);
+        setSupplierItemSearch('');
+        setNextSupplierItemPage(null);
         setPendingSupplierId(null);
         setSupplierChangeDialogOpen(false);
     };
@@ -584,6 +658,71 @@ export default function PurchaseOrderForm({
                                         </Button>
                                     </div>
 
+                                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                                        <Field
+                                            id="supplier-item-search"
+                                            label="Search supplier items"
+                                            helper={
+                                                selectedSupplier
+                                                    ? 'Search by item name, item SKU, or supplier SKU.'
+                                                    : 'Select a supplier before searching its items.'
+                                            }
+                                        >
+                                            <Input
+                                                value={supplierItemSearch}
+                                                onChange={(event) =>
+                                                    setSupplierItemSearch(
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                onKeyDown={(event) => {
+                                                    if (event.key !== 'Enter') {
+                                                        return;
+                                                    }
+
+                                                    event.preventDefault();
+                                                    void loadSupplierItems(
+                                                        1,
+                                                        false,
+                                                    );
+                                                }}
+                                                disabled={!selectedSupplier}
+                                            />
+                                        </Field>
+
+                                        <div className="flex items-end">
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() =>
+                                                    void loadSupplierItems(
+                                                        1,
+                                                        false,
+                                                    )
+                                                }
+                                                disabled={
+                                                    !selectedSupplier ||
+                                                    supplierItemsRequest.processing
+                                                }
+                                            >
+                                                {supplierItemsRequest.processing
+                                                    ? 'Loading…'
+                                                    : supplierItemSearch === ''
+                                                      ? 'Load items'
+                                                      : 'Search'}
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {selectedSupplier &&
+                                    supplierItems.length === 0 &&
+                                    !supplierItemsRequest.processing ? (
+                                        <p className="text-sm text-muted-foreground">
+                                            No items loaded. Search or load the
+                                            first 25 items for this supplier.
+                                        </p>
+                                    ) : null}
+
                                     {lines.map((line, index) => (
                                         <div
                                             key={line.clientId}
@@ -613,7 +752,7 @@ export default function PurchaseOrderForm({
                                                     <option value="">
                                                         Select item
                                                     </option>
-                                                    {selectedSupplier?.items.map(
+                                                    {supplierItems.map(
                                                         (item) => (
                                                             <option
                                                                 key={item.id}
@@ -682,6 +821,24 @@ export default function PurchaseOrderForm({
                                             </div>
                                         </div>
                                     ))}
+
+                                    {nextSupplierItemPage !== null ? (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() =>
+                                                void loadSupplierItems(
+                                                    nextSupplierItemPage,
+                                                    true,
+                                                )
+                                            }
+                                            disabled={
+                                                supplierItemsRequest.processing
+                                            }
+                                        >
+                                            Load more items
+                                        </Button>
+                                    ) : null}
 
                                     {errors.lines ? (
                                         <p

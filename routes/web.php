@@ -508,6 +508,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 )->name('store');
 
                 Route::get(
+                    'supplier-items',
+                    [PurchaseOrderController::class, 'supplierItems'],
+                )->name('supplier-items');
+
+                Route::get(
                     '{purchaseOrder}/edit',
                     [PurchaseOrderController::class, 'edit'],
                 )->name('edit');

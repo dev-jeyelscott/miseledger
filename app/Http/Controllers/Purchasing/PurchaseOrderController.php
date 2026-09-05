@@ -21,6 +21,7 @@ use Brick\Math\BigDecimal;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -226,10 +227,106 @@ class PurchaseOrderController extends Controller
                 $record,
                 $canViewCosts,
             ),
-            ...$this->formOptions($organization, $canViewCosts),
+            ...$this->formOptions(
+                $organization,
+                $canViewCosts,
+                $record,
+            ),
             'canManage' => $canManage,
             'canReceive' => $canReceive,
             'canViewCosts' => $canViewCosts,
+        ]);
+    }
+
+    /**
+     * Return a bounded, searchable page of active supplier items for PO lines.
+     */
+    public function supplierItems(Request $request): JsonResponse
+    {
+        $organization = $this->activeOrganization($request);
+
+        Gate::authorize(
+            OrganizationPermission::PurchasingManage->value,
+            $organization,
+        );
+
+        $validated = $request->validate([
+            'supplier' => ['required', 'integer', 'min:1'],
+            'search' => ['nullable', 'string', 'max:120'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $supplier = Supplier::query()
+            ->where('organization_id', $organization->id)
+            ->where('active', true)
+            ->findOrFail((int) $validated['supplier']);
+
+        $search = trim((string) ($validated['search'] ?? ''));
+
+        $supplierItems = SupplierItem::query()
+            ->with([
+                'inventoryItem:id,name,sku',
+                'purchaseUnitOfMeasure:id,symbol',
+            ])
+            ->where('organization_id', $organization->id)
+            ->where('supplier_id', $supplier->id)
+            ->where('active', true)
+            ->whereNotNull('current_price')
+            ->whereHas(
+                'inventoryItem',
+                static fn (EloquentBuilder $query): EloquentBuilder => $query
+                    ->where('active', true),
+            )
+            ->whereHas(
+                'purchaseUnitOfMeasure',
+                static fn (EloquentBuilder $query): EloquentBuilder => $query
+                    ->where('active', true),
+            );
+
+        if ($search !== '') {
+            $searchPattern = '%'.$search.'%';
+
+            $supplierItems->where(
+                static function (EloquentBuilder $query) use ($searchPattern): void {
+                    $query
+                        ->whereLike('supplier_sku', $searchPattern)
+                        ->orWhereHas(
+                            'inventoryItem',
+                            static fn (EloquentBuilder $inventoryItems): EloquentBuilder => $inventoryItems
+                                ->whereLike('name', $searchPattern)
+                                ->orWhereLike('sku', $searchPattern),
+                        );
+                },
+            );
+        }
+
+        $paginator = $supplierItems
+            ->orderBy('supplier_sku')
+            ->orderBy('id')
+            ->simplePaginate(25)
+            ->withQueryString();
+
+        $canViewCosts = Gate::allows(
+            OrganizationPermission::CostsView->value,
+            $organization,
+        );
+
+        return response()->json([
+            'data' => collect($paginator->items())
+                ->map(
+                    fn (SupplierItem $supplierItem): array => $this->supplierItemOption(
+                        $supplierItem,
+                        $canViewCosts,
+                    ),
+                )
+                ->values()
+                ->all(),
+            'meta' => [
+                'currentPage' => $paginator->currentPage(),
+                'nextPage' => $paginator->hasMorePages()
+                    ? $paginator->currentPage() + 1
+                    : null,
+            ],
         ]);
     }
 
@@ -686,36 +783,15 @@ class PurchaseOrderController extends Controller
     }
 
     /**
-     * Build active supplier-item and location form options.
+     * Build lightweight supplier and location form options.
      *
      * @return array<string, mixed>
      */
     private function formOptions(
         Organization $organization,
         bool $canViewCosts,
+        ?PurchaseOrder $purchaseOrder = null,
     ): array {
-        $supplierItems = SupplierItem::query()
-            ->with([
-                'inventoryItem:id,name,sku,active',
-                'purchaseUnitOfMeasure:id,name,symbol,active',
-            ])
-            ->where(
-                'organization_id',
-                $organization->id,
-            )
-            ->where('active', true)
-            ->whereNotNull('current_price')
-            ->get()
-            ->filter(
-                static fn (SupplierItem $supplierItem): bool => $supplierItem
-                    ->inventoryItem
-                    ->active
-                    && $supplierItem
-                        ->purchaseUnitOfMeasure
-                        ->active,
-            )
-            ->groupBy('supplier_id');
-
         $suppliers = Supplier::query()
             ->where(
                 'organization_id',
@@ -724,42 +800,12 @@ class PurchaseOrderController extends Controller
             ->where('active', true)
             ->orderBy('name')
             ->get()
-            ->map(function (
-                Supplier $supplier,
-            ) use ($canViewCosts, $supplierItems): array {
-                $items = $supplierItems->get(
-                    $supplier->id,
-                    collect(),
-                );
-
-                return [
+            ->map(
+                static fn (Supplier $supplier): array => [
                     'id' => $supplier->id,
                     'name' => $supplier->name,
-                    'items' => $items
-                        ->map(
-                            static fn (
-                                SupplierItem $supplierItem,
-                            ): array => [
-                                'id' => $supplierItem->id,
-                                'supplierSku' => $supplierItem
-                                    ->supplier_sku,
-                                'itemName' => $supplierItem
-                                    ->inventoryItem
-                                    ->name,
-                                'purchaseUnit' => $supplierItem
-                                    ->purchaseUnitOfMeasure
-                                    ->symbol,
-                                'baseQuantity' => $supplierItem
-                                    ->base_quantity,
-                                'currentPrice' => $canViewCosts
-                                    ? $supplierItem->current_price
-                                    : null,
-                            ],
-                        )
-                        ->values()
-                        ->all(),
-                ];
-            })
+                ],
+            )
             ->values()
             ->all();
 
@@ -785,8 +831,69 @@ class PurchaseOrderController extends Controller
 
         return [
             'supplierOptions' => $suppliers,
+            'selectedSupplierItems' => $this->selectedSupplierItems(
+                $organization,
+                $purchaseOrder,
+                $canViewCosts,
+            ),
             'locationOptions' => $locations,
             'currency' => $organization->currency,
+        ];
+    }
+
+    /**
+     * Return only the supplier items already referenced by an edited PO.
+     *
+     * @return list<array{id: int, supplierSku: string, itemName: string, purchaseUnit: string, baseQuantity: string, currentPrice: string|null}>
+     */
+    private function selectedSupplierItems(
+        Organization $organization,
+        ?PurchaseOrder $purchaseOrder,
+        bool $canViewCosts,
+    ): array {
+        if ($purchaseOrder === null) {
+            return [];
+        }
+
+        return array_values(
+            SupplierItem::query()
+                ->with([
+                    'inventoryItem:id,name,sku',
+                    'purchaseUnitOfMeasure:id,symbol',
+                ])
+                ->where('organization_id', $organization->id)
+                ->whereIn(
+                    'id',
+                    $purchaseOrder->lines->pluck('supplier_item_id'),
+                )
+                ->get()
+                ->map(
+                    fn (SupplierItem $supplierItem): array => $this->supplierItemOption(
+                        $supplierItem,
+                        $canViewCosts,
+                    ),
+                )
+                ->values()
+                ->all(),
+        );
+    }
+
+    /**
+     * @return array{id: int, supplierSku: string, itemName: string, purchaseUnit: string, baseQuantity: string, currentPrice: string|null}
+     */
+    private function supplierItemOption(
+        SupplierItem $supplierItem,
+        bool $canViewCosts,
+    ): array {
+        return [
+            'id' => $supplierItem->id,
+            'supplierSku' => $supplierItem->supplier_sku,
+            'itemName' => $supplierItem->inventoryItem->name,
+            'purchaseUnit' => $supplierItem->purchaseUnitOfMeasure->symbol,
+            'baseQuantity' => $supplierItem->base_quantity,
+            'currentPrice' => $canViewCosts
+                ? $supplierItem->current_price
+                : null,
         ];
     }
 

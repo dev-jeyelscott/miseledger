@@ -163,7 +163,7 @@ test('purchase order form omits monetary props without cost permission', functio
                 ->where('purchaseOrder.total', null)
                 ->where('purchaseOrder.lines.0.unitPrice', null)
                 ->where('purchaseOrder.lines.0.lineTotal', null)
-                ->where('supplierOptions.0.items.0.currentPrice', null),
+                ->where('selectedSupplierItems.0.currentPrice', null),
         );
 });
 
