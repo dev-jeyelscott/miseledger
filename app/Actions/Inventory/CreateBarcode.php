@@ -7,6 +7,7 @@ use App\Models\InventoryItem;
 use App\Models\InventoryItemBarcode;
 use App\Models\Organization;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 final class CreateBarcode
 {
@@ -22,6 +23,12 @@ final class CreateBarcode
         bool $isPrimary,
         bool $active,
     ): InventoryItemBarcode {
+        if ($isPrimary && ! $active) {
+            throw ValidationException::withMessages([
+                'active' => __('A primary barcode must be active.'),
+            ]);
+        }
+
         return DB::transaction(function () use (
             $organization,
             $inventoryItem,

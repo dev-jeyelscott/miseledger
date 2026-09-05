@@ -12,6 +12,7 @@ use App\Models\OrganizationMembership;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
+use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('an inventory item can have multiple barcodes across supported symbologies', function () {
@@ -168,6 +169,73 @@ test('create barcode action rejects an alternate unit outside the locked item', 
         false,
         true,
     ))->toThrow(ModelNotFoundException::class);
+});
+
+test('create barcode action rejects an inactive primary barcode without demoting the current primary', function () {
+    $organization = Organization::factory()->create();
+    $item = InventoryItem::factory()
+        ->for($organization)
+        ->create();
+
+    $currentPrimary = InventoryItemBarcode::factory()
+        ->for($item)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '1010101010101',
+            'primary' => true,
+            'active' => true,
+        ]);
+
+    expect(fn () => (new CreateBarcode)->handle(
+        $organization,
+        $item,
+        '2020202020202',
+        BarcodeSymbology::Ean13,
+        null,
+        true,
+        false,
+    ))->toThrow(ValidationException::class);
+
+    expect($currentPrimary->fresh()->primary)
+        ->toBeTrue()
+        ->and($currentPrimary->fresh()->active)
+        ->toBeTrue()
+        ->and($item->barcodes()->count())
+        ->toBe(1);
+});
+
+test('creating a barcode cannot promote an inactive barcode or demote the current primary', function () {
+    [$user, $organization, $item] = inventoryItemBarcodeContext(
+        OrganizationRole::Owner,
+    );
+
+    $currentPrimary = InventoryItemBarcode::factory()
+        ->for($item)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '2121212121212',
+            'primary' => true,
+            'active' => true,
+        ]);
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->post(route('inventory.items.barcodes.store', $item), [
+            'value' => '3131313131313',
+            'symbology' => BarcodeSymbology::Ean13->value,
+            'is_primary' => true,
+            'active' => false,
+        ])
+        ->assertSessionHasErrors('active');
+
+    expect($currentPrimary->fresh()->primary)
+        ->toBeTrue()
+        ->and($currentPrimary->fresh()->active)
+        ->toBeTrue()
+        ->and($item->barcodes()->count())
+        ->toBe(1);
 });
 
 /**
@@ -558,6 +626,57 @@ test('updating a barcode as the primary demotes the current primary for the item
     expect($challenger->fresh()->primary)
         ->toBeTrue()
         ->and($currentPrimary->fresh()->primary)
+        ->toBeFalse();
+});
+
+test('updating a barcode cannot promote an inactive barcode or demote the current primary', function () {
+    [$user, $organization, $item] = inventoryItemBarcodeContext(
+        OrganizationRole::Owner,
+    );
+
+    $currentPrimary = InventoryItemBarcode::factory()
+        ->for($item)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '3030303030303',
+            'primary' => true,
+            'active' => true,
+        ]);
+
+    $inactiveBarcode = InventoryItemBarcode::factory()
+        ->for($item)
+        ->create([
+            'organization_id' => $organization->id,
+            'barcode' => '4040404040404',
+            'primary' => false,
+            'active' => false,
+        ]);
+
+    $this->withSession([
+        'active_organization_id' => $organization->id,
+    ])
+        ->actingAs($user)
+        ->put(
+            route(
+                'inventory.items.barcodes.update',
+                [$item, $inactiveBarcode],
+            ),
+            [
+                'value' => $inactiveBarcode->barcode,
+                'symbology' => BarcodeSymbology::Ean13->value,
+                'is_primary' => true,
+                'active' => false,
+            ],
+        )
+        ->assertSessionHasErrors('active');
+
+    expect($currentPrimary->fresh()->primary)
+        ->toBeTrue()
+        ->and($currentPrimary->fresh()->active)
+        ->toBeTrue()
+        ->and($inactiveBarcode->fresh()->primary)
+        ->toBeFalse()
+        ->and($inactiveBarcode->fresh()->active)
         ->toBeFalse();
 });
 

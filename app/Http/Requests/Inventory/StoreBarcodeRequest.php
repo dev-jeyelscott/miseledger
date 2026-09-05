@@ -96,6 +96,7 @@ class StoreBarcodeRequest extends FormRequest
         return [
             function (Validator $validator): void {
                 $this->validateBarcodeStructure($validator);
+                $this->validatePrimaryBarcodeIsActive($validator);
             },
         ];
     }
@@ -191,6 +192,26 @@ class StoreBarcodeRequest extends FormRequest
         if ($message !== null) {
             $validator->errors()->add('value', $message);
         }
+    }
+
+    /**
+     * Prevent a primary barcode from becoming unavailable to scan lookup.
+     */
+    private function validatePrimaryBarcodeIsActive(Validator $validator): void
+    {
+        if (
+            $validator->errors()->has('is_primary')
+            || $validator->errors()->has('active')
+            || ! $this->boolean('is_primary')
+            || $this->boolean('active')
+        ) {
+            return;
+        }
+
+        $validator->errors()->add(
+            'active',
+            __('A primary barcode must be active.'),
+        );
     }
 
     /**
