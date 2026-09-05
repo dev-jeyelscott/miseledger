@@ -41,7 +41,8 @@ test(
 
         expect($source)
             ->toContain('Receive from purchase order')
-            ->toContain('PurchaseOrderController.index()')
+            ->toContain('PurchaseOrderController.index({')
+            ->toContain("status: 'approved'")
             ->toContain('GoodsReceiptController.edit(')
             ->toContain(
                 '<Form action={GoodsReceiptController.index().url} method="get">',

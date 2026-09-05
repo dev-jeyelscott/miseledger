@@ -452,6 +452,8 @@ test(
 
         [$user, $organization] = payMongoBillingOwner();
 
+        $this->withoutExceptionHandling();
+
         $insertAttempts = 0;
         $shouldFailInsert = true;
 

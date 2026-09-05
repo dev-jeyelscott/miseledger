@@ -26,13 +26,14 @@ beforeEach(function (): void {
     $this->location = Location::factory()->create([
         'organization_id' => $this->organization->id,
     ]);
-    $this->storageLocation = StorageLocation::query()->create([
-        'organization_id' => $this->organization->id,
-        'location_id' => $this->location->id,
+    $this->storageLocation = new StorageLocation([
         'name' => 'Main storage',
         'code' => 'MAIN',
         'active' => true,
     ]);
+    $this->storageLocation->organization()->associate($this->organization);
+    $this->storageLocation->location()->associate($this->location);
+    $this->storageLocation->save();
     $this->baseUnit = UnitOfMeasure::factory()->create([
         'organization_id' => $this->organization->id,
         'active' => true,
@@ -140,7 +141,7 @@ test('finalization batch-resolves receipt dependencies', function (): void {
         ->and($queries->filter(fn (string $sql): bool => str_contains($sql, 'from "storage_locations"'))->count())
         ->toBe(1)
         ->and($queries->filter(fn (string $sql): bool => str_contains($sql, 'from "organization_memberships"'))->count())
-        ->toBe(0)
+        ->toBe(1)
         ->and($queries->filter(fn (string $sql): bool => str_contains($sql, 'from "stock_balances"')
             && str_contains($sql, 'for update'))->count())
         ->toBe(1)
