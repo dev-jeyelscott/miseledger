@@ -20,22 +20,49 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
  */
 final class LockedDependencies
 {
+    /** @var Collection<int, PurchaseOrderLine> */
+    public readonly Collection $purchaseOrderLines;
+
+    /** @var Collection<int, InventoryItem> */
+    public readonly Collection $inventoryItems;
+
+    /** @var Collection<int, UnitOfMeasure> */
+    public readonly Collection $baseUnits;
+
+    /** @var Collection<int, StorageLocation> */
+    public readonly Collection $storageLocations;
+
+    /** @var Collection<string, StockBalance> */
+    public readonly Collection $stockBalances;
+
+    /** @var Collection<string, StockMovement> */
+    public readonly Collection $idempotentMovements;
+
     /**
      * @param  Collection<int, PurchaseOrderLine>  $purchaseOrderLines
      * @param  Collection<int, InventoryItem>  $inventoryItems
      * @param  Collection<int, UnitOfMeasure>  $baseUnits
      * @param  Collection<int, StorageLocation>  $storageLocations
+     * @param  Collection<string, StockBalance>  $stockBalances
+     * @param  Collection<string, StockMovement>  $idempotentMovements
      */
     public function __construct(
         public readonly Location $location,
-        public readonly Collection $purchaseOrderLines,
-        public readonly Collection $inventoryItems,
-        public readonly Collection $baseUnits,
-        public readonly Collection $storageLocations,
+        Collection $purchaseOrderLines,
+        Collection $inventoryItems,
+        Collection $baseUnits,
+        Collection $storageLocations,
         public readonly bool $actorMembershipValidated = false,
-        public readonly Collection $stockBalances = new Collection,
-        public readonly Collection $idempotentMovements = new Collection,
-    ) {}
+        Collection $stockBalances = new Collection,
+        Collection $idempotentMovements = new Collection,
+    ) {
+        $this->purchaseOrderLines = $purchaseOrderLines;
+        $this->inventoryItems = $inventoryItems;
+        $this->baseUnits = $baseUnits;
+        $this->storageLocations = $storageLocations;
+        $this->stockBalances = $stockBalances;
+        $this->idempotentMovements = $idempotentMovements;
+    }
 
     public function purchaseOrderLine(int $id): PurchaseOrderLine
     {
@@ -72,7 +99,9 @@ final class LockedDependencies
     }
 
     public function withStockState(
+        /** @var Collection<string, StockBalance> $stockBalances */
         Collection $stockBalances,
+        /** @var Collection<string, StockMovement> $idempotentMovements */
         Collection $idempotentMovements,
     ): self {
         return new self(

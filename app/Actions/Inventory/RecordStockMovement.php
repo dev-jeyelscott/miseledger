@@ -540,23 +540,29 @@ final class RecordStockMovement
                 $idempotentMovements,
             );
 
-            return collect($movements)->map(fn (array $movement): StockMovement => $this->handle(
-                organization: $organization,
-                location: $location,
-                storageLocation: $movement['storageLocation'],
-                inventoryItem: $movement['inventoryItem'],
-                type: $movement['type'],
-                baseQuantity: $movement['baseQuantity'],
-                baseUnitOfMeasure: $movement['baseUnitOfMeasure'],
-                referenceType: $movement['referenceType'],
-                referenceId: $movement['referenceId'],
-                occurredAt: $movement['occurredAt'],
-                actor: $movement['actor'] ?? null,
-                idempotencyKey: $movement['idempotencyKey'] ?? null,
-                notes: $movement['notes'] ?? null,
-                inboundUnitCost: $movement['inboundUnitCost'] ?? null,
-                lockedDependencies: $batchDependencies,
-            ));
+            $stockMovements = new Collection;
+
+            foreach ($movements as $movement) {
+                $stockMovements->push($this->handle(
+                    organization: $organization,
+                    location: $location,
+                    storageLocation: $movement['storageLocation'],
+                    inventoryItem: $movement['inventoryItem'],
+                    type: $movement['type'],
+                    baseQuantity: $movement['baseQuantity'],
+                    baseUnitOfMeasure: $movement['baseUnitOfMeasure'],
+                    referenceType: $movement['referenceType'],
+                    referenceId: $movement['referenceId'],
+                    occurredAt: $movement['occurredAt'],
+                    actor: $movement['actor'] ?? null,
+                    idempotencyKey: $movement['idempotencyKey'] ?? null,
+                    notes: $movement['notes'] ?? null,
+                    inboundUnitCost: $movement['inboundUnitCost'] ?? null,
+                    lockedDependencies: $batchDependencies,
+                ));
+            }
+
+            return $stockMovements;
         };
 
         return DB::transactionLevel() > 0

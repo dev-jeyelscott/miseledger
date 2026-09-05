@@ -326,16 +326,6 @@ final class FinalizeGoodsReceipt
             ]);
         }
 
-        foreach ($lines as $line) {
-            $poLine = $purchaseOrderLines->get($line->purchase_order_line_id);
-
-            if ($poLine->inventory_item_id !== $line->inventory_item_id) {
-                throw ValidationException::withMessages([
-                    'lines' => __('Receipt line inventory does not match its purchase-order line.'),
-                ]);
-            }
-        }
-
         $inventoryItemIds = $lines
             ->pluck('inventory_item_id')
             ->merge($nonStockLines->pluck('inventory_item_id'))
