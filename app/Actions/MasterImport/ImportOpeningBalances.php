@@ -19,6 +19,8 @@ use Throwable;
 
 final class ImportOpeningBalances
 {
+    private const LOOKUP_CHUNK_SIZE = 1000;
+
     public function __construct(
         private readonly RecordOpeningBalance $recordOpeningBalance,
     ) {}
@@ -70,6 +72,12 @@ final class ImportOpeningBalances
         $skipped = 0;
         $errors = [];
 
+        $preparedRows = [];
+        $locationCodes = [];
+        $storageLocationCodes = [];
+        $itemSkus = [];
+        $unitSymbols = [];
+
         foreach (CsvTable::parse($csvContents) as $row) {
             $data = $row['data'];
             $locationCode = strtoupper(trim($data['location_code'] ?? ''));
@@ -120,19 +128,148 @@ final class ImportOpeningBalances
             }
 
             if ($rowErrors !== []) {
-                $errors[] = new ImportRowError($row['number'], $rowErrors);
+                $preparedRows[] = [
+                    'number' => $row['number'],
+                    'location_code' => $locationCode,
+                    'storage_location_code' => $storageLocationCode,
+                    'item_sku' => $itemSku,
+                    'quantity' => $quantity,
+                    'unit_symbol' => $unitSymbol,
+                    'unit_cost' => $unitCost,
+                    'occurred_at' => $occurredAtRaw,
+                    'notes' => $notes,
+                    'errors' => $rowErrors,
+                ];
 
                 continue;
             }
 
-            $location = Location::query()
+            $preparedRows[] = [
+                'number' => $row['number'],
+                'location_code' => $locationCode,
+                'storage_location_code' => $storageLocationCode,
+                'item_sku' => $itemSku,
+                'quantity' => $quantity,
+                'unit_symbol' => $unitSymbol,
+                'unit_cost' => $unitCost,
+                'occurred_at' => $occurredAtRaw,
+                'notes' => $notes,
+                'errors' => [],
+            ];
+
+            $locationCodes[$locationCode] = true;
+            $storageLocationCodes[$storageLocationCode] = true;
+            $itemSkus[$itemSku] = true;
+            $unitSymbols[$unitSymbol] = true;
+        }
+
+        $locations = [];
+
+        foreach (array_chunk(array_keys($locationCodes), self::LOOKUP_CHUNK_SIZE) as $codes) {
+            foreach (Location::query()
                 ->where('organization_id', $organization->getKey())
-                ->where('code', $locationCode)
+                ->whereIn('code', $codes)
                 ->where('active', true)
-                ->first();
+                ->get() as $location) {
+                $locations[$location->code] = $location;
+            }
+        }
+
+        $storageLocations = [];
+        $locationIds = array_map(
+            static fn (Location $location): int => $location->getKey(),
+            $locations,
+        );
+
+        if ($locationIds !== []) {
+            foreach (array_chunk(array_keys($storageLocationCodes), self::LOOKUP_CHUNK_SIZE) as $codes) {
+                foreach (StorageLocation::query()
+                    ->where('organization_id', $organization->getKey())
+                    ->whereIn('location_id', $locationIds)
+                    ->whereIn('code', $codes)
+                    ->where('active', true)
+                    ->get() as $storageLocation) {
+                    $storageLocations[
+                        "{$storageLocation->location_id}:{$storageLocation->code}"
+                    ] = $storageLocation;
+                }
+            }
+        }
+
+        $items = [];
+
+        foreach (array_chunk(array_keys($itemSkus), self::LOOKUP_CHUNK_SIZE) as $skus) {
+            foreach (InventoryItem::query()
+                ->with('baseUnitOfMeasure')
+                ->where('organization_id', $organization->getKey())
+                ->whereIn('sku', $skus)
+                ->where('active', true)
+                ->whereHas(
+                    'baseUnitOfMeasure',
+                    fn ($query) => $query
+                        ->where(
+                            'organization_id',
+                            $organization->getKey(),
+                        )
+                        ->where('active', true),
+                )
+                ->get() as $item) {
+                $items[$item->sku] = $item;
+            }
+        }
+
+        $units = [];
+
+        foreach (array_chunk(array_keys($unitSymbols), self::LOOKUP_CHUNK_SIZE) as $symbols) {
+            foreach (UnitOfMeasure::query()
+                ->where('organization_id', $organization->getKey())
+                ->whereIn('symbol', $symbols)
+                ->where('active', true)
+                ->get() as $unit) {
+                $units[$unit->symbol] = $unit;
+            }
+        }
+
+        $idempotencyKeys = [];
+        $validRowNumbers = [];
+
+        foreach ($preparedRows as $preparedRow) {
+            if ($preparedRow['errors'] === []) {
+                $validRowNumbers[] = $preparedRow['number'];
+            }
+        }
+
+        foreach (array_chunk($validRowNumbers, self::LOOKUP_CHUNK_SIZE) as $rowNumbers) {
+            $keys = array_map(
+                static fn (int $rowNumber): string => "opening_balance:import:{$batchId}:{$rowNumber}",
+                $rowNumbers,
+            );
+
+            foreach (StockMovement::query()
+                ->where('organization_id', $organization->getKey())
+                ->whereIn('idempotency_key', $keys)
+                ->pluck('idempotency_key') as $idempotencyKey) {
+                $idempotencyKeys[$idempotencyKey] = true;
+            }
+        }
+
+        foreach ($preparedRows as $preparedRow) {
+            $rowNumber = $preparedRow['number'];
+
+            if ($preparedRow['errors'] !== []) {
+                $errors[] = new ImportRowError($rowNumber, $preparedRow['errors']);
+
+                continue;
+            }
+
+            $locationCode = $preparedRow['location_code'];
+            $storageLocationCode = $preparedRow['storage_location_code'];
+            $itemSku = $preparedRow['item_sku'];
+            $unitSymbol = $preparedRow['unit_symbol'];
+            $location = $locations[$locationCode] ?? null;
 
             if ($location === null) {
-                $errors[] = new ImportRowError($row['number'], [
+                $errors[] = new ImportRowError($rowNumber, [
                     __(
                         'No active location with code ":code" exists for this organization.',
                         ['code' => $locationCode],
@@ -142,15 +279,12 @@ final class ImportOpeningBalances
                 continue;
             }
 
-            $storageLocation = StorageLocation::query()
-                ->where('organization_id', $organization->getKey())
-                ->where('location_id', $location->getKey())
-                ->where('code', $storageLocationCode)
-                ->where('active', true)
-                ->first();
+            $storageLocation = $storageLocations[
+                "{$location->getKey()}:{$storageLocationCode}"
+            ] ?? null;
 
             if ($storageLocation === null) {
-                $errors[] = new ImportRowError($row['number'], [
+                $errors[] = new ImportRowError($rowNumber, [
                     __(
                         'No active storage location with code ":code" exists for location ":location".',
                         [
@@ -163,24 +297,10 @@ final class ImportOpeningBalances
                 continue;
             }
 
-            $item = InventoryItem::query()
-                ->with('baseUnitOfMeasure')
-                ->where('organization_id', $organization->getKey())
-                ->where('sku', $itemSku)
-                ->where('active', true)
-                ->whereHas(
-                    'baseUnitOfMeasure',
-                    fn ($query) => $query
-                        ->where(
-                            'organization_id',
-                            $organization->getKey(),
-                        )
-                        ->where('active', true),
-                )
-                ->first();
+            $item = $items[$itemSku] ?? null;
 
             if ($item === null) {
-                $errors[] = new ImportRowError($row['number'], [
+                $errors[] = new ImportRowError($rowNumber, [
                     __(
                         'No active inventory item with sku ":sku" exists for this organization.',
                         ['sku' => $itemSku],
@@ -190,14 +310,10 @@ final class ImportOpeningBalances
                 continue;
             }
 
-            $unit = UnitOfMeasure::query()
-                ->where('organization_id', $organization->getKey())
-                ->where('symbol', $unitSymbol)
-                ->where('active', true)
-                ->first();
+            $unit = $units[$unitSymbol] ?? null;
 
             if ($unit === null) {
-                $errors[] = new ImportRowError($row['number'], [
+                $errors[] = new ImportRowError($rowNumber, [
                     __(
                         'No active unit of measure with symbol ":symbol" exists for this organization.',
                         ['symbol' => $unitSymbol],
@@ -208,14 +324,14 @@ final class ImportOpeningBalances
             }
 
             try {
-                $occurredAt = $occurredAtRaw === ''
+                $occurredAt = $preparedRow['occurred_at'] === ''
                     ? CarbonImmutable::now($organization->timezone)->utc()
                     : CarbonImmutable::parse(
-                        $occurredAtRaw,
+                        $preparedRow['occurred_at'],
                         $organization->timezone,
                     )->utc();
             } catch (Throwable) {
-                $errors[] = new ImportRowError($row['number'], [
+                $errors[] = new ImportRowError($rowNumber, [
                     __(
                         'The occurred_at column must be a valid date and time when present.',
                     ),
@@ -224,12 +340,8 @@ final class ImportOpeningBalances
                 continue;
             }
 
-            $idempotencyKey = "opening_balance:import:{$batchId}:{$row['number']}";
-
-            $alreadyImported = StockMovement::query()
-                ->where('organization_id', $organization->getKey())
-                ->where('idempotency_key', $idempotencyKey)
-                ->exists();
+            $idempotencyKey = "opening_balance:import:{$batchId}:{$rowNumber}";
+            $alreadyImported = isset($idempotencyKeys[$idempotencyKey]);
 
             try {
                 $this->recordOpeningBalance->handle(
@@ -237,19 +349,21 @@ final class ImportOpeningBalances
                     location: $location,
                     storageLocation: $storageLocation,
                     inventoryItem: $item,
-                    quantity: $quantity,
+                    quantity: $preparedRow['quantity'],
                     unit: $unit,
-                    baseUnitCost: $unitCost,
+                    baseUnitCost: $preparedRow['unit_cost'],
                     referenceType: 'csv_opening_balance_import',
                     referenceId: $item->id,
                     occurredAt: $occurredAt,
                     idempotencyKey: $idempotencyKey,
                     actor: $actor,
-                    notes: $notes === '' ? null : $notes,
+                    notes: $preparedRow['notes'] === ''
+                        ? null
+                        : $preparedRow['notes'],
                 );
             } catch (ValidationException $exception) {
                 $errors[] = new ImportRowError(
-                    $row['number'],
+                    $rowNumber,
                     array_values($exception->validator->errors()->all()),
                 );
 
