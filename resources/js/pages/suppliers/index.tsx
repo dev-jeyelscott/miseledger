@@ -15,7 +15,6 @@ import SupplierController from '@/actions/App/Http/Controllers/Suppliers/Supplie
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
 import { EmptyState } from '@/components/empty-state';
 import { FilterToolbar } from '@/components/filter-toolbar';
-import InputError from '@/components/input-error';
 import { PageHeader } from '@/components/page-header';
 import { PaginationControls } from '@/components/pagination-controls';
 import { StatusBadge } from '@/components/status-badge';
@@ -30,7 +29,6 @@ import {
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
@@ -181,98 +179,78 @@ function CreateSupplierDialog({ trigger }: CreateSupplierDialogProps) {
                                 <input type="hidden" name="active" value="1" />
 
                                 <div className="grid gap-5 sm:grid-cols-2">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="create-supplier-name">
-                                            Name
-                                        </Label>
+                                    <Field
+                                        id="create-supplier-name"
+                                        label="Name"
+                                        error={errors.name}
+                                    >
                                         <Input
-                                            id="create-supplier-name"
                                             name="name"
                                             required
                                             autoFocus
                                             placeholder="Metro Food Supply"
                                         />
-                                        <InputError message={errors.name} />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="create-supplier-code">
-                                            Code
-                                        </Label>
+                                    <Field
+                                        id="create-supplier-code"
+                                        label="Code"
+                                        error={errors.code}
+                                    >
                                         <Input
-                                            id="create-supplier-code"
                                             name="code"
                                             required
                                             placeholder="METRO"
                                         />
-                                        <InputError message={errors.code} />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="create-supplier-contact-name">
-                                            Contact name
-                                        </Label>
-                                        <Input
-                                            id="create-supplier-contact-name"
-                                            name="contact_name"
-                                        />
-                                        <InputError
-                                            message={errors.contact_name}
-                                        />
-                                    </div>
+                                    <Field
+                                        id="create-supplier-contact-name"
+                                        label="Contact name"
+                                        error={errors.contact_name}
+                                    >
+                                        <Input name="contact_name" />
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="create-supplier-email">
-                                            Email
-                                        </Label>
-                                        <Input
-                                            id="create-supplier-email"
-                                            name="email"
-                                            type="email"
-                                        />
-                                        <InputError message={errors.email} />
-                                    </div>
+                                    <Field
+                                        id="create-supplier-email"
+                                        label="Email"
+                                        error={errors.email}
+                                    >
+                                        <Input name="email" type="email" />
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="create-supplier-phone">
-                                            Phone
-                                        </Label>
-                                        <Input
-                                            id="create-supplier-phone"
-                                            name="phone"
-                                        />
-                                        <InputError message={errors.phone} />
-                                    </div>
+                                    <Field
+                                        id="create-supplier-phone"
+                                        label="Phone"
+                                        error={errors.phone}
+                                    >
+                                        <Input name="phone" />
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="create-supplier-payment-terms">
-                                            Payment terms
-                                        </Label>
+                                    <Field
+                                        id="create-supplier-payment-terms"
+                                        label="Payment terms"
+                                        error={errors.payment_terms}
+                                    >
                                         <Input
-                                            id="create-supplier-payment-terms"
                                             name="payment_terms"
                                             placeholder="Net 30"
                                         />
-                                        <InputError
-                                            message={errors.payment_terms}
-                                        />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="create-supplier-lead-time-days">
-                                            Lead time (days)
-                                        </Label>
+                                    <Field
+                                        id="create-supplier-lead-time-days"
+                                        label="Lead time (days)"
+                                        error={errors.lead_time_days}
+                                    >
                                         <Input
-                                            id="create-supplier-lead-time-days"
                                             name="lead_time_days"
                                             type="number"
                                             min="0"
                                             step="1"
                                         />
-                                        <InputError
-                                            message={errors.lead_time_days}
-                                        />
-                                    </div>
+                                    </Field>
                                 </div>
 
                                 <div className="flex flex-wrap justify-end gap-2">
@@ -332,111 +310,87 @@ function EditSupplierDialog({ supplier, trigger }: EditSupplierDialogProps) {
                                 <input type="hidden" name="_modal" value="1" />
 
                                 <div className="grid gap-5 sm:grid-cols-2">
-                                    <div className="grid gap-2">
-                                        <Label
-                                            htmlFor={`edit-supplier-name-${supplier.id}`}
-                                        >
-                                            Name
-                                        </Label>
+                                    <Field
+                                        id={`edit-supplier-name-${supplier.id}`}
+                                        label="Name"
+                                        error={errors.name}
+                                    >
                                         <Input
-                                            id={`edit-supplier-name-${supplier.id}`}
                                             name="name"
                                             required
                                             autoFocus
                                             defaultValue={supplier.name}
                                         />
-                                        <InputError message={errors.name} />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label
-                                            htmlFor={`edit-supplier-code-${supplier.id}`}
-                                        >
-                                            Code
-                                        </Label>
+                                    <Field
+                                        id={`edit-supplier-code-${supplier.id}`}
+                                        label="Code"
+                                        error={errors.code}
+                                    >
                                         <Input
-                                            id={`edit-supplier-code-${supplier.id}`}
                                             name="code"
                                             required
                                             defaultValue={supplier.code}
                                         />
-                                        <InputError message={errors.code} />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label
-                                            htmlFor={`edit-supplier-contact-name-${supplier.id}`}
-                                        >
-                                            Contact name
-                                        </Label>
+                                    <Field
+                                        id={`edit-supplier-contact-name-${supplier.id}`}
+                                        label="Contact name"
+                                        error={errors.contact_name}
+                                    >
                                         <Input
-                                            id={`edit-supplier-contact-name-${supplier.id}`}
                                             name="contact_name"
                                             defaultValue={
                                                 supplier.contactName ?? ''
                                             }
                                         />
-                                        <InputError
-                                            message={errors.contact_name}
-                                        />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label
-                                            htmlFor={`edit-supplier-email-${supplier.id}`}
-                                        >
-                                            Email
-                                        </Label>
+                                    <Field
+                                        id={`edit-supplier-email-${supplier.id}`}
+                                        label="Email"
+                                        error={errors.email}
+                                    >
                                         <Input
-                                            id={`edit-supplier-email-${supplier.id}`}
                                             name="email"
                                             type="email"
                                             defaultValue={supplier.email ?? ''}
                                         />
-                                        <InputError message={errors.email} />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label
-                                            htmlFor={`edit-supplier-phone-${supplier.id}`}
-                                        >
-                                            Phone
-                                        </Label>
+                                    <Field
+                                        id={`edit-supplier-phone-${supplier.id}`}
+                                        label="Phone"
+                                        error={errors.phone}
+                                    >
                                         <Input
-                                            id={`edit-supplier-phone-${supplier.id}`}
                                             name="phone"
                                             defaultValue={supplier.phone ?? ''}
                                         />
-                                        <InputError message={errors.phone} />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label
-                                            htmlFor={`edit-supplier-payment-terms-${supplier.id}`}
-                                        >
-                                            Payment terms
-                                        </Label>
+                                    <Field
+                                        id={`edit-supplier-payment-terms-${supplier.id}`}
+                                        label="Payment terms"
+                                        error={errors.payment_terms}
+                                    >
                                         <Input
-                                            id={`edit-supplier-payment-terms-${supplier.id}`}
                                             name="payment_terms"
                                             defaultValue={
                                                 supplier.paymentTerms ?? ''
                                             }
                                             placeholder="Net 30"
                                         />
-                                        <InputError
-                                            message={errors.payment_terms}
-                                        />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label
-                                            htmlFor={`edit-supplier-lead-time-days-${supplier.id}`}
-                                        >
-                                            Lead time (days)
-                                        </Label>
+                                    <Field
+                                        id={`edit-supplier-lead-time-days-${supplier.id}`}
+                                        label="Lead time (days)"
+                                        error={errors.lead_time_days}
+                                    >
                                         <Input
-                                            id={`edit-supplier-lead-time-days-${supplier.id}`}
                                             name="lead_time_days"
                                             type="number"
                                             min="0"
@@ -445,19 +399,14 @@ function EditSupplierDialog({ supplier, trigger }: EditSupplierDialogProps) {
                                                 supplier.leadTimeDays ?? ''
                                             }
                                         />
-                                        <InputError
-                                            message={errors.lead_time_days}
-                                        />
-                                    </div>
+                                    </Field>
 
-                                    <div className="grid gap-2">
-                                        <Label
-                                            htmlFor={`edit-supplier-active-${supplier.id}`}
-                                        >
-                                            Status
-                                        </Label>
+                                    <Field
+                                        id={`edit-supplier-active-${supplier.id}`}
+                                        label="Status"
+                                        error={errors.active}
+                                    >
                                         <NativeSelect
-                                            id={`edit-supplier-active-${supplier.id}`}
                                             name="active"
                                             defaultValue={
                                                 supplier.active ? '1' : '0'
@@ -466,8 +415,7 @@ function EditSupplierDialog({ supplier, trigger }: EditSupplierDialogProps) {
                                             <option value="1">Active</option>
                                             <option value="0">Inactive</option>
                                         </NativeSelect>
-                                        <InputError message={errors.active} />
-                                    </div>
+                                    </Field>
                                 </div>
 
                                 <div className="flex flex-wrap justify-end gap-2">
