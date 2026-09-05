@@ -30,6 +30,17 @@ test('stock count index follows the canonical admin ui contract', function () {
         ->not->toContain('text-blue-600');
 });
 
+test('shared pagination announces the authoritative page and result range', function () {
+    $source = File::get(resource_path('js/components/pagination-controls.tsx'));
+
+    expect($source)
+        ->toContain('role="status"')
+        ->toContain('aria-live="polite"')
+        ->toContain('aria-atomic="true"')
+        ->toContain('className="sr-only"')
+        ->toContain('Page ${currentPage} of ${lastPage}. ${range}.');
+});
+
 test('stock count index preserves permission aware primary actions', function () {
     $source = File::get(resource_path('js/pages/stock-counts/index.tsx'));
 

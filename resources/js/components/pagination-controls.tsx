@@ -37,6 +37,7 @@ function PaginationControls({
     }
 
     const range = `Showing ${from ?? 0} to ${to ?? 0} of ${total.toLocaleString()} ${itemLabel}`;
+    const statusMessage = `Page ${currentPage} of ${lastPage}. ${range}.`;
 
     return (
         <nav
@@ -47,6 +48,14 @@ function PaginationControls({
                 className,
             )}
         >
+            <span
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className="sr-only"
+            >
+                {statusMessage}
+            </span>
             <p className="text-sm text-muted-foreground">{range}</p>
             <div className="flex items-center gap-2">
                 {previousPageUrl === null ? (
