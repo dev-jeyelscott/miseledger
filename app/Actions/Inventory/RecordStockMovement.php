@@ -164,7 +164,7 @@ final class RecordStockMovement
                 }
 
                 $activeItem = $lockedDependencies?->inventoryItem(
-                    $inventoryItem->getKey(),
+                    $inventoryItem->id,
                 );
 
                 if ($activeItem === null) {
@@ -188,7 +188,7 @@ final class RecordStockMovement
                 }
 
                 $activeStorage = $lockedDependencies?->storageLocation(
-                    $storageLocation->getKey(),
+                    $storageLocation->id,
                 );
 
                 if ($activeStorage === null) {
@@ -491,12 +491,13 @@ final class RecordStockMovement
                     ->get()
                     ->keyBy('idempotency_key');
 
+            /** @var \Illuminate\Support\Collection<int, array{organization_id: int, location_id: int, storage_location_id: int, inventory_item_id: int}> $balanceIdentities */
             $balanceIdentities = collect($movements)
                 ->map(fn (array $movement): array => [
-                    'organization_id' => $organization->getKey(),
-                    'location_id' => $location->getKey(),
-                    'storage_location_id' => $movement['storageLocation']->getKey(),
-                    'inventory_item_id' => $movement['inventoryItem']->getKey(),
+                    'organization_id' => $organization->id,
+                    'location_id' => $location->id,
+                    'storage_location_id' => $movement['storageLocation']->id,
+                    'inventory_item_id' => $movement['inventoryItem']->id,
                 ])
                 ->unique(fn (array $identity): string => $this->balanceKeyFromIdentity($identity))
                 ->sortBy(fn (array $identity): string => $this->balanceKeyFromIdentity($identity))
@@ -530,9 +531,9 @@ final class RecordStockMovement
                 ->lockForUpdate()
                 ->get()
                 ->keyBy(fn (StockBalance $balance): string => $this->balanceKeyFromIdentity([
-                    'location_id' => $balance->location_id,
-                    'storage_location_id' => $balance->storage_location_id,
-                    'inventory_item_id' => $balance->inventory_item_id,
+                    'location_id' => (int) $balance->location_id,
+                    'storage_location_id' => (int) $balance->storage_location_id,
+                    'inventory_item_id' => (int) $balance->inventory_item_id,
                 ]));
 
             $batchDependencies = $lockedDependencies->withStockState(
@@ -608,9 +609,9 @@ final class RecordStockMovement
         InventoryItem $inventoryItem,
     ): string {
         return $this->balanceKeyFromIdentity([
-            'location_id' => $location->getKey(),
-            'storage_location_id' => $storageLocation->getKey(),
-            'inventory_item_id' => $inventoryItem->getKey(),
+            'location_id' => $location->id,
+            'storage_location_id' => $storageLocation->id,
+            'inventory_item_id' => $inventoryItem->id,
         ]);
     }
 

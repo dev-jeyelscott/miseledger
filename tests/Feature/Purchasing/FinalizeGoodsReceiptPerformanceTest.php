@@ -1,9 +1,11 @@
 <?php
 
+use App\Actions\Inventory\RecordStockMovement;
 use App\Actions\Purchasing\FinalizeGoodsReceipt;
 use App\Enums\GoodsReceiptStatus;
 use App\Enums\OrganizationRole;
 use App\Enums\PurchaseOrderStatus;
+use App\Enums\StockMovementType;
 use App\Models\GoodsReceipt;
 use App\Models\GoodsReceiptLine;
 use App\Models\InventoryItem;
@@ -12,6 +14,8 @@ use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
+use App\Models\StockBalance;
+use App\Models\StockMovement;
 use App\Models\StorageLocation;
 use App\Models\Supplier;
 use App\Models\SupplierItem;
@@ -191,4 +195,87 @@ test('preload rejects inactive accepted dependencies before writing movements', 
         $this->actor,
         $this->receipt,
     ))->toThrow(ValidationException::class);
+});
+
+test('finalization remains correct during simultaneous inventory activity', function (): void {
+    if (DB::connection()->getDriverName() !== 'pgsql') {
+        $this->markTestSkipped('PostgreSQL concurrency coverage runs in CI.');
+    }
+
+    if (! function_exists('pcntl_fork')) {
+        $this->markTestSkipped('The pcntl extension is required for concurrency coverage.');
+    }
+
+    DB::commit();
+
+    $resultPath = tempnam(sys_get_temp_dir(), 'miseledger-finalize-');
+
+    if ($resultPath === false) {
+        throw new RuntimeException('Unable to create the concurrency result file.');
+    }
+
+    $childPid = pcntl_fork();
+
+    if ($childPid === -1) {
+        unlink($resultPath);
+
+        throw new RuntimeException('Unable to fork the concurrency test process.');
+    }
+
+    if ($childPid === 0) {
+        try {
+            DB::purge('pgsql');
+
+            app(RecordStockMovement::class)->handle(
+                Organization::query()->findOrFail($this->organization->id),
+                Location::query()->findOrFail($this->location->id),
+                StorageLocation::query()->findOrFail($this->storageLocation->id),
+                InventoryItem::query()->findOrFail($this->inventoryItem->id),
+                StockMovementType::OpeningBalance,
+                '1.000000',
+                UnitOfMeasure::query()->findOrFail($this->baseUnit->id),
+                'opening_balance',
+                999,
+                now(),
+                User::query()->findOrFail($this->actor->id),
+                'concurrency:opening-balance',
+                null,
+                '10.0000',
+            );
+
+            file_put_contents($resultPath, 'success');
+            exit(0);
+        } catch (Throwable $exception) {
+            file_put_contents($resultPath, get_class($exception));
+            exit(1);
+        }
+    }
+
+    try {
+        app(FinalizeGoodsReceipt::class)->handle(
+            $this->organization,
+            $this->actor,
+            $this->receipt,
+        );
+
+        pcntl_waitpid($childPid, $status);
+
+        expect(pcntl_wifexited($status))->toBeTrue()
+            ->and(pcntl_wexitstatus($status))->toBe(0)
+            ->and(file_get_contents($resultPath))->toBe('success')
+            ->and(StockMovement::query()
+                ->where('reference_type', 'goods_receipt_line')
+                ->whereIn('reference_id', GoodsReceiptLine::query()
+                    ->where('goods_receipt_id', $this->receipt->id)
+                    ->pluck('id'))
+                ->count())->toBe(100)
+            ->and(StockMovement::query()
+                ->where('idempotency_key', 'concurrency:opening-balance')
+                ->count())->toBe(1)
+            ->and(StockBalance::query()->sole()->quantity_on_hand)->toBe('101.000000');
+    } finally {
+        if (file_exists($resultPath)) {
+            unlink($resultPath);
+        }
+    }
 });
