@@ -41,6 +41,61 @@ function usageLimitFixtureSubscription(Organization $organization): void
     $organization->update(['trial_ends_at' => null]);
 }
 
+test('dashboard usage guidance resolves organization counts in one query', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create(['role' => OrganizationRole::Owner]);
+
+    Location::factory()->for($organization)->create();
+
+    $unit = UnitOfMeasure::factory()->for($organization)->create();
+
+    InventoryItem::factory()
+        ->for($organization)
+        ->for($unit, 'baseUnitOfMeasure')
+        ->create();
+
+    $queries = [];
+
+    DB::listen(static function (QueryExecuted $query) use (&$queries): void {
+        $queries[] = strtolower($query->sql);
+    });
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('organizationContext.entitlements.usage.seats.current', 1)
+            ->where('organizationContext.entitlements.usage.locations.current', 1)
+            ->where('organizationContext.entitlements.usage.inventory_items.current', 1));
+
+    $usageOverviewQueries = collect($queries)->filter(
+        static fn (string $sql): bool => str_contains($sql, 'from "organizations"')
+            && str_contains($sql, 'organization_memberships')
+            && str_contains($sql, 'locations')
+            && str_contains($sql, 'inventory_items'),
+    );
+
+    $independentUsageCountQueries = collect($queries)->filter(
+        static fn (string $sql): bool => str_starts_with($sql, 'select count(*) as aggregate from')
+            && (
+                str_contains($sql, 'organization_memberships')
+                || str_contains($sql, 'locations')
+                || str_contains($sql, 'inventory_items')
+            ),
+    );
+
+    expect($usageOverviewQueries)
+        ->toHaveCount(1);
+    expect($independentUsageCountQueries)
+        ->toBeEmpty();
+});
+
 test('a finite member limit rejects creation once reached and leaves no partial record', function () {
     usageLimitFixturePlans(['seats' => 1, 'locations' => null, 'inventory_items' => null]);
 

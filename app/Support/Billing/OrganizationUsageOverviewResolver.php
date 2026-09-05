@@ -38,10 +38,20 @@ final class OrganizationUsageOverviewResolver
      */
     private static function currentUsage(Organization $organization): array
     {
+        $usageOrganization = Organization::query()
+            ->select('id')
+            ->whereKey($organization->getKey())
+            ->withCount([
+                'memberships',
+                'locations',
+                'inventoryItems',
+            ])
+            ->sole();
+
         return [
-            UsageLimitKey::Seats => $organization->memberships()->count(),
-            UsageLimitKey::Locations => $organization->locations()->count(),
-            UsageLimitKey::InventoryItems => $organization->inventoryItems()->count(),
+            UsageLimitKey::Seats => (int) $usageOrganization->getAttribute('memberships_count'),
+            UsageLimitKey::Locations => (int) $usageOrganization->getAttribute('locations_count'),
+            UsageLimitKey::InventoryItems => (int) $usageOrganization->getAttribute('inventory_items_count'),
         ];
     }
 
