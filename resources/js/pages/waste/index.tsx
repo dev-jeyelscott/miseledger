@@ -449,7 +449,7 @@ function BreakdownDisclosure({
 }) {
     return (
         <details
-            className="overflow-hidden rounded-xl border border-border bg-card"
+            className="group overflow-hidden rounded-xl border border-border bg-card"
             open={defaultOpen}
         >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
@@ -462,7 +462,10 @@ function BreakdownDisclosure({
 
                 <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                     {count.toLocaleString()} groups
-                    <ChevronDown className="size-4" aria-hidden="true" />
+                    <ChevronDown
+                        className="size-4 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
+                        aria-hidden="true"
+                    />
                 </span>
             </summary>
 

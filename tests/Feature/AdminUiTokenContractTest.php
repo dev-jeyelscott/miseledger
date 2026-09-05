@@ -109,6 +109,31 @@ test('native select preserves the canonical native form control contract', funct
         ->toContain('disabled:opacity-50');
 });
 
+test('inventory report item searches keep field metadata on their native inputs', function () {
+    $searchInput = File::get(
+        resource_path('js/components/ui/search-input.tsx'),
+    );
+    $lowStock = File::get(resource_path('js/pages/inventory/low-stock.tsx'));
+    $stockOnHand = File::get(
+        resource_path('js/pages/inventory/stock-on-hand.tsx'),
+    );
+
+    expect($searchInput)
+        ->toContain('React.ComponentProps<typeof Input>')
+        ->toContain('<Input className={cn(\'pl-9\', className)} {...props} />')
+        ->toContain('aria-hidden="true"');
+
+    expect($lowStock)
+        ->toContain("import { SearchInput } from '@/components/ui/search-input';")
+        ->toContain('<SearchInput')
+        ->not->toContain('<div className="relative">');
+
+    expect($stockOnHand)
+        ->toContain("import { SearchInput } from '@/components/ui/search-input';")
+        ->toContain('<SearchInput')
+        ->not->toContain('<div className="relative">');
+});
+
 test('shared inventory UI primitives follow the canonical admin contract', function () {
     $field = File::get(resource_path('js/components/ui/field.tsx'));
     $statusBadge = File::get(resource_path('js/components/status-badge.tsx'));

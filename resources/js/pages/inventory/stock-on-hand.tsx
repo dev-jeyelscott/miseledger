@@ -16,8 +16,8 @@ import { FilterToolbar } from '@/components/filter-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
+import { SearchInput } from '@/components/ui/search-input';
 import { dashboard } from '@/routes';
 
 type StockOnHandRow = {
@@ -230,21 +230,13 @@ export default function StockOnHandReport({
                                 </Field>
 
                                 <Field id="item" label="Item">
-                                    <div className="relative">
-                                        <Search
-                                            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                                            aria-hidden="true"
-                                        />
-
-                                        <Input
-                                            type="search"
-                                            name="item"
-                                            defaultValue={itemSearchDefault}
-                                            placeholder="Search by item ID, SKU, or name"
-                                            className="pl-9"
-                                            autoComplete="off"
-                                        />
-                                    </div>
+                                    <SearchInput
+                                        type="search"
+                                        name="item"
+                                        defaultValue={itemSearchDefault}
+                                        placeholder="Search by item ID, SKU, or name"
+                                        autoComplete="off"
+                                    />
                                 </Field>
 
                                 <div className="flex items-end gap-2 lg:col-span-2 xl:col-span-1">

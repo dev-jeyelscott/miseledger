@@ -22,8 +22,8 @@ import type { StatusBadgeProps } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
+import { SearchInput } from '@/components/ui/search-input';
 import { dashboard } from '@/routes';
 
 type LowStockStatus = 'out_of_stock' | 'negative';
@@ -294,21 +294,13 @@ export default function LowStockReport({
                                     label="Item"
                                     error={errors.item}
                                 >
-                                    <div className="relative">
-                                        <Search
-                                            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                                            aria-hidden="true"
-                                        />
-
-                                        <Input
-                                            type="search"
-                                            name="item"
-                                            defaultValue={itemFilterValue}
-                                            placeholder="Search by name, SKU, or item ID"
-                                            className="pl-9"
-                                            autoComplete="off"
-                                        />
-                                    </div>
+                                    <SearchInput
+                                        type="search"
+                                        name="item"
+                                        defaultValue={itemFilterValue}
+                                        placeholder="Search by name, SKU, or item ID"
+                                        autoComplete="off"
+                                    />
                                 </Field>
 
                                 <div className="flex items-end gap-2 md:col-span-2 xl:col-span-1">
