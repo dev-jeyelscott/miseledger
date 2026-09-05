@@ -98,10 +98,12 @@ final class LockedDependencies
         return $movement instanceof StockMovement ? $movement : null;
     }
 
+    /**
+     * @param  Collection<string, StockBalance>  $stockBalances
+     * @param  Collection<string, StockMovement>  $idempotentMovements
+     */
     public function withStockState(
-        /** @var Collection<string, StockBalance> $stockBalances */
         Collection $stockBalances,
-        /** @var Collection<string, StockMovement> $idempotentMovements */
         Collection $idempotentMovements,
     ): self {
         return new self(
