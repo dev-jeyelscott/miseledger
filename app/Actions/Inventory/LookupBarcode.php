@@ -22,6 +22,22 @@ final class LookupBarcode
             )
             ->where('barcode', $value)
             ->where('active', true)
+            ->whereHas(
+                'inventoryItem',
+                fn ($query) => $query->where('active', true),
+            )
+            ->where(function ($query): void {
+                $query
+                    ->whereNull('inventory_item_unit_id')
+                    ->orWhereHas('inventoryItemUnit', function ($query): void {
+                        $query
+                            ->where('active', true)
+                            ->whereHas(
+                                'unitOfMeasure',
+                                fn ($query) => $query->where('active', true),
+                            );
+                    });
+            })
             ->with([
                 'inventoryItem',
                 'inventoryItemUnit.unitOfMeasure',
