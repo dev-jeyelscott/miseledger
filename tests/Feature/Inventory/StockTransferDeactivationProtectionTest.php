@@ -135,7 +135,7 @@ beforeEach(function () {
     );
 });
 
-test('in transit dependencies cannot be deactivated and the transfer remains receivable', function () {
+test('in transit dependencies cannot be deactivated and on-hand stock remains protected after receipt', function () {
     $transfer = app(ShipStockTransfer::class)->handle(
         $this->organization,
         $this->owner,
@@ -247,12 +247,7 @@ test('in transit dependencies cannot be deactivated and the transfer remains rec
                 'active' => false,
             ],
         )
-        ->assertRedirect(
-            route(
-                'inventory.items.edit',
-                $this->inventoryItem,
-            ),
-        );
+        ->assertSessionHasErrors('active');
 
     $this->withSession([
         'active_organization_id' => $this->organization->id,
@@ -273,15 +268,7 @@ test('in transit dependencies cannot be deactivated and the transfer remains rec
                 'active' => false,
             ],
         )
-        ->assertRedirect(
-            route(
-                'organizations.locations.storage-locations.index',
-                [
-                    $this->organization,
-                    $this->destinationLocation,
-                ],
-            ),
-        );
+        ->assertSessionHasErrors('active');
 
     $this->withSession([
         'active_organization_id' => $this->organization->id,
@@ -301,26 +288,36 @@ test('in transit dependencies cannot be deactivated and the transfer remains rec
                 'active' => false,
             ],
         )
-        ->assertRedirect(
-            route(
-                'organizations.locations.index',
-                $this->organization,
-            ),
-        );
+        ->assertSessionHasErrors('active');
 
     expect($this->inventoryItem->refresh()->active)
-        ->toBeFalse()
+        ->toBeTrue()
         ->and($this->destinationStorage->refresh()->active)
-        ->toBeFalse()
+        ->toBeTrue()
         ->and($this->destinationLocation->refresh()->active)
-        ->toBeFalse();
+        ->toBeTrue();
 });
 
-test('shipped transfer does not prevent source deactivation after stock has left', function () {
+test('shipped transfer does not prevent source deactivation after its balance reaches zero', function () {
     $transfer = app(ShipStockTransfer::class)->handle(
         $this->organization,
         $this->owner,
         $this->stockTransfer,
+    );
+
+    app(RecordStockMovement::class)->handle(
+        organization: $this->organization,
+        location: $this->sourceLocation,
+        storageLocation: $this->sourceStorage,
+        inventoryItem: $this->inventoryItem,
+        type: StockMovementType::ManualAdjustment,
+        baseQuantity: '-6.000000',
+        baseUnitOfMeasure: $this->baseUnit,
+        referenceType: 'stock_transfer_deactivation_test',
+        referenceId: $transfer->id,
+        occurredAt: now(),
+        actor: $this->owner,
+        idempotencyKey: "stock-transfer-deactivation:clear-source:{$transfer->id}",
     );
 
     $this->withSession([
@@ -400,6 +397,109 @@ test('shipped transfer does not prevent source deactivation after stock has left
 
     expect($received->status)
         ->toBe(StockTransferStatus::Received);
+});
+
+test('non-zero on-hand stock prevents deactivation of its master data', function () {
+    $this->withSession([
+        'active_organization_id' => $this->organization->id,
+    ])
+        ->actingAs($this->owner)
+        ->put(
+            route('inventory.items.update', $this->inventoryItem),
+            [
+                'name' => $this->inventoryItem->name,
+                'sku' => $this->inventoryItem->sku,
+                'base_unit_of_measure_id' => $this->baseUnit->id,
+                'type' => InventoryItemType::Ingredient->value,
+                'yield_percentage' => '100.00',
+                'active' => false,
+            ],
+        )
+        ->assertSessionHasErrors('active');
+
+    $this->withSession([
+        'active_organization_id' => $this->organization->id,
+    ])
+        ->actingAs($this->owner)
+        ->put(
+            route(
+                'organizations.locations.storage-locations.update',
+                [
+                    $this->organization,
+                    $this->sourceLocation,
+                    $this->sourceStorage,
+                ],
+            ),
+            [
+                'name' => $this->sourceStorage->name,
+                'code' => $this->sourceStorage->code,
+                'active' => false,
+            ],
+        )
+        ->assertSessionHasErrors('active');
+
+    $this->withSession([
+        'active_organization_id' => $this->organization->id,
+    ])
+        ->actingAs($this->owner)
+        ->put(
+            route(
+                'organizations.locations.update',
+                [$this->organization, $this->sourceLocation],
+            ),
+            [
+                'name' => $this->sourceLocation->name,
+                'code' => $this->sourceLocation->code,
+                'active' => false,
+            ],
+        )
+        ->assertSessionHasErrors('active');
+
+    expect($this->inventoryItem->refresh()->active)
+        ->toBeTrue()
+        ->and($this->sourceStorage->refresh()->active)
+        ->toBeTrue()
+        ->and($this->sourceLocation->refresh()->active)
+        ->toBeTrue();
+});
+
+test('an inventory item with zero on-hand stock can be deactivated', function () {
+    app(RecordStockMovement::class)->handle(
+        organization: $this->organization,
+        location: $this->sourceLocation,
+        storageLocation: $this->sourceStorage,
+        inventoryItem: $this->inventoryItem,
+        type: StockMovementType::ManualAdjustment,
+        baseQuantity: '-10.000000',
+        baseUnitOfMeasure: $this->baseUnit,
+        referenceType: 'stock_transfer_deactivation_test',
+        referenceId: $this->inventoryItem->id,
+        occurredAt: now(),
+        actor: $this->owner,
+        idempotencyKey: "stock-transfer-deactivation:clear-item:{$this->inventoryItem->id}",
+    );
+
+    $this->withSession([
+        'active_organization_id' => $this->organization->id,
+    ])
+        ->actingAs($this->owner)
+        ->put(
+            route('inventory.items.update', $this->inventoryItem),
+            [
+                'name' => $this->inventoryItem->name,
+                'sku' => $this->inventoryItem->sku,
+                'base_unit_of_measure_id' => $this->baseUnit->id,
+                'type' => InventoryItemType::Ingredient->value,
+                'yield_percentage' => '100.00',
+                'active' => false,
+            ],
+        )
+        ->assertRedirect(
+            route('inventory.items.edit', $this->inventoryItem),
+        );
+
+    expect($this->inventoryItem->refresh()->active)
+        ->toBeFalse();
 });
 
 test('draft transfer cannot be shipped after its destination location is deactivated', function () {

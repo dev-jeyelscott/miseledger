@@ -6,6 +6,7 @@ use App\Enums\StockTransferStatus;
 use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
+use App\Models\StockBalance;
 use App\Models\StockTransfer;
 use App\Models\StockTransferLine;
 use App\Models\StorageLocation;
@@ -35,6 +36,13 @@ final class EnsureStockTransferDependencyCanBeDeactivated
                 'This location cannot be deactivated while a shipped stock transfer is awaiting receipt here.',
             ),
         );
+
+        $this->assertNoNonZeroBalance(
+            StockBalance::query()
+                ->where('organization_id', $organization->getKey())
+                ->where('location_id', $location->getKey()),
+            __('This location cannot be deactivated while stock remains on hand.'),
+        );
     }
 
     /**
@@ -57,6 +65,13 @@ final class EnsureStockTransferDependencyCanBeDeactivated
             __(
                 'This storage location cannot be deactivated while a shipped stock transfer is awaiting receipt here.',
             ),
+        );
+
+        $this->assertNoNonZeroBalance(
+            StockBalance::query()
+                ->where('organization_id', $organization->getKey())
+                ->where('storage_location_id', $storageLocation->getKey()),
+            __('This storage location cannot be deactivated while stock remains on hand.'),
         );
     }
 
@@ -85,6 +100,13 @@ final class EnsureStockTransferDependencyCanBeDeactivated
             __(
                 'This inventory item cannot be deactivated while it is included in a shipped stock transfer awaiting receipt.',
             ),
+        );
+
+        $this->assertNoNonZeroBalance(
+            StockBalance::query()
+                ->where('organization_id', $organization->getKey())
+                ->where('inventory_item_id', $inventoryItem->getKey()),
+            __('This inventory item cannot be deactivated while stock remains on hand.'),
         );
     }
 
@@ -119,6 +141,30 @@ final class EnsureStockTransferDependencyCanBeDeactivated
         );
 
         if (! $hasShippedTransfer) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'active' => $message,
+        ]);
+    }
+
+    /**
+     * Lock non-zero balance projections and preserve the active master-data
+     * dependencies required for ledger-safe stock mutations.
+     *
+     * @param  Builder<StockBalance>  $query
+     */
+    private function assertNoNonZeroBalance(
+        Builder $query,
+        string $message,
+    ): void {
+        $hasNonZeroBalance = $query
+            ->where('quantity_on_hand', '<>', '0')
+            ->lockForUpdate()
+            ->exists();
+
+        if (! $hasNonZeroBalance) {
             return;
         }
 
