@@ -261,9 +261,9 @@ export default function OrganizationMembers({
 
                 <section
                     aria-label="Organization members"
-                    className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card dark:border-sidebar-border"
+                    className="overflow-hidden rounded-xl border border-border bg-card"
                 >
-                    <div className="flex flex-col gap-4 border-b border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                    <div className="flex flex-col gap-4 border-b border-border p-4">
                         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
                             <div>
                                 <h2 className="font-medium">Current members</h2>
@@ -388,7 +388,7 @@ export default function OrganizationMembers({
                     ) : (
                         <>
                             <div
-                                className="divide-y divide-sidebar-border/70 md:hidden dark:divide-sidebar-border"
+                                className="divide-y divide-border md:hidden"
                                 data-testid="mobile-organization-members"
                             >
                                 {filteredMembers.map((member) => (
@@ -423,7 +423,7 @@ export default function OrganizationMembers({
                             <div className="hidden overflow-x-auto md:block">
                                 <table className="w-full min-w-[680px] text-sm">
                                     <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-                                        <tr className="border-b border-sidebar-border/70 dark:border-sidebar-border">
+                                        <tr className="border-b border-border">
                                             <th
                                                 scope="col"
                                                 className="px-4 py-3 font-medium"
@@ -449,7 +449,7 @@ export default function OrganizationMembers({
                                         {filteredMembers.map((member) => (
                                             <tr
                                                 key={member.id}
-                                                className="border-b border-sidebar-border/70 transition-colors last:border-b-0 hover:bg-muted/30 dark:border-sidebar-border"
+                                                className="border-b border-border transition-colors last:border-b-0 hover:bg-muted/30"
                                             >
                                                 <td className="px-4 py-3">
                                                     <div className="flex items-center gap-3">
@@ -487,7 +487,7 @@ export default function OrganizationMembers({
                         </>
                     )}
 
-                    <div className="border-t border-sidebar-border/70 bg-muted/20 px-4 py-3 text-xs text-muted-foreground dark:border-sidebar-border">
+                    <div className="border-t border-border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
                         Only registered MiseLedger users can be added. Access is
                         determined by the organization role assigned to their
                         membership.
