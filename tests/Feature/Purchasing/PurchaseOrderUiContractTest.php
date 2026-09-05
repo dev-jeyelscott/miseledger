@@ -23,6 +23,8 @@ test('purchase order detail uses confirmation dialogs and history-aware navigati
         ->toContain('useHttp')
         ->toContain('PurchaseOrderController.supplierItems.url(')
         ->toContain('Load more items')
+        ->toContain('id={`line-${line.clientId}-supplier-item`}')
+        ->toContain('id={`line-${line.clientId}-quantity`}')
         ->toContain('replace: purchaseOrder === null')
         ->toContain("router.on('before'")
         ->toContain("window.addEventListener('beforeunload'")

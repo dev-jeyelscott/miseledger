@@ -738,6 +738,7 @@ export default function PurchaseOrderForm({
                                                 }
                                             >
                                                 <NativeSelect
+                                                    id={`line-${line.clientId}-supplier-item`}
                                                     name={`lines[${index}][supplier_item_id]`}
                                                     value={line.supplierItemId}
                                                     onChange={(event) =>
@@ -789,6 +790,7 @@ export default function PurchaseOrderForm({
                                                 }
                                             >
                                                 <Input
+                                                    id={`line-${line.clientId}-quantity`}
                                                     name={`lines[${index}][ordered_quantity]`}
                                                     type="number"
                                                     min="0.000001"
