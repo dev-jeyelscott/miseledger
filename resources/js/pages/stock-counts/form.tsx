@@ -467,7 +467,7 @@ function CountEvidence({
             </div>
 
             <div className="hidden overflow-x-auto md:block">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[70rem] text-sm">
                     <thead className="border-b border-border bg-muted/40 text-left">
                         <tr>
                             <th scope="col" className="px-4 py-3 font-medium">

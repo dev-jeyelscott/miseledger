@@ -93,6 +93,7 @@ test('stock count form follows the canonical lifecycle workspace contract', func
         ->toContain("behavior: prefersReducedMotion ? 'auto' : 'smooth'")
         ->toContain('md:hidden')
         ->toContain('hidden overflow-x-auto md:block')
+        ->toContain('w-full min-w-[70rem] text-sm')
         ->toContain('rounded-xl border border-border bg-card')
         ->not->toContain('border-sidebar-border')
         ->not->toContain('<Label>')
