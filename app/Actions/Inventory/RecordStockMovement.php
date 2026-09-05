@@ -15,6 +15,7 @@ use Brick\Math\BigDecimal;
 use Brick\Math\Exception\NumberFormatException;
 use Brick\Math\RoundingMode;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -52,6 +53,7 @@ final class RecordStockMovement
         ?string $notes = null,
         ?string $inboundUnitCost = null,
         ?bool &$wasCreated = null,
+        ?LockedDependencies $lockedDependencies = null,
     ): StockMovement {
         if ($wasCreated !== null) {
             $wasCreated = false;
@@ -78,7 +80,7 @@ final class RecordStockMovement
         );
 
         try {
-            return DB::transaction(function () use (
+            $operation = function () use (
                 $organization,
                 $location,
                 $storageLocation,
@@ -94,9 +96,12 @@ final class RecordStockMovement
                 $notes,
                 $explicitInboundCost,
                 &$wasCreated,
+                $lockedDependencies,
             ): StockMovement {
                 if (
                     $actor !== null
+                    && ($lockedDependencies === null
+                        || ! $lockedDependencies->actorMembershipValidated)
                     && $actor->organizationMemberships()
                         ->where(
                             'organization_id',
@@ -111,10 +116,12 @@ final class RecordStockMovement
                     ]);
                 }
 
-                $existing = $this->existingIdempotentMovement(
-                    $organization,
-                    $idempotencyKey,
-                );
+                $existing = $lockedDependencies !== null && $idempotencyKey !== null
+                    ? $lockedDependencies->idempotentMovement($idempotencyKey)
+                    : $this->existingIdempotentMovement(
+                        $organization,
+                        $idempotencyKey,
+                    );
 
                 if ($existing !== null) {
                     $this->assertIdempotentMatch(
@@ -134,15 +141,19 @@ final class RecordStockMovement
                     return $existing;
                 }
 
-                $activeLocation = Location::query()
-                    ->where(
-                        'organization_id',
-                        $organization->getKey(),
-                    )
-                    ->whereKey($location->getKey())
-                    ->where('active', true)
-                    ->lockForUpdate()
-                    ->first();
+                $activeLocation = $lockedDependencies?->location;
+
+                if ($activeLocation === null) {
+                    $activeLocation = Location::query()
+                        ->where(
+                            'organization_id',
+                            $organization->getKey(),
+                        )
+                        ->whereKey($location->getKey())
+                        ->where('active', true)
+                        ->lockForUpdate()
+                        ->first();
+                }
 
                 if ($activeLocation === null) {
                     throw ValidationException::withMessages([
@@ -152,37 +163,21 @@ final class RecordStockMovement
                     ]);
                 }
 
-                $activeStorage = StorageLocation::query()
-                    ->where(
-                        'organization_id',
-                        $organization->getKey(),
-                    )
-                    ->where(
-                        'location_id',
-                        $activeLocation->getKey(),
-                    )
-                    ->whereKey($storageLocation->getKey())
-                    ->where('active', true)
-                    ->lockForUpdate()
-                    ->first();
+                $activeItem = $lockedDependencies?->inventoryItem(
+                    $inventoryItem->getKey(),
+                );
 
-                if ($activeStorage === null) {
-                    throw ValidationException::withMessages([
-                        'storage_location' => __(
-                            'The storage location does not belong to the selected active location.',
-                        ),
-                    ]);
+                if ($activeItem === null) {
+                    $activeItem = InventoryItem::query()
+                        ->where(
+                            'organization_id',
+                            $organization->getKey(),
+                        )
+                        ->whereKey($inventoryItem->getKey())
+                        ->where('active', true)
+                        ->lockForUpdate()
+                        ->first();
                 }
-
-                $activeItem = InventoryItem::query()
-                    ->where(
-                        'organization_id',
-                        $organization->getKey(),
-                    )
-                    ->whereKey($inventoryItem->getKey())
-                    ->where('active', true)
-                    ->lockForUpdate()
-                    ->first();
 
                 if ($activeItem === null) {
                     throw ValidationException::withMessages([
@@ -192,16 +187,50 @@ final class RecordStockMovement
                     ]);
                 }
 
-                $baseUnit = UnitOfMeasure::query()
-                    ->where(
-                        'organization_id',
-                        $organization->getKey(),
-                    )
-                    ->whereKey(
-                        $activeItem->base_unit_of_measure_id,
-                    )
-                    ->where('active', true)
-                    ->first();
+                $activeStorage = $lockedDependencies?->storageLocation(
+                    $storageLocation->getKey(),
+                );
+
+                if ($activeStorage === null) {
+                    $activeStorage = StorageLocation::query()
+                        ->where(
+                            'organization_id',
+                            $organization->getKey(),
+                        )
+                        ->where(
+                            'location_id',
+                            $activeLocation->getKey(),
+                        )
+                        ->whereKey($storageLocation->getKey())
+                        ->where('active', true)
+                        ->lockForUpdate()
+                        ->first();
+                }
+
+                if ($activeStorage === null) {
+                    throw ValidationException::withMessages([
+                        'storage_location' => __(
+                            'The storage location does not belong to the selected active location.',
+                        ),
+                    ]);
+                }
+
+                $baseUnit = $lockedDependencies?->baseUnit(
+                    $activeItem->base_unit_of_measure_id,
+                );
+
+                if ($baseUnit === null) {
+                    $baseUnit = UnitOfMeasure::query()
+                        ->where(
+                            'organization_id',
+                            $organization->getKey(),
+                        )
+                        ->whereKey(
+                            $activeItem->base_unit_of_measure_id,
+                        )
+                        ->where('active', true)
+                        ->first();
+                }
 
                 if ($baseUnit === null) {
                     throw ValidationException::withMessages([
@@ -222,7 +251,7 @@ final class RecordStockMovement
                     ]);
                 }
 
-                if (! Organization::query()
+                if ($lockedDependencies === null && ! Organization::query()
                     ->whereKey($organization->getKey())
                     ->where('active', true)
                     ->exists()) {
@@ -233,17 +262,26 @@ final class RecordStockMovement
                     ]);
                 }
 
-                $balance = $this->lockBalance(
-                    $organization,
+                $balanceKey = $this->balanceKey(
                     $activeLocation,
                     $activeStorage,
                     $activeItem,
                 );
 
-                $existing = $this->existingIdempotentMovement(
-                    $organization,
-                    $idempotencyKey,
-                );
+                $balance = $lockedDependencies?->stockBalance($balanceKey)
+                    ?? $this->lockBalance(
+                        $organization,
+                        $activeLocation,
+                        $activeStorage,
+                        $activeItem,
+                    );
+
+                $existing = $lockedDependencies !== null && $idempotencyKey !== null
+                    ? $lockedDependencies->idempotentMovement($idempotencyKey)
+                    : $this->existingIdempotentMovement(
+                        $organization,
+                        $idempotencyKey,
+                    );
 
                 if ($existing !== null) {
                     $this->assertIdempotentMatch(
@@ -378,7 +416,11 @@ final class RecordStockMovement
                 ])->saveQuietly();
 
                 return $movement;
-            }, 3);
+            };
+
+            return $lockedDependencies !== null && DB::transactionLevel() > 0
+                ? $operation()
+                : DB::transaction($operation, 3);
         } catch (
             UniqueConstraintViolationException $exception
         ) {
@@ -418,6 +460,111 @@ final class RecordStockMovement
     }
 
     /**
+     * Record several movements while sharing one dependency and stock-state preload.
+     *
+     * @param  array<int, array{storageLocation: StorageLocation, inventoryItem: InventoryItem, type: StockMovementType, baseQuantity: string, baseUnitOfMeasure: UnitOfMeasure, referenceType: string, referenceId: int, occurredAt: CarbonInterface, actor?: User|null, idempotencyKey?: string|null, notes?: string|null, inboundUnitCost?: string|null}>  $movements
+     * @return Collection<int, StockMovement>
+     */
+    public function handleBatch(
+        Organization $organization,
+        Location $location,
+        array $movements,
+        LockedDependencies $lockedDependencies,
+    ): Collection {
+        $operation = function () use (
+            $organization,
+            $location,
+            $movements,
+            $lockedDependencies,
+        ): Collection {
+            $idempotencyKeys = collect($movements)
+                ->pluck('idempotencyKey')
+                ->filter()
+                ->unique()
+                ->values();
+
+            $idempotentMovements = $idempotencyKeys->isEmpty()
+                ? new Collection
+                : StockMovement::query()
+                    ->where('organization_id', $organization->getKey())
+                    ->whereIn('idempotency_key', $idempotencyKeys)
+                    ->get()
+                    ->keyBy('idempotency_key');
+
+            $balanceIdentities = collect($movements)
+                ->map(fn (array $movement): array => [
+                    'organization_id' => $organization->getKey(),
+                    'location_id' => $location->getKey(),
+                    'storage_location_id' => $movement['storageLocation']->getKey(),
+                    'inventory_item_id' => $movement['inventoryItem']->getKey(),
+                ])
+                ->unique(fn (array $identity): string => $this->balanceKeyFromIdentity($identity))
+                ->sortBy(fn (array $identity): string => $this->balanceKeyFromIdentity($identity))
+                ->values();
+
+            if ($balanceIdentities->isEmpty()) {
+                return new Collection;
+            }
+
+            $now = now();
+
+            StockBalance::query()->insertOrIgnore(
+                $balanceIdentities->map(fn (array $identity): array => [
+                    ...$identity,
+                    'quantity_on_hand' => '0.000000',
+                    'average_unit_cost' => '0.0000',
+                    'inventory_value' => '0.0000',
+                    'last_movement_at' => null,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->all(),
+            );
+
+            $stockBalances = StockBalance::query()
+                ->where('organization_id', $organization->getKey())
+                ->where('location_id', $location->getKey())
+                ->whereIn('storage_location_id', $balanceIdentities->pluck('storage_location_id'))
+                ->whereIn('inventory_item_id', $balanceIdentities->pluck('inventory_item_id'))
+                ->orderBy('storage_location_id')
+                ->orderBy('inventory_item_id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy(fn (StockBalance $balance): string => $this->balanceKeyFromIdentity([
+                    'location_id' => $balance->location_id,
+                    'storage_location_id' => $balance->storage_location_id,
+                    'inventory_item_id' => $balance->inventory_item_id,
+                ]));
+
+            $batchDependencies = $lockedDependencies->withStockState(
+                $stockBalances,
+                $idempotentMovements,
+            );
+
+            return collect($movements)->map(fn (array $movement): StockMovement => $this->handle(
+                organization: $organization,
+                location: $location,
+                storageLocation: $movement['storageLocation'],
+                inventoryItem: $movement['inventoryItem'],
+                type: $movement['type'],
+                baseQuantity: $movement['baseQuantity'],
+                baseUnitOfMeasure: $movement['baseUnitOfMeasure'],
+                referenceType: $movement['referenceType'],
+                referenceId: $movement['referenceId'],
+                occurredAt: $movement['occurredAt'],
+                actor: $movement['actor'] ?? null,
+                idempotencyKey: $movement['idempotencyKey'] ?? null,
+                notes: $movement['notes'] ?? null,
+                inboundUnitCost: $movement['inboundUnitCost'] ?? null,
+                lockedDependencies: $batchDependencies,
+            ));
+        };
+
+        return DB::transactionLevel() > 0
+            ? $operation()
+            : DB::transaction($operation, 3);
+    }
+
+    /**
      * Create the balance row safely, then lock the authoritative projection row.
      */
     private function lockBalance(
@@ -447,6 +594,28 @@ final class RecordStockMovement
             ->where($identity)
             ->lockForUpdate()
             ->firstOrFail();
+    }
+
+    private function balanceKey(
+        Location $location,
+        StorageLocation $storageLocation,
+        InventoryItem $inventoryItem,
+    ): string {
+        return $this->balanceKeyFromIdentity([
+            'location_id' => $location->getKey(),
+            'storage_location_id' => $storageLocation->getKey(),
+            'inventory_item_id' => $inventoryItem->getKey(),
+        ]);
+    }
+
+    /** @param  array<string, int>  $identity */
+    private function balanceKeyFromIdentity(array $identity): string
+    {
+        return implode(':', [
+            $identity['location_id'],
+            $identity['storage_location_id'],
+            $identity['inventory_item_id'],
+        ]);
     }
 
     /**
