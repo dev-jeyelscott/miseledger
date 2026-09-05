@@ -48,6 +48,11 @@ export type OrganizationMembership = {
     permissions: OrganizationPermission[];
 };
 
+export type OrganizationAIAccessContext = {
+    canUse: boolean;
+    memberEnabled: boolean;
+};
+
 export type OrganizationSubscriptionContext = {
     plan: string | null;
     status: string | null;
@@ -64,7 +69,11 @@ export type OrganizationSubscriptionContext = {
 };
 
 export type FeatureCode =
-    'purchasing' | 'recipes' | 'reports.export' | 'locations.multi';
+    | 'purchasing'
+    | 'recipes'
+    | 'reports.export'
+    | 'locations.multi'
+    | 'ai.assistant';
 
 export type OrganizationUsageOverview = {
     current: number;
@@ -96,4 +105,5 @@ export type OrganizationContext = {
     memberships: OrganizationMembership[];
     subscription: OrganizationSubscriptionContext | null;
     entitlements: OrganizationEntitlementContext | null;
+    ai: OrganizationAIAccessContext | null;
 };

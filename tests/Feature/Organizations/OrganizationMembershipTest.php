@@ -369,3 +369,86 @@ test('duplicate organization membership is rejected', function () {
 
     $this->assertDatabaseCount('organization_memberships', 2);
 });
+
+test('an owner can enable a member AI access without changing their organization role', function () {
+    $owner = User::factory()->create();
+    $member = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($owner)
+        ->create(['role' => OrganizationRole::Owner]);
+    $membership = OrganizationMembership::factory()
+        ->for($organization)
+        ->for($member)
+        ->create([
+            'role' => OrganizationRole::KitchenStaff,
+            'ai_enabled' => false,
+        ]);
+
+    $this->actingAs($owner)
+        ->put(route('organizations.members.ai-access.update', [
+            'organization' => $organization,
+            'membership' => $membership,
+        ]), ['ai_enabled' => true])
+        ->assertRedirect(route('organizations.members.index', $organization));
+
+    $this->assertDatabaseHas('organization_memberships', [
+        'id' => $membership->id,
+        'role' => OrganizationRole::KitchenStaff->value,
+        'ai_enabled' => true,
+    ]);
+});
+
+test('a non-owner cannot change a member AI access', function () {
+    $manager = User::factory()->create();
+    $member = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($manager)
+        ->create(['role' => OrganizationRole::Manager]);
+    $membership = OrganizationMembership::factory()
+        ->for($organization)
+        ->for($member)
+        ->create(['ai_enabled' => false]);
+
+    $this->actingAs($manager)
+        ->put(route('organizations.members.ai-access.update', [
+            'organization' => $organization,
+            'membership' => $membership,
+        ]), ['ai_enabled' => true])
+        ->assertForbidden();
+
+    $this->assertDatabaseHas('organization_memberships', [
+        'id' => $membership->id,
+        'ai_enabled' => false,
+    ]);
+});
+
+test('the active organization exposes only the current members AI capability', function () {
+    $owner = User::factory()->create();
+    $organization = Organization::factory()->create([
+        'trial_ends_at' => now()->addDay(),
+    ]);
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($owner)
+        ->create([
+            'role' => OrganizationRole::Owner,
+            'ai_enabled' => false,
+        ]);
+
+    $this->withSession(['active_organization_id' => $organization->id])
+        ->actingAs($owner)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page) => $page
+                ->where('organizationContext.ai.canUse', true)
+                ->where('organizationContext.ai.memberEnabled', true),
+        );
+});

@@ -19,6 +19,8 @@ final class FeatureCode
 
     public const string MultiLocation = 'locations.multi';
 
+    public const string Assistant = 'ai.assistant';
+
     /**
      * @return list<string>
      */
@@ -29,6 +31,7 @@ final class FeatureCode
             self::Recipes,
             self::ReportsExport,
             self::MultiLocation,
+            self::Assistant,
         ];
     }
 }

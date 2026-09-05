@@ -251,6 +251,7 @@ test('the shared entitlement context resolves the same feature grants used to en
             'recipes' => false,
             'reports.export' => false,
             'locations.multi' => false,
+            'ai.assistant' => false,
         ]);
 
     $organization->subscription(config('billing.subscription_type'))->update([
@@ -268,6 +269,7 @@ test('the shared entitlement context resolves the same feature grants used to en
             'recipes' => true,
             'reports.export' => true,
             'locations.multi' => true,
+            'ai.assistant' => false,
         ]);
 });
 

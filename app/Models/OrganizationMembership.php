@@ -15,14 +15,20 @@ use Illuminate\Support\Carbon;
  * @property int $organization_id
  * @property int $user_id
  * @property OrganizationRole $role
+ * @property bool $ai_enabled
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['organization_id', 'user_id', 'role'])]
+#[Fillable(['organization_id', 'user_id', 'role', 'ai_enabled'])]
 class OrganizationMembership extends Model
 {
     /** @use HasFactory<OrganizationMembershipFactory> */
     use HasFactory;
+
+    /** @var array<string, bool> */
+    protected $attributes = [
+        'ai_enabled' => false,
+    ];
 
     /**
      * Get the organization this membership belongs to.
@@ -53,6 +59,7 @@ class OrganizationMembership extends Model
     {
         return [
             'role' => OrganizationRole::class,
+            'ai_enabled' => 'boolean',
         ];
     }
 }

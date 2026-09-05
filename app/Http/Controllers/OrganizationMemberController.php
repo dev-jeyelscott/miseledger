@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Organizations\AddOrganizationMember;
+use App\Actions\Organizations\ToggleOrganizationMemberAIAccess;
 use App\Enums\OrganizationPermission;
 use App\Enums\OrganizationRole;
 use App\Http\Requests\Organizations\StoreOrganizationMemberRequest;
+use App\Http\Requests\Organizations\UpdateOrganizationMemberAIAccessRequest;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
@@ -93,5 +95,29 @@ class OrganizationMemberController extends Controller
             'organizations.members.index',
             $organization,
         );
+    }
+
+    /**
+     * Enable or disable AI access for a non-owner organization member.
+     */
+    public function updateAIAccess(
+        UpdateOrganizationMemberAIAccessRequest $request,
+        Organization $organization,
+        OrganizationMembership $membership,
+        ToggleOrganizationMemberAIAccess $toggleOrganizationMemberAIAccess,
+    ): RedirectResponse {
+        $toggleOrganizationMemberAIAccess->handle(
+            organization: $organization,
+            actor: $request->user(),
+            membership: $membership,
+            aiEnabled: (bool) $request->validated('ai_enabled'),
+        );
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => __('Organization member AI access updated.'),
+        ]);
+
+        return to_route('organizations.members.index', $organization);
     }
 }

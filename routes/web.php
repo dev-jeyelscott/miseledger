@@ -153,6 +153,13 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         [OrganizationMemberController::class, 'store'],
     )->name('organizations.members.store');
 
+    Route::put(
+        'organizations/{organization}/members/{membership}/ai-access',
+        [OrganizationMemberController::class, 'updateAIAccess'],
+    )
+        ->scopeBindings()
+        ->name('organizations.members.ai-access.update');
+
     Route::get(
         'organizations/{organization}/billing',
         [OrganizationBillingController::class, 'show'],

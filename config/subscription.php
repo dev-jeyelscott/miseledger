@@ -125,7 +125,9 @@ return [
                     'yearly' => env('PAYMONGO_PLAN_STARTER_YEARLY'),
                 ],
             ],
-            'features' => [],
+            'features' => [
+                'ai.assistant',
+            ],
             'limits' => [
                 'seats' => 3,
                 'locations' => 1,
@@ -154,6 +156,7 @@ return [
                 'recipes',
                 'reports.export',
                 'locations.multi',
+                'ai.assistant',
             ],
             'limits' => [
                 'seats' => 10,
@@ -183,6 +186,7 @@ return [
                 'recipes',
                 'reports.export',
                 'locations.multi',
+                'ai.assistant',
             ],
             'limits' => [
                 'seats' => null,

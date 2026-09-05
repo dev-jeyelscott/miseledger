@@ -24,6 +24,7 @@ class OrganizationMembershipFactory extends Factory
             'organization_id' => Organization::factory(),
             'user_id' => User::factory(),
             'role' => OrganizationRole::InventoryStaff,
+            'ai_enabled' => false,
         ];
     }
 }

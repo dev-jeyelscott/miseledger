@@ -38,7 +38,7 @@ test('the configured plans provide the intended features and limits', function (
     $business = $catalog->get(PlanCode::from('business'));
 
     expect($starter?->name)->toBe('Starter Plan')
-        ->and($starter?->features)->toBe([])
+        ->and($starter?->features)->toBe(['ai.assistant'])
         ->and($starter?->limits)->toBe([
             'seats' => 3,
             'locations' => 1,
@@ -50,6 +50,7 @@ test('the configured plans provide the intended features and limits', function (
             'recipes',
             'reports.export',
             'locations.multi',
+            'ai.assistant',
         ])
         ->and($growth?->limits)->toBe([
             'seats' => 10,

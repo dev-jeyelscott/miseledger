@@ -6,6 +6,7 @@ use App\Enums\OrganizationPermission;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Support\Billing\FeatureCode;
+use App\Support\Billing\MemberAIAccessResolver;
 use App\Support\Billing\OrganizationFeatureEntitlement;
 use App\Support\Billing\OrganizationSubscriptionAccess;
 use App\Support\Billing\OrganizationSubscriptionAccessResolver;
@@ -80,7 +81,8 @@ class HandleInertiaRequests extends Middleware
      *         features: list<string>,
      *         limits: array<string, int|null>,
      *         grants: array<string, bool>
-     *     }|null
+     *     }|null,
+     *     ai: array{canUse: bool, memberEnabled: bool}|null
      * }
      */
     private function organizationContext(Request $request): array
@@ -120,6 +122,24 @@ class HandleInertiaRequests extends Middleware
             ? OrganizationSubscriptionAccessResolver::resolve($activeOrganization)
             : null;
 
+        $activeMembership = null;
+
+        if ($activeOrganization instanceof Organization
+            && $memberships instanceof Collection) {
+            foreach ($memberships as $membership) {
+                if ($membership instanceof OrganizationMembership
+                    && $membership->organization_id === $activeOrganization->getKey()) {
+                    $activeMembership = $membership;
+
+                    break;
+                }
+            }
+        }
+
+        $aiAccess = $activeOrganization instanceof Organization
+            ? MemberAIAccessResolver::resolve($activeOrganization, $activeMembership)
+            : null;
+
         return [
             'active' => $activeOrganization instanceof Organization
                 ? $this->organizationData($activeOrganization)
@@ -128,6 +148,12 @@ class HandleInertiaRequests extends Middleware
             'subscription' => $access !== null ? $this->subscriptionData($access) : null,
             'entitlements' => $access !== null
                 ? $this->entitlementData($access, $activeOrganization)
+                : null,
+            'ai' => $aiAccess !== null
+                ? [
+                    'canUse' => $aiAccess->canUse(),
+                    'memberEnabled' => $aiAccess->memberEnabled,
+                ]
                 : null,
         ];
     }
