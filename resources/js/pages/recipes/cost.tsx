@@ -131,7 +131,7 @@ const ComponentRows = ({
                             </div>
                         )}
                     </td>
-                    <td className="px-4 py-3 tabular-nums">
+                    <td className="px-4 py-3 text-right tabular-nums">
                         {formatDecimal(component.effectiveQuantity)}{' '}
                         {component.unitSymbol}
                     </td>
@@ -394,7 +394,9 @@ export default function RecipeCost({
                                 <thead className="border-b border-border text-left">
                                     <tr>
                                         <th className="px-4 py-3">Component</th>
-                                        <th className="px-4 py-3">Quantity</th>
+                                        <th className="px-4 py-3 text-right">
+                                            Quantity
+                                        </th>
                                         <th className="px-4 py-3 text-right">
                                             Unit cost
                                         </th>
