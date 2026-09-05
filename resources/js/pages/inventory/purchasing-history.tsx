@@ -105,12 +105,12 @@ const receiptStateOptions: Array<{
     {
         value: 'received',
         label: 'Received',
-        dotClassName: 'bg-emerald-500',
+        dotClassName: 'bg-success-subtle',
     },
     {
         value: 'partial',
         label: 'Partial',
-        dotClassName: 'bg-amber-500',
+        dotClassName: 'bg-warning-subtle',
     },
     {
         value: 'not_received',
