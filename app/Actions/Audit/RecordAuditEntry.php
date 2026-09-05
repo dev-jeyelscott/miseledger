@@ -30,7 +30,7 @@ final class RecordAuditEntry
             return null;
         }
 
-        return AuditLog::query()->create([
+        $attributes = [
             'organization_id' => $organization->getKey(),
             'actor_id' => $actor?->getKey(),
             'action' => $action,
@@ -40,6 +40,30 @@ final class RecordAuditEntry
             'after_data' => $afterData,
             'correlation_id' => $correlationId,
             'is_deduplication_key' => $isDeduplicationKey,
-        ]);
+        ];
+
+        if (! $isDeduplicationKey) {
+            return AuditLog::query()->create($attributes);
+        }
+
+        $deduplicationAttributes = [
+            ...$attributes,
+            'before_data' => $beforeData === null
+                ? null
+                : json_encode($beforeData, JSON_THROW_ON_ERROR),
+            'after_data' => $afterData === null
+                ? null
+                : json_encode($afterData, JSON_THROW_ON_ERROR),
+        ];
+
+        $wasInserted = AuditLog::query()->insertOrIgnore($deduplicationAttributes) === 1;
+
+        return $wasInserted
+            ? AuditLog::query()
+                ->where('organization_id', $organization->getKey())
+                ->where('correlation_id', $correlationId)
+                ->where('is_deduplication_key', true)
+                ->first()
+            : null;
     }
 }

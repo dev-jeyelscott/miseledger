@@ -13,7 +13,6 @@ use App\Jobs\SendManualRenewalPaymentReceipt;
 use App\Models\BillingInvoice;
 use App\Models\BillingPayment;
 use App\Models\BillingSubscription;
-use App\Models\Organization;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -37,14 +36,6 @@ final class SettlePayMongoPayment
          * @var array{
          *     0: BillingPayment,
          *     1: bool,
-         *     2: array{
-         *         organization_id: int,
-         *         subscription_id: int,
-         *         previous_plan: string|null,
-         *         target_plan: string,
-         *         interval: string|null,
-         *         external_payment_id: string
-         *     }|null
          * } $result
          */
         $result = DB::transaction(function () use (
@@ -102,7 +93,16 @@ final class SettlePayMongoPayment
                     );
                 }
 
-                return [$payment, false, null];
+                if ($invoice->invoice_type === BillingInvoiceType::Upgrade) {
+                    $this->recordUpgradeAudit(
+                        $subscription,
+                        $invoice->plan_code,
+                        $invoice->target_plan_code,
+                        $externalPaymentId,
+                    );
+                }
+
+                return [$payment, false];
             }
 
             if (! $invoice->status->isPayable()) {
@@ -142,55 +142,60 @@ final class SettlePayMongoPayment
                 ...($isUpgrade ? ['plan_code' => $targetPlanCode] : []),
             ]);
 
-            $upgrade = null;
-
             if ($isUpgrade) {
-                $upgrade = [
-                    'organization_id' => $subscription->organization_id,
-                    'subscription_id' => $subscription->id,
-                    'previous_plan' => $previousPlanCode,
-                    'target_plan' => $targetPlanCode,
-                    'interval' => $subscription->interval,
-                    'external_payment_id' => $externalPaymentId,
-                ];
+                $this->recordUpgradeAudit(
+                    $subscription,
+                    $previousPlanCode,
+                    $targetPlanCode,
+                    $externalPaymentId,
+                );
             }
 
             $payment->refresh();
 
-            return [$payment, true, $upgrade];
+            return [$payment, true];
         }, attempts: 3);
 
-        [$payment, $wasSettled, $upgrade] = $result;
+        [$payment, $wasSettled] = $result;
 
         if ($wasSettled) {
             SendManualRenewalPaymentReceipt::dispatch($payment->id);
         }
 
-        if ($upgrade !== null) {
-            $organization = Organization::query()
-                ->whereKey($upgrade['organization_id'])
-                ->firstOrFail();
+        return $payment;
+    }
 
-            $this->recordAuditEntry->handle(
-                $organization,
-                null,
-                'billing.subscription.upgraded',
-                BillingSubscription::class,
-                $upgrade['subscription_id'],
-                [
-                    'plan' => $upgrade['previous_plan'],
-                    'interval' => $upgrade['interval'],
-                ],
-                [
-                    'plan' => $upgrade['target_plan'],
-                    'interval' => $upgrade['interval'],
-                    'provider' => 'paymongo',
-                ],
-                $upgrade['external_payment_id'],
+    /** Record an upgrade audit within the settlement transaction. */
+    private function recordUpgradeAudit(
+        BillingSubscription $subscription,
+        ?string $previousPlanCode,
+        ?string $targetPlanCode,
+        string $externalPaymentId,
+    ): void {
+        if ($targetPlanCode === null) {
+            throw new RuntimeException(
+                'Upgrade invoice is missing its target plan.',
             );
         }
 
-        return $payment;
+        $this->recordAuditEntry->handle(
+            $subscription->organization,
+            null,
+            'billing.subscription.upgraded',
+            BillingSubscription::class,
+            $subscription->id,
+            [
+                'plan' => $previousPlanCode,
+                'interval' => $subscription->interval,
+            ],
+            [
+                'plan' => $targetPlanCode,
+                'interval' => $subscription->interval,
+                'provider' => 'paymongo',
+            ],
+            $externalPaymentId,
+            isDeduplicationKey: true,
+        );
     }
 
     /** Allow only the narrowly defined legacy manual-mode repair. */

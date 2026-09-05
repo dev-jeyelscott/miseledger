@@ -256,6 +256,39 @@ test('successful settlement flips the plan exactly once and preserves the paid-t
     Carbon::setTestNow();
 });
 
+test('a failed upgrade audit rolls back settlement atomically and a retry records the audit', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-08-31 00:00:00', 'UTC'));
+    $subscription = upgradeTestSubscription();
+    fakeUpgradeCheckout('pi_upgrade_audit_failure');
+    $invoice = app(CreateUpgradeInvoice::class)->handle($subscription, PlanCode::from('growth'));
+    app(CreatePayMongoQrPhPayment::class)->handle($invoice);
+    $payment = $invoice->fresh()->payments()->sole();
+    $payment->update(['external_payment_intent_id' => 'pi_upgrade_audit_failure']);
+
+    $shouldFailAuditWrite = true;
+    AuditLog::creating(function () use (&$shouldFailAuditWrite): void {
+        if ($shouldFailAuditWrite) {
+            $shouldFailAuditWrite = false;
+            throw new RuntimeException('audit storage unavailable');
+        }
+    });
+
+    $payload = upgradePaymentPaidPayload('evt_upgrade_audit_failure', 'pi_upgrade_audit_failure', 10_000);
+    postUpgradeWebhook($payload)->assertServerError();
+
+    expect($subscription->fresh()->plan_code)->toBe('starter')
+        ->and($invoice->fresh()->status)->toBe(BillingInvoiceStatus::PaymentPending)
+        ->and(AuditLog::query()->where('action', 'billing.subscription.upgraded')->count())->toBe(0);
+
+    postUpgradeWebhook($payload)->assertNoContent();
+
+    expect($subscription->fresh()->plan_code)->toBe('growth')
+        ->and($invoice->fresh()->status)->toBe(BillingInvoiceStatus::Paid)
+        ->and(AuditLog::query()->where('action', 'billing.subscription.upgraded')->count())->toBe(1);
+
+    Carbon::setTestNow();
+});
+
 test('an unpaid, expired, or failed QR attempt leaves the plan unchanged', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-08-31 00:00:00', 'UTC'));
     $subscription = upgradeTestSubscription();
