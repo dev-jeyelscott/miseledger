@@ -55,14 +55,33 @@ final class CreateOrganizationCheckoutSession
 
         $organizationId = (string) $organization->getKey();
         $pendingCacheKey = self::pendingCheckoutCacheKey($organizationId, $type);
+        $pendingFingerprint = self::pendingCheckoutFingerprint(
+            $provider,
+            $plan,
+            $interval,
+        );
 
         return Cache::lock('billing:checkout:lock:'.$organizationId, 10)->block(
             5,
-            function () use ($organization, $actor, $plan, $interval, $provider, $externalPlanId, $organizationId, $pendingCacheKey, $type): BillingCheckoutOutcome {
+            function () use ($organization, $actor, $plan, $interval, $provider, $externalPlanId, $organizationId, $pendingCacheKey, $pendingFingerprint, $type): BillingCheckoutOutcome {
                 $pendingOutcome = Cache::get($pendingCacheKey);
 
                 if (is_array($pendingOutcome)) {
-                    return BillingCheckoutOutcome::fromCacheValue($pendingOutcome);
+                    if (($pendingOutcome['fingerprint'] ?? null) !== $pendingFingerprint) {
+                        throw ValidationException::withMessages([
+                            'plan' => __('A checkout is already pending for different billing terms. Complete or cancel it before starting another checkout.'),
+                        ]);
+                    }
+
+                    $cachedOutcome = $pendingOutcome['outcome'] ?? null;
+
+                    if (! is_array($cachedOutcome)) {
+                        throw new \InvalidArgumentException(
+                            'The cached billing checkout outcome is malformed.',
+                        );
+                    }
+
+                    return BillingCheckoutOutcome::fromCacheValue($cachedOutcome);
                 }
 
                 if ($this->hasActiveSubscription($organization, $type)) {
@@ -103,7 +122,14 @@ final class CreateOrganizationCheckoutSession
                     ],
                 );
 
-                Cache::put($pendingCacheKey, $outcome->toCacheValue(), now()->addMinutes(self::PENDING_CHECKOUT_TTL_MINUTES));
+                Cache::put(
+                    $pendingCacheKey,
+                    [
+                        'fingerprint' => $pendingFingerprint,
+                        'outcome' => $outcome->toCacheValue(),
+                    ],
+                    now()->addMinutes(self::PENDING_CHECKOUT_TTL_MINUTES),
+                );
 
                 return $outcome;
             },
@@ -113,6 +139,14 @@ final class CreateOrganizationCheckoutSession
     private static function pendingCheckoutCacheKey(string $organizationId, string $type): string
     {
         return "billing:checkout:pending:{$organizationId}:{$type}";
+    }
+
+    private static function pendingCheckoutFingerprint(
+        BillingProvider $provider,
+        PlanCode $plan,
+        string $interval,
+    ): string {
+        return implode(':', [$provider->value, $plan->value, $interval]);
     }
 
     private function hasActiveSubscription(Organization $organization, string $type): bool

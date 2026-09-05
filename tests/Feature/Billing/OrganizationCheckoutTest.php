@@ -322,3 +322,32 @@ test('a repeated Checkout request before the subscription webhook syncs reuses t
 
     expect($checkoutSessionRequests)->toHaveCount(1);
 });
+
+test('a pending Checkout request with different terms is rejected', function () {
+    organizationCheckoutFixturePlans();
+
+    $client = fakeStripeHttpClient();
+
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create(['stripe_id' => 'cus_test_123']);
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create(['role' => OrganizationRole::Owner]);
+
+    $this->actingAs($user)->post(
+        route('organizations.billing.checkout', $organization),
+        ['plan' => 'starter', 'interval' => 'monthly'],
+    )->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_123');
+
+    $this->actingAs($user)->post(
+        route('organizations.billing.checkout', $organization),
+        ['plan' => 'growth', 'interval' => 'monthly'],
+    )->assertInvalid(['plan']);
+
+    $checkoutSessionRequests = collect($client->requests)
+        ->filter(fn (array $request): bool => str_contains($request['url'], '/v1/checkout/sessions'));
+
+    expect($checkoutSessionRequests)->toHaveCount(1);
+});
