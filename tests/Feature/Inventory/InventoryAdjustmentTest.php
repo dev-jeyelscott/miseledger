@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Actions\Inventory\RecordStockMovement;
 use App\Enums\OrganizationRole;
 use App\Enums\StockMovementType;
@@ -396,6 +397,13 @@ test(
             )
             ->toBe(1)
             ->and(
+                AuditLog::query()
+                    ->where('correlation_id', "inventory_adjustment:inventory_adjustment:manual:{$operationId}")
+                    ->where('is_deduplication_key', true)
+                    ->count(),
+            )
+            ->toBe(1)
+            ->and(
                 StockBalance::query()
                     ->sole()
                     ->quantity_on_hand,
@@ -403,3 +411,21 @@ test(
             ->toBe('14.000000');
     },
 );
+
+test('a reused movement does not create an audit entry', function () {
+    $audit = app(RecordAuditEntry::class)->handle(
+        organization: $this->organization,
+        actor: $this->manager,
+        action: 'inventory.manual_adjustment',
+        entityType: 'stock_movement',
+        entityId: 1,
+        beforeData: null,
+        afterData: [],
+        correlationId: 'inventory_adjustment:reused',
+        wasCreated: false,
+        isDeduplicationKey: true,
+    );
+
+    expect($audit)->toBeNull()
+        ->and(AuditLog::query()->count())->toBe(0);
+});

@@ -18,6 +18,7 @@ use LogicException;
  * @property array<string, mixed>|null $before_data
  * @property array<string, mixed>|null $after_data
  * @property string|null $correlation_id
+ * @property bool $is_deduplication_key
  * @property Carbon|null $created_at
  */
 #[Fillable([
@@ -29,6 +30,7 @@ use LogicException;
     'before_data',
     'after_data',
     'correlation_id',
+    'is_deduplication_key',
 ])]
 class AuditLog extends Model
 {
@@ -65,6 +67,7 @@ class AuditLog extends Model
             'before_data' => 'array',
             'after_data' => 'array',
             'created_at' => 'datetime',
+            'is_deduplication_key' => 'boolean',
         ];
     }
 

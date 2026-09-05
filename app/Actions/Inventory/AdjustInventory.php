@@ -78,6 +78,7 @@ final class AdjustInventory
         }
 
         $idempotencyKey = trim($idempotencyKey);
+        $wasCreated = false;
 
         return DB::transaction(function () use (
             $organization,
@@ -92,18 +93,8 @@ final class AdjustInventory
             $occurredAt,
             $actor,
             $idempotencyKey,
+            &$wasCreated,
         ): StockMovement {
-            $alreadyRecorded = StockMovement::query()
-                ->where(
-                    'organization_id',
-                    $organization->getKey(),
-                )
-                ->where(
-                    'idempotency_key',
-                    $idempotencyKey,
-                )
-                ->exists();
-
             $baseQuantity = $this->convertQuantity->handle(
                 $organization,
                 $inventoryItem,
@@ -126,30 +117,31 @@ final class AdjustInventory
                 actor: $actor,
                 idempotencyKey: $idempotencyKey,
                 notes: $reason,
+                wasCreated: $wasCreated,
             );
 
-            if (! $alreadyRecorded) {
-                $this->recordAuditEntry->handle(
-                    organization: $organization,
-                    actor: $actor,
-                    action: 'inventory.manual_adjustment',
-                    entityType: 'stock_movement',
-                    entityId: $movement->id,
-                    beforeData: null,
-                    afterData: [
-                        'location_id' => $location->getKey(),
-                        'storage_location_id' => $storageLocation->getKey(),
-                        'inventory_item_id' => $inventoryItem->getKey(),
-                        'quantity' => $quantity,
-                        'unit_id' => $unit->getKey(),
-                        'base_quantity' => $movement->quantity,
-                        'reason' => $reason,
-                        'occurred_at' => $occurredAt
-                            ->toIso8601String(),
-                    ],
-                    correlationId: "inventory_adjustment:{$idempotencyKey}",
-                );
-            }
+            $this->recordAuditEntry->handle(
+                organization: $organization,
+                actor: $actor,
+                action: 'inventory.manual_adjustment',
+                entityType: 'stock_movement',
+                entityId: $movement->id,
+                beforeData: null,
+                afterData: [
+                    'location_id' => $location->getKey(),
+                    'storage_location_id' => $storageLocation->getKey(),
+                    'inventory_item_id' => $inventoryItem->getKey(),
+                    'quantity' => $quantity,
+                    'unit_id' => $unit->getKey(),
+                    'base_quantity' => $movement->quantity,
+                    'reason' => $reason,
+                    'occurred_at' => $occurredAt
+                        ->toIso8601String(),
+                ],
+                correlationId: "inventory_adjustment:{$idempotencyKey}",
+                wasCreated: $wasCreated,
+                isDeduplicationKey: true,
+            );
 
             return $movement;
         }, 3);

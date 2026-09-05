@@ -51,7 +51,12 @@ final class RecordStockMovement
         ?string $idempotencyKey = null,
         ?string $notes = null,
         ?string $inboundUnitCost = null,
+        ?bool &$wasCreated = null,
     ): StockMovement {
+        if ($wasCreated !== null) {
+            $wasCreated = false;
+        }
+
         $quantity = $this->quantity($baseQuantity);
         $referenceType = trim($referenceType);
         $idempotencyKey = $this->normalizeIdempotencyKey(
@@ -88,6 +93,7 @@ final class RecordStockMovement
                 $idempotencyKey,
                 $notes,
                 $explicitInboundCost,
+                &$wasCreated,
             ): StockMovement {
                 if (
                     $actor !== null
@@ -346,6 +352,10 @@ final class RecordStockMovement
                     'notes' => $notes,
                 ]);
 
+                if ($wasCreated !== null) {
+                    $wasCreated = true;
+                }
+
                 $lastMovementAt = $balance->last_movement_at;
 
                 if (
@@ -372,6 +382,10 @@ final class RecordStockMovement
         } catch (
             UniqueConstraintViolationException $exception
         ) {
+            if ($wasCreated !== null) {
+                $wasCreated = false;
+            }
+
             if ($idempotencyKey === null) {
                 throw $exception;
             }

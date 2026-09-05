@@ -23,7 +23,13 @@ final class RecordAuditEntry
         ?array $beforeData,
         ?array $afterData,
         ?string $correlationId = null,
-    ): AuditLog {
+        bool $wasCreated = true,
+        bool $isDeduplicationKey = false,
+    ): ?AuditLog {
+        if (! $wasCreated) {
+            return null;
+        }
+
         return AuditLog::query()->create([
             'organization_id' => $organization->getKey(),
             'actor_id' => $actor?->getKey(),
@@ -33,6 +39,7 @@ final class RecordAuditEntry
             'before_data' => $beforeData,
             'after_data' => $afterData,
             'correlation_id' => $correlationId,
+            'is_deduplication_key' => $isDeduplicationKey,
         ]);
     }
 }
