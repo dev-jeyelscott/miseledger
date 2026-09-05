@@ -375,8 +375,8 @@ export default function GoodsReceiptIndex({
                 <Form action={GoodsReceiptController.index().url} method="get">
                     {({ errors, processing }) => (
                         <FilterToolbar className="overflow-hidden p-0 shadow-sm">
-                            <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-8">
-                                <div className="md:col-span-2 xl:col-span-2">
+                            <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-[1.3fr_0.85fr_0.85fr_0.85fr_0.8fr_0.8fr_0.85fr_auto]">
+                                <div className="md:col-span-2 xl:col-span-1">
                                     <Field
                                         id="search"
                                         label="Search"
@@ -517,7 +517,7 @@ export default function GoodsReceiptIndex({
                                     </NativeSelect>
                                 </Field>
 
-                                <div className="flex items-end gap-2 md:col-span-2 xl:col-span-8 xl:justify-end">
+                                <div className="flex flex-wrap items-end gap-2 md:col-span-2 xl:col-span-1">
                                     <Button
                                         type="submit"
                                         disabled={processing}
