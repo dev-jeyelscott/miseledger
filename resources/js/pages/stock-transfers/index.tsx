@@ -102,6 +102,7 @@ const quickViews: Array<{ label: string; value: StockTransferView }> = [
     { label: 'Draft', value: 'draft' },
     { label: 'Awaiting receipt', value: 'shipped' },
     { label: 'Received', value: 'received' },
+    { label: 'Cancelled', value: 'cancelled' },
     { label: 'Variance', value: 'variance' },
 ];
 const viewLabels: Record<StockTransferView, string> = {
