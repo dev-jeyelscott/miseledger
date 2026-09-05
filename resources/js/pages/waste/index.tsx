@@ -549,7 +549,6 @@ function RecordWasteForm({
 
         confirmedSubmission.current = true;
         setConfirmationOpen(false);
-        setDirty(false);
         form.requestSubmit();
     }
 
@@ -575,6 +574,7 @@ function RecordWasteForm({
 
                     setConfirmationOpen(true);
                 }}
+                onSuccess={() => setDirty(false)}
                 onError={() => setDirty(true)}
             >
                 {({ errors, processing }) => (

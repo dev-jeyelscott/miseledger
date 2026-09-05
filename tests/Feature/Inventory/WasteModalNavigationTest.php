@@ -153,3 +153,12 @@ test('waste reason actions use guarded dialogs without adding modal history entr
         ->toContain('router.visit(fallbackUrl, {')
         ->toContain('replace: true');
 });
+
+test('waste form keeps unsaved-change protection until submission succeeds', function () {
+    $source = File::get(resource_path('js/pages/waste/index.tsx'));
+
+    expect($source)
+        ->toContain('onSuccess={() => setDirty(false)}')
+        ->toContain('onError={() => setDirty(true)}')
+        ->not->toMatch('/function confirmWasteSubmission\(\): void\s*\{.*?setDirty\(false\);/s');
+});
