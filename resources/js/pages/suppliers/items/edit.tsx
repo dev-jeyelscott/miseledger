@@ -167,7 +167,12 @@ export default function EditSupplierItem({
                                 ])}
                                 className="space-y-5"
                             >
-                                {({ processing, errors, isDirty, wasSuccessful }) => (
+                                {({
+                                    processing,
+                                    errors,
+                                    isDirty,
+                                    wasSuccessful,
+                                }) => (
                                     <>
                                         <DirtyStateTracker
                                             dirty={isDirty}

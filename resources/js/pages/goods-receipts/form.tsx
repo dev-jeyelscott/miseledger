@@ -576,15 +576,27 @@ export default function GoodsReceiptForm({
                     <div className="hidden overflow-x-auto md:block">
                         <table className="w-full text-sm">
                             <caption className="sr-only">
-                                Purchase order fulfillment summary showing ordered, accepted, remaining, and over-received quantities.
+                                Purchase order fulfillment summary showing
+                                ordered, accepted, remaining, and over-received
+                                quantities.
                             </caption>
                             <thead className="border-b border-border text-left">
                                 <tr>
-                                    <th scope="col" className="px-2 py-2">Item</th>
-                                    <th scope="col" className="px-2 py-2">Ordered base</th>
-                                    <th scope="col" className="px-2 py-2">Accepted base</th>
-                                    <th scope="col" className="px-2 py-2">Remaining</th>
-                                    <th scope="col" className="px-2 py-2">Over received</th>
+                                    <th scope="col" className="px-2 py-2">
+                                        Item
+                                    </th>
+                                    <th scope="col" className="px-2 py-2">
+                                        Ordered base
+                                    </th>
+                                    <th scope="col" className="px-2 py-2">
+                                        Accepted base
+                                    </th>
+                                    <th scope="col" className="px-2 py-2">
+                                        Remaining
+                                    </th>
+                                    <th scope="col" className="px-2 py-2">
+                                        Over received
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -633,7 +645,8 @@ export default function GoodsReceiptForm({
                     ) && (
                         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-100">
                             <strong>Over-receipt detected:</strong> One or more
-                            lines have been received beyond the ordered quantity.
+                            lines have been received beyond the ordered
+                            quantity.
                         </div>
                     )}
                 </section>
@@ -1372,19 +1385,38 @@ export default function GoodsReceiptForm({
                         <div className="hidden overflow-x-auto md:block">
                             <table className="w-full text-sm">
                                 <caption className="sr-only">
-                                    Finalized receipt evidence showing accepted, rejected, and damaged quantities with stock movement details.
+                                    Finalized receipt evidence showing accepted,
+                                    rejected, and damaged quantities with stock
+                                    movement details.
                                 </caption>
                                 <thead className="border-b border-border text-left">
                                     <tr>
-                                        <th scope="col" className="px-2 py-2">Item</th>
-                                        <th scope="col" className="px-2 py-2">Storage</th>
-                                        <th scope="col" className="px-2 py-2">Accepted</th>
-                                        <th scope="col" className="px-2 py-2">Rejected</th>
-                                        <th scope="col" className="px-2 py-2">Damaged</th>
-                                        <th scope="col" className="px-2 py-2">Accepted base</th>
-                                        <th scope="col" className="px-2 py-2">Movement</th>
+                                        <th scope="col" className="px-2 py-2">
+                                            Item
+                                        </th>
+                                        <th scope="col" className="px-2 py-2">
+                                            Storage
+                                        </th>
+                                        <th scope="col" className="px-2 py-2">
+                                            Accepted
+                                        </th>
+                                        <th scope="col" className="px-2 py-2">
+                                            Rejected
+                                        </th>
+                                        <th scope="col" className="px-2 py-2">
+                                            Damaged
+                                        </th>
+                                        <th scope="col" className="px-2 py-2">
+                                            Accepted base
+                                        </th>
+                                        <th scope="col" className="px-2 py-2">
+                                            Movement
+                                        </th>
                                         {canViewCosts ? (
-                                            <th scope="col" className="px-2 py-2 text-right">
+                                            <th
+                                                scope="col"
+                                                className="px-2 py-2 text-right"
+                                            >
                                                 Unit cost
                                             </th>
                                         ) : null}
@@ -1487,13 +1519,27 @@ export default function GoodsReceiptForm({
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-sm">
                                         <caption className="sr-only">
-                                            Audit history of receipt actions and state changes.
+                                            Audit history of receipt actions and
+                                            state changes.
                                         </caption>
                                         <thead className="border-b border-border text-left">
                                             <tr>
-                                                <th scope="col" className="px-2 py-2">Action</th>
-                                                <th scope="col" className="px-2 py-2">Actor</th>
-                                                <th scope="col" className="px-2 py-2">
+                                                <th
+                                                    scope="col"
+                                                    className="px-2 py-2"
+                                                >
+                                                    Action
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="px-2 py-2"
+                                                >
+                                                    Actor
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="px-2 py-2"
+                                                >
                                                     Timestamp
                                                 </th>
                                             </tr>
@@ -1609,7 +1655,7 @@ export default function GoodsReceiptForm({
                                                                                 line.itemName
                                                                             }
                                                                         </span>
-                                                                        <span className="shrink-0 tabular-nums font-medium">
+                                                                        <span className="shrink-0 font-medium tabular-nums">
                                                                             {formatDecimal(
                                                                                 line.baseQuantity,
                                                                             )}{' '}

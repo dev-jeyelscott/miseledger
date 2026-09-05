@@ -321,11 +321,13 @@ export default function GoodsReceiptIndex({
                         canFinalize ? (
                             <Button asChild>
                                 <Link
-                                    href={PurchaseOrderController.index({
-                                        query: {
-                                            status: 'approved',
-                                        },
-                                    }).url}
+                                    href={
+                                        PurchaseOrderController.index({
+                                            query: {
+                                                status: 'approved',
+                                            },
+                                        }).url
+                                    }
                                 >
                                     <Package
                                         className="size-4"
