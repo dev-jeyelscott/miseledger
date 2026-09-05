@@ -15,6 +15,7 @@ use Brick\Math\BigDecimal;
 use Brick\Math\Exception\NumberFormatException;
 use Brick\Math\RoundingMode;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -163,30 +164,6 @@ final class RecordStockMovement
                     ]);
                 }
 
-                $activeItem = $lockedDependencies?->inventoryItem(
-                    $inventoryItem->id,
-                );
-
-                if ($activeItem === null) {
-                    $activeItem = InventoryItem::query()
-                        ->where(
-                            'organization_id',
-                            $organization->getKey(),
-                        )
-                        ->whereKey($inventoryItem->getKey())
-                        ->where('active', true)
-                        ->lockForUpdate()
-                        ->first();
-                }
-
-                if ($activeItem === null) {
-                    throw ValidationException::withMessages([
-                        'inventory_item' => __(
-                            'Select an active inventory item from the current organization.',
-                        ),
-                    ]);
-                }
-
                 $activeStorage = $lockedDependencies?->storageLocation(
                     $storageLocation->id,
                 );
@@ -211,6 +188,30 @@ final class RecordStockMovement
                     throw ValidationException::withMessages([
                         'storage_location' => __(
                             'The storage location does not belong to the selected active location.',
+                        ),
+                    ]);
+                }
+
+                $activeItem = $lockedDependencies?->inventoryItem(
+                    $inventoryItem->id,
+                );
+
+                if ($activeItem === null) {
+                    $activeItem = InventoryItem::query()
+                        ->where(
+                            'organization_id',
+                            $organization->getKey(),
+                        )
+                        ->whereKey($inventoryItem->getKey())
+                        ->where('active', true)
+                        ->lockForUpdate()
+                        ->first();
+                }
+
+                if ($activeItem === null) {
+                    throw ValidationException::withMessages([
+                        'inventory_item' => __(
+                            'Select an active inventory item from the current organization.',
                         ),
                     ]);
                 }
@@ -524,8 +525,15 @@ final class RecordStockMovement
             $stockBalances = StockBalance::query()
                 ->where('organization_id', $organization->getKey())
                 ->where('location_id', $location->getKey())
-                ->whereIn('storage_location_id', $balanceIdentities->pluck('storage_location_id'))
-                ->whereIn('inventory_item_id', $balanceIdentities->pluck('inventory_item_id'))
+                ->where(function (Builder $query) use ($balanceIdentities): void {
+                    foreach ($balanceIdentities as $identity) {
+                        $query->orWhere(function (Builder $query) use ($identity): void {
+                            $query
+                                ->where('storage_location_id', $identity['storage_location_id'])
+                                ->where('inventory_item_id', $identity['inventory_item_id']);
+                        });
+                    }
+                })
                 ->orderBy('storage_location_id')
                 ->orderBy('inventory_item_id')
                 ->lockForUpdate()

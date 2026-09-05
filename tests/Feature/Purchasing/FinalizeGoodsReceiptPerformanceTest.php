@@ -153,6 +153,12 @@ test('finalization batch-resolves receipt dependencies', function (): void {
             && str_starts_with($sql, 'select')
             && str_contains($sql, 'idempotency_key'))->count())
         ->toBe(1)
+        ->and($queries->first(fn (string $sql): bool => str_contains($sql, 'from "stock_balances"')
+            && str_contains($sql, 'for update')))
+        ->toContain('"storage_location_id" =')
+        ->and($queries->first(fn (string $sql): bool => str_contains($sql, 'from "stock_balances"')
+            && str_contains($sql, 'for update')))
+        ->not->toContain('"storage_location_id" in')
         ->and($this->receipt->refresh()->status)->toBe(GoodsReceiptStatus::Finalized);
 });
 
@@ -207,10 +213,13 @@ test('finalization remains correct during simultaneous inventory activity', func
     }
 
     DB::commit();
+    DB::disconnect();
 
     $resultPath = tempnam(sys_get_temp_dir(), 'miseledger-finalize-');
 
     if ($resultPath === false) {
+        $this->artisan('migrate:fresh', $this->migrateFreshUsing());
+
         throw new RuntimeException('Unable to create the concurrency result file.');
     }
 
@@ -218,14 +227,13 @@ test('finalization remains correct during simultaneous inventory activity', func
 
     if ($childPid === -1) {
         unlink($resultPath);
+        $this->artisan('migrate:fresh', $this->migrateFreshUsing());
 
         throw new RuntimeException('Unable to fork the concurrency test process.');
     }
 
     if ($childPid === 0) {
         try {
-            DB::purge('pgsql');
-
             app(RecordStockMovement::class)->handle(
                 Organization::query()->findOrFail($this->organization->id),
                 Location::query()->findOrFail($this->location->id),
@@ -251,6 +259,8 @@ test('finalization remains correct during simultaneous inventory activity', func
         }
     }
 
+    $childReaped = false;
+
     try {
         app(FinalizeGoodsReceipt::class)->handle(
             $this->organization,
@@ -259,6 +269,7 @@ test('finalization remains correct during simultaneous inventory activity', func
         );
 
         pcntl_waitpid($childPid, $status);
+        $childReaped = true;
 
         expect(pcntl_wifexited($status))->toBeTrue()
             ->and(pcntl_wexitstatus($status))->toBe(0)
@@ -274,8 +285,14 @@ test('finalization remains correct during simultaneous inventory activity', func
                 ->count())->toBe(1)
             ->and(StockBalance::query()->sole()->quantity_on_hand)->toBe('101.000000');
     } finally {
+        if (! $childReaped) {
+            pcntl_waitpid($childPid, $status);
+        }
+
         if (file_exists($resultPath)) {
             unlink($resultPath);
         }
+
+        $this->artisan('migrate:fresh', $this->migrateFreshUsing());
     }
 });
