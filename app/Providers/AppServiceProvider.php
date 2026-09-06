@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Console\Commands\StartMiseLedgerMcpServer;
 use App\Enums\OrganizationPermission;
+use App\Mcp\AiMcpExecutionContext;
 use App\Models\Organization;
 use App\Models\User;
 use App\Support\Billing\BillingConfigurationValidator;
@@ -23,6 +25,8 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         Cashier::ignoreRoutes();
+
+        $this->app->singleton(AiMcpExecutionContext::class);
     }
 
     /**
@@ -33,6 +37,10 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->configureAuthorization();
         $this->configureBilling();
+
+        $this->commands([
+            StartMiseLedgerMcpServer::class,
+        ]);
     }
 
     /**

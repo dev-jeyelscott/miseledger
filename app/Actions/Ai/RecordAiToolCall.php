@@ -42,6 +42,8 @@ final class RecordAiToolCall
                 'outcome',
                 'error_code',
                 'duration_ms',
+                'row_count',
+                'truncated',
             ]),
             static fn (mixed $value): bool => is_int($value) || is_string($value),
         );
