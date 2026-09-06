@@ -7,6 +7,8 @@ use App\Enums\OrganizationPermission;
 use App\Mcp\AiMcpExecutionContext;
 use App\Models\Organization;
 use App\Models\User;
+use App\Support\Ai\Providers\AiProviderAdapter;
+use App\Support\Ai\Providers\CodexAppServerProvider;
 use App\Support\Billing\BillingConfigurationValidator;
 use App\Support\Billing\OrganizationCommercialWriteGate;
 use Carbon\CarbonImmutable;
@@ -27,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
         Cashier::ignoreRoutes();
 
         $this->app->singleton(AiMcpExecutionContext::class);
+        $this->app->bind(AiProviderAdapter::class, CodexAppServerProvider::class);
     }
 
     /**

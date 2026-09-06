@@ -27,6 +27,16 @@ RUN set -eux; \
 
 FROM node:${NODE_VERSION}-bookworm-slim AS node
 
+FROM node AS codex
+
+ARG CODEX_VERSION=0.153.4
+
+RUN npm install --global --ignore-scripts \
+    @openai/codex@${CODEX_VERSION} \
+    "@openai/codex-linux-x64@npm:@openai/codex@${CODEX_VERSION}-linux-x64"; \
+    mkdir -p /usr/local/lib/node_modules/@openai/codex/node_modules/@openai; \
+    ln -s ../../../codex-linux-x64 /usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64
+
 FROM composer:2 AS composer
 
 # Runtime shared by the production web, queue-worker, and scheduler processes.
@@ -58,6 +68,10 @@ RUN set -eux; \
 
 COPY --from=php-extensions /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
 COPY --from=php-extensions /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
+COPY --from=codex /usr/local/bin/node /usr/local/bin/node
+COPY --from=codex /usr/local/lib/node_modules/ /usr/local/lib/node_modules/
+
+RUN ln -s ../lib/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex
 
 COPY docker/apache/000-default.conf /etc/apache2/sites-available/000-default.conf
 
@@ -85,6 +99,7 @@ COPY --from=php-development-extensions /usr/local/etc/php/conf.d/ /usr/local/etc
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=codex /usr/local/lib/node_modules/@openai/ /usr/local/lib/node_modules/@openai/
 
 ARG WWWUSER=1000
 ARG WWWGROUP=1000

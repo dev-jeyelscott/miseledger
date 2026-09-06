@@ -16,10 +16,11 @@ use Illuminate\Support\Carbon;
  * @property int $organization_id
  * @property int $user_id
  * @property string|null $title
+ * @property string|null $provider_thread_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['organization_id', 'user_id', 'title'])]
+#[Fillable(['organization_id', 'user_id', 'title', 'provider_thread_id'])]
 class AiConversation extends Model
 {
     /** @use HasFactory<AiConversationFactory> */

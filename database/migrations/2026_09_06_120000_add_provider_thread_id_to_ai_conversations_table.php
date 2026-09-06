@@ -1,0 +1,23 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('ai_conversations', function (Blueprint $table): void {
+            $table->string('provider_thread_id', 160)->nullable()->unique()->after('title');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('ai_conversations', function (Blueprint $table): void {
+            $table->dropUnique(['provider_thread_id']);
+            $table->dropColumn('provider_thread_id');
+        });
+    }
+};

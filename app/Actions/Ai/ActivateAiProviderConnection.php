@@ -79,6 +79,7 @@ final class ActivateAiProviderConnection
             'account_type',
             'workspace_name',
             'scopes',
+            'runtime_profile_ref',
         ]);
 
         return array_filter(

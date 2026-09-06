@@ -48,6 +48,8 @@ use App\Support\Billing\FeatureCode;
 use Illuminate\Support\Facades\Route;
 use Laravel\Cashier\Http\Controllers\PaymentController;
 
+require __DIR__.'/ai.php';
+
 Route::get('/', [WelcomeController::class, 'index'])->name('home');
 
 Route::get('stripe/payment/{id}', [PaymentController::class, 'show'])
