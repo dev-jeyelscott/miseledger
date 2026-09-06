@@ -9,6 +9,7 @@ use App\Models\Location;
 use App\Models\Organization;
 use App\Models\StockBalance;
 use App\Models\StorageLocation;
+use App\Support\Inventory\StockBalanceReportQuery;
 use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
@@ -20,6 +21,10 @@ use Inertia\Response;
 
 class LowStockReportController extends Controller
 {
+    public function __construct(
+        private readonly StockBalanceReportQuery $stockBalanceReportQuery,
+    ) {}
+
     /**
      * Report balances at zero or negative quantity for the active organization.
      *
@@ -185,76 +190,15 @@ class LowStockReportController extends Controller
             default => null,
         };
 
-        $query = StockBalance::query()
-            ->with([
-                'location:id,name',
-                'storageLocation:id,name',
-                'inventoryItem:id,name,sku,inventory_category_id,base_unit_of_measure_id',
-                'inventoryItem.baseUnitOfMeasure:id,name,symbol',
-                'inventoryItem.inventoryCategory:id,name',
-            ])
-            ->where('organization_id', $organization->id)
-            ->where('quantity_on_hand', '<=', '0');
-
-        if ($locationId !== null) {
-            $query->where('location_id', $locationId);
-        }
-
-        if ($storageLocationId !== null) {
-            $query->where('storage_location_id', $storageLocationId);
-        }
-
-        if ($categoryId !== null) {
-            $query->whereHas(
-                'inventoryItem',
-                fn (EloquentBuilder $itemQuery): EloquentBuilder => $itemQuery->where(
-                    'inventory_category_id',
-                    $categoryId,
-                ),
-            );
-        }
-
-        if ($itemId !== null) {
-            $query->where('inventory_item_id', $itemId);
-        }
-
-        if ($itemSearch !== null) {
-            $query->whereHas(
-                'inventoryItem',
-                function (EloquentBuilder $itemQuery) use ($itemSearch): void {
-                    $itemQuery->where(
-                        function (
-                            EloquentBuilder $searchQuery
-                        ) use ($itemSearch): void {
-                            $searchQuery
-                                ->whereLike(
-                                    'name',
-                                    "%{$itemSearch}%",
-                                )
-                                ->orWhereLike(
-                                    'sku',
-                                    "%{$itemSearch}%",
-                                );
-
-                            if (ctype_digit($itemSearch)) {
-                                $searchQuery->orWhere(
-                                    'id',
-                                    (int) $itemSearch,
-                                );
-                            }
-                        },
-                    );
-                },
-            );
-        }
-
-        if ($status === 'out_of_stock') {
-            $query->where('quantity_on_hand', '=', '0');
-        }
-
-        if ($status === 'negative') {
-            $query->where('quantity_on_hand', '<', '0');
-        }
+        $query = $this->stockBalanceReportQuery->lowStock(
+            $organization,
+            $locationId,
+            $storageLocationId,
+            $categoryId,
+            $itemId,
+            $itemSearch,
+            $status,
+        );
 
         return [
             [

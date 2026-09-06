@@ -11,6 +11,7 @@ use App\Models\OrganizationMembership;
 use App\Models\StorageLocation;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use App\Support\Inventory\StockBalanceReportQuery;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function makeStorageLocationForLowStockTest(
@@ -147,6 +148,57 @@ beforeEach(function () {
         'user_id' => $this->manager->id,
         'role' => OrganizationRole::Manager,
     ]);
+});
+
+test('shared balance report reads never cross organization boundaries', function (): void {
+    $otherOrganization = Organization::factory()->create();
+    $otherLocation = Location::factory()->create([
+        'organization_id' => $otherOrganization->id,
+    ]);
+    $otherStorageLocation = makeStorageLocationForLowStockTest(
+        $otherOrganization,
+        $otherLocation,
+        'OTHER',
+    );
+    $otherUnit = UnitOfMeasure::factory()->create([
+        'organization_id' => $otherOrganization->id,
+    ]);
+    $otherItem = InventoryItem::factory()->create([
+        'organization_id' => $otherOrganization->id,
+        'base_unit_of_measure_id' => $otherUnit->id,
+        'name' => 'Other Organization Negative Item',
+    ]);
+
+    app(RecordStockMovement::class)->handle(
+        organization: $otherOrganization,
+        location: $otherLocation,
+        storageLocation: $otherStorageLocation,
+        inventoryItem: $otherItem,
+        type: StockMovementType::CountAdjustment,
+        baseQuantity: '-1',
+        baseUnitOfMeasure: $otherUnit,
+        referenceType: 'stock_count_line',
+        referenceId: $otherItem->id,
+        occurredAt: now(),
+        idempotencyKey: "low-stock-test:other:{$otherItem->id}",
+    );
+
+    $rows = app(StockBalanceReportQuery::class)
+        ->lowStock(
+            $this->organization,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+        )
+        ->get();
+
+    expect($rows->pluck('organization_id')->unique()->all())
+        ->toBe([$this->organization->id])
+        ->and($rows->pluck('inventory_item_id'))
+        ->not->toContain($otherItem->id);
 });
 
 test('report lists only balances at zero or negative quantity with operational summary', function () {
