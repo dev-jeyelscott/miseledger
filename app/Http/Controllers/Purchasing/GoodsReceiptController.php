@@ -22,6 +22,7 @@ use App\Models\StorageLocation;
 use App\Models\Supplier;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use App\Support\Purchasing\GoodsReceiptIndexQuery;
 use Brick\Math\BigDecimal;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
@@ -53,6 +54,10 @@ use Inertia\Response;
  */
 class GoodsReceiptController extends Controller
 {
+    public function __construct(
+        private readonly GoodsReceiptIndexQuery $goodsReceiptIndexQuery,
+    ) {}
+
     /**
      * List tenant-scoped receiving history with operational filters and summaries.
      */
@@ -518,96 +523,10 @@ class GoodsReceiptController extends Controller
         Organization $organization,
         array $filters,
     ): EloquentBuilder {
-        $query = GoodsReceipt::query()
-            ->where('organization_id', $organization->id);
-
-        if ($filters['search'] !== null) {
-            $searchPattern = "%{$filters['search']}%";
-
-            $query->where(
-                function (
-                    EloquentBuilder $searchQuery,
-                ) use ($searchPattern): void {
-                    $searchQuery
-                        ->whereLike(
-                            'number',
-                            $searchPattern,
-                        )
-                        ->orWhereHas(
-                            'purchaseOrder',
-                            fn (
-                                EloquentBuilder $purchaseOrderQuery,
-                            ): EloquentBuilder => $purchaseOrderQuery
-                                ->whereLike(
-                                    'number',
-                                    $searchPattern,
-                                ),
-                        )
-                        ->orWhereHas(
-                            'supplier',
-                            fn (
-                                EloquentBuilder $supplierQuery,
-                            ): EloquentBuilder => $supplierQuery->whereLike(
-                                'name',
-                                $searchPattern,
-                            ),
-                        );
-                },
-            );
-        }
-
-        if ($filters['status'] !== null) {
-            $query->where(
-                'status',
-                $filters['status'],
-            );
-        }
-
-        if ($filters['supplierId'] !== null) {
-            $query->where(
-                'supplier_id',
-                $filters['supplierId'],
-            );
-        }
-
-        if ($filters['locationId'] !== null) {
-            $query->where(
-                'location_id',
-                $filters['locationId'],
-            );
-        }
-
-        if ($filters['from'] !== null) {
-            $from = CarbonImmutable::parse(
-                $filters['from'],
-                $organization->timezone,
-            )
-                ->startOfDay()
-                ->utc();
-
-            $query->where(
-                'received_at',
-                '>=',
-                $from,
-            );
-        }
-
-        if ($filters['to'] !== null) {
-            $to = CarbonImmutable::parse(
-                $filters['to'],
-                $organization->timezone,
-            )
-                ->endOfDay()
-                ->utc();
-
-            $query->where(
-                'received_at',
-                '<=',
-                $to,
-            );
-        }
-
-        return $query;
+        return $this->goodsReceiptIndexQuery->builder(
+            $organization,
+            $filters,
+        );
     }
 
     /**

@@ -13,8 +13,8 @@ use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\SupplierItem;
 use App\Models\UnitOfMeasure;
+use App\Support\Purchasing\SupplierIndexQuery;
 use Brick\Math\BigDecimal;
-use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -24,6 +24,10 @@ use Inertia\Response;
 
 class SupplierController extends Controller
 {
+    public function __construct(
+        private readonly SupplierIndexQuery $supplierIndexQuery,
+    ) {}
+
     /**
      * List the active organization's suppliers with bounded operational filtering.
      */
@@ -95,122 +99,12 @@ class SupplierController extends Controller
             ? (int) $validated['per_page']
             : 10;
 
-        $query = Supplier::query()
-            ->select('suppliers.*')
-            ->where(
-                'organization_id',
-                $organization->id,
-            )
-            ->addSelect([
-                'last_purchase_order_number' => PurchaseOrder::query()
-                    ->select('number')
-                    ->whereColumn(
-                        'purchase_orders.supplier_id',
-                        'suppliers.id',
-                    )
-                    ->whereColumn(
-                        'purchase_orders.organization_id',
-                        'suppliers.organization_id',
-                    )
-                    ->orderByDesc('order_date')
-                    ->orderByDesc('id')
-                    ->limit(1),
-
-                'last_purchase_order_date' => PurchaseOrder::query()
-                    ->select('order_date')
-                    ->whereColumn(
-                        'purchase_orders.supplier_id',
-                        'suppliers.id',
-                    )
-                    ->whereColumn(
-                        'purchase_orders.organization_id',
-                        'suppliers.organization_id',
-                    )
-                    ->orderByDesc('order_date')
-                    ->orderByDesc('id')
-                    ->limit(1),
-            ])
-            ->withCount([
-                'supplierItems as item_count',
-            ]);
-
-        if ($search !== null) {
-            $searchPattern = "%{$search}%";
-
-            $query->where(
-                function (
-                    EloquentBuilder $searchQuery,
-                ) use ($searchPattern): void {
-                    $searchQuery
-                        ->whereLike(
-                            'name',
-                            $searchPattern,
-                        )
-                        ->orWhereLike(
-                            'code',
-                            $searchPattern,
-                        )
-                        ->orWhereLike(
-                            'contact_name',
-                            $searchPattern,
-                        )
-                        ->orWhereLike(
-                            'email',
-                            $searchPattern,
-                        )
-                        ->orWhereLike(
-                            'phone',
-                            $searchPattern,
-                        );
-                },
-            );
-        }
-
-        if ($status !== null) {
-            $query->where(
-                'active',
-                $status === 'active',
-            );
-        }
-
-        switch ($sort) {
-            case 'name_desc':
-                $query
-                    ->orderByDesc('name')
-                    ->orderByDesc('id');
-
-                break;
-
-            case 'code_asc':
-                $query
-                    ->orderBy('code')
-                    ->orderBy('id');
-
-                break;
-
-            case 'code_desc':
-                $query
-                    ->orderByDesc('code')
-                    ->orderByDesc('id');
-
-                break;
-
-            case 'items_desc':
-                $query
-                    ->orderByDesc('item_count')
-                    ->orderBy('name')
-                    ->orderBy('id');
-
-                break;
-
-            case 'name_asc':
-            default:
-                $query
-                    ->orderBy('name')
-                    ->orderBy('id');
-
-                break;
-        }
+        $query = $this->supplierIndexQuery->builder(
+            $organization,
+            $search,
+            $status,
+            $sort,
+        );
 
         $paginator = $query
             ->paginate($perPage)

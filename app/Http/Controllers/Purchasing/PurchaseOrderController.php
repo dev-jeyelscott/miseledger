@@ -17,6 +17,7 @@ use App\Models\PurchaseOrderLine;
 use App\Models\Supplier;
 use App\Models\SupplierItem;
 use App\Models\User;
+use App\Support\Purchasing\PurchaseOrderIndexQuery;
 use Brick\Math\BigDecimal;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
@@ -48,6 +49,10 @@ use Inertia\Response;
  */
 class PurchaseOrderController extends Controller
 {
+    public function __construct(
+        private readonly PurchaseOrderIndexQuery $purchaseOrderIndexQuery,
+    ) {}
+
     /**
      * List tenant-scoped purchase orders with operational filters and summaries.
      */
@@ -563,72 +568,10 @@ class PurchaseOrderController extends Controller
         Organization $organization,
         array $filters,
     ): EloquentBuilder {
-        $query = PurchaseOrder::query()
-            ->where('organization_id', $organization->id);
-
-        if ($filters['search'] !== null) {
-            $searchPattern = "%{$filters['search']}%";
-
-            $query->where(
-                function (
-                    EloquentBuilder $searchQuery,
-                ) use ($searchPattern): void {
-                    $searchQuery
-                        ->whereLike(
-                            'number',
-                            $searchPattern,
-                        )
-                        ->orWhereHas(
-                            'supplier',
-                            fn (
-                                EloquentBuilder $supplierQuery,
-                            ): EloquentBuilder => $supplierQuery->whereLike(
-                                'name',
-                                $searchPattern,
-                            ),
-                        );
-                },
-            );
-        }
-
-        if ($filters['status'] !== null) {
-            $query->where(
-                'status',
-                $filters['status'],
-            );
-        }
-
-        if ($filters['supplierId'] !== null) {
-            $query->where(
-                'supplier_id',
-                $filters['supplierId'],
-            );
-        }
-
-        if ($filters['locationId'] !== null) {
-            $query->where(
-                'location_id',
-                $filters['locationId'],
-            );
-        }
-
-        if ($filters['from'] !== null) {
-            $query->whereDate(
-                'order_date',
-                '>=',
-                $filters['from'],
-            );
-        }
-
-        if ($filters['to'] !== null) {
-            $query->whereDate(
-                'order_date',
-                '<=',
-                $filters['to'],
-            );
-        }
-
-        return $query;
+        return $this->purchaseOrderIndexQuery->builder(
+            $organization,
+            $filters,
+        );
     }
 
     /**
