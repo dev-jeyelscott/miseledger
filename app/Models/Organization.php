@@ -71,6 +71,16 @@ class Organization extends Model
     }
 
     /**
+     * Get private AI conversations created in this organization.
+     *
+     * @return HasMany<AiConversation, $this>
+     */
+    public function aiConversations(): HasMany
+    {
+        return $this->hasMany(AiConversation::class);
+    }
+
+    /**
      * Get users belonging to this organization.
      *
      * @return BelongsToMany<User, $this>

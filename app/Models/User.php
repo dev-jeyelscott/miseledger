@@ -48,6 +48,26 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     }
 
     /**
+     * Get provider connections privately owned by this user.
+     *
+     * @return HasMany<AiProviderConnection, $this>
+     */
+    public function aiProviderConnections(): HasMany
+    {
+        return $this->hasMany(AiProviderConnection::class);
+    }
+
+    /**
+     * Get AI conversations privately owned by this user across memberships.
+     *
+     * @return HasMany<AiConversation, $this>
+     */
+    public function aiConversations(): HasMany
+    {
+        return $this->hasMany(AiConversation::class);
+    }
+
+    /**
      * Get organizations this user belongs to.
      *
      * @return BelongsToMany<Organization, $this>
