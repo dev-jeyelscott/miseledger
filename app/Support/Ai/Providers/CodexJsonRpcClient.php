@@ -5,6 +5,7 @@ namespace App\Support\Ai\Providers;
 use App\Enums\AiProviderErrorCode;
 use App\Exceptions\AiProviderException;
 use App\Models\User;
+use Symfony\Component\Process\InputStream;
 use Symfony\Component\Process\Process;
 use Throwable;
 
@@ -19,49 +20,105 @@ final class CodexJsonRpcClient
     public function call(User $user, string $method, array $params = []): array
     {
         $environment = ['CODEX_HOME' => $this->profiles->path($user)];
-        $command = (string) config('ai.codex.command');
         $timeout = (int) config('ai.codex.timeout_seconds');
 
         try {
-            (new Process([$command, 'app-server', 'daemon', 'start'], null, $environment))
-                ->setTimeout($timeout)
-                ->mustRun();
-
-            $input = implode("\n", [
-                json_encode(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'initialize', 'params' => [
-                    'clientInfo' => ['name' => 'miseledger', 'version' => '1.0'],
-                ]], JSON_THROW_ON_ERROR),
-                json_encode(['jsonrpc' => '2.0', 'id' => 2, 'method' => $method, 'params' => $params], JSON_THROW_ON_ERROR),
-            ])."\n";
-
-            $process = new Process([$command, 'app-server', 'proxy'], null, $environment, $input);
+            $input = new InputStream;
+            $process = new Process([
+                ...$this->command(),
+                'app-server',
+            ], base_path(), $environment);
+            $process->setInput($input);
             $process->setTimeout($timeout);
-            $process->run();
+            $process->start();
 
-            if (! $process->isSuccessful()) {
-                throw new AiProviderException(AiProviderErrorCode::Unavailable);
+            foreach ([
+                ['id' => 1, 'method' => 'initialize', 'params' => [
+                    'clientInfo' => ['name' => 'miseledger', 'version' => '1.0'],
+                ]],
+                ['method' => 'initialized', 'params' => []],
+                ['id' => 2, 'method' => $method, 'params' => $params],
+            ] as $message) {
+                $input->write(json_encode($message, JSON_THROW_ON_ERROR)."\n");
             }
 
-            foreach (preg_split('/\R/', $process->getOutput()) ?: [] as $line) {
-                $response = json_decode($line, true);
+            $response = $this->waitForResponse($process, $timeout);
+            $input->close();
 
-                if (! is_array($response) || ($response['id'] ?? null) !== 2) {
-                    continue;
-                }
-
-                if (isset($response['error'])) {
-                    throw new AiProviderException($this->errorCode((array) $response['error']));
-                }
-
-                return is_array($response['result'] ?? null) ? $response['result'] : [];
+            if ($process->isRunning()) {
+                $process->stop();
             }
+
+            if (isset($response['error'])) {
+                throw new AiProviderException($this->errorCode((array) $response['error']));
+            }
+
+            return is_array($response['result'] ?? null) ? $response['result'] : [];
         } catch (AiProviderException $exception) {
             throw $exception;
         } catch (Throwable) {
             throw new AiProviderException(AiProviderErrorCode::Unavailable);
         }
+    }
+
+    /** @return array<string, mixed> */
+    private function waitForResponse(Process $process, int $timeout): array
+    {
+        $deadline = microtime(true) + $timeout;
+        $buffer = '';
+
+        while ($process->isRunning() && microtime(true) < $deadline) {
+            $buffer .= $process->getIncrementalOutput();
+
+            while (($lineEnd = strpos($buffer, "\n")) !== false) {
+                $line = substr($buffer, 0, $lineEnd);
+                $buffer = substr($buffer, $lineEnd + 1);
+                $response = json_decode($line, true);
+
+                if (is_array($response) && ($response['id'] ?? null) === 2) {
+                    return $response;
+                }
+            }
+
+            usleep(10_000);
+        }
+
+        $buffer .= $process->getIncrementalOutput();
+
+        foreach (preg_split('/\R/', $buffer) ?: [] as $line) {
+            $response = json_decode($line, true);
+
+            if (is_array($response) && ($response['id'] ?? null) === 2) {
+                return $response;
+            }
+        }
+
+        if ($process->isRunning()) {
+            $process->stop();
+
+            throw new AiProviderException(AiProviderErrorCode::Unavailable);
+        }
 
         throw new AiProviderException(AiProviderErrorCode::Protocol);
+    }
+
+    /** @return list<string> */
+    private function command(): array
+    {
+        $configuredCommand = config('ai.codex.command');
+
+        if (is_string($configuredCommand) && $configuredCommand !== '') {
+            return [$configuredCommand];
+        }
+
+        if (is_array($configuredCommand)
+            && $configuredCommand !== []
+            && array_is_list($configuredCommand)
+            && array_all($configuredCommand, static fn (mixed $part): bool => is_string($part) && $part !== '')) {
+            return $configuredCommand;
+        }
+
+        throw new AiProviderException(AiProviderErrorCode::Unavailable);
     }
 
     /** @param array<string, mixed> $error */
