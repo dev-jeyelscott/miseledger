@@ -7,6 +7,7 @@ use App\Models\AiProviderConnection;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
+use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('AI Assistant page exposes only the signed-in member conversation data and safe connection state', function (): void {
@@ -44,4 +45,24 @@ test('AI capability context provides an actionable server reason when member acc
         ->assertInertia(fn (Assert $page) => $page
             ->where('organizationContext.ai.canUse', false)
             ->where('organizationContext.ai.reason', 'member_access_disabled'));
+});
+
+test('the persistent AI drawer refreshes its own server model after mutations and while a run is active', function (): void {
+    $drawer = File::get(resource_path('js/components/ai-assistant-drawer.tsx'));
+    $assistant = File::get(resource_path('js/components/ai-assistant.tsx'));
+
+    expect($drawer)
+        ->toContain('const refresh = useCallback((): void =>')
+        ->toContain('(conversationId: number | null): void =>')
+        ->toContain('window.setInterval(refresh, 2_000)')
+        ->toContain('assistantData?.organizationId === activeOrganizationId')
+        ->toContain('onConversationChange={selectConversation}')
+        ->toContain('onRefresh={refresh}');
+
+    expect($assistant)
+        ->toContain('onConversationChange?: (conversationId: number | null) => void;')
+        ->toContain('onRefresh?: () => void;')
+        ->toContain('function refreshAssistant(): void')
+        ->toContain('onSuccess: () => selectConversation(null)')
+        ->toContain('onSuccess: refreshAssistant');
 });

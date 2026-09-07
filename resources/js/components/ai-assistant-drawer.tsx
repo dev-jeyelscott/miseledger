@@ -1,6 +1,6 @@
 import { useHttp, usePage } from '@inertiajs/react';
 import { Bot } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AiAssistant } from '@/components/ai-assistant';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,15 +18,70 @@ export function AiAssistantDrawer() {
         organizationContext: OrganizationContext;
     }>().props;
     const [open, setOpen] = useState(false);
-    const [data, setData] = useState<AiAssistantData | null>(null);
+    const [assistantData, setAssistantData] = useState<{
+        organizationId: number | null;
+        data: AiAssistantData;
+    } | null>(null);
     const request = useHttp<Record<string, never>, AiAssistantData>({});
+    const activeOrganizationId = organizationContext.active?.id ?? null;
+    const data =
+        assistantData?.organizationId === activeOrganizationId
+            ? assistantData.data
+            : null;
+
+    const load = useCallback(
+        (conversationId?: number): void => {
+            request.setData({});
+            request.get(
+                aiIndex.url({
+                    query:
+                        conversationId === undefined
+                            ? {}
+                            : { conversation: conversationId },
+                }),
+                {
+                    onSuccess: (nextData) =>
+                        setAssistantData({
+                            organizationId: activeOrganizationId,
+                            data: nextData,
+                        }),
+                },
+            );
+        },
+        [activeOrganizationId, request],
+    );
+
+    const refresh = useCallback((): void => {
+        load(data?.conversation?.id);
+    }, [data?.conversation?.id, load]);
+
+    const selectConversation = useCallback(
+        (conversationId: number | null): void => {
+            load(conversationId ?? undefined);
+        },
+        [load],
+    );
+
+    const hasActiveRun =
+        data?.conversation?.runs.some(
+            (run) => run.status === 'queued' || run.status === 'running',
+        ) ?? false;
+
+    useEffect(() => {
+        if (!open || !hasActiveRun) {
+            return;
+        }
+
+        const interval = window.setInterval(refresh, 2_000);
+
+        return () => window.clearInterval(interval);
+    }, [hasActiveRun, open, refresh]);
 
     function changeOpen(nextOpen: boolean): void {
         setOpen(nextOpen);
 
-        if (nextOpen && data === null) {
-            request.setData({});
-            request.get(aiIndex.url(), { onSuccess: setData });
+        if (nextOpen) {
+            refresh();
         }
     }
 
@@ -54,6 +109,8 @@ export function AiAssistantDrawer() {
                             {...data}
                             access={organizationContext.ai}
                             compact
+                            onConversationChange={selectConversation}
+                            onRefresh={refresh}
                         />
                     </div>
                 ) : (

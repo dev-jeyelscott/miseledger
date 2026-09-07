@@ -21,6 +21,8 @@ import type { AiAssistantData, OrganizationAIAccessContext } from '@/types';
 type Props = AiAssistantData & {
     access: OrganizationAIAccessContext | null;
     compact?: boolean;
+    onConversationChange?: (conversationId: number | null) => void;
+    onRefresh?: () => void;
 };
 
 const unavailableCopy: Record<
@@ -45,7 +47,13 @@ const runErrorCopy: Record<string, string> = {
     access_revoked: 'AI access changed before this response could complete.',
 };
 
-export function AiAssistant({ access, compact = false, ...data }: Props) {
+export function AiAssistant({
+    access,
+    compact = false,
+    onConversationChange,
+    onRefresh,
+    ...data
+}: Props) {
     const [content, setContent] = useState('');
     const [deviceCode, setDeviceCode] = useState<{
         user_code: string;
@@ -79,6 +87,10 @@ export function AiAssistant({ access, compact = false, ...data }: Props) {
     );
 
     useEffect(() => {
+        if (onRefresh !== undefined) {
+            return;
+        }
+
         if (hasActiveRun) {
             poll.start();
 
@@ -86,17 +98,39 @@ export function AiAssistant({ access, compact = false, ...data }: Props) {
         }
 
         poll.stop();
-    }, [hasActiveRun, poll]);
+    }, [hasActiveRun, onRefresh, poll]);
+
+    function selectConversation(conversationId: number | null): void {
+        if (onConversationChange !== undefined) {
+            onConversationChange(conversationId);
+
+            return;
+        }
+
+        router.visit(
+            aiIndex.url({
+                query:
+                    conversationId === null
+                        ? {}
+                        : { conversation: conversationId },
+            }),
+        );
+    }
+
+    function refreshAssistant(): void {
+        if (onRefresh !== undefined) {
+            onRefresh();
+
+            return;
+        }
+
+        router.reload({ only: ['conversation', 'conversations'] });
+    }
 
     function createConversation(): void {
         conversationRequest.setData({});
         conversationRequest.post(AiConversationController.store.url(), {
-            onSuccess: (result) =>
-                router.visit(
-                    aiIndex.url({
-                        query: { conversation: result.conversation.id },
-                    }),
-                ),
+            onSuccess: (result) => selectConversation(result.conversation.id),
         });
     }
 
@@ -113,16 +147,15 @@ export function AiAssistant({ access, compact = false, ...data }: Props) {
             {
                 onSuccess: () => {
                     setContent('');
-                    router.reload({ only: ['conversation', 'conversations'] });
+                    refreshAssistant();
                 },
             },
         );
     }
 
     function deleteConversation(id: number): void {
-        router.delete(AiConversationController.destroy.url(id), {
-            preserveScroll: true,
-            onSuccess: () => router.visit(aiIndex()),
+        conversationRequest.delete(AiConversationController.destroy.url(id), {
+            onSuccess: () => selectConversation(null),
         });
     }
 
@@ -138,7 +171,7 @@ export function AiAssistant({ access, compact = false, ...data }: Props) {
         connectionRequest.post(CodexConnectionController.complete.url(), {
             onSuccess: () => {
                 setDeviceCode(null);
-                router.reload();
+                refreshAssistant();
             },
         });
     }
@@ -146,7 +179,7 @@ export function AiAssistant({ access, compact = false, ...data }: Props) {
     function disconnectCodex(): void {
         connectionRequest.setData({});
         connectionRequest.delete(CodexConnectionController.destroy.url(), {
-            onSuccess: () => router.reload(),
+            onSuccess: refreshAssistant,
         });
     }
 
@@ -272,21 +305,40 @@ export function AiAssistant({ access, compact = false, ...data }: Props) {
                                 key={conversation.id}
                                 className="flex items-center gap-1"
                             >
-                                <Link
-                                    href={aiIndex({
-                                        query: {
-                                            conversation: conversation.id,
-                                        },
-                                    })}
-                                    className={cn(
-                                        'min-w-0 flex-1 rounded-md px-2 py-2 text-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                                        data.conversation?.id ===
-                                            conversation.id &&
-                                            'bg-muted font-medium',
-                                    )}
-                                >
-                                    {conversation.title || 'New conversation'}
-                                </Link>
+                                {onConversationChange === undefined ? (
+                                    <Link
+                                        href={aiIndex({
+                                            query: {
+                                                conversation: conversation.id,
+                                            },
+                                        })}
+                                        className={cn(
+                                            'min-w-0 flex-1 rounded-md px-2 py-2 text-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                                            data.conversation?.id ===
+                                                conversation.id &&
+                                                'bg-muted font-medium',
+                                        )}
+                                    >
+                                        {conversation.title ||
+                                            'New conversation'}
+                                    </Link>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            selectConversation(conversation.id)
+                                        }
+                                        className={cn(
+                                            'min-w-0 flex-1 rounded-md px-2 py-2 text-left text-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                                            data.conversation?.id ===
+                                                conversation.id &&
+                                                'bg-muted font-medium',
+                                        )}
+                                    >
+                                        {conversation.title ||
+                                            'New conversation'}
+                                    </button>
+                                )}
                                 <Button
                                     variant="ghost"
                                     size="icon"
