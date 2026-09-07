@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Ai\AiAssistantController;
 use App\Http\Controllers\Ai\AiConversationController;
 use App\Http\Controllers\Ai\AiMessageController;
 use App\Http\Controllers\Ai\AiRunController;
@@ -11,6 +12,7 @@ use Laravel\Mcp\Facades\Mcp;
 Mcp::local('miseledger', MiseLedgerMcpServer::class);
 
 Route::middleware(['auth', 'verified'])->prefix('ai')->name('ai.')->group(function (): void {
+    Route::get('/', [AiAssistantController::class, 'index'])->name('index');
     Route::post('conversations', [AiConversationController::class, 'store'])->name('conversations.store');
     Route::delete('conversations/{conversation}', [AiConversationController::class, 'destroy'])->name('conversations.destroy');
     Route::post('conversations/{conversation}/messages', [AiMessageController::class, 'store'])->name('conversations.messages.store');

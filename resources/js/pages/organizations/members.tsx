@@ -1,4 +1,4 @@
-import { Form, Head } from '@inertiajs/react';
+import { Form, Head, router } from '@inertiajs/react';
 import { Search, UserPlus, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
@@ -7,6 +7,7 @@ import InputError from '@/components/input-error';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -28,6 +29,7 @@ type Member = {
     name: string;
     email: string;
     role: OrganizationRole;
+    ai_enabled: boolean;
 };
 
 type RoleOption = {
@@ -39,6 +41,7 @@ type Props = {
     organization: OrganizationSummary;
     members: Member[];
     roles: RoleOption[];
+    canManageAiAccess: boolean;
 };
 
 type MemberRoleFilter = 'all' | OrganizationRole;
@@ -185,6 +188,7 @@ export default function OrganizationMembers({
     organization,
     members,
     roles,
+    canManageAiAccess,
 }: Props) {
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState<MemberRoleFilter>('all');
@@ -416,6 +420,41 @@ export default function OrganizationMembers({
                                             {roleLabels.get(member.role) ??
                                                 member.role}
                                         </Badge>
+
+                                        {canManageAiAccess ? (
+                                            <label className="flex items-center gap-2 text-xs">
+                                                <Checkbox
+                                                    checked={member.ai_enabled}
+                                                    disabled={
+                                                        member.role === 'owner'
+                                                    }
+                                                    aria-label={`AI access for ${member.name}`}
+                                                    onCheckedChange={(
+                                                        checked,
+                                                    ) =>
+                                                        router.put(
+                                                            OrganizationMemberController.updateAIAccess.url(
+                                                                {
+                                                                    organization:
+                                                                        organization.id,
+                                                                    membership:
+                                                                        member.id,
+                                                                },
+                                                            ),
+                                                            {
+                                                                ai_enabled:
+                                                                    checked ===
+                                                                    true,
+                                                            },
+                                                            {
+                                                                preserveScroll: true,
+                                                            },
+                                                        )
+                                                    }
+                                                />
+                                                <span>AI</span>
+                                            </label>
+                                        ) : null}
                                     </article>
                                 ))}
                             </div>
@@ -429,6 +468,12 @@ export default function OrganizationMembers({
                                                 className="px-4 py-3 font-medium"
                                             >
                                                 Member
+                                            </th>
+                                            <th
+                                                scope="col"
+                                                className="w-40 px-4 py-3 font-medium"
+                                            >
+                                                AI access
                                             </th>
                                             <th
                                                 scope="col"
@@ -466,6 +511,55 @@ export default function OrganizationMembers({
                                                             {member.name}
                                                         </span>
                                                     </div>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    {canManageAiAccess ? (
+                                                        <label className="flex items-center gap-2 text-sm">
+                                                            <Checkbox
+                                                                checked={
+                                                                    member.ai_enabled
+                                                                }
+                                                                disabled={
+                                                                    member.role ===
+                                                                    'owner'
+                                                                }
+                                                                aria-label={`AI access for ${member.name}`}
+                                                                onCheckedChange={(
+                                                                    checked,
+                                                                ) =>
+                                                                    router.put(
+                                                                        OrganizationMemberController.updateAIAccess.url(
+                                                                            {
+                                                                                organization:
+                                                                                    organization.id,
+                                                                                membership:
+                                                                                    member.id,
+                                                                            },
+                                                                        ),
+                                                                        {
+                                                                            ai_enabled:
+                                                                                checked ===
+                                                                                true,
+                                                                        },
+                                                                        {
+                                                                            preserveScroll: true,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                            <span>
+                                                                {member.ai_enabled
+                                                                    ? 'Enabled'
+                                                                    : 'Disabled'}
+                                                            </span>
+                                                        </label>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">
+                                                            {member.ai_enabled
+                                                                ? 'Enabled'
+                                                                : 'Disabled'}
+                                                        </span>
+                                                    )}
                                                 </td>
 
                                                 <td className="px-4 py-3 text-muted-foreground">

@@ -21,4 +21,28 @@ final readonly class MemberAIAccess
             && $this->commerciallyWritable
             && $this->organizationActive;
     }
+
+    /**
+     * Return the first server-authoritative reason that prevents AI use.
+     */
+    public function unavailableReason(): ?string
+    {
+        if (! $this->organizationActive) {
+            return 'organization_inactive';
+        }
+
+        if (! $this->commerciallyWritable) {
+            return 'commercial_read_only';
+        }
+
+        if (! $this->featureGranted) {
+            return 'feature_not_in_plan';
+        }
+
+        if (! $this->memberEnabled) {
+            return 'member_access_disabled';
+        }
+
+        return null;
+    }
 }

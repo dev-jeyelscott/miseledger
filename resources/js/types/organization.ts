@@ -51,6 +51,12 @@ export type OrganizationMembership = {
 export type OrganizationAIAccessContext = {
     canUse: boolean;
     memberEnabled: boolean;
+    reason:
+        | 'organization_inactive'
+        | 'commercial_read_only'
+        | 'feature_not_in_plan'
+        | 'member_access_disabled'
+        | null;
 };
 
 export type OrganizationSubscriptionContext = {

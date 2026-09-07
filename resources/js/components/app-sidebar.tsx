@@ -3,6 +3,7 @@ import {
     AlertTriangle,
     ArrowLeftRight,
     BadgeCheck,
+    Bot,
     Boxes,
     ClipboardCheck,
     ClipboardList,
@@ -24,6 +25,7 @@ import {
     Truck,
     Users,
 } from 'lucide-react';
+import AiAssistantController from '@/actions/App/Http/Controllers/Ai/AiAssistantController';
 import OrganizationBillingController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingController';
 import InventoryAdjustmentController from '@/actions/App/Http/Controllers/Inventory/InventoryAdjustmentController';
 import InventoryBrandController from '@/actions/App/Http/Controllers/Inventory/InventoryBrandController';
@@ -89,6 +91,14 @@ export function AppSidebar() {
             icon: LayoutGrid,
         },
     ];
+
+    if (organizationContext.ai?.canUse) {
+        overviewNavItems.push({
+            title: 'AI Assistant',
+            href: AiAssistantController.index(),
+            icon: Bot,
+        });
+    }
 
     const inventoryNavItems: NavItem[] = [];
 

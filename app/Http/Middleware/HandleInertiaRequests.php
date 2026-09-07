@@ -82,7 +82,7 @@ class HandleInertiaRequests extends Middleware
      *         limits: array<string, int|null>,
      *         grants: array<string, bool>
      *     }|null,
-     *     ai: array{canUse: bool, memberEnabled: bool}|null
+     *     ai: array{canUse: bool, memberEnabled: bool, reason: string|null}|null
      * }
      */
     private function organizationContext(Request $request): array
@@ -153,6 +153,7 @@ class HandleInertiaRequests extends Middleware
                 ? [
                     'canUse' => $aiAccess->canUse(),
                     'memberEnabled' => $aiAccess->memberEnabled,
+                    'reason' => $aiAccess->unavailableReason(),
                 ]
                 : null,
         ];

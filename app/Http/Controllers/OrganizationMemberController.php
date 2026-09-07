@@ -12,6 +12,7 @@ use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -22,7 +23,7 @@ class OrganizationMemberController extends Controller
     /**
      * Show users belonging to an organization.
      */
-    public function index(Organization $organization): Response
+    public function index(Request $request, Organization $organization): Response
     {
         Gate::authorize(
             OrganizationPermission::UsersManage->value,
@@ -39,6 +40,8 @@ class OrganizationMemberController extends Controller
                     'name' => $membership->user->name,
                     'email' => $membership->user->email,
                     'role' => $membership->role->value,
+                    'ai_enabled' => $membership->role === OrganizationRole::Owner
+                        || $membership->ai_enabled,
                 ],
             )
             ->values()
@@ -60,6 +63,7 @@ class OrganizationMemberController extends Controller
             ],
             'members' => $members,
             'roles' => $roles,
+            'canManageAiAccess' => $this->isOwner($request, $organization),
         ]);
     }
 
@@ -119,5 +123,16 @@ class OrganizationMemberController extends Controller
         ]);
 
         return to_route('organizations.members.index', $organization);
+    }
+
+    private function isOwner(Request $request, Organization $organization): bool
+    {
+        $user = $request->user();
+
+        return $user instanceof User
+            && $user->organizationMemberships()
+                ->whereBelongsTo($organization)
+                ->where('role', OrganizationRole::Owner->value)
+                ->exists();
     }
 }

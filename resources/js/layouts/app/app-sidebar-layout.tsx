@@ -1,3 +1,4 @@
+import { AiAssistantDrawer } from '@/components/ai-assistant-drawer';
 import { AppContent } from '@/components/app-content';
 import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
@@ -16,6 +17,9 @@ export default function AppSidebarLayout({
                 <AppSidebarHeader breadcrumbs={breadcrumbs} />
                 <SubscriptionNotice />
                 {children}
+                <div className="fixed right-4 bottom-4 z-40">
+                    <AiAssistantDrawer />
+                </div>
             </AppContent>
         </AppShell>
     );
