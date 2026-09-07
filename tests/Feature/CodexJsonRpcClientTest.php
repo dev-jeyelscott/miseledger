@@ -29,11 +29,11 @@ test('the Codex provider uses documented direct stdio JSON-RPC for connection an
     $provider->logout($user);
 
     expect($provider->rateLimits($user)['rateLimits']['primary']['usedPercent'])->toBe(20)
-        ->and($provider->startThread($user, $conversation))->toBe('thr_123');
+        ->and($provider->startThread($user, $conversation, 'signed-identity'))->toBe('thr_123');
 
     expect($conversation->refresh()->provider_thread_id)->toBe('thr_123')
-        ->and($provider->resumeThread($user, $conversation))->toBe('thr_123')
-        ->and($provider->startTurn($user, 'thr_123', 'Summarize today.'))->toBe('turn_123');
+        ->and($provider->resumeThread($user, $conversation, 'signed-identity'))->toBe('thr_123')
+        ->and($provider->startTurn($user, 'thr_123', 'Summarize today.')->id)->toBe('turn_123');
 
     $profilePath = app(CodexProfileLocator::class)->path($user);
     $transcripts = array_map(
@@ -61,6 +61,15 @@ test('the Codex provider uses documented direct stdio JSON-RPC for connection an
     ]);
 
     expect($transcripts[4][2]['params']['cwd'])->toBe(config('ai.codex.workspace_path'));
+
+    $commands = array_map(
+        static fn (string $line): array => json_decode($line, true, 512, JSON_THROW_ON_ERROR),
+        array_filter(file($profilePath.'/command.jsonl', FILE_IGNORE_NEW_LINES) ?: []),
+    );
+
+    expect($commands[4])->toContain('--config')
+        ->and(implode(' ', $commands[4]))->toContain('mcp_servers.miseledger.command')
+        ->and(implode(' ', $commands[4]))->toContain('--execution-identity=signed-identity');
     expect(trim((string) file_get_contents($profilePath.'/workspace')))->toBe(config('ai.codex.workspace_path'));
 });
 
@@ -82,7 +91,7 @@ test('a user cannot bind another users conversation to their Codex profile', fun
     $conversation = AiConversation::factory()->create();
     $otherUser = User::factory()->create();
 
-    expect(fn (): string => app(CodexAppServerProvider::class)->startThread($otherUser, $conversation))
+    expect(fn (): string => app(CodexAppServerProvider::class)->startThread($otherUser, $conversation, 'signed-identity'))
         ->toThrow(AiProviderException::class);
 });
 

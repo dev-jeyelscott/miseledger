@@ -23,9 +23,9 @@ interface AiProviderAdapter
     /** @return array<string, mixed> */
     public function rateLimits(User $user): array;
 
-    public function startThread(User $user, AiConversation $conversation): string;
+    public function startThread(User $user, AiConversation $conversation, string $mcpExecutionIdentity): string;
 
-    public function resumeThread(User $user, AiConversation $conversation): string;
+    public function resumeThread(User $user, AiConversation $conversation, string $mcpExecutionIdentity): string;
 
-    public function startTurn(User $user, string $threadId, string $input): string;
+    public function startTurn(User $user, string $threadId, string $input): AiProviderTurn;
 }

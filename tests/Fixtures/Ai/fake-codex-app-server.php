@@ -2,10 +2,13 @@
 
 declare(strict_types=1);
 
-if (array_slice($argv, 1, 4) !== ['--sandbox', 'read-only', '--ask-for-approval', 'never']
-    || ($argv[5] ?? null) !== '--cd'
-    || ! is_string($argv[6] ?? null)
-    || array_slice($argv, 7) !== ['app-server', '--stdio']) {
+if (! in_array('--sandbox', $argv, true)
+    || ! in_array('read-only', $argv, true)
+    || ! in_array('--ask-for-approval', $argv, true)
+    || ! in_array('never', $argv, true)
+    || ($cdIndex = array_search('--cd', $argv, true)) === false
+    || ! is_string($argv[$cdIndex + 1] ?? null)
+    || array_slice($argv, $cdIndex + 2) !== ['app-server', '--stdio']) {
     fwrite(STDERR, 'Unexpected Codex command.');
     exit(1);
 }
@@ -42,6 +45,7 @@ if (! is_string($profilePath) || $profilePath === '') {
 }
 
 file_put_contents($profilePath.'/protocol.jsonl', json_encode($messages, JSON_THROW_ON_ERROR)."\n", FILE_APPEND | LOCK_EX);
+file_put_contents($profilePath.'/command.jsonl', json_encode($argv, JSON_THROW_ON_ERROR)."\n", FILE_APPEND | LOCK_EX);
 file_put_contents($profilePath.'/workspace', getcwd()."\n", LOCK_EX);
 
 $method = $messages[2]['method'] ?? null;
@@ -51,7 +55,7 @@ $result = match ($method) {
     'account/logout' => [],
     'account/rateLimits/read' => ['rateLimits' => ['primary' => ['usedPercent' => 20]]],
     'thread/start', 'thread/resume' => ['thread' => ['id' => 'thr_123']],
-    'turn/start' => ['turn' => ['id' => 'turn_123']],
+    'turn/start' => ['turn' => ['id' => 'turn_123', 'items' => [['type' => 'agentMessage', 'text' => 'Inventory is stable.']], 'model' => 'gpt-5', 'usage' => ['inputTokens' => 3, 'outputTokens' => 4]]],
     default => null,
 };
 

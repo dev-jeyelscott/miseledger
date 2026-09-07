@@ -18,10 +18,12 @@ final class CodexJsonRpcClient
         private readonly Filesystem $files,
     ) {}
 
-    /** @param array<string, mixed> $params
+    /**
+     * @param  array<string, mixed>  $params
+     * @param  array<string, list<string>|string>  $configOverrides
      * @return array<string, mixed>
      */
-    public function call(User $user, string $method, array $params = []): array
+    public function call(User $user, string $method, array $params = [], array $configOverrides = []): array
     {
         $environment = ['CODEX_HOME' => $this->profiles->path($user)];
         $timeout = (int) config('ai.codex.timeout_seconds');
@@ -32,6 +34,7 @@ final class CodexJsonRpcClient
             $input = new InputStream;
             $process = new Process([
                 ...$this->command(),
+                ...$this->configOverrides($configOverrides),
                 '--sandbox',
                 'read-only',
                 '--ask-for-approval',
@@ -135,6 +138,22 @@ final class CodexJsonRpcClient
         throw new AiProviderException(AiProviderErrorCode::Unavailable);
     }
 
+    /**
+     * @param  array<string, list<string>|string>  $configOverrides
+     * @return list<string>
+     */
+    private function configOverrides(array $configOverrides): array
+    {
+        $arguments = [];
+
+        foreach ($configOverrides as $key => $value) {
+            $arguments[] = '--config';
+            $arguments[] = $key.'='.json_encode($value, JSON_THROW_ON_ERROR);
+        }
+
+        return $arguments;
+    }
+
     /** @param array<string, mixed> $error */
     private function errorCode(array $error): AiProviderErrorCode
     {
@@ -143,6 +162,8 @@ final class CodexJsonRpcClient
         return match (true) {
             str_contains($message, 'unauthor') => AiProviderErrorCode::Unauthorized,
             str_contains($message, 'rate limit') => AiProviderErrorCode::RateLimited,
+            str_contains($message, 'timeout') => AiProviderErrorCode::Timeout,
+            str_contains($message, 'tool') => AiProviderErrorCode::ToolFailed,
             str_contains($message, 'invalid') => AiProviderErrorCode::InvalidRequest,
             default => AiProviderErrorCode::Failed,
         };
