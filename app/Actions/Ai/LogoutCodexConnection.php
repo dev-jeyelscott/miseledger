@@ -2,6 +2,7 @@
 
 namespace App\Actions\Ai;
 
+use App\Exceptions\AiProviderException;
 use App\Models\AiProviderConnection;
 use App\Models\User;
 use App\Support\Ai\Providers\AiProviderAdapter;
@@ -13,7 +14,14 @@ final class LogoutCodexConnection
 
     public function handle(User $user): void
     {
-        $this->provider->logout($user);
+        // The connection must be deactivated locally even when the provider
+        // session is already broken (e.g. an expired or revoked token) —
+        // that's precisely the state a user is trying to disconnect from.
+        try {
+            $this->provider->logout($user);
+        } catch (AiProviderException) {
+            // ignore: local deactivation below still proceeds
+        }
 
         DB::transaction(function () use ($user): void {
             AiProviderConnection::query()

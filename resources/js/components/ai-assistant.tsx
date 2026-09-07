@@ -212,6 +212,7 @@ export function AiAssistant({
         connectionRequest.setData({});
         connectionRequest.delete(CodexConnectionController.destroy.url(), {
             onSuccess: refreshAssistant,
+            onError: refreshAssistant,
         });
     }
 
