@@ -25,27 +25,92 @@ final class CodexJsonRpcClient
      */
     public function call(User $user, string $method, array $params = [], array $configOverrides = []): array
     {
+        return $this->callSession($user, [
+            static fn (): array => [$method, $params],
+        ], $configOverrides)[0];
+    }
+
+    /**
+     * Runs a sequence of requests against a single Codex app-server process.
+     * Codex only keeps thread and turn state for the lifetime of the process
+     * that created them, so a thread started by one process is invisible to
+     * another — steps that depend on each other's state (starting a thread,
+     * then a turn on it) must therefore share one process instead of each
+     * opening its own.
+     *
+     * A step's request/response pair is a synchronous acknowledgement only:
+     * for a request like `turn/start`, that ack just confirms the turn was
+     * accepted (`status: "inProgress"`, no output yet) — the actual result
+     * arrives later as a notification (e.g. `turn/completed`). A step may
+     * name such a notification method; when it does, that notification's
+     * `params` become the step's result instead of the ack's `result`.
+     *
+     * @param  list<callable(list<array<string, mixed>> $priorResults): array{0: string, 1: array<string, mixed>, 2?: string}>  $steps
+     * @param  array<string, list<string>|string>  $configOverrides
+     * @return list<array<string, mixed>>
+     */
+    public function callSession(User $user, array $steps, array $configOverrides = []): array
+    {
         $timeout = (int) config('ai.codex.timeout_seconds');
         $input = new InputStream;
         $process = $this->spawnProcess($user, $input, $configOverrides);
+        $results = [];
 
         try {
             $process->start();
-            $this->sendRequest($input, $method, $params);
+            $this->sendHandshake($input);
 
             $buffer = '';
-            $response = $this->readMessageMatching(
-                $process,
-                $buffer,
-                static fn (array $message): bool => ($message['id'] ?? null) === 2,
-                $timeout,
-            );
 
-            if (isset($response['error'])) {
-                throw new AiProviderException($this->errorCode((array) $response['error']));
+            foreach ($steps as $index => $step) {
+                $step = $step($results);
+                [$method, $params] = $step;
+                $completionNotification = $step[2] ?? null;
+                $id = $index + 2;
+
+                $this->sendCall($input, $id, $method, $params);
+
+                $response = $this->readMessageMatching(
+                    $process,
+                    $buffer,
+                    static fn (array $message): bool => ($message['id'] ?? null) === $id,
+                    $timeout,
+                );
+
+                if (isset($response['error'])) {
+                    throw new AiProviderException($this->errorCode((array) $response['error']));
+                }
+
+                if ($completionNotification === null) {
+                    $results[] = is_array($response['result'] ?? null) ? $response['result'] : [];
+
+                    continue;
+                }
+
+                // Codex only loads a turn's items lazily (the terminal
+                // notification's own `turn.items` stays empty), so the
+                // agent's reply must be gathered from the `item/completed`
+                // events streamed while waiting for the terminal one.
+                $events = $this->collectMessagesUntil(
+                    $process,
+                    $buffer,
+                    static fn (array $message): bool => ($message['method'] ?? null) === $completionNotification,
+                    $timeout,
+                );
+                $notification = end($events);
+
+                $notificationParams = is_array($notification['params'] ?? null) ? $notification['params'] : [];
+                $notificationParams['streamedItems'] = array_values(array_filter(array_map(
+                    static fn (array $message): ?array => ($message['method'] ?? null) === 'item/completed'
+                        ? ($message['params']['item'] ?? null)
+                        : null,
+                    $events,
+                )));
+
+                $results[] = $notificationParams;
             }
 
-            return is_array($response['result'] ?? null) ? $response['result'] : [];
+            return $results;
         } catch (AiProviderException $exception) {
             throw $exception;
         } catch (Throwable) {
@@ -76,7 +141,8 @@ final class CodexJsonRpcClient
 
         try {
             $process->start();
-            $this->sendRequest($input, 'account/login/start', ['type' => 'chatgptDeviceCode']);
+            $this->sendHandshake($input);
+            $this->sendCall($input, 2, 'account/login/start', ['type' => 'chatgptDeviceCode']);
 
             $buffer = '';
             $response = $this->readMessageMatching(
@@ -152,18 +218,20 @@ final class CodexJsonRpcClient
         return $process;
     }
 
-    /** @param array<string, mixed> $params */
-    private function sendRequest(InputStream $input, string $method, array $params): void
+    private function sendHandshake(InputStream $input): void
     {
-        foreach ([
-            ['id' => 1, 'method' => 'initialize', 'params' => [
-                'clientInfo' => ['name' => 'miseledger', 'version' => '1.0'],
-            ]],
-            ['method' => 'initialized', 'params' => []],
-            ['id' => 2, 'method' => $method, 'params' => $params],
-        ] as $message) {
-            $input->write(json_encode($message, JSON_THROW_ON_ERROR)."\n");
-        }
+        $input->write(json_encode([
+            'id' => 1,
+            'method' => 'initialize',
+            'params' => ['clientInfo' => ['name' => 'miseledger', 'version' => '1.0']],
+        ], JSON_THROW_ON_ERROR)."\n");
+        $input->write(json_encode(['method' => 'initialized', 'params' => []], JSON_THROW_ON_ERROR)."\n");
+    }
+
+    /** @param array<string, mixed> $params */
+    private function sendCall(InputStream $input, int $id, string $method, array $params): void
+    {
+        $input->write(json_encode(['id' => $id, 'method' => $method, 'params' => $params], JSON_THROW_ON_ERROR)."\n");
     }
 
     /**
@@ -177,6 +245,22 @@ final class CodexJsonRpcClient
      */
     private function readMessageMatching(Process $process, string &$buffer, callable $predicate, int $timeoutSeconds): array
     {
+        $messages = $this->collectMessagesUntil($process, $buffer, $predicate, $timeoutSeconds);
+
+        return $messages[array_key_last($messages)];
+    }
+
+    /**
+     * Like {@see readMessageMatching()}, but returns every message seen
+     * along the way (including the matching one), so a caller can react to
+     * intermediate notifications too.
+     *
+     * @param  callable(array<string, mixed>): bool  $predicate
+     * @return list<array<string, mixed>>
+     */
+    private function collectMessagesUntil(Process $process, string &$buffer, callable $predicate, int $timeoutSeconds): array
+    {
+        $messages = [];
         $deadline = microtime(true) + $timeoutSeconds;
 
         while ($process->isRunning() && microtime(true) < $deadline) {
@@ -187,8 +271,14 @@ final class CodexJsonRpcClient
                 $buffer = substr($buffer, $lineEnd + 1);
                 $message = json_decode($line, true);
 
-                if (is_array($message) && $predicate($message)) {
-                    return $message;
+                if (! is_array($message)) {
+                    continue;
+                }
+
+                $messages[] = $message;
+
+                if ($predicate($message)) {
+                    return $messages;
                 }
             }
 
@@ -200,8 +290,14 @@ final class CodexJsonRpcClient
         foreach (preg_split('/\R/', $buffer) ?: [] as $line) {
             $message = json_decode($line, true);
 
-            if (is_array($message) && $predicate($message)) {
-                return $message;
+            if (! is_array($message)) {
+                continue;
+            }
+
+            $messages[] = $message;
+
+            if ($predicate($message)) {
+                return $messages;
             }
         }
 
@@ -243,7 +339,11 @@ final class CodexJsonRpcClient
 
         foreach ($configOverrides as $key => $value) {
             $arguments[] = '--config';
-            $arguments[] = $key.'='.json_encode($value, JSON_THROW_ON_ERROR);
+            // Codex parses --config values as TOML, not JSON: TOML's string
+            // grammar has no `\/` escape, so an unescaped-slash JSON encoding
+            // is required for a value like a filesystem path to parse as the
+            // intended array/string rather than falling back to a raw string.
+            $arguments[] = $key.'='.json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
         }
 
         return $arguments;
@@ -252,7 +352,18 @@ final class CodexJsonRpcClient
     /** @param array<string, mixed> $error */
     private function errorCode(array $error): AiProviderErrorCode
     {
-        $message = strtolower((string) ($error['message'] ?? ''));
+        return $this->errorCodeForMessage((string) ($error['message'] ?? ''));
+    }
+
+    /**
+     * Classifies a provider-reported failure message, whether it arrived as
+     * a JSON-RPC error or as a terminal `status: "failed"` on an otherwise
+     * successful turn (e.g. an expired provider token surfaces only in the
+     * turn's own `error.message`, not as a JSON-RPC error).
+     */
+    public function errorCodeForMessage(string $message): AiProviderErrorCode
+    {
+        $message = strtolower($message);
 
         return match (true) {
             str_contains($message, 'unauthor') => AiProviderErrorCode::Unauthorized,

@@ -35,62 +35,53 @@ final class CodexAppServerProvider implements AiProviderAdapter
         return $this->client->call($user, 'account/rateLimits/read');
     }
 
-    public function startThread(User $user, AiConversation $conversation, string $mcpExecutionIdentity): string
+    public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn
     {
         $this->assertConversationOwner($user, $conversation);
 
-        $result = $this->client->call($user, 'thread/start', [
-            'cwd' => (string) config('ai.codex.workspace_path'),
-        ], $this->miseLedgerMcpConfig($mcpExecutionIdentity));
-        $threadId = $this->threadId($result);
+        $existingThreadId = $conversation->provider_thread_id;
 
-        $conversation->forceFill(['provider_thread_id' => $threadId])->save();
-
-        return $threadId;
-    }
-
-    public function resumeThread(User $user, AiConversation $conversation, string $mcpExecutionIdentity): string
-    {
-        $this->assertConversationOwner($user, $conversation);
-
-        if (! is_string($conversation->provider_thread_id)) {
-            return $this->startThread($user, $conversation, $mcpExecutionIdentity);
-        }
-
-        $result = $this->client->call($user, 'thread/resume', [
-            'threadId' => $conversation->provider_thread_id,
+        $results = $this->client->callSession($user, [
+            static fn (): array => is_string($existingThreadId)
+                ? ['thread/resume', ['threadId' => $existingThreadId]]
+                : ['thread/start', ['cwd' => (string) config('ai.codex.workspace_path')]],
+            // turn/start only acknowledges that the turn was accepted
+            // (status "inProgress", no output yet); the actual result
+            // arrives later as a `turn/completed` notification.
+            fn (array $priorResults): array => ['turn/start', [
+                'threadId' => $this->threadId($priorResults[0]),
+                'input' => [['type' => 'text', 'text' => $input]],
+            ], 'turn/completed'],
         ], $this->miseLedgerMcpConfig($mcpExecutionIdentity));
 
-        $threadId = $this->threadId($result);
+        $threadId = $this->threadId($results[0]);
 
-        if ($threadId !== $conversation->provider_thread_id) {
+        if ($threadId !== $existingThreadId) {
             $conversation->forceFill(['provider_thread_id' => $threadId])->save();
         }
 
-        return $threadId;
-    }
-
-    public function startTurn(User $user, string $threadId, string $input): AiProviderTurn
-    {
-        $result = $this->client->call($user, 'turn/start', [
-            'threadId' => $threadId,
-            'input' => [['type' => 'text', 'text' => $input]],
-        ]);
-
-        $turn = $result['turn'] ?? [];
+        $turn = $results[1]['turn'] ?? [];
         $turnId = $turn['id'] ?? null;
 
         if (! is_string($turnId)) {
             throw new AiProviderException(AiProviderErrorCode::Protocol);
         }
 
-        $output = $this->output($turn);
+        if (($turn['status'] ?? null) === 'failed') {
+            throw new AiProviderException($this->client->errorCodeForMessage((string) ($turn['error']['message'] ?? '')));
+        }
+
+        // A completed turn's own `items` stay lazily unloaded ("notLoaded"),
+        // so the agent's reply is read from the `item/completed` events
+        // streamed alongside the terminal notification instead.
+        $output = $this->output($turn)
+            ?? $this->outputFromItems($results[1]['streamedItems'] ?? null);
 
         if ($output === null) {
             throw new AiProviderException(AiProviderErrorCode::Protocol);
         }
 
-        $usage = $turn['usage'] ?? $result['usage'] ?? [];
+        $usage = $turn['usage'] ?? $results[1]['usage'] ?? [];
 
         return new AiProviderTurn(
             id: $turnId,
@@ -138,8 +129,11 @@ final class CodexAppServerProvider implements AiProviderAdapter
             }
         }
 
-        $items = $turn['items'] ?? null;
+        return $this->outputFromItems($turn['items'] ?? null);
+    }
 
+    private function outputFromItems(mixed $items): ?string
+    {
         if (! is_array($items)) {
             return null;
         }
@@ -151,7 +145,7 @@ final class CodexAppServerProvider implements AiProviderAdapter
                 continue;
             }
 
-            $text = $item['text'] ?? null;
+            $text = $this->itemText($item);
 
             if (is_string($text) && trim($text) !== '') {
                 $output[] = $text;
@@ -159,5 +153,34 @@ final class CodexAppServerProvider implements AiProviderAdapter
         }
 
         return $output === [] ? null : implode("\n\n", $output);
+    }
+
+    /**
+     * An item's text is either a flat `text` field, or nested one level
+     * under `content` as one or more `{type: "text", text: "..."}` parts.
+     *
+     * @param  array<string, mixed>  $item
+     */
+    private function itemText(array $item): ?string
+    {
+        if (is_string($item['text'] ?? null)) {
+            return $item['text'];
+        }
+
+        $content = $item['content'] ?? null;
+
+        if (! is_array($content)) {
+            return null;
+        }
+
+        $parts = [];
+
+        foreach ($content as $part) {
+            if (is_array($part) && is_string($part['text'] ?? null)) {
+                $parts[] = $part['text'];
+            }
+        }
+
+        return $parts === [] ? null : implode('', $parts);
     }
 }

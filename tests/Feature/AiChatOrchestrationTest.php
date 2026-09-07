@@ -38,17 +38,7 @@ beforeEach(function (): void {
             return [];
         }
 
-        public function startThread(User $user, AiConversation $conversation, string $mcpExecutionIdentity): string
-        {
-            return 'thread_'.$conversation->id;
-        }
-
-        public function resumeThread(User $user, AiConversation $conversation, string $mcpExecutionIdentity): string
-        {
-            return 'thread_'.$conversation->id;
-        }
-
-        public function startTurn(User $user, string $threadId, string $input): AiProviderTurn
+        public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn
         {
             $this->turns++;
 

@@ -70,10 +70,7 @@ final class ExecuteAiRun
         try {
             $conversation = $run->conversation;
             $identity = $this->identityIssuer->issue($run);
-            $threadId = $conversation->provider_thread_id === null
-                ? $this->provider->startThread($run->user, $conversation, $identity)
-                : $this->provider->resumeThread($run->user, $conversation, $identity);
-            $turn = $this->provider->startTurn($run->user, $threadId, $this->userMessage($conversation, $run));
+            $turn = $this->provider->converse($run->user, $conversation, $identity, $this->userMessage($conversation, $run));
 
             $this->complete($run->id, $turn);
         } catch (AiProviderException $exception) {

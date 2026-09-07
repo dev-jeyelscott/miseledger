@@ -68,17 +68,7 @@ beforeEach(function (): void {
             return ['rateLimits' => ['primary' => ['usedPercent' => 20]], 'accessToken' => 'never-expose'];
         }
 
-        public function startThread(User $user, AiConversation $conversation, string $mcpExecutionIdentity): string
-        {
-            return 'thread_123';
-        }
-
-        public function resumeThread(User $user, AiConversation $conversation, string $mcpExecutionIdentity): string
-        {
-            return 'thread_123';
-        }
-
-        public function startTurn(User $user, string $threadId, string $input): AiProviderTurn
+        public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn
         {
             return new AiProviderTurn('turn_123', 'Inventory is stable.');
         }
@@ -167,17 +157,7 @@ test('provider failures are stable browser-safe codes', function () {
             throw new AiProviderException(AiProviderErrorCode::Unavailable);
         }
 
-        public function startThread(User $user, AiConversation $conversation, string $mcpExecutionIdentity): string
-        {
-            throw new AiProviderException(AiProviderErrorCode::Unavailable);
-        }
-
-        public function resumeThread(User $user, AiConversation $conversation, string $mcpExecutionIdentity): string
-        {
-            throw new AiProviderException(AiProviderErrorCode::Unavailable);
-        }
-
-        public function startTurn(User $user, string $threadId, string $input): AiProviderTurn
+        public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn
         {
             throw new AiProviderException(AiProviderErrorCode::Unavailable);
         }

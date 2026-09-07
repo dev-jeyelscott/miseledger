@@ -34,9 +34,12 @@ interface AiProviderAdapter
     /** @return array<string, mixed> */
     public function rateLimits(User $user): array;
 
-    public function startThread(User $user, AiConversation $conversation, string $mcpExecutionIdentity): string;
-
-    public function resumeThread(User $user, AiConversation $conversation, string $mcpExecutionIdentity): string;
-
-    public function startTurn(User $user, string $threadId, string $input): AiProviderTurn;
+    /**
+     * Starts or resumes the conversation's thread and runs one turn on it,
+     * in a single provider session. Codex only keeps thread and turn state
+     * for the lifetime of the process that created them, so starting (or
+     * resuming) the thread and starting the turn must not be split across
+     * independent provider calls.
+     */
+    public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn;
 }
