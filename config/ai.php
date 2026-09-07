@@ -7,7 +7,12 @@ return [
         'command' => env('AI_CODEX_COMMAND', 'codex'),
         'version' => '0.153.4',
         'profile_root' => env('AI_CODEX_PROFILE_ROOT', storage_path('app/private/codex')),
-        'workspace_path' => env('AI_CODEX_WORKSPACE', storage_path('app/private/codex-workspace')),
+        // Deliberately outside the application's own git working tree: Codex
+        // walks a turn's cwd up to the enclosing repository root and loads
+        // any AGENTS.md / project-local config it finds there as thread
+        // instructions. Pointing this inside the repo leaked this project's
+        // own developer-facing AGENTS.md into the customer-facing assistant.
+        'workspace_path' => env('AI_CODEX_WORKSPACE', sys_get_temp_dir().'/miseledger-ai-workspace'),
         'timeout_seconds' => 20,
         // Device-code logins stay open in the background until the user
         // finishes signing in at the verification URL, so this window is

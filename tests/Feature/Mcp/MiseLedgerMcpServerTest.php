@@ -7,6 +7,7 @@ use App\Mcp\AiMcpExecutionIdentityIssuer;
 use App\Mcp\Servers\MiseLedgerMcpServer;
 use App\Mcp\Tools\InventoryStockOnHandTool;
 use App\Mcp\Tools\InventoryValuationTool;
+use App\Mcp\Tools\OrganizationProfileTool;
 use App\Mcp\Tools\PurchaseOrderSearchTool;
 use App\Models\AiConversation;
 use App\Models\AiRun;
@@ -39,12 +40,24 @@ function establishMcpExecutionIdentity(): array
     return [$organization, $user, $run];
 }
 
-test('the local MCP server exposes only its three typed read-only tools', function () {
+test('the local MCP server exposes only its four typed read-only tools', function () {
     establishMcpExecutionIdentity();
 
+    MiseLedgerMcpServer::tool(OrganizationProfileTool::class)->assertOk()->assertName('organization_profile');
     MiseLedgerMcpServer::tool(InventoryStockOnHandTool::class)->assertOk()->assertName('inventory_stock_on_hand');
     MiseLedgerMcpServer::tool(PurchaseOrderSearchTool::class)->assertOk()->assertName('procurement_purchase_orders');
     MiseLedgerMcpServer::tool(InventoryValuationTool::class)->assertOk()->assertName('reports_inventory_valuation');
+});
+
+test('the organization profile tool returns the worker-established organization\'s own identity', function () {
+    [$organization] = establishMcpExecutionIdentity();
+
+    MiseLedgerMcpServer::tool(OrganizationProfileTool::class)->assertOk()->assertStructuredContent([
+        'name' => $organization->name,
+        'slug' => $organization->slug,
+        'timezone' => $organization->timezone,
+        'currency' => $organization->currency,
+    ]);
 });
 
 test('a tool rejects a filter identifier owned by another organization', function () {

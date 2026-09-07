@@ -38,9 +38,14 @@ beforeEach(function (): void {
             return [];
         }
 
+        /** @var list<string> */
+        public array $inputs = [];
+
         public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn
         {
             $this->turns++;
+            $this->inputs[] = $input;
+            $conversation->forceFill(['provider_thread_id' => $conversation->provider_thread_id ?? 'thread_'.$this->turns])->save();
 
             return new AiProviderTurn('turn_'.$this->turns, 'The current stock is available.', 'gpt-5', 8, 9);
         }
@@ -84,6 +89,21 @@ test('a queued run rechecks access before provider execution', function () {
     app(ExecuteAiRun::class)->handle($run->id);
 
     expect($this->provider->turns)->toBe(0)->and($run->refresh()->status)->toBe(AiRunStatus::Failed)->and($run->error_code)->toBe('access_revoked');
+});
+
+test('the first turn of a new thread carries organization context, but a resumed thread does not', function () {
+    [$organization, $user] = aiConversationOwner();
+    $conversation = AiConversation::factory()->create(['organization_id' => $organization->id, 'user_id' => $user->id]);
+
+    $firstRun = app(QueueAiMessage::class)->handle($organization, $user, $conversation, 'What is my organization name?')['run'];
+    app(ExecuteAiRun::class)->handle($firstRun->id);
+
+    $secondRun = app(QueueAiMessage::class)->handle($organization, $user, $conversation->refresh(), 'And now?')['run'];
+    app(ExecuteAiRun::class)->handle($secondRun->id);
+
+    expect($this->provider->inputs)->toHaveCount(2)
+        ->and($this->provider->inputs[0])->toContain($organization->name)->toContain('What is my organization name?')
+        ->and($this->provider->inputs[1])->not->toContain($organization->name)->toBe('And now?');
 });
 
 test('replaying a completed run does not duplicate the assistant message', function () {
