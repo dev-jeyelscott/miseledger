@@ -27,9 +27,11 @@ final class CodexJsonRpcClient
             $process = new Process([
                 ...$this->command(),
                 'app-server',
+                '--stdio',
             ], base_path(), $environment);
             $process->setInput($input);
             $process->setTimeout($timeout);
+
             $process->start();
 
             foreach ([

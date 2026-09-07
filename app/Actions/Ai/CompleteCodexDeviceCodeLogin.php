@@ -18,8 +18,12 @@ final class CompleteCodexDeviceCodeLogin
         private readonly CodexProfileLocator $profiles,
     ) {}
 
-    public function handle(User $user): AiProviderConnection
+    public function handle(User $user, string $loginId): AiProviderConnection
     {
+        if ($loginId === '') {
+            throw new AiProviderException(AiProviderErrorCode::LoginRequired);
+        }
+
         $account = $this->provider->account($user);
         $details = $account['account'] ?? null;
 

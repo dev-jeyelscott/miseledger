@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+if (array_slice($argv, 1) !== ['app-server', '--stdio']) {
+    fwrite(STDERR, 'Unexpected Codex command.');
+    exit(1);
+}
+
 $messages = [];
 
 while (count($messages) < 3 && ($line = fgets(STDIN)) !== false) {

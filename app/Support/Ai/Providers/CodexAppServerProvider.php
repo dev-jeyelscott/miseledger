@@ -46,20 +46,33 @@ final class CodexAppServerProvider implements AiProviderAdapter
 
     public function startThread(User $user, AiConversation $conversation): string
     {
-        $result = $this->client->call($user, 'thread/start', ['cwd' => base_path()]);
+        $this->assertConversationOwner($user, $conversation);
 
-        return $this->threadId($result);
+        $result = $this->client->call($user, 'thread/start', ['cwd' => base_path()]);
+        $threadId = $this->threadId($result);
+
+        $conversation->forceFill(['provider_thread_id' => $threadId])->save();
+
+        return $threadId;
     }
 
     public function resumeThread(User $user, AiConversation $conversation): string
     {
+        $this->assertConversationOwner($user, $conversation);
+
         if (! is_string($conversation->provider_thread_id)) {
             return $this->startThread($user, $conversation);
         }
 
         $result = $this->client->call($user, 'thread/resume', ['threadId' => $conversation->provider_thread_id]);
 
-        return $this->threadId($result);
+        $threadId = $this->threadId($result);
+
+        if ($threadId !== $conversation->provider_thread_id) {
+            $conversation->forceFill(['provider_thread_id' => $threadId])->save();
+        }
+
+        return $threadId;
     }
 
     public function startTurn(User $user, string $threadId, string $input): string
@@ -88,5 +101,12 @@ final class CodexAppServerProvider implements AiProviderAdapter
         }
 
         return $threadId;
+    }
+
+    private function assertConversationOwner(User $user, AiConversation $conversation): void
+    {
+        if ($conversation->user_id !== $user->getKey()) {
+            throw new AiProviderException(AiProviderErrorCode::InvalidRequest);
+        }
     }
 }

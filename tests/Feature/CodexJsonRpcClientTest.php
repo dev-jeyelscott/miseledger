@@ -30,9 +30,8 @@ test('the Codex provider uses documented direct stdio JSON-RPC for connection an
     expect($provider->rateLimits($user)['rateLimits']['primary']['usedPercent'])->toBe(20)
         ->and($provider->startThread($user, $conversation))->toBe('thr_123');
 
-    $conversation->forceFill(['provider_thread_id' => 'thr_123']);
-
-    expect($provider->resumeThread($user, $conversation))->toBe('thr_123')
+    expect($conversation->refresh()->provider_thread_id)->toBe('thr_123')
+        ->and($provider->resumeThread($user, $conversation))->toBe('thr_123')
         ->and($provider->startTurn($user, 'thr_123', 'Summarize today.'))->toBe('turn_123');
 
     $profilePath = app(CodexProfileLocator::class)->path($user);
@@ -59,6 +58,28 @@ test('the Codex provider uses documented direct stdio JSON-RPC for connection an
         'thread/resume',
         'turn/start',
     ]);
+});
+
+test('the Codex client uses a distinct provider-owned profile for each user', function () {
+    $first = User::factory()->create();
+    $second = User::factory()->create();
+    $client = app(CodexJsonRpcClient::class);
+    $profiles = app(CodexProfileLocator::class);
+
+    $client->call($first, 'account/read');
+    $client->call($second, 'account/read');
+
+    expect($profiles->path($first))->not->toBe($profiles->path($second))
+        ->and(file($profiles->path($first).'/protocol.jsonl', FILE_IGNORE_NEW_LINES))->toHaveCount(1)
+        ->and(file($profiles->path($second).'/protocol.jsonl', FILE_IGNORE_NEW_LINES))->toHaveCount(1);
+});
+
+test('a user cannot bind another users conversation to their Codex profile', function () {
+    $conversation = AiConversation::factory()->create();
+    $otherUser = User::factory()->create();
+
+    expect(fn (): string => app(CodexAppServerProvider::class)->startThread($otherUser, $conversation))
+        ->toThrow(AiProviderException::class);
 });
 
 test('the Codex JSON-RPC client maps provider errors without exposing provider details', function () {

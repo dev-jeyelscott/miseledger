@@ -66,6 +66,8 @@ test('a verified user can complete managed device login without persisting crede
             'user_code' => 'ABCD-1234',
         ]);
 
+    expect(session('ai.codex.login_id'))->toBe('login_123');
+
     $this->fakeCodex->connected = true;
 
     $this->actingAs($user)
@@ -95,6 +97,8 @@ test('a Codex runtime profile reference is unique and non-reversible between use
 test('rate limits expose only safe provider state and logout deactivates the users connection', function () {
     $user = User::factory()->create(['email_verified_at' => now()]);
     $this->fakeCodex->connected = true;
+
+    $this->actingAs($user)->postJson(route('ai.codex.login.start'))->assertSuccessful();
 
     $this->actingAs($user)->postJson(route('ai.codex.login.complete'))->assertSuccessful();
 
