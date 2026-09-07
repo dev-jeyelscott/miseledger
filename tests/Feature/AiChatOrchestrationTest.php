@@ -26,9 +26,9 @@ beforeEach(function (): void {
             return [];
         }
 
-        public function startDeviceCodeLogin(User $user): array
+        public function runDeviceCodeLogin(User $user, callable $onStarted): bool
         {
-            return [];
+            return false;
         }
 
         public function logout(User $user): void {}

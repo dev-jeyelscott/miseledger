@@ -25,46 +25,21 @@ final class CodexJsonRpcClient
      */
     public function call(User $user, string $method, array $params = [], array $configOverrides = []): array
     {
-        $environment = ['CODEX_HOME' => $this->profiles->path($user)];
         $timeout = (int) config('ai.codex.timeout_seconds');
-        $workspace = (string) config('ai.codex.workspace_path');
-        $this->files->ensureDirectoryExists($workspace, 0700, true);
+        $input = new InputStream;
+        $process = $this->spawnProcess($user, $input, $configOverrides);
 
         try {
-            $input = new InputStream;
-            $process = new Process([
-                ...$this->command(),
-                ...$this->configOverrides($configOverrides),
-                '--sandbox',
-                'read-only',
-                '--ask-for-approval',
-                'never',
-                '--cd',
-                $workspace,
-                'app-server',
-                '--stdio',
-            ], $workspace, $environment);
-            $process->setInput($input);
-            $process->setTimeout($timeout);
-
             $process->start();
+            $this->sendRequest($input, $method, $params);
 
-            foreach ([
-                ['id' => 1, 'method' => 'initialize', 'params' => [
-                    'clientInfo' => ['name' => 'miseledger', 'version' => '1.0'],
-                ]],
-                ['method' => 'initialized', 'params' => []],
-                ['id' => 2, 'method' => $method, 'params' => $params],
-            ] as $message) {
-                $input->write(json_encode($message, JSON_THROW_ON_ERROR)."\n");
-            }
-
-            $response = $this->waitForResponse($process, $timeout);
-            $input->close();
-
-            if ($process->isRunning()) {
-                $process->stop();
-            }
+            $buffer = '';
+            $response = $this->readMessageMatching(
+                $process,
+                $buffer,
+                static fn (array $message): bool => ($message['id'] ?? null) === 2,
+                $timeout,
+            );
 
             if (isset($response['error'])) {
                 throw new AiProviderException($this->errorCode((array) $response['error']));
@@ -75,14 +50,134 @@ final class CodexJsonRpcClient
             throw $exception;
         } catch (Throwable) {
             throw new AiProviderException(AiProviderErrorCode::Unavailable);
+        } finally {
+            $input->close();
+
+            if ($process->isRunning()) {
+                $process->stop();
+            }
         }
     }
 
-    /** @return array<string, mixed> */
-    private function waitForResponse(Process $process, int $timeout): array
+    /**
+     * Starts a ChatGPT device-code login and keeps the Codex process running
+     * until it reports the login completed, failed, or the given window
+     * elapsed. Unlike {@see call()}, the process is intentionally kept alive
+     * between the initial response and the later notification, since Codex
+     * only exchanges and persists credentials while that process keeps
+     * polling in the background.
+     *
+     * @param  callable(array{login_id: string, verification_url: string, user_code: string}): void  $onStarted
+     */
+    public function runDeviceCodeLogin(User $user, callable $onStarted, int $awaitTimeoutSeconds): bool
     {
-        $deadline = microtime(true) + $timeout;
-        $buffer = '';
+        $input = new InputStream;
+        $process = $this->spawnProcess($user, $input);
+
+        try {
+            $process->start();
+            $this->sendRequest($input, 'account/login/start', ['type' => 'chatgptDeviceCode']);
+
+            $buffer = '';
+            $response = $this->readMessageMatching(
+                $process,
+                $buffer,
+                static fn (array $message): bool => ($message['id'] ?? null) === 2,
+                (int) config('ai.codex.timeout_seconds'),
+            );
+
+            if (isset($response['error'])) {
+                throw new AiProviderException($this->errorCode((array) $response['error']));
+            }
+
+            $result = is_array($response['result'] ?? null) ? $response['result'] : [];
+
+            if (($result['type'] ?? null) !== 'chatgptDeviceCode'
+                || ! is_string($result['loginId'] ?? null)
+                || ! is_string($result['verificationUrl'] ?? null)
+                || ! is_string($result['userCode'] ?? null)) {
+                throw new AiProviderException(AiProviderErrorCode::Protocol);
+            }
+
+            $onStarted([
+                'login_id' => $result['loginId'],
+                'verification_url' => $result['verificationUrl'],
+                'user_code' => $result['userCode'],
+            ]);
+
+            $notification = $this->readMessageMatching(
+                $process,
+                $buffer,
+                static fn (array $message): bool => ($message['method'] ?? null) === 'account/login/completed',
+                $awaitTimeoutSeconds,
+            );
+
+            $notificationParams = is_array($notification['params'] ?? null) ? $notification['params'] : [];
+
+            return $notificationParams['success'] ?? false;
+        } catch (AiProviderException $exception) {
+            throw $exception;
+        } catch (Throwable) {
+            throw new AiProviderException(AiProviderErrorCode::Unavailable);
+        } finally {
+            $input->close();
+
+            if ($process->isRunning()) {
+                $process->stop();
+            }
+        }
+    }
+
+    /** @param array<string, list<string>|string> $configOverrides */
+    private function spawnProcess(User $user, InputStream $input, array $configOverrides = []): Process
+    {
+        $environment = ['CODEX_HOME' => $this->profiles->path($user)];
+        $workspace = (string) config('ai.codex.workspace_path');
+        $this->files->ensureDirectoryExists($workspace, 0700, true);
+
+        $process = new Process([
+            ...$this->command(),
+            ...$this->configOverrides($configOverrides),
+            '--sandbox',
+            'read-only',
+            '--ask-for-approval',
+            'never',
+            '--cd',
+            $workspace,
+            'app-server',
+            '--stdio',
+        ], $workspace, $environment);
+        $process->setInput($input);
+
+        return $process;
+    }
+
+    /** @param array<string, mixed> $params */
+    private function sendRequest(InputStream $input, string $method, array $params): void
+    {
+        foreach ([
+            ['id' => 1, 'method' => 'initialize', 'params' => [
+                'clientInfo' => ['name' => 'miseledger', 'version' => '1.0'],
+            ]],
+            ['method' => 'initialized', 'params' => []],
+            ['id' => 2, 'method' => $method, 'params' => $params],
+        ] as $message) {
+            $input->write(json_encode($message, JSON_THROW_ON_ERROR)."\n");
+        }
+    }
+
+    /**
+     * Reads decoded JSONL messages from the process until one satisfies
+     * $predicate, appending to the shared $buffer so callers can issue
+     * multiple successive waits (e.g. an initial response, then a later
+     * notification) against the same stdout stream.
+     *
+     * @param  callable(array<string, mixed>): bool  $predicate
+     * @return array<string, mixed>
+     */
+    private function readMessageMatching(Process $process, string &$buffer, callable $predicate, int $timeoutSeconds): array
+    {
+        $deadline = microtime(true) + $timeoutSeconds;
 
         while ($process->isRunning() && microtime(true) < $deadline) {
             $buffer .= $process->getIncrementalOutput();
@@ -90,10 +185,10 @@ final class CodexJsonRpcClient
             while (($lineEnd = strpos($buffer, "\n")) !== false) {
                 $line = substr($buffer, 0, $lineEnd);
                 $buffer = substr($buffer, $lineEnd + 1);
-                $response = json_decode($line, true);
+                $message = json_decode($line, true);
 
-                if (is_array($response) && ($response['id'] ?? null) === 2) {
-                    return $response;
+                if (is_array($message) && $predicate($message)) {
+                    return $message;
                 }
             }
 
@@ -103,10 +198,10 @@ final class CodexJsonRpcClient
         $buffer .= $process->getIncrementalOutput();
 
         foreach (preg_split('/\R/', $buffer) ?: [] as $line) {
-            $response = json_decode($line, true);
+            $message = json_decode($line, true);
 
-            if (is_array($response) && ($response['id'] ?? null) === 2) {
-                return $response;
+            if (is_array($message) && $predicate($message)) {
+                return $message;
             }
         }
 

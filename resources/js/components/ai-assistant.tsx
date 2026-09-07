@@ -7,7 +7,7 @@ import {
     Trash2,
     TriangleAlert,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AiConversationController from '@/actions/App/Http/Controllers/Ai/AiConversationController';
 import AiMessageController from '@/actions/App/Http/Controllers/Ai/AiMessageController';
 import CodexConnectionController from '@/actions/App/Http/Controllers/Ai/CodexConnectionController';
@@ -47,6 +47,13 @@ const runErrorCopy: Record<string, string> = {
     access_revoked: 'AI access changed before this response could complete.',
 };
 
+type CodexLoginStatus = {
+    status: 'idle' | 'starting' | 'pending' | 'connected' | 'failed';
+    verification_url?: string;
+    user_code?: string;
+    error_code?: string;
+};
+
 export function AiAssistant({
     access,
     compact = false,
@@ -55,10 +62,9 @@ export function AiAssistant({
     ...data
 }: Props) {
     const [content, setContent] = useState('');
-    const [deviceCode, setDeviceCode] = useState<{
-        user_code: string;
-        verification_uri: string;
-    } | null>(null);
+    const [loginStatus, setLoginStatus] = useState<CodexLoginStatus | null>(
+        null,
+    );
     const conversationRequest = useHttp<
         Record<string, never>,
         { conversation: { id: number } }
@@ -67,14 +73,14 @@ export function AiAssistant({
         { content: string },
         { run: { id: number } }
     >({ content: '' });
-    const codexRequest = useHttp<
-        Record<string, never>,
-        { user_code: string; verification_uri: string }
-    >({});
+    const codexRequest = useHttp<Record<string, never>, CodexLoginStatus>({});
     const connectionRequest = useHttp<
         Record<string, never>,
         { connected: boolean }
     >({});
+    const statusRequest = useHttp<Record<string, never>, CodexLoginStatus>(
+        {},
+    );
     const hasActiveRun =
         data.conversation?.runs.some(
             (run) => run.status === 'queued' || run.status === 'running',
@@ -124,8 +130,38 @@ export function AiAssistant({
             return;
         }
 
-        router.reload({ only: ['conversation', 'conversations'] });
+        router.reload({ only: ['conversation', 'conversations', 'codex'] });
     }
+
+    const applyLoginStatus = useCallback(
+        (result: CodexLoginStatus): void => {
+            setLoginStatus(result);
+
+            if (result.status === 'connected') {
+                refreshAssistant();
+            }
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [onRefresh],
+    );
+
+    useEffect(() => {
+        if (
+            loginStatus === null ||
+            loginStatus.status === 'connected' ||
+            loginStatus.status === 'failed'
+        ) {
+            return;
+        }
+
+        const timeout = window.setTimeout(() => {
+            statusRequest.get(CodexConnectionController.loginStatus.url(), {
+                onSuccess: applyLoginStatus,
+            });
+        }, 2_000);
+
+        return () => window.clearTimeout(timeout);
+    }, [applyLoginStatus, loginStatus, statusRequest]);
 
     function createConversation(): void {
         conversationRequest.setData({});
@@ -162,17 +198,13 @@ export function AiAssistant({
     function startCodexLogin(): void {
         codexRequest.setData({});
         codexRequest.post(CodexConnectionController.start.url(), {
-            onSuccess: setDeviceCode,
+            onSuccess: setLoginStatus,
         });
     }
 
-    function completeCodexLogin(): void {
-        connectionRequest.setData({});
-        connectionRequest.post(CodexConnectionController.complete.url(), {
-            onSuccess: () => {
-                setDeviceCode(null);
-                refreshAssistant();
-            },
+    function checkCodexLoginNow(): void {
+        statusRequest.get(CodexConnectionController.loginStatus.url(), {
+            onSuccess: applyLoginStatus,
         });
     }
 
@@ -205,7 +237,7 @@ export function AiAssistant({
                     <AlertDescription>{unavailable}</AlertDescription>
                 </Alert>
             )}
-            {!unavailable && !data.codex.connected && (
+            {!unavailable && !data.codex.connected && loginStatus === null && (
                 <Alert>
                     <Bot aria-hidden="true" />
                     <AlertTitle>Connect Codex to start</AlertTitle>
@@ -224,25 +256,61 @@ export function AiAssistant({
                     </AlertDescription>
                 </Alert>
             )}
-            {deviceCode && (
+            {loginStatus && loginStatus.status === 'starting' && (
+                <Alert>
+                    <Bot aria-hidden="true" />
+                    <AlertTitle>Starting Codex sign-in</AlertTitle>
+                    <AlertDescription>
+                        Requesting a sign-in code from Codex...
+                    </AlertDescription>
+                </Alert>
+            )}
+            {loginStatus && loginStatus.status === 'pending' && (
                 <Alert>
                     <Bot aria-hidden="true" />
                     <AlertTitle>Complete Codex sign-in</AlertTitle>
                     <AlertDescription>
                         <p>
-                            Visit {deviceCode.verification_uri} and enter code{' '}
+                            Visit{' '}
+                            <a
+                                href={loginStatus.verification_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="underline"
+                            >
+                                {loginStatus.verification_url}
+                            </a>{' '}
+                            and enter code{' '}
                             <strong className="font-mono">
-                                {deviceCode.user_code}
+                                {loginStatus.user_code}
                             </strong>
-                            .
+                            . This page checks automatically once you're
+                            done.
                         </p>
                         <Button
                             size="sm"
                             className="mt-2"
-                            onClick={completeCodexLogin}
-                            disabled={connectionRequest.processing}
+                            onClick={checkCodexLoginNow}
+                            disabled={statusRequest.processing}
                         >
                             I completed sign-in
+                        </Button>
+                    </AlertDescription>
+                </Alert>
+            )}
+            {loginStatus && loginStatus.status === 'failed' && (
+                <Alert variant="destructive">
+                    <TriangleAlert aria-hidden="true" />
+                    <AlertTitle>Codex sign-in failed</AlertTitle>
+                    <AlertDescription className="gap-3">
+                        {runErrorCopy[loginStatus.error_code ?? ''] ??
+                            'Codex could not complete the sign-in. Try again.'}
+                        <Button
+                            size="sm"
+                            onClick={startCodexLogin}
+                            disabled={codexRequest.processing}
+                        >
+                            Try again
                         </Button>
                     </AlertDescription>
                 </Alert>

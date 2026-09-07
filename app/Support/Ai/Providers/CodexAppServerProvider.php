@@ -16,22 +16,13 @@ final class CodexAppServerProvider implements AiProviderAdapter
         return $this->client->call($user, 'account/read', ['refreshToken' => true]);
     }
 
-    public function startDeviceCodeLogin(User $user): array
+    public function runDeviceCodeLogin(User $user, callable $onStarted): bool
     {
-        $result = $this->client->call($user, 'account/login/start', ['type' => 'chatgptDeviceCode']);
-
-        if (($result['type'] ?? null) !== 'chatgptDeviceCode'
-            || ! is_string($result['loginId'] ?? null)
-            || ! is_string($result['verificationUrl'] ?? null)
-            || ! is_string($result['userCode'] ?? null)) {
-            throw new AiProviderException(AiProviderErrorCode::Protocol);
-        }
-
-        return [
-            'login_id' => $result['loginId'],
-            'verification_url' => $result['verificationUrl'],
-            'user_code' => $result['userCode'],
-        ];
+        return $this->client->runDeviceCodeLogin(
+            $user,
+            $onStarted,
+            (int) config('ai.codex.device_login_timeout_seconds'),
+        );
     }
 
     public function logout(User $user): void

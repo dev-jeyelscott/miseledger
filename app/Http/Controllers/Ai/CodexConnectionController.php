@@ -2,16 +2,17 @@
 
 namespace App\Http\Controllers\Ai;
 
-use App\Actions\Ai\CompleteCodexDeviceCodeLogin;
 use App\Actions\Ai\LogoutCodexConnection;
 use App\Actions\Ai\StartCodexDeviceCodeLogin;
 use App\Exceptions\AiProviderException;
 use App\Http\Controllers\Controller;
+use App\Jobs\AwaitCodexDeviceCodeLogin;
 use App\Models\AiProviderConnection;
 use App\Models\User;
 use App\Support\Ai\Providers\AiProviderAdapter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 final class CodexConnectionController extends Controller
 {
@@ -32,28 +33,18 @@ final class CodexConnectionController extends Controller
     public function start(Request $request, StartCodexDeviceCodeLogin $login): JsonResponse
     {
         return $this->respond(function () use ($request, $login): array {
-            $details = $login->handle($this->user($request));
-            $request->session()->put('ai.codex.login_id', $details['login_id']);
+            $login->handle($this->user($request));
 
-            return $details;
+            return ['status' => 'starting'];
         });
     }
 
-    public function complete(Request $request, CompleteCodexDeviceCodeLogin $login): JsonResponse
+    public function loginStatus(Request $request): JsonResponse
     {
-        return $this->respond(function () use ($request, $login): array {
-            $connection = $login->handle(
-                $this->user($request),
-                (string) $request->session()->get('ai.codex.login_id', ''),
-            );
-            $request->session()->forget('ai.codex.login_id');
+        $user = $this->user($request);
+        $state = Cache::get(AwaitCodexDeviceCodeLogin::cacheKey($user), ['status' => 'idle']);
 
-            return [
-                'connected' => true,
-                'connection_id' => $connection->id,
-                'account_label' => $connection->account_label,
-            ];
-        });
+        return response()->json($state);
     }
 
     public function destroy(Request $request, LogoutCodexConnection $logout): JsonResponse

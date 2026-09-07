@@ -19,12 +19,18 @@ test('the Codex provider uses documented direct stdio JSON-RPC for connection an
     $user = $conversation->user;
     $provider = app(CodexAppServerProvider::class);
 
+    $startedDetails = null;
+
     expect($provider->account($user)['account']['type'])->toBe('chatgpt')
-        ->and($provider->startDeviceCodeLogin($user))->toBe([
-            'login_id' => 'login_123',
-            'verification_url' => 'https://auth.openai.example/device',
-            'user_code' => 'ABCD-1234',
-        ]);
+        ->and($provider->runDeviceCodeLogin($user, function (array $details) use (&$startedDetails): void {
+            $startedDetails = $details;
+        }))->toBeTrue();
+
+    expect($startedDetails)->toBe([
+        'login_id' => 'login_123',
+        'verification_url' => 'https://auth.openai.example/device',
+        'user_code' => 'ABCD-1234',
+    ]);
 
     $provider->logout($user);
 

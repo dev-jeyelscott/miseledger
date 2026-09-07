@@ -1,13 +1,37 @@
 <?php
 
+use App\Actions\Ai\ActivateAiProviderConnection;
 use App\Enums\AiProviderErrorCode;
 use App\Exceptions\AiProviderException;
+use App\Jobs\AwaitCodexDeviceCodeLogin;
 use App\Models\AiConversation;
 use App\Models\AiProviderConnection;
 use App\Models\User;
 use App\Support\Ai\Providers\AiProviderAdapter;
 use App\Support\Ai\Providers\AiProviderTurn;
 use App\Support\Ai\Providers\CodexProfileLocator;
+use Illuminate\Support\Facades\Queue;
+
+/**
+ * The login job runs on the isolated `ai` queue connection (a dedicated
+ * sandboxed worker), not the connection Testbench's sync override targets,
+ * so tests fake the dispatch and invoke the job body directly to simulate
+ * that worker picking it up.
+ */
+function runQueuedCodexLogin(User $user): void
+{
+    Queue::assertPushed(AwaitCodexDeviceCodeLogin::class, function (AwaitCodexDeviceCodeLogin $job) use ($user): bool {
+        expect($job->userId)->toBe($user->id);
+
+        $job->handle(
+            app(AiProviderAdapter::class),
+            app(ActivateAiProviderConnection::class),
+            app(CodexProfileLocator::class),
+        );
+
+        return true;
+    });
+}
 
 beforeEach(function (): void {
     $this->fakeCodex = new class implements AiProviderAdapter
@@ -21,9 +45,17 @@ beforeEach(function (): void {
                 : ['account' => null, 'requiresOpenaiAuth' => true];
         }
 
-        public function startDeviceCodeLogin(User $user): array
+        public function runDeviceCodeLogin(User $user, callable $onStarted): bool
         {
-            return ['login_id' => 'login_123', 'verification_url' => 'https://auth.openai.example/device', 'user_code' => 'ABCD-1234'];
+            $onStarted([
+                'login_id' => 'login_123',
+                'verification_url' => 'https://auth.openai.example/device',
+                'user_code' => 'ABCD-1234',
+            ]);
+
+            $this->connected = true;
+
+            return true;
         }
 
         public function logout(User $user): void
@@ -56,25 +88,20 @@ beforeEach(function (): void {
 });
 
 test('a verified user can complete managed device login without persisting credentials', function () {
+    Queue::fake();
     $user = User::factory()->create(['email_verified_at' => now()]);
 
     $this->actingAs($user)
         ->postJson(route('ai.codex.login.start'))
         ->assertSuccessful()
-        ->assertExactJson([
-            'login_id' => 'login_123',
-            'verification_url' => 'https://auth.openai.example/device',
-            'user_code' => 'ABCD-1234',
-        ]);
+        ->assertExactJson(['status' => 'starting']);
 
-    expect(session('ai.codex.login_id'))->toBe('login_123');
-
-    $this->fakeCodex->connected = true;
+    runQueuedCodexLogin($user);
 
     $this->actingAs($user)
-        ->postJson(route('ai.codex.login.complete'))
+        ->getJson(route('ai.codex.login.status'))
         ->assertSuccessful()
-        ->assertJsonPath('connected', true)
+        ->assertJsonPath('status', 'connected')
         ->assertJsonMissing(['access_token', 'refresh_token', 'oauth_token', 'api_key']);
 
     $connection = AiProviderConnection::query()->forUser($user)->active()->sole();
@@ -101,8 +128,6 @@ test('rate limits expose only safe provider state and logout deactivates the use
 
     $this->actingAs($user)->postJson(route('ai.codex.login.start'))->assertSuccessful();
 
-    $this->actingAs($user)->postJson(route('ai.codex.login.complete'))->assertSuccessful();
-
     $this->actingAs($user)
         ->getJson(route('ai.codex.rate-limits.show'))
         ->assertSuccessful()
@@ -118,6 +143,7 @@ test('rate limits expose only safe provider state and logout deactivates the use
 });
 
 test('provider failures are stable browser-safe codes', function () {
+    Queue::fake();
     $user = User::factory()->create(['email_verified_at' => now()]);
     app()->instance(AiProviderAdapter::class, new class implements AiProviderAdapter
     {
@@ -126,7 +152,7 @@ test('provider failures are stable browser-safe codes', function () {
             throw new AiProviderException(AiProviderErrorCode::Unavailable);
         }
 
-        public function startDeviceCodeLogin(User $user): array
+        public function runDeviceCodeLogin(User $user, callable $onStarted): bool
         {
             throw new AiProviderException(AiProviderErrorCode::Unavailable);
         }
@@ -159,6 +185,17 @@ test('provider failures are stable browser-safe codes', function () {
 
     $this->actingAs($user)
         ->postJson(route('ai.codex.login.start'))
-        ->assertUnprocessable()
-        ->assertExactJson(['error_code' => 'provider_unavailable']);
+        ->assertSuccessful()
+        ->assertExactJson(['status' => 'starting']);
+
+    // The login job absorbs provider failures into the polled status rather
+    // than failing the dispatching request, since it keeps running long
+    // after the request that started it returns.
+    runQueuedCodexLogin($user);
+
+    $this->actingAs($user)
+        ->getJson(route('ai.codex.login.status'))
+        ->assertSuccessful()
+        ->assertJsonPath('status', 'failed')
+        ->assertJsonPath('error_code', 'provider_unavailable');
 });

@@ -77,6 +77,23 @@ services:
     image: miseledger-ai-worker-dev
     environment:
       DOCKER_DEV: '1'
+      # This image has no bind-mounted .env (by design, for its read-only,
+      # capability-dropped posture), so the framework env it needs to boot
+      # and reach shared infra is passed explicitly here instead, sourced
+      # from the same root .env the other dev services read directly.
+      APP_ENV: '${APP_ENV:-local}'
+      APP_NAME: '${APP_NAME:-MiseLedger}'
+      APP_KEY: '${APP_KEY}'
+      DB_CONNECTION: '${DB_CONNECTION:-pgsql}'
+      DB_HOST: '${DB_HOST:-pgsql}'
+      DB_PORT: '${DB_PORT:-5432}'
+      DB_DATABASE: '${DB_DATABASE:-miseledger}'
+      DB_USERNAME: '${DB_USERNAME:-miseledger}'
+      DB_PASSWORD: '${DB_PASSWORD:-miseledger}'
+      REDIS_HOST: '${REDIS_HOST:-redis}'
+      REDIS_PORT: '${REDIS_PORT:-6379}'
+      REDIS_PASSWORD: '${REDIS_PASSWORD:-null}'
+      CACHE_STORE: '${CACHE_STORE:-database}'
       AI_CODEX_PROFILE_ROOT: /var/lib/miseledger/codex/profiles
       AI_CODEX_WORKSPACE: /tmp/codex-workspace
       AI_REDIS_QUEUE_CONNECTION: default

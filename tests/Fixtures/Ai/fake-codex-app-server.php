@@ -73,3 +73,10 @@ if (! is_array($result)) {
 echo json_encode(['id' => 1, 'result' => ['userAgent' => 'fake']], JSON_THROW_ON_ERROR)."\n";
 echo json_encode(['method' => 'initialized', 'params' => []], JSON_THROW_ON_ERROR)."\n";
 echo json_encode(['id' => 2, 'result' => $result], JSON_THROW_ON_ERROR)."\n";
+
+if ($method === 'account/login/start') {
+    echo json_encode([
+        'method' => 'account/login/completed',
+        'params' => ['success' => true, 'loginId' => $result['loginId']],
+    ], JSON_THROW_ON_ERROR)."\n";
+}

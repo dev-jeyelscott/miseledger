@@ -15,8 +15,19 @@ interface AiProviderAdapter
     /** @return array<string, mixed> */
     public function account(User $user): array;
 
-    /** @return array{login_id: string, verification_url: string, user_code: string} */
-    public function startDeviceCodeLogin(User $user): array;
+    /**
+     * Starts a ChatGPT device-code login and blocks until Codex reports the
+     * login completed, failed, or the login window elapsed. Codex only
+     * persists exchanged credentials while its own process keeps polling in
+     * the background, so this call keeps that process running for the whole
+     * window instead of one-shotting a single request/response.
+     *
+     * $onStarted is invoked once, as soon as the verification URL and user
+     * code are known, so a caller can surface them before login completes.
+     *
+     * @param  callable(array{login_id: string, verification_url: string, user_code: string}): void  $onStarted
+     */
+    public function runDeviceCodeLogin(User $user, callable $onStarted): bool;
 
     public function logout(User $user): void;
 
