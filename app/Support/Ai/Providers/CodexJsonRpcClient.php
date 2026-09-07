@@ -5,6 +5,7 @@ namespace App\Support\Ai\Providers;
 use App\Enums\AiProviderErrorCode;
 use App\Exceptions\AiProviderException;
 use App\Models\User;
+use Illuminate\Filesystem\Filesystem;
 use Symfony\Component\Process\InputStream;
 use Symfony\Component\Process\Process;
 use Throwable;
@@ -12,7 +13,10 @@ use Throwable;
 /** @internal A line-delimited JSON-RPC v2 transport to one user profile. */
 final class CodexJsonRpcClient
 {
-    public function __construct(private readonly CodexProfileLocator $profiles) {}
+    public function __construct(
+        private readonly CodexProfileLocator $profiles,
+        private readonly Filesystem $files,
+    ) {}
 
     /** @param array<string, mixed> $params
      * @return array<string, mixed>
@@ -21,14 +25,22 @@ final class CodexJsonRpcClient
     {
         $environment = ['CODEX_HOME' => $this->profiles->path($user)];
         $timeout = (int) config('ai.codex.timeout_seconds');
+        $workspace = (string) config('ai.codex.workspace_path');
+        $this->files->ensureDirectoryExists($workspace, 0700, true);
 
         try {
             $input = new InputStream;
             $process = new Process([
                 ...$this->command(),
+                '--sandbox',
+                'read-only',
+                '--ask-for-approval',
+                'never',
+                '--cd',
+                $workspace,
                 'app-server',
                 '--stdio',
-            ], base_path(), $environment);
+            ], $workspace, $environment);
             $process->setInput($input);
             $process->setTimeout($timeout);
 

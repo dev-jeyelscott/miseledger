@@ -69,6 +69,53 @@ services:
       ]
     restart: unless-stopped
 
+  ai-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ai-worker
+    image: miseledger-ai-worker-dev
+    environment:
+      DOCKER_DEV: '1'
+      AI_CODEX_PROFILE_ROOT: /var/lib/miseledger/codex/profiles
+      AI_CODEX_WORKSPACE: /tmp/codex-workspace
+      AI_REDIS_QUEUE_CONNECTION: default
+      AI_QUEUE: ai
+      AI_QUEUE_RETRY_AFTER: '120'
+    volumes:
+      - '.:/var/www/html:ro'
+    tmpfs:
+      - /tmp/codex-workspace:mode=0700,uid=10001,gid=10001
+      - /var/lib/miseledger/codex:mode=0700,uid=10001,gid=10001
+      - /var/www/html/storage:mode=0770,uid=10001,gid=10001
+      - /var/www/html/bootstrap/cache:mode=0770,uid=10001,gid=10001
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    cpus: 2.0
+    mem_limit: 2g
+    networks:
+      - miseledger
+    depends_on:
+      pgsql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command:
+      [
+        'php',
+        'artisan',
+        'queue:work',
+        'ai',
+        '--sleep=1',
+        '--tries=3',
+        '--timeout=90',
+      ]
+    restart: unless-stopped
+
   scheduler:
     image: miseledger-dev
     environment:

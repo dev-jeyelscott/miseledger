@@ -2,7 +2,7 @@
 
 ## Purpose
 
-MiseLedger uses one project-owned PHP 8.5 application image for production web, queue-worker, scheduler, and one-off Artisan commands.
+MiseLedger uses one project-owned PHP 8.5 application image for production web, normal queue-worker, scheduler, and one-off Artisan commands. A separate `ai-worker` Docker target contains the pinned Codex runtime and must never be used for HTTP, normal queue, or scheduler processes.
 
 The same Dockerfile defines local and production PHP/runtime requirements. Environment-specific differences are intentional:
 
@@ -11,16 +11,17 @@ The same Dockerfile defines local and production PHP/runtime requirements. Envir
 - local Composer and Node dependencies are writable;
 - local Vite HMR runs as a separate Compose service;
 - local Xdebug is available but disabled by default;
-- production uses the final `production` target;
+- production web, normal worker, and scheduler use the final `production` target;
+- the AI worker uses the dedicated `ai-worker` target;
 - production application code and Vite assets are immutable;
-- production does not contain Composer, Node, npm, Xdebug, or development dependencies;
+- the normal production image does not contain Composer, Node, npm, Codex, Xdebug, or development dependencies;
 - production secrets are injected by Coolify at runtime.
 
 Do not use `php artisan serve` as the permanent production HTTP server.
 
 ## Production Process Model
 
-One production image is used for three independent long-running process types:
+The normal production image is used for three independent long-running process types:
 
 | Process   | Command                                                         | Public HTTP               |
 | --------- | --------------------------------------------------------------- | ------------------------- |
@@ -33,6 +34,14 @@ The web process listens on container port `8080`.
 The worker timeout must remain lower than the Redis queue `retry_after` configuration. The current application queue `retry_after` is 120 seconds.
 
 Do not combine web, worker, and scheduler under Supervisor. Coolify owns process restart and lifecycle behavior independently.
+
+The separate AI worker consumes only the `ai` Redis queue:
+
+| Process | Docker target | Command | Public HTTP |
+| --- | --- | --- | --- |
+| AI worker | `ai-worker` | `php artisan queue:work ai --sleep=1 --tries=3 --timeout=90` | No |
+
+The `ai` connection uses a 120-second `retry_after`, which remains greater than the 90-second worker timeout. Normal workers retain `php artisan queue:work redis --sleep=1 --tries=3 --timeout=90` and therefore continue consuming the existing default queue unchanged.
 
 ## Local Development
 
@@ -402,6 +411,44 @@ Equivalent custom Docker option when required:
 Run one scheduler replica.
 
 The application already protects scheduled billing work with `withoutOverlapping()` and `onOneServer()`. Redis must therefore be available to the scheduler.
+
+## Coolify AI Worker Resource
+
+Create a fourth Git-based Coolify application from the same repository commit, with Docker target `ai-worker`. It is a private worker resource, not an App Server.
+
+Configure it as follows:
+
+- do not assign a domain, public port, or HTTP health check;
+- do not enable Coolify's public App Server or reverse-proxy exposure;
+- use the target command `php artisan queue:work ai --sleep=1 --tries=3 --timeout=90`;
+- enable Coolify restart-on-failure and run one replica initially;
+- set a 90-second process timeout and allow the worker to receive `SIGTERM` for a graceful shutdown;
+- set limits of 2 vCPU, 2 GB memory, and 64 processes (PID limit), or the closest stricter limits available in the installed Coolify and Docker runtime;
+- use a read-only root filesystem, drop Linux capabilities, and enable `no-new-privileges` where the deployment runtime exposes those controls;
+- attach only the private MiseLedger network paths required for PostgreSQL, Redis, DNS, and the approved provider endpoints. Do not attach the public web ingress network.
+
+Set these AI-worker-only environment values in Coolify:
+
+```dotenv
+AI_CODEX_COMMAND=codex
+AI_CODEX_PROFILE_ROOT=/var/lib/miseledger/codex/profiles
+AI_CODEX_WORKSPACE=/tmp/codex-workspace
+AI_REDIS_QUEUE_CONNECTION=default
+AI_QUEUE=ai
+AI_QUEUE_RETRY_AFTER=120
+```
+
+The production Docker context excludes `.git`, and Codex is started with `--cd /tmp/codex-workspace`, `--sandbox read-only`, and `--ask-for-approval never`. `/tmp/codex-workspace` is created empty with mode `0700`; do not mount a repository, application source, SSH material, Docker socket, host filesystem, or user home directory there. Codex receives no repository checkout or writable application workspace.
+
+Each provider profile lives under an HMAC-derived, non-reversible user reference with mode `0700`. The AI resource keeps `/var/lib/miseledger/codex` on its disposable container filesystem, not a persistent Coolify volume. Profiles therefore survive only while that container instance runs and are discarded on replacement or restart. This avoids cross-user profile reuse and leaves the database as the authoritative record of connection state. If a future requirement needs login persistence across replacement, it must introduce an encrypted, per-user persistence design and explicit retention, revocation, backup, and cleanup approval. Do not add a shared profile volume.
+
+Operational checks:
+
+1. Confirm the resource has no domain, published port, or HTTP health check.
+2. Confirm Coolify reports the queue process running and inspect its stderr logs for startup, job failure, and restart events.
+3. Dispatch a controlled AI-queue job only after the corresponding application slice exists, then verify it appears on the `ai` queue and is not consumed by the normal worker.
+4. On failed jobs, use Laravel's failed-job record and Coolify logs. Do not expose an App Server for diagnosis.
+5. Redeploy to clear disposable workspaces and profiles. For urgent provider revocation, execute the existing provider logout flow before redeploying.
 
 ## Required Shared Production Environment
 

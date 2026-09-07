@@ -36,6 +36,12 @@ jobs:
             --tag miseledger:smoke \
             .
 
+          docker build \
+            --pull \
+            --target ai-worker \
+            --tag miseledger:ai-worker-smoke \
+            .
+
       - name: Verify production runtime contents
         run: |
           docker run --rm miseledger:smoke php -r '
@@ -81,10 +87,20 @@ jobs:
             test -w storage
             test -w bootstrap/cache
             ! command -v composer
+            ! command -v codex
             ! command -v node
             ! command -v npm
             ! command -v gcc
             ! command -v make
+          '
+
+          docker run --rm --entrypoint sh miseledger:ai-worker-smoke -ec '
+            test "$(id -un)" = "ai-worker"
+            command -v codex
+            codex --version | grep -F "0.153.4"
+            ! command -v apache2
+            test -d /tmp/codex-workspace
+            test -d /var/lib/miseledger/codex/profiles
           '
 
       - name: Start backing services

@@ -48,7 +48,9 @@ final class CodexAppServerProvider implements AiProviderAdapter
     {
         $this->assertConversationOwner($user, $conversation);
 
-        $result = $this->client->call($user, 'thread/start', ['cwd' => base_path()]);
+        $result = $this->client->call($user, 'thread/start', [
+            'cwd' => (string) config('ai.codex.workspace_path'),
+        ]);
         $threadId = $this->threadId($result);
 
         $conversation->forceFill(['provider_thread_id' => $threadId])->save();

@@ -39,7 +39,8 @@ RUN npm install --global --ignore-scripts \
 
 FROM composer:2 AS composer
 
-# Runtime shared by the production web, queue-worker, and scheduler processes.
+# Runtime shared by the production web, normal queue-worker, and scheduler
+# processes. AI tooling is intentionally excluded from this image.
 FROM php:${PHP_VERSION}-apache-bookworm AS runtime-base
 
 # The pg_dump client must match the production PostgreSQL 18 server; Debian
@@ -68,10 +69,6 @@ RUN set -eux; \
 
 COPY --from=php-extensions /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
 COPY --from=php-extensions /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
-COPY --from=codex /usr/local/bin/node /usr/local/bin/node
-COPY --from=codex /usr/local/lib/node_modules/ /usr/local/lib/node_modules/
-
-RUN ln -s ../lib/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex
 
 COPY docker/apache/000-default.conf /etc/apache2/sites-available/000-default.conf
 
@@ -111,6 +108,7 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*; \
     ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm; \
     ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx; \
+    ln -s ../lib/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex; \
     groupmod -o -g "${WWWGROUP}" www-data; \
     usermod -o -u "${WWWUSER}" -g "${WWWGROUP}" www-data; \
     chown -R www-data:www-data /var/run/apache2 /var/lock/apache2 /var/log/apache2
@@ -204,3 +202,53 @@ RUN set -eux; \
 USER www-data
 
 CMD ["apache2-foreground"]
+
+# Dedicated, non-HTTP AI runtime. It contains the pinned Codex binary but no
+# Apache, Composer, npm, source checkout metadata, or development toolchain.
+FROM php:${PHP_VERSION}-cli-bookworm AS ai-worker
+
+USER root
+
+COPY --from=php-extensions /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
+COPY --from=php-extensions /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
+COPY --from=codex /usr/local/bin/node /usr/local/bin/node
+COPY --from=codex /usr/local/lib/node_modules/@openai/ /usr/local/lib/node_modules/@openai/
+COPY docker/php/production.ini ${PHP_INI_DIR}/conf.d/zz-production.ini
+COPY --from=build /var/www/html /var/www/html
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        libcurl4 \
+        libonig5 \
+        libpq5 \
+        libxml2; \
+    rm -rf /var/lib/apt/lists/*; \
+    ln -s ../lib/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex; \
+    groupadd --gid 10001 ai-worker; \
+    useradd --uid 10001 --gid ai-worker --create-home --shell /usr/sbin/nologin ai-worker; \
+    mkdir -p \
+        /tmp/codex-workspace \
+        /var/lib/miseledger/codex/profiles \
+        /var/www/html/storage/app/private \
+        /var/www/html/storage/app/public \
+        /var/www/html/storage/framework/cache/data \
+        /var/www/html/storage/framework/sessions \
+        /var/www/html/storage/framework/views \
+        /var/www/html/storage/logs \
+        /var/www/html/bootstrap/cache; \
+    chown -R ai-worker:ai-worker \
+        /tmp/codex-workspace \
+        /var/lib/miseledger/codex \
+        /var/www/html/storage \
+        /var/www/html/bootstrap/cache; \
+    chmod 700 /tmp/codex-workspace /var/lib/miseledger/codex /var/lib/miseledger/codex/profiles
+
+WORKDIR /var/www/html
+
+STOPSIGNAL SIGTERM
+
+USER ai-worker
+
+CMD ["php", "artisan", "queue:work", "ai", "--sleep=1", "--tries=3", "--timeout=90"]

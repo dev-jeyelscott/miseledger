@@ -6,7 +6,8 @@ return [
         // version here makes an incompatible runtime fail closed at startup.
         'command' => env('AI_CODEX_COMMAND', 'codex'),
         'version' => '0.153.4',
-        'profile_root' => storage_path('app/private/codex'),
+        'profile_root' => env('AI_CODEX_PROFILE_ROOT', storage_path('app/private/codex')),
+        'workspace_path' => env('AI_CODEX_WORKSPACE', storage_path('app/private/codex-workspace')),
         'timeout_seconds' => 20,
     ],
 ];

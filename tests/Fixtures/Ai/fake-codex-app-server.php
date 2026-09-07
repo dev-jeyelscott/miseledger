@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
-if (array_slice($argv, 1) !== ['app-server', '--stdio']) {
+if (array_slice($argv, 1, 4) !== ['--sandbox', 'read-only', '--ask-for-approval', 'never']
+    || ($argv[5] ?? null) !== '--cd'
+    || ! is_string($argv[6] ?? null)
+    || array_slice($argv, 7) !== ['app-server', '--stdio']) {
     fwrite(STDERR, 'Unexpected Codex command.');
     exit(1);
 }
@@ -39,6 +42,7 @@ if (! is_string($profilePath) || $profilePath === '') {
 }
 
 file_put_contents($profilePath.'/protocol.jsonl', json_encode($messages, JSON_THROW_ON_ERROR)."\n", FILE_APPEND | LOCK_EX);
+file_put_contents($profilePath.'/workspace', getcwd()."\n", LOCK_EX);
 
 $method = $messages[2]['method'] ?? null;
 $result = match ($method) {

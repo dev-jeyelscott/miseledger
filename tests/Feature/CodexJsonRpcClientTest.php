@@ -11,6 +11,7 @@ use App\Support\Ai\Providers\CodexProfileLocator;
 beforeEach(function (): void {
     config()->set('ai.codex.command', [PHP_BINARY, base_path('tests/Fixtures/Ai/fake-codex-app-server.php')]);
     config()->set('ai.codex.profile_root', sys_get_temp_dir().'/miseledger-codex-app-server-tests-'.bin2hex(random_bytes(8)));
+    config()->set('ai.codex.workspace_path', sys_get_temp_dir().'/miseledger-codex-workspace-tests-'.bin2hex(random_bytes(8)));
 });
 
 test('the Codex provider uses documented direct stdio JSON-RPC for connection and conversation operations', function () {
@@ -58,6 +59,9 @@ test('the Codex provider uses documented direct stdio JSON-RPC for connection an
         'thread/resume',
         'turn/start',
     ]);
+
+    expect($transcripts[4][2]['params']['cwd'])->toBe(config('ai.codex.workspace_path'));
+    expect(trim((string) file_get_contents($profilePath.'/workspace')))->toBe(config('ai.codex.workspace_path'));
 });
 
 test('the Codex client uses a distinct provider-owned profile for each user', function () {
