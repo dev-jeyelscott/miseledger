@@ -82,8 +82,6 @@ services:
       AI_REDIS_QUEUE_CONNECTION: default
       AI_QUEUE: ai
       AI_QUEUE_RETRY_AFTER: '120'
-    volumes:
-      - '.:/var/www/html:ro'
     tmpfs:
       - /tmp/codex-workspace:mode=0700,uid=10001,gid=10001
       - /var/lib/miseledger/codex:mode=0700,uid=10001,gid=10001

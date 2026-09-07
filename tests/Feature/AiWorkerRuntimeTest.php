@@ -27,5 +27,6 @@ test('the production web image excludes Codex and the isolated AI worker target 
         ->toContain('read_only: true')
         ->toContain('pids_limit: 64')
         ->toContain('mem_limit: 2g')
+        ->not->toContain("'.:/var/www/html:ro'")
         ->not->toContain('ports:');
 });

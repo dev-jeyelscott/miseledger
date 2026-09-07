@@ -63,6 +63,23 @@ Subsequent development startup is:
 docker compose up -d
 ```
 
+### Local AI worker image lifecycle
+
+The local `ai-worker` intentionally runs the immutable `ai-worker` image
+without a source bind mount. This prevents Codex from seeing the host checkout,
+including `.git`, tests, and local configuration. Rebuild and recreate only
+this private worker after changing application or AI-runtime code that it must
+execute:
+
+```bash
+docker compose build ai-worker
+docker compose up -d --force-recreate ai-worker
+```
+
+Do not add a bind mount for `/var/www/html`, a repository checkout, SSH
+material, a Docker socket, or a user home directory to the `ai-worker` service.
+Its workspace and per-user profiles remain disposable `tmpfs` mounts.
+
 Inspect the stack:
 
 ```bash
