@@ -1,8 +1,7 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -11,10 +10,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('inventory_item_units', function (Blueprint $table): void {
-            $table->check('quantity_in_base_unit > 0')
-                ->name('chk_inventory_item_units_quantity_positive');
-        });
+        DB::statement('ALTER TABLE inventory_item_units ADD CONSTRAINT chk_inventory_item_units_quantity_positive CHECK (quantity_in_base_unit > 0)');
     }
 
     /**
@@ -22,8 +18,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('inventory_item_units', function (Blueprint $table): void {
-            $table->dropCheck('chk_inventory_item_units_quantity_positive');
-        });
+        DB::statement('ALTER TABLE inventory_item_units DROP CONSTRAINT chk_inventory_item_units_quantity_positive');
     }
 };
