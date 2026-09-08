@@ -1,6 +1,32 @@
 <?php
 
 return [
+    /*
+    |--------------------------------------------------------------------------
+    | Rollout and abuse controls
+    |--------------------------------------------------------------------------
+    |
+    | AI is deliberately fail-closed until an operator enables it. Provider
+    | switches are separate so an incident can stop one integration without
+    | changing organization entitlements or normal application processes.
+    |
+    */
+    'enabled' => (bool) env('AI_ENABLED', false),
+
+    'providers' => [
+        'openai' => [
+            'enabled' => (bool) env('AI_OPENAI_ENABLED', false),
+        ],
+    ],
+
+    'rate_limits' => [
+        'messages_per_minute' => (int) env('AI_MESSAGES_PER_MINUTE', 12),
+        'connections_per_hour' => (int) env('AI_CONNECTIONS_PER_HOUR', 3),
+        'provider_runs_per_minute' => (int) env('AI_PROVIDER_RUNS_PER_MINUTE', 30),
+    ],
+
+    'logger' => env('AI_LOG_CHANNEL', 'stack'),
+
     'codex' => [
         // This binary is provisioned by the deployment image. Keeping the
         // version here makes an incompatible runtime fail closed at startup.

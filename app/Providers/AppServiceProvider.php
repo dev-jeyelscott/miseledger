@@ -12,9 +12,12 @@ use App\Support\Ai\Providers\CodexAppServerProvider;
 use App\Support\Billing\BillingConfigurationValidator;
 use App\Support\Billing\OrganizationCommercialWriteGate;
 use Carbon\CarbonImmutable;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Laravel\Cashier\Cashier;
@@ -38,6 +41,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->configureAiRateLimiting();
         $this->configureAuthorization();
         $this->configureBilling();
 
@@ -88,6 +92,29 @@ class AppServiceProvider extends ServiceProvider
                 ),
             );
         }
+    }
+
+    /**
+     * Keep interactive abuse limits tenant- and member-specific. Provider
+     * execution has an additional shared queue limiter in ProcessAiRun.
+     */
+    protected function configureAiRateLimiting(): void
+    {
+        RateLimiter::for('ai-message', function (Request $request): Limit {
+            $organizationId = $request->attributes->get('activeOrganization')?->getKey();
+
+            return Limit::perMinute((int) config('ai.rate_limits.messages_per_minute'))
+                ->by('ai-message:'.($organizationId ?? 'none').':'.($request->user()?->getAuthIdentifier() ?? $request->ip()));
+        });
+
+        RateLimiter::for('ai-connection', function (Request $request): Limit {
+            return Limit::perHour((int) config('ai.rate_limits.connections_per_hour'))
+                ->by('ai-connection:'.($request->user()?->getAuthIdentifier() ?? $request->ip()));
+        });
+
+        RateLimiter::for('ai-provider-openai', fn (): Limit => Limit::perMinute(
+            (int) config('ai.rate_limits.provider_runs_per_minute'),
+        )->by('ai-provider-openai'));
     }
 
     /**

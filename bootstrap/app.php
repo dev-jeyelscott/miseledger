@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnforceFeatureEntitlement;
+use App\Http\Middleware\EnsureAiFeatureEnabled;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\ResolveActiveOrganization;
@@ -33,6 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'feature' => EnforceFeatureEntitlement::class,
+            'ai.enabled' => EnsureAiFeatureEnabled::class,
             'paymongo.webhook' => VerifyPayMongoWebhookSignature::class,
         ]);
 

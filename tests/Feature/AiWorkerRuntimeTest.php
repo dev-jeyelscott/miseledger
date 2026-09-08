@@ -5,8 +5,8 @@ test('the dedicated AI queue has a bounded retry window that exceeds its tool-ba
         'driver' => 'redis',
         'connection' => 'default',
         'queue' => 'ai',
-        'retry_after' => 210,
-    ])->and(config('queue.connections.ai.retry_after'))->toBeGreaterThan(180)
+        'retry_after' => 960,
+    ])->and(config('queue.connections.ai.retry_after'))->toBeGreaterThan(930)
         ->and(config('ai.codex.timeout_seconds'))->toBe(75);
 });
 
@@ -22,7 +22,7 @@ test('the production web image excludes Codex and isolated workers separate inte
 
     expect($dockerfile)->toContain('FROM php:${PHP_VERSION}-cli-bookworm AS ai-worker')
         ->toContain('COPY --from=codex /usr/local/bin/node /usr/local/bin/node')
-        ->toContain('CMD ["php", "artisan", "queue:work", "ai", "--sleep=1", "--tries=3", "--timeout=90"]')
+        ->toContain('CMD ["php", "artisan", "queue:work", "ai", "--sleep=1", "--tries=3", "--timeout=190"]')
         ->and($productionTarget)->not->toContain('COPY --from=codex')
         ->not->toContain('/usr/local/bin/node')
         ->and($compose)->toContain('  ai-worker:')

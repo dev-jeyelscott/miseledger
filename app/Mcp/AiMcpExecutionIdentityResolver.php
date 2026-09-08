@@ -5,6 +5,7 @@ namespace App\Mcp;
 use App\Enums\AiRunStatus;
 use App\Models\AiRun;
 use App\Models\OrganizationMembership;
+use App\Support\Ai\AiFeatureGate;
 use App\Support\Billing\MemberAIAccessResolver;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
@@ -46,6 +47,8 @@ final class AiMcpExecutionIdentityResolver
         if (! MemberAIAccessResolver::resolve($organization, $membership)->canUse()) {
             throw new AuthorizationException('AI access is not currently permitted.');
         }
+
+        AiFeatureGate::ensureProviderEnabled($run->provider);
 
         if ($membership === null) {
             throw new AuthorizationException('The AI execution identity is no longer a member of this organization.');

@@ -11,6 +11,8 @@ use App\Models\AiRun;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
+use App\Support\Ai\AiFeatureGate;
+use App\Support\Ai\AiObservability;
 use App\Support\Billing\MemberAIAccessResolver;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +21,8 @@ use Illuminate\Validation\ValidationException;
 
 final class QueueAiMessage
 {
+    public function __construct(private readonly AiObservability $observability) {}
+
     /** @return array{message_id: int, run: AiRun} */
     public function handle(
         Organization $organization,
@@ -57,6 +61,8 @@ final class QueueAiMessage
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            AiFeatureGate::ensureProviderEnabled($connection->provider);
+
             $nextSequence = (int) $lockedConversation->messages()
                 ->max('sequence') + 1;
 
@@ -82,6 +88,8 @@ final class QueueAiMessage
 
             return ['message_id' => $message->id, 'run' => $run];
         });
+
+        $this->observability->queued($result['run']);
 
         return $result;
     }

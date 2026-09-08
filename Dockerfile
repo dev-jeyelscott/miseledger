@@ -251,4 +251,4 @@ STOPSIGNAL SIGTERM
 
 USER ai-worker
 
-CMD ["php", "artisan", "queue:work", "ai", "--sleep=1", "--tries=3", "--timeout=90"]
+CMD ["php", "artisan", "queue:work", "ai", "--sleep=1", "--tries=3", "--timeout=190"]

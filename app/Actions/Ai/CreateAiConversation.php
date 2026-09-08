@@ -6,6 +6,7 @@ use App\Models\AiConversation;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
+use App\Support\Ai\AiFeatureGate;
 use App\Support\Billing\MemberAIAccessResolver;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,8 @@ final class CreateAiConversation
 {
     public function handle(Organization $organization, User $user): AiConversation
     {
+        AiFeatureGate::ensureEnabled();
+
         return DB::transaction(function () use ($organization, $user): AiConversation {
             $membership = OrganizationMembership::query()
                 ->whereBelongsTo($organization)

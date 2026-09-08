@@ -99,7 +99,7 @@ services:
       AI_CODEX_TIMEOUT_SECONDS: '75'
       AI_REDIS_QUEUE_CONNECTION: default
       AI_QUEUE: ai
-      AI_QUEUE_RETRY_AFTER: '210'
+      AI_QUEUE_RETRY_AFTER: '960'
     tmpfs:
       # Codex's Linux sandbox creates transient Bubblewrap mount targets
       # directly under /tmp before it launches the local MCP server.
@@ -165,7 +165,7 @@ services:
       AI_CODEX_TIMEOUT_SECONDS: '75'
       AI_REDIS_QUEUE_CONNECTION: default
       AI_QUEUE: ai
-      AI_QUEUE_RETRY_AFTER: '210'
+      AI_QUEUE_RETRY_AFTER: '960'
     tmpfs:
       - /tmp:mode=1777
       - /var/www/html/storage:mode=0770,uid=10001,gid=10001

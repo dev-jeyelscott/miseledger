@@ -12,6 +12,8 @@ use App\Models\AiMessage;
 use App\Models\AiRun;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
+use App\Support\Ai\AiFeatureGate;
+use App\Support\Ai\AiObservability;
 use App\Support\Ai\Providers\AiProviderAdapter;
 use App\Support\Ai\Providers\AiProviderTurn;
 use App\Support\Billing\MemberAIAccessResolver;
@@ -22,6 +24,7 @@ final class ExecuteAiRun
     public function __construct(
         private readonly AiMcpExecutionIdentityIssuer $identityIssuer,
         private readonly AiProviderAdapter $provider,
+        private readonly AiObservability $observability,
     ) {}
 
     public function handle(int $runId): void
@@ -52,6 +55,20 @@ final class ExecuteAiRun
                     'finished_at' => now(),
                 ]);
 
+                $this->observability->denied($run, 'access_revoked');
+
+                return null;
+            }
+
+            if (! AiFeatureGate::isProviderEnabled($run->provider)) {
+                $run->update([
+                    'status' => AiRunStatus::Failed,
+                    'error_code' => 'provider_disabled',
+                    'finished_at' => now(),
+                ]);
+
+                $this->observability->denied($run, 'provider_disabled');
+
                 return null;
             }
 
@@ -68,12 +85,14 @@ final class ExecuteAiRun
             return;
         }
 
+        $this->observability->started($run);
+
         try {
             $conversation = $run->conversation;
             $identity = $this->identityIssuer->issue($run);
             $turn = $this->provider->converse($run->user, $conversation, $identity, $this->userMessage($conversation, $run));
 
-            $this->complete($run->id, $turn);
+            $this->observability->completed($this->complete($run->id, $turn));
         } catch (AiProviderException $exception) {
             if (in_array($exception->errorCode, [
                 AiProviderErrorCode::Unavailable,
@@ -88,11 +107,11 @@ final class ExecuteAiRun
 
     public function fail(int $runId, string $errorCode): void
     {
-        DB::transaction(function () use ($runId, $errorCode): void {
-            $run = AiRun::query()->lockForUpdate()->find($runId);
+        $run = DB::transaction(function () use ($runId, $errorCode): ?AiRun {
+            $run = AiRun::query()->with('conversation')->lockForUpdate()->find($runId);
 
             if ($run === null || $run->status === AiRunStatus::Succeeded) {
-                return;
+                return null;
             }
 
             $run->update([
@@ -100,19 +119,25 @@ final class ExecuteAiRun
                 'error_code' => $errorCode,
                 'finished_at' => now(),
             ]);
+
+            return $run;
         });
+
+        if ($run !== null) {
+            $this->observability->failed($run);
+        }
     }
 
-    private function complete(int $runId, AiProviderTurn $turn): void
+    private function complete(int $runId, AiProviderTurn $turn): AiRun
     {
-        DB::transaction(function () use ($runId, $turn): void {
+        return DB::transaction(function () use ($runId, $turn): AiRun {
             $run = AiRun::query()
                 ->with('conversation')
                 ->lockForUpdate()
                 ->findOrFail($runId);
 
             if ($run->status === AiRunStatus::Succeeded) {
-                return;
+                return $run;
             }
 
             $conversation = AiConversation::query()
@@ -143,6 +168,8 @@ final class ExecuteAiRun
                 'error_code' => null,
                 'finished_at' => now(),
             ]);
+
+            return $run;
         });
     }
 

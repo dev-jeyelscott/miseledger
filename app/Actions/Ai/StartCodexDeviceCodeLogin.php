@@ -2,14 +2,18 @@
 
 namespace App\Actions\Ai;
 
+use App\Enums\AiProvider;
 use App\Jobs\AwaitCodexDeviceCodeLogin;
 use App\Models\User;
+use App\Support\Ai\AiFeatureGate;
 use Illuminate\Support\Facades\Cache;
 
 final class StartCodexDeviceCodeLogin
 {
     public function handle(User $user): void
     {
+        AiFeatureGate::ensureProviderEnabled(AiProvider::OpenAi);
+
         Cache::put(AwaitCodexDeviceCodeLogin::cacheKey($user), ['status' => 'starting'], now()->addMinutes(20));
 
         // Device-code polling can wait for up to fifteen minutes. Keep it

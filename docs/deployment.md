@@ -39,9 +39,9 @@ The separate AI worker consumes only the `ai` Redis queue:
 
 | Process | Docker target | Command | Public HTTP |
 | --- | --- | --- | --- |
-| AI worker | `ai-worker` | `php artisan queue:work ai --sleep=1 --tries=3 --timeout=90` | No |
+| AI worker | `ai-worker` | `php artisan queue:work ai --sleep=1 --tries=3 --timeout=190` | No |
 
-The `ai` connection uses a 120-second `retry_after`, which remains greater than the 90-second worker timeout. Normal workers retain `php artisan queue:work redis --sleep=1 --tries=3 --timeout=90` and therefore continue consuming the existing default queue unchanged.
+The `ai` connection uses a 960-second `retry_after`, which remains greater than the 190-second normal-turn timeout and the 930-second device-login timeout. Normal workers retain `php artisan queue:work redis --sleep=1 --tries=3 --timeout=90` and therefore continue consuming the existing default queue unchanged.
 
 ## Local Development
 
@@ -437,9 +437,9 @@ Configure it as follows:
 
 - do not assign a domain, public port, or HTTP health check;
 - do not enable Coolify's public App Server or reverse-proxy exposure;
-- use the target command `php artisan queue:work ai --sleep=1 --tries=3 --timeout=90`;
+- use the target command `php artisan queue:work ai --sleep=1 --tries=3 --timeout=190`;
 - enable Coolify restart-on-failure and run one replica initially;
-- set a 90-second process timeout and allow the worker to receive `SIGTERM` for a graceful shutdown;
+- set a 190-second process timeout and allow the worker to receive `SIGTERM` for a graceful shutdown;
 - set limits of 2 vCPU, 2 GB memory, and 64 processes (PID limit), or the closest stricter limits available in the installed Coolify and Docker runtime;
 - use a read-only root filesystem, drop Linux capabilities, and enable `no-new-privileges` where the deployment runtime exposes those controls;
 - attach only the private MiseLedger network paths required for PostgreSQL, Redis, DNS, and the approved provider endpoints. Do not attach the public web ingress network.
@@ -452,7 +452,7 @@ AI_CODEX_PROFILE_ROOT=/var/lib/miseledger/codex/profiles
 AI_CODEX_WORKSPACE=/tmp/codex-workspace
 AI_REDIS_QUEUE_CONNECTION=default
 AI_QUEUE=ai
-AI_QUEUE_RETRY_AFTER=120
+AI_QUEUE_RETRY_AFTER=960
 ```
 
 The production Docker context excludes `.git`, and Codex is started with `--cd /tmp/codex-workspace`, `--sandbox read-only`, and `--ask-for-approval never`. `/tmp/codex-workspace` is created empty with mode `0700`; do not mount a repository, application source, SSH material, Docker socket, host filesystem, or user home directory there. Codex receives no repository checkout or writable application workspace.
@@ -466,6 +466,78 @@ Operational checks:
 3. Dispatch a controlled AI-queue job only after the corresponding application slice exists, then verify it appears on the `ai` queue and is not consumed by the normal worker.
 4. On failed jobs, use Laravel's failed-job record and Coolify logs. Do not expose an App Server for diagnosis.
 5. Redeploy to clear disposable workspaces and profiles. For urgent provider revocation, execute the existing provider logout flow before redeploying.
+
+### AI operator runbook
+
+The AI surface is operationally gated independently of organization plan
+entitlements and member access. These flags are runtime secrets/configuration,
+not browser-visible settings:
+
+```dotenv
+AI_ENABLED=false
+AI_OPENAI_ENABLED=false
+AI_MESSAGES_PER_MINUTE=12
+AI_CONNECTIONS_PER_HOUR=3
+AI_PROVIDER_RUNS_PER_MINUTE=30
+```
+
+`AI_ENABLED=false` disables every AI HTTP route and prevents queued runs from
+starting a provider turn. `AI_OPENAI_ENABLED=false` leaves the rest of the
+application and its normal workers running while rejecting OpenAI/Codex work.
+Neither flag changes subscription entitlements, organization membership, stock
+history, or existing provider-account records.
+
+#### Staged rollout
+
+1. Deploy with both flags `false`. Verify web, normal worker, scheduler, and
+   AI worker health independently.
+2. Set `AI_ENABLED=true` and keep `AI_OPENAI_ENABLED=false`. Verify the AI
+   routes deny provider use, no provider process starts, and normal business
+   writes remain unaffected.
+3. Enable `AI_OPENAI_ENABLED=true` for an internal pilot organization only by
+   granting its existing plan entitlement and owner-controlled member access.
+   Keep all other memberships disabled.
+4. Expand to a small allowlisted cohort, reviewing `ai.run.*` lifecycle logs,
+   failed jobs, provider rate-limit signals, tenant-isolation regressions, and
+   PostgreSQL/Redis health daily.
+5. Enable more entitled memberships only after the cohort remains stable for
+   the agreed observation window. Global enablement is the final stage.
+
+Rollback is immediate: set `AI_OPENAI_ENABLED=false` for a provider incident,
+or `AI_ENABLED=false` for a full AI incident, then redeploy/restart the
+private AI worker so any in-flight Codex process is terminated. Do not stop or
+restart the web, normal worker, or scheduler merely to disable AI.
+
+#### Provider disconnect and profile cleanup
+
+Use the authenticated **Disconnect** control first. It asks the provider to
+logout and always deactivates the local connection even if that provider call
+fails. For an urgent revocation, disable the provider flag, perform the
+disconnect as the affected user where possible, then redeploy the AI worker.
+The worker profile directory is an HMAC-derived per-user path on disposable
+container storage. Recreating the AI worker removes all profiles and its
+temporary workspace. Never inspect, archive, bind-mount, or copy profile
+directories, and never put them on a persistent volume.
+
+#### Stuck runs and queue health
+
+1. Disable the relevant provider flag before intervening if a run appears
+   stuck or a provider is failing broadly.
+2. Inspect the private AI worker's process health, queue depth, and Laravel
+   failed-job records. Review only `ai.run.*` structured lifecycle context:
+   run ID, organization ID, user ID, provider, status, token counts, and safe
+   error code. Prompts, responses, tool arguments/results, profile paths, and
+   credentials must never be requested or added to incident notes.
+3. A run that has exhausted retries is marked failed. Do not edit AI run rows
+   to retry it; let the member submit a new request after the provider is
+   healthy. The normal web, worker, and scheduler processes remain isolated
+   from AI-worker failure.
+4. Confirm the AI worker consumes only `ai` and the login worker only
+   `ai-login`; confirm normal workers do not consume either queue. Confirm
+   worker timeout remains below the matching Redis `retry_after`.
+5. If a run coincides with any inventory discrepancy, treat it as a normal
+   ledger incident. AI has no mutation tool. Inspect StockMovement history and
+   derived StockBalance read-only, and never repair balances directly.
 
 ## Required Shared Production Environment
 
