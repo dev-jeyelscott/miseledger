@@ -30,3 +30,4 @@ yarn-error.log
 /miseledger
 /miseledger_test
 /database/*.sqlite
+test-results
