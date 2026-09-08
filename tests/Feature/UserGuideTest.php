@@ -79,3 +79,27 @@ test('the user menu exposes the user guide in shared desktop and mobile navigati
         ->toContain('<UserMenuContent user={auth.user} />')
         ->toContain('isMobile');
 });
+
+test('every sidebar navigation destination is assigned to a user guide module', function (): void {
+    $sidebar = File::get(resource_path('js/components/app-sidebar.tsx'));
+    $guideContent = File::get(resource_path('js/pages/user-guide/content.ts'));
+
+    $sidebarLabels = [
+        'Dashboard', 'AI Assistant', 'Items', 'Categories', 'Brands',
+        'Product families', 'Units of measure', 'Opening balances',
+        'Stock adjustments', 'Stock counts', 'Waste', 'Stock transfers',
+        'Suppliers', 'Purchase orders', 'Receiving', 'Recipes',
+        'Stock on hand', 'Low stock', 'Stock movement ledger',
+        'Inventory valuation', 'Purchasing history', 'Locations', 'Members',
+        'Settings', 'Billing',
+    ];
+
+    foreach ($sidebarLabels as $label) {
+        expect($sidebar)->toContain("title: '{$label}'");
+        expect($guideContent)->toContain(
+            preg_match('/^[A-Za-z]+$/', $label) === 1
+                ? "{$label}:"
+                : "'{$label}':",
+        );
+    }
+});
