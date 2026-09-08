@@ -249,7 +249,13 @@ final class CodexJsonRpcClient
     {
         $messages = $this->collectMessagesUntil($process, $buffer, $predicate, $timeoutSeconds);
 
-        return $messages[array_key_last($messages)];
+        $messageIndex = array_key_last($messages);
+
+        if ($messageIndex === null) {
+            throw new AiProviderException(AiProviderErrorCode::Protocol);
+        }
+
+        return $messages[$messageIndex];
     }
 
     /**

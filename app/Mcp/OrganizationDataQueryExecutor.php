@@ -11,6 +11,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
@@ -1002,9 +1003,12 @@ final class OrganizationDataQueryExecutor
                             .'), 0)';
                     }
 
-                    $query->selectRaw(
-                        $expression.' AS '.$alias,
-                    );
+                    /** @var literal-string&non-falsy-string $expression */
+                    /** @var literal-string&non-falsy-string $alias */
+                    $select = $expression.' AS '.$alias;
+
+                    /** @var literal-string&non-falsy-string $select */
+                    $query->addSelect(DB::raw($select));
                 }
 
                 if ($groupColumns === []) {
@@ -1204,7 +1208,11 @@ final class OrganizationDataQueryExecutor
     /**
      * Resolve a public field descriptor to its server-owned database column.
      *
-     * @param  string|array{column: string, cost?: bool}  $field
+     * The catalog is application-owned and is the only source for database
+     * identifiers. Callers can select only previously validated catalog keys.
+     *
+     * @param  literal-string|array{column: literal-string, cost?: bool}  $field
+     * @return literal-string
      */
     private function column(string|array $field): string
     {
