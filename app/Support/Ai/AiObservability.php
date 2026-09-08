@@ -11,16 +11,19 @@ use Illuminate\Support\Facades\Log;
  */
 final class AiObservability
 {
+    /** Emit the queued lifecycle signal for an AI run. */
     public function queued(AiRun $run): void
     {
         $this->record('ai.run.queued', $run);
     }
 
+    /** Emit the started lifecycle signal for an AI run. */
     public function started(AiRun $run): void
     {
         $this->record('ai.run.started', $run);
     }
 
+    /** Emit the completed lifecycle signal with safe execution metrics. */
     public function completed(AiRun $run): void
     {
         $this->record('ai.run.completed', $run, [
@@ -30,11 +33,13 @@ final class AiObservability
         ]);
     }
 
+    /** Emit the denied lifecycle signal with its safe reason code. */
     public function denied(AiRun $run, string $reason): void
     {
         $this->record('ai.run.denied', $run, ['reason' => $reason]);
     }
 
+    /** Emit the failed lifecycle signal with its safe error code. */
     public function failed(AiRun $run): void
     {
         $this->record('ai.run.failed', $run, ['error_code' => $run->error_code]);
@@ -61,7 +66,11 @@ final class AiObservability
         ]);
     }
 
-    /** @param array<string, int|string|null> $context */
+    /**
+     * Write one safe operational signal to the configured AI log channel.
+     *
+     * @param  array<string, int|string|null>  $context
+     */
     private function record(string $event, AiRun $run, array $context = []): void
     {
         Log::channel((string) config('ai.logger'))->info('AI operational signal emitted.', [
@@ -77,12 +86,16 @@ final class AiObservability
         ]);
     }
 
+    /** Calculate a non-negative whole-millisecond duration for a completed run. */
     private function durationMs(AiRun $run): ?int
     {
         if ($run->started_at === null || $run->finished_at === null) {
             return null;
         }
 
-        return max(0, $run->started_at->diffInMilliseconds($run->finished_at));
+        return max(
+            0,
+            (int) $run->started_at->diffInMilliseconds($run->finished_at),
+        );
     }
 }
