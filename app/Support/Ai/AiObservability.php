@@ -26,6 +26,7 @@ final class AiObservability
         $this->record('ai.run.completed', $run, [
             'input_tokens' => $run->input_tokens,
             'output_tokens' => $run->output_tokens,
+            'duration_ms' => $this->durationMs($run),
         ]);
     }
 
@@ -39,11 +40,34 @@ final class AiObservability
         $this->record('ai.run.failed', $run, ['error_code' => $run->error_code]);
     }
 
+    /**
+     * Emit a metric-shaped tool lifecycle signal without retaining an MCP
+     * request, response, or provider-managed profile detail.
+     *
+     * @param  array<string, int|string>  $metadata
+     */
+    public function toolCalled(
+        AiRun $run,
+        string $toolName,
+        string $outcome,
+        array $metadata,
+    ): void {
+        $this->record('ai.tool.'.$outcome, $run, [
+            'metric_name' => 'ai.tool.calls',
+            'metric_value' => 1,
+            'tool_name' => $toolName,
+            'tool_outcome' => $outcome,
+            ...$metadata,
+        ]);
+    }
+
     /** @param array<string, int|string|null> $context */
     private function record(string $event, AiRun $run, array $context = []): void
     {
         Log::channel((string) config('ai.logger'))->info('AI operational signal emitted.', [
             'event' => $event,
+            'metric_name' => 'ai.run.lifecycle',
+            'metric_value' => 1,
             'ai_run_id' => $run->getKey(),
             'organization_id' => $run->conversation->organization_id,
             'user_id' => $run->user_id,
@@ -51,5 +75,14 @@ final class AiObservability
             'status' => $run->status->value,
             ...$context,
         ]);
+    }
+
+    private function durationMs(AiRun $run): ?int
+    {
+        if ($run->started_at === null || $run->finished_at === null) {
+            return null;
+        }
+
+        return max(0, $run->started_at->diffInMilliseconds($run->finished_at));
     }
 }

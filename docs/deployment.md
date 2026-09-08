@@ -524,10 +524,11 @@ directories, and never put them on a persistent volume.
 1. Disable the relevant provider flag before intervening if a run appears
    stuck or a provider is failing broadly.
 2. Inspect the private AI worker's process health, queue depth, and Laravel
-   failed-job records. Review only `ai.run.*` structured lifecycle context:
-   run ID, organization ID, user ID, provider, status, token counts, and safe
-   error code. Prompts, responses, tool arguments/results, profile paths, and
-   credentials must never be requested or added to incident notes.
+   failed-job records. Review only `ai.run.*` and `ai.tool.*` structured
+   lifecycle metrics: run ID, organization ID, user ID, provider, status,
+   token counts, bounded duration, tool outcome, and safe error code. Prompts,
+   responses, tool arguments/results, profile paths, and credentials must
+   never be requested or added to incident notes.
 3. A run that has exhausted retries is marked failed. Do not edit AI run rows
    to retry it; let the member submit a new request after the provider is
    healthy. The normal web, worker, and scheduler processes remain isolated

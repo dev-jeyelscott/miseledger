@@ -4,10 +4,13 @@ namespace App\Actions\Ai;
 
 use App\Models\AiRun;
 use App\Models\AiToolCall;
+use App\Support\Ai\AiObservability;
 use Illuminate\Support\Arr;
 
 final class RecordAiToolCall
 {
+    public function __construct(private readonly AiObservability $observability) {}
+
     /**
      * Persist one tool-call audit entry without arguments, result bodies, or
      * credentials. The metadata allow-list is deliberately narrow.
@@ -21,12 +24,23 @@ final class RecordAiToolCall
         ?string $providerToolCallId = null,
         array $metadata = [],
     ): AiToolCall {
-        return $run->toolCalls()->create([
+        $safeMetadata = $this->safeMetadata($metadata);
+
+        $toolCall = $run->toolCalls()->create([
             'tool_name' => $toolName,
             'status' => $status,
             'provider_tool_call_id' => $providerToolCallId,
-            'metadata' => $this->safeMetadata($metadata),
+            'metadata' => $safeMetadata,
         ]);
+
+        $this->observability->toolCalled(
+            $run,
+            $toolName,
+            $status,
+            $safeMetadata,
+        );
+
+        return $toolCall;
     }
 
     /**

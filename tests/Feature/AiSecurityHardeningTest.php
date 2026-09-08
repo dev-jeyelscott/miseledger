@@ -165,8 +165,22 @@ test('AI observability excludes prompts, results, tool data, and credentials', f
     Log::shouldHaveReceived('info')->withArgs(function (string $message, array $context): bool {
         return $message === 'AI operational signal emitted.'
             && $context['event'] === 'ai.run.completed'
+            && $context['metric_name'] === 'ai.run.lifecycle'
+            && $context['metric_value'] === 1
             && $context['input_tokens'] === 12
             && $context['output_tokens'] === 34
+            && ! str_contains(json_encode($context), 'prompt')
+            && ! str_contains(json_encode($context), 'result')
+            && ! str_contains(json_encode($context), 'access_token');
+    })->once();
+
+    Log::shouldHaveReceived('info')->withArgs(function (string $message, array $context): bool {
+        return $message === 'AI operational signal emitted.'
+            && $context['event'] === 'ai.tool.succeeded'
+            && $context['metric_name'] === 'ai.tool.calls'
+            && $context['metric_value'] === 1
+            && $context['tool_name'] === 'organization_data_query'
+            && $context['row_count'] === 1
             && ! str_contains(json_encode($context), 'prompt')
             && ! str_contains(json_encode($context), 'result')
             && ! str_contains(json_encode($context), 'access_token');
