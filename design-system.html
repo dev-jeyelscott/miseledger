@@ -94,6 +94,38 @@
                 border: 1px solid var(--input);
             }
 
+            .ai-launcher {
+                display: inline-flex;
+                min-height: 3rem;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0 1rem;
+                border-radius: 9999px;
+                border: 1px solid
+                    color-mix(
+                        in oklch,
+                        var(--ai-assistant-launcher-foreground) 20%,
+                        transparent
+                    );
+                background: var(--ai-assistant-launcher);
+                color: var(--ai-assistant-launcher-foreground);
+                font-weight: 600;
+                box-shadow: 0 4px 12px rgb(0 0 0 / 0.18);
+                outline: 3px solid
+                    color-mix(
+                        in oklch,
+                        var(--ai-assistant-launcher-ring) 80%,
+                        transparent
+                    );
+                outline-offset: 2px;
+            }
+
+            .token-stack {
+                display: grid;
+                gap: 0.25rem;
+                text-align: right;
+            }
+
             code {
                 font-size: 0.75rem;
                 overflow-wrap: anywhere;
@@ -122,38 +154,87 @@
                 </header>
                 <div class="row">
                     <strong>Canvas</strong>
-                    <div class="sample"><span>Page background</span><code data-token="background"></code></div>
+                    <div class="sample">
+                        <span>Page background</span>
+                        <code data-token="background"></code>
+                    </div>
                 </div>
                 <div class="row">
                     <strong>Elevated surface</strong>
-                    <div class="sample surface"><span>Cards, tables, panels, widgets</span><code data-token="card"></code></div>
+                    <div class="sample surface">
+                        <span>Cards, tables, panels, widgets</span>
+                        <code data-token="card"></code>
+                    </div>
                 </div>
                 <div class="row">
                     <strong>Popover</strong>
-                    <div class="sample popover"><span>Selects, menus, dialogs</span><code data-token="popover"></code></div>
+                    <div class="sample popover">
+                        <span>Selects, menus, dialogs</span>
+                        <code data-token="popover"></code>
+                    </div>
                 </div>
                 <div class="row">
                     <strong>Structural border</strong>
-                    <div class="sample border"><span>Tables, grouping, sidebar edges</span><code data-token="border"></code></div>
+                    <div class="sample border">
+                        <span>Tables, grouping, sidebar edges</span>
+                        <code data-token="border"></code>
+                    </div>
                 </div>
                 <div class="row">
                     <strong>Input boundary</strong>
-                    <div class="sample input"><span>Editable controls and fields</span><code data-token="input"></code></div>
+                    <div class="sample input">
+                        <span>Editable controls and fields</span>
+                        <code data-token="input"></code>
+                    </div>
                 </div>
                 <div class="row">
                     <strong>Sidebar</strong>
-                    <div class="sample" style="background: var(--sidebar)"><span>Persistent navigation</span><code data-token="sidebar"></code></div>
+                    <div class="sample" style="background: var(--sidebar)">
+                        <span>Persistent navigation</span>
+                        <code data-token="sidebar"></code>
+                    </div>
+                </div>
+                <div class="row">
+                    <strong>AI Assistant</strong>
+                    <div class="sample">
+                        <span class="ai-launcher">Ask AI</span>
+                        <span class="token-stack">
+                            <code data-token="ai-assistant-launcher"></code>
+                            <code
+                                data-token="ai-assistant-launcher-foreground"
+                            ></code>
+                            <code
+                                data-token="ai-assistant-launcher-ring"
+                            ></code>
+                        </span>
+                    </div>
                 </div>
             </section>
         </template>
 
         <script>
-            const tokenNames = ['background', 'card', 'popover', 'border', 'input', 'sidebar'];
+            const tokenNames = [
+                'background',
+                'card',
+                'popover',
+                'border',
+                'input',
+                'sidebar',
+                'ai-assistant-launcher',
+                'ai-assistant-launcher-foreground',
+                'ai-assistant-launcher-ring',
+            ];
 
+            /** Reads the canonical CSS custom-property values rendered for one theme specimen. */
             function readTokens(element) {
                 const styles = getComputedStyle(element);
 
-                return Object.fromEntries(tokenNames.map((token) => [token, styles.getPropertyValue(`--${token}`).trim()]));
+                return Object.fromEntries(
+                    tokenNames.map((token) => [
+                        token,
+                        styles.getPropertyValue(`--${token}`).trim(),
+                    ]),
+                );
             }
 
             const template = document.querySelector('#theme-template');
@@ -173,9 +254,11 @@
                 const renderedTheme = container.lastElementChild;
                 const tokens = readTokens(renderedTheme);
 
-                renderedTheme.querySelectorAll('[data-token]').forEach((element) => {
-                    element.textContent = tokens[element.dataset.token];
-                });
+                renderedTheme
+                    .querySelectorAll('[data-token]')
+                    .forEach((element) => {
+                        element.textContent = tokens[element.dataset.token];
+                    });
             });
         </script>
     </body>

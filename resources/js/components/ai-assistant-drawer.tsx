@@ -9,10 +9,12 @@ import {
     SheetDescription,
     SheetHeader,
     SheetTitle,
+    SheetTrigger,
 } from '@/components/ui/sheet';
 import { index as aiIndex } from '@/routes/ai';
 import type { AiAssistantData, OrganizationContext } from '@/types';
 
+/** Renders the global AI Assistant launcher and its controlled conversation drawer. */
 export function AiAssistantDrawer() {
     const { organizationContext } = usePage<{
         organizationContext: OrganizationContext;
@@ -29,6 +31,7 @@ export function AiAssistantDrawer() {
             ? assistantData.data
             : null;
 
+    /** Loads server-authoritative AI Assistant data for the active organization and conversation. */
     const load = useCallback(
         (conversationId?: number): void => {
             request.setData({});
@@ -51,10 +54,12 @@ export function AiAssistantDrawer() {
         [activeOrganizationId, request],
     );
 
+    /** Refreshes the currently selected conversation without changing its selection. */
     const refresh = useCallback((): void => {
         load(data?.conversation?.id);
     }, [data?.conversation?.id, load]);
 
+    /** Loads the user-selected conversation while preserving server-authoritative conversation data. */
     const selectConversation = useCallback(
         (conversationId: number | null): void => {
             load(conversationId ?? undefined);
@@ -67,6 +72,7 @@ export function AiAssistantDrawer() {
             (run) => run.status === 'queued' || run.status === 'running',
         ) ?? false;
 
+    // Keep the existing two-second refresh behavior only while an opened conversation has active work.
     useEffect(() => {
         if (!open || !hasActiveRun) {
             return;
@@ -77,6 +83,7 @@ export function AiAssistantDrawer() {
         return () => window.clearInterval(interval);
     }, [hasActiveRun, open, refresh]);
 
+    /** Synchronizes the Radix Sheet state and refreshes data whenever the assistant is opened. */
     function changeOpen(nextOpen: boolean): void {
         setOpen(nextOpen);
 
@@ -87,15 +94,20 @@ export function AiAssistantDrawer() {
 
     return (
         <Sheet open={open} onOpenChange={changeOpen}>
-            <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Open AI Assistant"
-                onClick={() => changeOpen(true)}
-                disabled={organizationContext.active === null}
-            >
-                <Bot aria-hidden="true" />
-            </Button>
+            <SheetTrigger asChild>
+                <Button
+                    type="button"
+                    variant="default"
+                    size="lg"
+                    aria-label="Open AI Assistant"
+                    className="h-12 min-w-12 rounded-full border border-ai-assistant-launcher-foreground/20 bg-ai-assistant-launcher text-ai-assistant-launcher-foreground shadow-lg transition-[background-color,box-shadow] hover:bg-ai-assistant-launcher/90 hover:shadow-xl focus-visible:border-ai-assistant-launcher-ring focus-visible:ring-ai-assistant-launcher-ring/80 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:bg-ai-assistant-launcher/80 active:shadow-md disabled:shadow-none motion-reduce:transition-none"
+                    disabled={organizationContext.active === null}
+                >
+                    <Bot aria-hidden="true" className="size-5" />
+                    <span className="hidden min-[360px]:inline">Ask AI</span>
+                </Button>
+            </SheetTrigger>
+
             <SheetContent className="w-full gap-0 p-0 sm:max-w-xl">
                 <SheetHeader className="border-b border-border">
                     <SheetTitle>AI Assistant</SheetTitle>
@@ -103,6 +115,7 @@ export function AiAssistantDrawer() {
                         Ask questions about the active organization.
                     </SheetDescription>
                 </SheetHeader>
+
                 {data ? (
                     <div className="min-h-0 flex-1 p-4">
                         <AiAssistant

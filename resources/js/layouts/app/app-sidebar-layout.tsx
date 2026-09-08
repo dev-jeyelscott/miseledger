@@ -6,6 +6,7 @@ import { AppSidebarHeader } from '@/components/app-sidebar-header';
 import { SubscriptionNotice } from '@/components/subscription-notice';
 import type { AppLayoutProps } from '@/types';
 
+/** Renders the authenticated sidebar shell and its single global AI Assistant entry point. */
 export default function AppSidebarLayout({
     children,
     breadcrumbs = [],
@@ -17,7 +18,7 @@ export default function AppSidebarLayout({
                 <AppSidebarHeader breadcrumbs={breadcrumbs} />
                 <SubscriptionNotice />
                 {children}
-                <div className="fixed right-4 bottom-4 z-40">
+                <div className="fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1rem,env(safe-area-inset-bottom))] z-40">
                     <AiAssistantDrawer />
                 </div>
             </AppContent>
