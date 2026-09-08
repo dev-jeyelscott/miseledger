@@ -20,7 +20,7 @@ final class CodexJsonRpcClient
 
     /**
      * @param  array<string, mixed>  $params
-     * @param  array<string, list<string>|string>  $configOverrides
+     * @param  array<string, int|list<string>|string>  $configOverrides
      * @return array<string, mixed>
      */
     public function call(User $user, string $method, array $params = [], array $configOverrides = []): array
@@ -46,7 +46,7 @@ final class CodexJsonRpcClient
      * `params` become the step's result instead of the ack's `result`.
      *
      * @param  list<callable(list<array<string, mixed>> $priorResults): array{0: string, 1: array<string, mixed>, 2?: string}>  $steps
-     * @param  array<string, list<string>|string>  $configOverrides
+     * @param  array<string, int|list<string>|string>  $configOverrides
      * @return list<array<string, mixed>>
      */
     public function callSession(User $user, array $steps, array $configOverrides = []): array
@@ -194,7 +194,7 @@ final class CodexJsonRpcClient
         }
     }
 
-    /** @param array<string, list<string>|string> $configOverrides */
+    /** @param array<string, int|list<string>|string> $configOverrides */
     private function spawnProcess(User $user, InputStream $input, array $configOverrides = []): Process
     {
         $environment = ['CODEX_HOME' => $this->profiles->path($user)];
@@ -332,7 +332,7 @@ final class CodexJsonRpcClient
     }
 
     /**
-     * @param  array<string, list<string>|string>  $configOverrides
+     * @param  array<string, int|list<string>|string>  $configOverrides
      * @return list<string>
      */
     private function configOverrides(array $configOverrides): array

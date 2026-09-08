@@ -9,6 +9,30 @@ use App\Models\User;
 
 final class CodexAppServerProvider implements AiProviderAdapter
 {
+    /**
+     * Codex does not let a local stdio MCP server inherit this process's
+     * environment; only variables explicitly listed here are forwarded.
+     * Without them, the artisan-booted miseledger MCP server has no
+     * APP_KEY/DB/Redis configuration and crashes before the handshake
+     * completes. Mirrors the framework env compose.yaml injects into the
+     * ai-worker container (which ships without a bind-mounted .env).
+     */
+    private const array FORWARDED_ENV_VARS = [
+        'APP_KEY',
+        'APP_ENV',
+        'APP_NAME',
+        'DB_CONNECTION',
+        'DB_HOST',
+        'DB_PORT',
+        'DB_DATABASE',
+        'DB_USERNAME',
+        'DB_PASSWORD',
+        'REDIS_HOST',
+        'REDIS_PORT',
+        'REDIS_PASSWORD',
+        'CACHE_STORE',
+    ];
+
     public function __construct(private readonly CodexJsonRpcClient $client) {}
 
     public function account(User $user): array
@@ -115,13 +139,35 @@ final class CodexAppServerProvider implements AiProviderAdapter
         }
     }
 
-    /** @return array<string, list<string>|string> */
+    /** @return array<string, list<string>|string|int> */
     private function miseLedgerMcpConfig(string $mcpExecutionIdentity): array
     {
-        return [
+        // The miseledger MCP server is a full artisan bootstrap (autoload,
+        // service providers, DB connection), not a prewarmed process, so it
+        // can take longer to answer Codex's initial handshake than Codex's
+        // own short built-in MCP startup/tool-call timeouts allow on a cold
+        // worker. Codex silently drops the server's tools when that timeout
+        // is hit, which surfaces to the user as "the tool isn't available"
+        // even though the request/queue-level timeout (ai.codex.timeout_seconds)
+        // never fires. Align both to the same budget we already wait on.
+        $timeoutSeconds = (int) config('ai.codex.timeout_seconds');
+
+        $config = [
             'mcp_servers.miseledger.command' => PHP_BINARY,
             'mcp_servers.miseledger.args' => [base_path('artisan'), 'ai:mcp:start', '--execution-identity='.$mcpExecutionIdentity],
+            'mcp_servers.miseledger.startup_timeout_sec' => $timeoutSeconds,
+            'mcp_servers.miseledger.tool_timeout_sec' => $timeoutSeconds,
         ];
+
+        foreach (self::FORWARDED_ENV_VARS as $name) {
+            $value = getenv($name);
+
+            if ($value !== false) {
+                $config["mcp_servers.miseledger.env.{$name}"] = $value;
+            }
+        }
+
+        return $config;
     }
 
     /** @param array<string, mixed> $turn */
