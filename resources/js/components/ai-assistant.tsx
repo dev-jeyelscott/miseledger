@@ -434,7 +434,7 @@ export function AiAssistant({
                                 className={cn(
                                     'max-w-[85%] rounded-lg px-3 py-2 text-sm leading-6',
                                     message.role === 'user'
-                                        ? 'ml-auto bg-primary text-primary-foreground'
+                                        ? 'ml-auto w-fit bg-primary text-primary-foreground'
                                         : 'bg-muted',
                                 )}
                             >
