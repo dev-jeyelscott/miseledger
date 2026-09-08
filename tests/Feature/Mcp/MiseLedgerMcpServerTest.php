@@ -46,6 +46,10 @@ test('the local MCP server exposes only the authoritative organization data quer
 
     expect($server->createContext()->tools()->map->name()->all())->toBe(['organization_data_query']);
     expect(app(OrganizationDataQueryTool::class)->name())->toBe('organization_data_query');
+    expect(file_get_contents(base_path('app/Mcp/Servers/MiseLedgerMcpServer.php')))
+        ->not->toContain('RecordStockMovement')
+        ->not->toContain('DB::')
+        ->not->toContain('Schema::');
 });
 
 test('it returns only the worker-established organization inventory rows and bounded metadata', function () {

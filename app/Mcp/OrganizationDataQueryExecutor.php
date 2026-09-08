@@ -10,6 +10,7 @@ use DateTimeInterface;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
@@ -846,7 +847,7 @@ final class OrganizationDataQueryExecutor
 
             $query->with([
                 $relation['relation'] => static function (
-                    Builder $relatedQuery,
+                    Relation $relatedQuery,
                 ) use ($columns): void {
                     $relatedQuery->select($columns);
                 },

@@ -106,10 +106,10 @@ services:
       - /tmp:mode=1777
       - /var/www/html/storage:mode=0770,uid=10001,gid=10001
       - /var/www/html/bootstrap/cache:mode=0770,uid=10001,gid=10001
-    volumes:
-      # Preserve only the per-user Codex authentication/runtime profile across
-      # worker recreation. This is a Docker-managed volume, never a host bind.
-      - 'ai-codex-profiles:/var/lib/miseledger/codex/profiles'
+      # Provider authentication profiles are deliberately per-worker and
+      # disposable. They must never survive worker replacement or be shared
+      # with another service.
+      - /var/lib/miseledger/codex/profiles:mode=0700,uid=10001,gid=10001
     read_only: true
     cap_drop:
       - ALL
@@ -170,8 +170,7 @@ services:
       - /tmp:mode=1777
       - /var/www/html/storage:mode=0770,uid=10001,gid=10001
       - /var/www/html/bootstrap/cache:mode=0770,uid=10001,gid=10001
-    volumes:
-      - 'ai-codex-profiles:/var/lib/miseledger/codex/profiles'
+      - /var/lib/miseledger/codex/profiles:mode=0700,uid=10001,gid=10001
     read_only: true
     cap_drop:
       - ALL
@@ -279,8 +278,6 @@ networks:
     driver: bridge
 
 volumes:
-  ai-codex-profiles:
-    driver: local
   sail-pgsql:
     driver: local
   sail-redis:
