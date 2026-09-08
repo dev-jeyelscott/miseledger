@@ -43,6 +43,7 @@ use App\Http\Controllers\Recipes\RecipeCostController;
 use App\Http\Controllers\Suppliers\SupplierController;
 use App\Http\Controllers\Suppliers\SupplierItemController;
 use App\Http\Controllers\Testing\E2ECheckoutPaymentFixtureController;
+use App\Http\Controllers\UserGuideController;
 use App\Http\Controllers\WelcomeController;
 use App\Support\Billing\FeatureCode;
 use Illuminate\Support\Facades\Route;
@@ -67,6 +68,16 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         'dashboard',
         [DashboardController::class, 'index'],
     )->name('dashboard');
+
+    Route::get(
+        'user-guide',
+        [UserGuideController::class, 'index'],
+    )->name('user-guide.index');
+
+    Route::get(
+        'user-guide/{module}',
+        [UserGuideController::class, 'show'],
+    )->name('user-guide.show');
 
     Route::get(
         'organizations/create',

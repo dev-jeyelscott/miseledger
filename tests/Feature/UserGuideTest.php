@@ -1,0 +1,81 @@
+<?php
+
+use App\Models\User;
+use Illuminate\Support\Facades\File;
+use Inertia\Testing\AssertableInertia as Assert;
+
+test('guests are redirected to the login page', function (): void {
+    $this
+        ->get(route('user-guide.index'))
+        ->assertRedirect(route('login'));
+});
+
+test('unverified users are redirected to email verification', function (): void {
+    $user = User::factory()->unverified()->create();
+
+    $this
+        ->actingAs($user)
+        ->get(route('user-guide.index'))
+        ->assertRedirect(route('verification.notice'));
+});
+
+test('verified users can view the user guide index', function (): void {
+    $user = User::factory()->create();
+
+    $this
+        ->actingAs($user)
+        ->get(route('user-guide.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('user-guide/index'));
+});
+
+test('verified users can view each user guide module', function (string $module): void {
+    $user = User::factory()->create();
+
+    $this
+        ->actingAs($user)
+        ->get(route('user-guide.show', $module))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('user-guide/show')
+            ->where('module', $module));
+})->with([
+    'getting started' => 'getting-started',
+    'dashboard' => 'dashboard',
+    'AI Assistant' => 'ai-assistant',
+    'inventory' => 'inventory',
+    'stock counts' => 'stock-counts',
+    'waste' => 'waste',
+    'stock transfers' => 'stock-transfers',
+    'purchasing' => 'purchasing',
+    'recipes' => 'recipes',
+    'reports' => 'reports',
+    'organization' => 'organization',
+    'billing' => 'billing',
+    'settings' => 'settings',
+]);
+
+test('unknown user guide modules return not found', function (): void {
+    $user = User::factory()->create();
+
+    $this
+        ->actingAs($user)
+        ->get(route('user-guide.show', 'unknown-module'))
+        ->assertNotFound();
+});
+
+test('the user menu exposes the user guide in shared desktop and mobile navigation', function (): void {
+    $menu = File::get(resource_path('js/components/user-menu-content.tsx'));
+    $navigation = File::get(resource_path('js/components/nav-user.tsx'));
+
+    expect($menu)
+        ->toContain("import { index as userGuideIndex } from '@/routes/user-guide';")
+        ->toContain('<BookOpen className="mr-2" />')
+        ->toContain('href={userGuideIndex()}')
+        ->toContain('User Guide');
+
+    expect($navigation)
+        ->toContain('<UserMenuContent user={auth.user} />')
+        ->toContain('isMobile');
+});
