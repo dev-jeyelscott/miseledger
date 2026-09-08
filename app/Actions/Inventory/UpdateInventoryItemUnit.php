@@ -6,11 +6,15 @@ use App\Models\InventoryItem;
 use App\Models\InventoryItemUnit;
 use App\Models\Organization;
 use App\Models\UnitOfMeasure;
+use Brick\Math\BigDecimal;
+use Brick\Math\Exception\NumberFormatException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 final class UpdateInventoryItemUnit
 {
+    private const SCALE = 6;
+
     /**
      * Update a conversion factor without changing its UOM identity.
      */
@@ -28,6 +32,8 @@ final class UpdateInventoryItemUnit
             $quantityInBaseUnit,
             $active,
         ): InventoryItemUnit {
+            $this->validateFactor($quantityInBaseUnit);
+
             $currentConversion = InventoryItemUnit::query()
                 ->where('inventory_item_id', $inventoryItem->getKey())
                 ->whereKey($inventoryItemUnit->getKey())
@@ -77,5 +83,32 @@ final class UpdateInventoryItemUnit
 
             return $lockedConversion;
         });
+    }
+
+    private function validateFactor(string $factor): void
+    {
+        try {
+            $decimal = BigDecimal::of(trim($factor));
+        } catch (NumberFormatException) {
+            throw ValidationException::withMessages([
+                'quantity_in_base_unit' => __('A valid decimal quantity is required.'),
+            ]);
+        }
+
+        if ($decimal->compareTo(BigDecimal::zero()) <= 0) {
+            throw ValidationException::withMessages([
+                'quantity_in_base_unit' => __(
+                    'The conversion factor must be greater than zero.',
+                ),
+            ]);
+        }
+
+        if ($decimal->getScale() > self::SCALE) {
+            throw ValidationException::withMessages([
+                'quantity_in_base_unit' => __(
+                    'The conversion factor must have at most 6 decimal places.',
+                ),
+            ]);
+        }
     }
 }
