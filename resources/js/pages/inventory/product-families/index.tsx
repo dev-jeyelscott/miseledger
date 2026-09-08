@@ -323,7 +323,7 @@ export default function ProductFamiliesIndex({
                                     </th>
                                     <th
                                         scope="col"
-                                        className="px-4 py-3 font-medium"
+                                        className="px-4 py-3 font-medium text-right"
                                     >
                                         Variants
                                     </th>
@@ -372,7 +372,7 @@ export default function ProductFamiliesIndex({
                                                     {productFamily.name}
                                                 </Link>
                                             </td>
-                                            <td className="px-4 py-3 tabular-nums">
+                                            <td className="px-4 py-3 tabular-nums text-right">
                                                 {productFamily.variantCount}
                                             </td>
                                             <td className="px-4 py-3">
