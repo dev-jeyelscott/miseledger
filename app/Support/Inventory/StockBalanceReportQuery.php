@@ -8,15 +8,20 @@ use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Bounded, organization-scoped balance reads shared by inventory reports and
- * future read tools. This deliberately exposes report concepts, not columns,
- * SQL, or caller-provided ordering.
+ * read-only organization-data tools.
  */
 final class StockBalanceReportQuery
 {
     /**
+     * Build the neutral organization-scoped stock-balance query.
+     *
+     * Unlike stockOnHand and lowStock, this deliberately applies no quantity
+     * status predicate so callers can safely select positive, zero, or
+     * negative balances themselves.
+     *
      * @return Builder<StockBalance>
      */
-    public function stockOnHand(
+    public function allBalances(
         Organization $organization,
         ?int $locationId,
         ?int $storageLocationId,
@@ -31,10 +36,35 @@ final class StockBalanceReportQuery
             $categoryId,
             $itemId,
             $itemSearch,
+        );
+    }
+
+    /**
+     * Build the current non-zero stock-on-hand query.
+     *
+     * @return Builder<StockBalance>
+     */
+    public function stockOnHand(
+        Organization $organization,
+        ?int $locationId,
+        ?int $storageLocationId,
+        ?int $categoryId,
+        ?int $itemId,
+        ?string $itemSearch,
+    ): Builder {
+        return $this->allBalances(
+            $organization,
+            $locationId,
+            $storageLocationId,
+            $categoryId,
+            $itemId,
+            $itemSearch,
         )->where('quantity_on_hand', '<>', '0');
     }
 
     /**
+     * Build the zero or negative stock query used by low-stock reporting.
+     *
      * @param  'out_of_stock'|'negative'|null  $status
      * @return Builder<StockBalance>
      */
@@ -47,7 +77,7 @@ final class StockBalanceReportQuery
         ?string $itemSearch,
         ?string $status,
     ): Builder {
-        $query = $this->balances(
+        $query = $this->allBalances(
             $organization,
             $locationId,
             $storageLocationId,
@@ -68,6 +98,8 @@ final class StockBalanceReportQuery
     }
 
     /**
+     * Build the non-zero inventory valuation query.
+     *
      * @return Builder<StockBalance>
      */
     public function valuation(
@@ -84,11 +116,28 @@ final class StockBalanceReportQuery
             ])
             ->where('organization_id', $organization->id)
             ->where('quantity_on_hand', '<>', '0')
-            ->when($locationId !== null, fn (Builder $query): Builder => $query->where('location_id', $locationId))
-            ->when($categoryId !== null, fn (Builder $query): Builder => $query->whereHas('inventoryItem', fn (Builder $itemQuery): Builder => $itemQuery->where('inventory_category_id', $categoryId)));
+            ->when(
+                $locationId !== null,
+                fn (Builder $query): Builder => $query->where(
+                    'location_id',
+                    $locationId,
+                ),
+            )
+            ->when(
+                $categoryId !== null,
+                fn (Builder $query): Builder => $query->whereHas(
+                    'inventoryItem',
+                    fn (Builder $itemQuery): Builder => $itemQuery->where(
+                        'inventory_category_id',
+                        $categoryId,
+                    ),
+                ),
+            );
     }
 
     /**
+     * Build the authoritative organization-scoped StockBalance projection read.
+     *
      * @return Builder<StockBalance>
      */
     private function balances(
@@ -118,7 +167,13 @@ final class StockBalanceReportQuery
         }
 
         if ($categoryId !== null) {
-            $query->whereHas('inventoryItem', fn (Builder $itemQuery): Builder => $itemQuery->where('inventory_category_id', $categoryId));
+            $query->whereHas(
+                'inventoryItem',
+                fn (Builder $itemQuery): Builder => $itemQuery->where(
+                    'inventory_category_id',
+                    $categoryId,
+                ),
+            );
         }
 
         if ($itemId !== null) {
@@ -126,16 +181,22 @@ final class StockBalanceReportQuery
         }
 
         if ($itemSearch !== null) {
-            $query->whereHas('inventoryItem', function (Builder $itemQuery) use ($itemSearch): void {
-                $itemQuery->where(function (Builder $searchQuery) use ($itemSearch): void {
-                    $searchQuery->whereLike('name', "%{$itemSearch}%")
-                        ->orWhereLike('sku', "%{$itemSearch}%");
+            $query->whereHas(
+                'inventoryItem',
+                function (Builder $itemQuery) use ($itemSearch): void {
+                    $itemQuery->where(
+                        function (Builder $searchQuery) use ($itemSearch): void {
+                            $searchQuery
+                                ->whereLike('name', "%{$itemSearch}%")
+                                ->orWhereLike('sku', "%{$itemSearch}%");
 
-                    if (ctype_digit($itemSearch)) {
-                        $searchQuery->orWhere('id', (int) $itemSearch);
-                    }
-                });
-            });
+                            if (ctype_digit($itemSearch)) {
+                                $searchQuery->orWhere('id', (int) $itemSearch);
+                            }
+                        },
+                    );
+                },
+            );
         }
 
         return $query;
