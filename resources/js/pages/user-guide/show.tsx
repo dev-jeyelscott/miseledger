@@ -1,7 +1,6 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
-import type { ReactElement } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -10,7 +9,6 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import AppLayout from '@/layouts/app-layout';
 import { index, show } from '@/routes/user-guide';
 import type { OrganizationContext } from '@/types';
 import { resolveGuideAction } from '@/user-guide/actions';
@@ -175,20 +173,23 @@ export default function UserGuideShow({ module }: Props) {
     );
 }
 
-UserGuideShow.layout = (page: ReactElement<Props>) => (
-    <AppLayout
-        breadcrumbs={[
+UserGuideShow.layout = (page: Props) => {
+    const guide = guideModulesBySlug[page.module as GuideModuleSlug];
+
+    return {
+        breadcrumbs: [
             {
                 title: 'User Guide',
                 href: index(),
             },
-            {
-                title: guideModulesBySlug[page.props.module as GuideModuleSlug]
-                    .title,
-                href: show(page.props.module),
-            },
-        ]}
-    >
-        {page}
-    </AppLayout>
-);
+            ...(guide
+                ? [
+                      {
+                          title: guide.title,
+                          href: show(page.module),
+                      },
+                  ]
+                : []),
+        ],
+    };
+};
