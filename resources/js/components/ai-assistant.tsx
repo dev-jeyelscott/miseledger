@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from 'react';
 import AiConversationController from '@/actions/App/Http/Controllers/Ai/AiConversationController';
 import AiMessageController from '@/actions/App/Http/Controllers/Ai/AiMessageController';
 import CodexConnectionController from '@/actions/App/Http/Controllers/Ai/CodexConnectionController';
+import { AiMessageContent } from '@/components/ai-message-content';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -442,7 +443,13 @@ export function AiAssistant({
                                         ? 'You'
                                         : 'Assistant'}
                                 </p>
-                                {message.content}
+                                {message.role === 'user' ? (
+                                    message.content
+                                ) : (
+                                    <AiMessageContent
+                                        content={message.content}
+                                    />
+                                )}
                             </article>
                         ))}
                         {hasActiveRun && (
