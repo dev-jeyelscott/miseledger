@@ -483,8 +483,7 @@ final class OrganizationDataQueryExecutor
 
         foreach ($relations as $relation) {
             foreach (
-                $descriptor['relations'][$relation]['fields']
-                as $field
+                $descriptor['relations'][$relation]['fields'] as $field
             ) {
                 if (
                     is_array($field)
@@ -1184,8 +1183,7 @@ final class OrganizationDataQueryExecutor
                 $row[$alias] = [];
 
                 foreach (
-                    $relation['fields']
-                    as $name => $field
+                    $relation['fields'] as $name => $field
                 ) {
                     $row[$alias][$name] = $this->value(
                         $related->getAttribute(
