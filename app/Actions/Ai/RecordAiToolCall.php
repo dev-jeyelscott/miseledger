@@ -37,13 +37,13 @@ final class RecordAiToolCall
     {
         return array_filter(
             Arr::only($metadata, [
-                'resource_type',
                 'resource_id',
                 'outcome',
                 'error_code',
                 'duration_ms',
                 'row_count',
                 'truncated',
+                'resource_type',
             ]),
             static fn (mixed $value): bool => is_int($value) || is_string($value),
         );
