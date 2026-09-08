@@ -382,6 +382,12 @@ Do not patch symptoms, bypass validation, weaken authorization, suppress type er
 
 ## 21. Change Discipline
 
+### User Guide Maintenance
+
+- New user-facing features or modules must update the User Guide in the same change.
+- Update the affected guide content when a user-facing workflow, label, field, action, access rule, expected result, or user-visible bug fix changes.
+- Internal fixes that do not change documented behavior need no guide update. Do not infer customer documentation from commit messages; use simple English and avoid implementation jargon.
+
 - Keep diffs focused on the requested scope.
 - Do not refactor unrelated code opportunistically.
 - Do not rename routes, fields, enums, permissions, or lifecycle states without explicit scope.

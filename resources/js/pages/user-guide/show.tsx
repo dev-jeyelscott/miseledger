@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { PageHeader } from '@/components/page-header';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
     Collapsible,
@@ -12,8 +13,9 @@ import {
 import AppLayout from '@/layouts/app-layout';
 import { index, show } from '@/routes/user-guide';
 import type { OrganizationContext } from '@/types';
+import { resolveGuideAction } from '@/user-guide/actions';
+import type { GuideAccessContext, GuideModuleSlug } from '@/user-guide/types';
 import { guideModulesBySlug } from './content';
-import type { GuideAccessContext, GuideModuleSlug } from './content';
 
 type Props = {
     module: string;
@@ -73,13 +75,11 @@ export default function UserGuideShow({ module }: Props) {
             organizationContext.entitlements?.grants[feature] ?? false,
         hasPermission: (permission) => permissions.has(permission),
     };
-    const availableActions = guide.actions
-        .filter((action) => action.isAvailable(accessContext))
-        .map((action) => ({ ...action, href: action.href(accessContext) }))
-        .filter(
-            (action): action is typeof action & { href: string } =>
-                action.href !== null,
-        );
+    const availableActions = guide.actions.flatMap((action) => {
+        const resolvedAction = resolveGuideAction(action, accessContext);
+
+        return resolvedAction === null ? [] : [resolvedAction];
+    });
 
     return (
         <>
@@ -91,6 +91,12 @@ export default function UserGuideShow({ module }: Props) {
                     description={guide.description}
                 />
 
+                {guide.accessNote ? (
+                    <Alert>
+                        <AlertDescription>{guide.accessNote}</AlertDescription>
+                    </Alert>
+                ) : null}
+
                 <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
                     <h2 className="text-sm font-semibold">Overview</h2>
                     <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
@@ -98,24 +104,31 @@ export default function UserGuideShow({ module }: Props) {
                     </p>
                 </section>
 
-                {availableActions.length > 0 ? (
+                {guide.actions.length > 0 ? (
                     <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
                         <h2 className="text-sm font-semibold">
                             Go to this feature
                         </h2>
-                        <div className="mt-4 flex flex-wrap gap-2">
-                            {availableActions.map((action) => (
-                                <Button
-                                    key={action.label}
-                                    asChild
-                                    variant="outline"
-                                >
-                                    <Link href={action.href} prefetch>
-                                        {action.label}
-                                    </Link>
-                                </Button>
-                            ))}
-                        </div>
+                        {availableActions.length > 0 ? (
+                            <div className="mt-4 flex flex-wrap gap-2">
+                                {availableActions.map((action) => (
+                                    <Button
+                                        key={action.label}
+                                        asChild
+                                        variant="outline"
+                                    >
+                                        <Link href={action.href} prefetch>
+                                            {action.label}
+                                        </Link>
+                                    </Button>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                                You may not see this feature if it is not
+                                included in your plan or your access level.
+                            </p>
+                        )}
                     </section>
                 ) : null}
 

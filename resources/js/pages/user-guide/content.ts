@@ -1,106 +1,10 @@
-import AiAssistantController from '@/actions/App/Http/Controllers/Ai/AiAssistantController';
-import OrganizationBillingController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingController';
-import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
-import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
-import StockTransferController from '@/actions/App/Http/Controllers/Inventory/StockTransferController';
-import WasteController from '@/actions/App/Http/Controllers/Inventory/WasteController';
-import OrganizationController from '@/actions/App/Http/Controllers/OrganizationController';
-import OrganizationLocationController from '@/actions/App/Http/Controllers/OrganizationLocationController';
-import OrganizationMemberController from '@/actions/App/Http/Controllers/OrganizationMemberController';
-import GoodsReceiptController from '@/actions/App/Http/Controllers/Purchasing/GoodsReceiptController';
-import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/PurchaseOrderController';
-import RecipeController from '@/actions/App/Http/Controllers/Recipes/RecipeController';
-import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
-import { dashboard } from '@/routes';
-import { edit as profileEdit } from '@/routes/profile';
-import type { OrganizationPermission } from '@/types';
+import type { GuideModule, GuideModuleSlug } from '@/user-guide/types';
 
-export type GuideModuleSlug =
-    | 'getting-started'
-    | 'dashboard'
-    | 'ai-assistant'
-    | 'inventory'
-    | 'stock-counts'
-    | 'waste'
-    | 'stock-transfers'
-    | 'purchasing'
-    | 'recipes'
-    | 'reports'
-    | 'organization'
-    | 'billing'
-    | 'settings';
-
-export type GuideAccessContext = {
-    activeOrganizationId: number | null;
-    aiCanUse: boolean;
-    hasFeature: (
-        feature: 'purchasing' | 'recipes' | 'locations.multi',
-    ) => boolean;
-    hasPermission: (permission: OrganizationPermission) => boolean;
-};
-
-type GuideAction = {
-    href: (context: GuideAccessContext) => string | null;
-    isAvailable: (context: GuideAccessContext) => boolean;
-    label: string;
-};
-
-type GuideField = {
-    description: string;
-    name: string;
-};
-
-type GuideTutorial = {
-    id: string;
-    steps: string[];
-    title: string;
-};
-
-export type GuideModule = {
-    actions: GuideAction[];
-    description: string;
-    fields: GuideField[];
-    overview: string;
-    slug: GuideModuleSlug;
-    title: string;
-    troubleshooting: string[];
-    tutorials: GuideTutorial[];
-};
-
-/** Maps every sidebar destination to the guide module that explains it. */
-export const documentedNavigationLabels: Record<string, GuideModuleSlug> = {
-    'AI Assistant': 'ai-assistant',
-    Billing: 'billing',
-    Brands: 'inventory',
-    Categories: 'inventory',
-    Dashboard: 'dashboard',
-    'Inventory valuation': 'reports',
-    Items: 'inventory',
-    'Low stock': 'reports',
-    Locations: 'organization',
-    Members: 'organization',
-    'Opening balances': 'inventory',
-    'Product families': 'inventory',
-    'Purchase orders': 'purchasing',
-    'Purchasing history': 'reports',
-    Recipes: 'recipes',
-    Receiving: 'purchasing',
-    Settings: 'organization',
-    'Stock adjustments': 'inventory',
-    'Stock counts': 'stock-counts',
-    'Stock movement ledger': 'reports',
-    'Stock on hand': 'reports',
-    'Stock transfers': 'stock-transfers',
-    Suppliers: 'purchasing',
-    'Units of measure': 'inventory',
-    Waste: 'waste',
-};
-
-const hasAnyPermission = (
-    context: GuideAccessContext,
-    permissions: OrganizationPermission[],
-): boolean =>
-    permissions.some((permission) => context.hasPermission(permission));
+export type {
+    GuideAccessContext,
+    GuideModule,
+    GuideModuleSlug,
+} from '@/user-guide/types';
 
 export const guideModules: GuideModule[] = [
     {
@@ -110,6 +14,8 @@ export const guideModules: GuideModule[] = [
             'Set up your organization and establish a reliable inventory workflow.',
         overview:
             'MiseLedger keeps stock history and current balances in sync. Start with your organization, locations, units, and item catalog before recording day-to-day activity.',
+        keywords: ['setup', 'organization', 'location', 'opening balance'],
+        navigationLabels: [],
         tutorials: [
             {
                 id: 'prepare-your-workspace',
@@ -143,13 +49,7 @@ export const guideModules: GuideModule[] = [
             'If a feature is not visible, confirm you selected the right organization and have the required permission.',
             'Do not use opening balances to correct later mistakes. Use the appropriate stock adjustment, count, transfer, or waste workflow instead.',
         ],
-        actions: [
-            {
-                label: 'Open dashboard',
-                isAvailable: () => true,
-                href: () => dashboard().url,
-            },
-        ],
+        actions: ['dashboard'],
     },
     {
         slug: 'dashboard',
@@ -158,6 +58,8 @@ export const guideModules: GuideModule[] = [
             'Review the operational picture for your active organization.',
         overview:
             'The dashboard is the starting point for organization-aware work. Its summaries are based on the active organization, so use the organization switcher before interpreting the data.',
+        keywords: ['overview', 'active organization', 'summary'],
+        navigationLabels: ['Dashboard'],
         tutorials: [
             {
                 id: 'review-your-dashboard',
@@ -185,13 +87,7 @@ export const guideModules: GuideModule[] = [
             'If information looks unexpected, first verify the active organization.',
             'Dashboard visibility follows your organization membership and permissions.',
         ],
-        actions: [
-            {
-                label: 'Open dashboard',
-                isAvailable: () => true,
-                href: () => dashboard().url,
-            },
-        ],
+        actions: ['dashboard'],
     },
     {
         slug: 'ai-assistant',
@@ -200,6 +96,8 @@ export const guideModules: GuideModule[] = [
             'Ask context-aware questions about the active organization.',
         overview:
             'The AI Assistant uses the current organization context. It is available only when your organization plan and individual member access permit it.',
+        keywords: ['ask', 'question', 'organization context'],
+        navigationLabels: ['AI Assistant'],
         tutorials: [
             {
                 id: 'ask-a-question',
@@ -227,13 +125,9 @@ export const guideModules: GuideModule[] = [
             'If AI Assistant is unavailable, ask an organization administrator to check plan entitlement and member access.',
             'Switch organizations before starting a new question when the subject belongs to a different business.',
         ],
-        actions: [
-            {
-                label: 'Open AI Assistant',
-                isAvailable: (context) => context.aiCanUse,
-                href: () => AiAssistantController.index().url,
-            },
-        ],
+        accessNote:
+            'You may not see the AI Assistant if it is not included in your plan or your access level.',
+        actions: ['ai-assistant'],
     },
     {
         slug: 'inventory',
@@ -242,6 +136,16 @@ export const guideModules: GuideModule[] = [
             'Maintain the item catalog and establish accurate starting quantities.',
         overview:
             'Inventory items, categories, brands, product families, and units of measure are the master data behind stock activity. Changes to quantities must use a ledger-safe workflow.',
+        keywords: ['catalog', 'quantity', 'unit conversion', 'adjustment'],
+        navigationLabels: [
+            'Items',
+            'Categories',
+            'Brands',
+            'Product families',
+            'Units of measure',
+            'Opening balances',
+            'Stock adjustments',
+        ],
         tutorials: [
             {
                 id: 'create-an-inventory-item',
@@ -275,14 +179,9 @@ export const guideModules: GuideModule[] = [
             'If an item cannot change product family, reconcile its saved option values as part of the same update.',
             'If a quantity needs correction, use a stock adjustment or count workflow instead of changing stock directly.',
         ],
-        actions: [
-            {
-                label: 'Open inventory items',
-                isAvailable: (context) =>
-                    context.hasPermission('inventory.view'),
-                href: () => InventoryItemController.index().url,
-            },
-        ],
+        accessNote:
+            'You may not see some inventory features if your access level does not allow them.',
+        actions: ['inventory-items'],
     },
     {
         slug: 'stock-counts',
@@ -291,6 +190,8 @@ export const guideModules: GuideModule[] = [
             'Count on-hand stock and finalize approved variances safely.',
         overview:
             'Stock counts compare physical inventory with the derived balance. Finalizing a count records the required stock movement, so review quantities carefully before completing it.',
+        keywords: ['physical count', 'variance', 'finalize'],
+        navigationLabels: ['Stock counts'],
         tutorials: [
             {
                 id: 'complete-a-stock-count',
@@ -323,18 +224,9 @@ export const guideModules: GuideModule[] = [
             'If finalization is unavailable, you may need count-finalization permission.',
             'Recheck the selected location and base-unit quantity before finalizing a variance.',
         ],
-        actions: [
-            {
-                label: 'Open stock counts',
-                isAvailable: (context) =>
-                    hasAnyPermission(context, [
-                        'counts.create',
-                        'counts.finalize',
-                        'reports.view',
-                    ]),
-                href: () => StockCountController.index().url,
-            },
-        ],
+        accessNote:
+            'You may not see stock counts if your access level does not allow them.',
+        actions: ['stock-counts'],
     },
     {
         slug: 'waste',
@@ -343,6 +235,8 @@ export const guideModules: GuideModule[] = [
             'Record inventory lost through spoilage, damage, or other approved reasons.',
         overview:
             'Waste is a typed stock movement. Recording it preserves the reason, quantity, location, actor, and audit history while updating the derived balance.',
+        keywords: ['spoilage', 'damage', 'waste reason'],
+        navigationLabels: ['Waste'],
         tutorials: [
             {
                 id: 'record-waste',
@@ -370,14 +264,9 @@ export const guideModules: GuideModule[] = [
             'If recording would make stock negative, verify the quantity, location, and earlier stock activity.',
             'Use a truthful waste reason so reports remain useful for operational decisions.',
         ],
-        actions: [
-            {
-                label: 'Open waste',
-                isAvailable: (context) =>
-                    hasAnyPermission(context, ['waste.record', 'reports.view']),
-                href: () => WasteController.index().url,
-            },
-        ],
+        accessNote:
+            'You may not see waste records if your access level does not allow them.',
+        actions: ['waste'],
     },
     {
         slug: 'stock-transfers',
@@ -386,6 +275,13 @@ export const guideModules: GuideModule[] = [
             'Move stock between locations with clear shipment and receipt stages.',
         overview:
             'Transfers maintain location-level accuracy. The sending and receiving steps are distinct, so stock is not treated as available at the destination until it is received.',
+        keywords: [
+            'ship',
+            'receive',
+            'source location',
+            'destination location',
+        ],
+        navigationLabels: ['Stock transfers'],
         tutorials: [
             {
                 id: 'transfer-stock-between-locations',
@@ -418,19 +314,9 @@ export const guideModules: GuideModule[] = [
             'If you cannot ship or receive, confirm you have the corresponding transfer permission.',
             'Do not create a second transfer to correct an in-progress one until you review its status and physical stock.',
         ],
-        actions: [
-            {
-                label: 'Open stock transfers',
-                isAvailable: (context) =>
-                    hasAnyPermission(context, [
-                        'transfers.create',
-                        'transfers.ship',
-                        'transfers.receive',
-                        'reports.view',
-                    ]),
-                href: () => StockTransferController.index().url,
-            },
-        ],
+        accessNote:
+            'You may not see stock transfers if your access level does not allow them.',
+        actions: ['stock-transfers'],
     },
     {
         slug: 'purchasing',
@@ -438,6 +324,13 @@ export const guideModules: GuideModule[] = [
         description: 'Manage suppliers, purchase orders, and goods receipts.',
         overview:
             'Purchasing records the intention to buy and the actual receipt of stock separately. Inventory increases through goods receiving, using the established inbound cost and stock-ledger controls.',
+        keywords: [
+            'supplier',
+            'purchase order',
+            'goods receipt',
+            'partial receipt',
+        ],
+        navigationLabels: ['Suppliers', 'Purchase orders', 'Receiving'],
         tutorials: [
             {
                 id: 'receive-a-purchase-order',
@@ -470,29 +363,9 @@ export const guideModules: GuideModule[] = [
             'If purchasing is unavailable, your plan may not include the feature or you may lack purchasing permission.',
             'Do not finalize a receipt for goods that are still pending delivery.',
         ],
-        actions: [
-            {
-                label: 'Open purchase orders',
-                isAvailable: (context) =>
-                    context.hasPermission('purchasing.view') &&
-                    context.hasFeature('purchasing'),
-                href: () => PurchaseOrderController.index().url,
-            },
-            {
-                label: 'Open suppliers',
-                isAvailable: (context) =>
-                    context.hasPermission('purchasing.view') &&
-                    context.hasFeature('purchasing'),
-                href: () => SupplierController.index().url,
-            },
-            {
-                label: 'Open receiving',
-                isAvailable: (context) =>
-                    context.hasPermission('purchasing.view') &&
-                    context.hasFeature('purchasing'),
-                href: () => GoodsReceiptController.index().url,
-            },
-        ],
+        accessNote:
+            'You may not see purchasing features if they are not included in your plan or your access level.',
+        actions: ['purchase-orders', 'suppliers', 'receiving'],
     },
     {
         slug: 'recipes',
@@ -501,6 +374,8 @@ export const guideModules: GuideModule[] = [
             'Define recipe ingredients and understand their calculated cost.',
         overview:
             'Recipes bring item quantities together for production planning and costing. Use the correct inventory items and base-unit conversions so calculated costs remain meaningful.',
+        keywords: ['ingredients', 'yield', 'costing'],
+        navigationLabels: ['Recipes'],
         tutorials: [
             {
                 id: 'build-a-recipe',
@@ -532,15 +407,9 @@ export const guideModules: GuideModule[] = [
             'If recipes are unavailable, confirm recipe entitlement and recipe-view permission.',
             'Unexpected costs usually require checking the ingredient, quantity, unit conversion, and current inventory cost.',
         ],
-        actions: [
-            {
-                label: 'Open recipes',
-                isAvailable: (context) =>
-                    context.hasPermission('recipes.view') &&
-                    context.hasFeature('recipes'),
-                href: () => RecipeController.index().url,
-            },
-        ],
+        accessNote:
+            'You may not see recipes if they are not included in your plan or your access level.',
+        actions: ['recipes'],
     },
     {
         slug: 'reports',
@@ -549,6 +418,14 @@ export const guideModules: GuideModule[] = [
             'Inspect stock, movement history, valuation, and purchasing activity.',
         overview:
             'Reports read from the authoritative stock ledger and its balance projections. Use filters to narrow the organization, location, item, and date context before drawing conclusions.',
+        keywords: ['export', 'filters', 'history', 'valuation'],
+        navigationLabels: [
+            'Stock on hand',
+            'Low stock',
+            'Stock movement ledger',
+            'Inventory valuation',
+            'Purchasing history',
+        ],
         tutorials: [
             {
                 id: 'investigate-stock-activity',
@@ -589,6 +466,8 @@ export const guideModules: GuideModule[] = [
         description: 'Manage organization identity, locations, and members.',
         overview:
             'Organization settings establish the context for all operational work. Permissions are assigned through membership and must be reviewed whenever a person’s responsibilities change.',
+        keywords: ['switch organization', 'members', 'locations', 'access'],
+        navigationLabels: ['Locations', 'Members', 'Settings'],
         tutorials: [
             {
                 id: 'manage-organization-access',
@@ -622,45 +501,9 @@ export const guideModules: GuideModule[] = [
             'If a location or member page is unavailable, ask an administrator to review your permissions and feature access.',
             'Changing organization activity does not replace commercial subscription access decisions.',
         ],
-        actions: [
-            {
-                label: 'Open organization settings',
-                isAvailable: (context) =>
-                    context.activeOrganizationId !== null &&
-                    context.hasPermission('organization.manage'),
-                href: (context) =>
-                    context.activeOrganizationId === null
-                        ? null
-                        : OrganizationController.edit(
-                              context.activeOrganizationId,
-                          ).url,
-            },
-            {
-                label: 'Open locations',
-                isAvailable: (context) =>
-                    context.activeOrganizationId !== null &&
-                    context.hasPermission('locations.manage') &&
-                    context.hasFeature('locations.multi'),
-                href: (context) =>
-                    context.activeOrganizationId === null
-                        ? null
-                        : OrganizationLocationController.index(
-                              context.activeOrganizationId,
-                          ).url,
-            },
-            {
-                label: 'Open members',
-                isAvailable: (context) =>
-                    context.activeOrganizationId !== null &&
-                    context.hasPermission('users.manage'),
-                href: (context) =>
-                    context.activeOrganizationId === null
-                        ? null
-                        : OrganizationMemberController.index(
-                              context.activeOrganizationId,
-                          ).url,
-            },
-        ],
+        accessNote:
+            'You may not see organization features if your access level does not allow them.',
+        actions: ['organization-settings', 'locations', 'members'],
     },
     {
         slug: 'billing',
@@ -669,6 +512,8 @@ export const guideModules: GuideModule[] = [
             'Review the organization subscription, plan access, and billing recovery options.',
         overview:
             'Billing controls commercial access, while organization activity controls a separate administrative state. Billing changes never alter stock history, balances, or valuation.',
+        keywords: ['plan', 'subscription', 'read-only', 'payment'],
+        navigationLabels: ['Billing'],
         tutorials: [
             {
                 id: 'review-commercial-access',
@@ -701,20 +546,9 @@ export const guideModules: GuideModule[] = [
             'If a feature is read-only, use Billing to review recovery options. Historical records remain available.',
             'A browser success page, QR scan, or pending invoice is not payment confirmation on its own.',
         ],
-        actions: [
-            {
-                label: 'Open billing',
-                isAvailable: (context) =>
-                    context.activeOrganizationId !== null &&
-                    context.hasPermission('billing.manage'),
-                href: (context) =>
-                    context.activeOrganizationId === null
-                        ? null
-                        : OrganizationBillingController.show(
-                              context.activeOrganizationId,
-                          ).url,
-            },
-        ],
+        accessNote:
+            'You may not see billing if your access level does not allow it.',
+        actions: ['billing'],
     },
     {
         slug: 'settings',
@@ -722,6 +556,13 @@ export const guideModules: GuideModule[] = [
         description: 'Maintain your profile, password, and sign-in security.',
         overview:
             'Personal settings apply to your user account, while organization settings apply to the active organization. Keep account security current without sharing credentials or recovery codes.',
+        keywords: [
+            'profile',
+            'password',
+            'two-factor authentication',
+            'passkeys',
+        ],
+        navigationLabels: [],
         tutorials: [
             {
                 id: 'secure-your-account',
@@ -752,13 +593,7 @@ export const guideModules: GuideModule[] = [
             'If you lose access to two-factor authentication, use your recovery path or contact an authorized administrator.',
             'Use Organization settings, not personal Settings, when changing shared business information.',
         ],
-        actions: [
-            {
-                label: 'Open profile settings',
-                isAvailable: () => true,
-                href: () => profileEdit().url,
-            },
-        ],
+        actions: ['profile-settings'],
     },
 ];
 

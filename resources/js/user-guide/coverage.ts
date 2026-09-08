@@ -1,0 +1,30 @@
+import type { GuideModuleSlug } from './types';
+
+/** Maps every discoverable application sidebar destination to its guide module. */
+export const documentedNavigationLabels: Record<string, GuideModuleSlug> = {
+    'AI Assistant': 'ai-assistant',
+    Billing: 'billing',
+    Brands: 'inventory',
+    Categories: 'inventory',
+    Dashboard: 'dashboard',
+    'Inventory valuation': 'reports',
+    Items: 'inventory',
+    'Low stock': 'reports',
+    Locations: 'organization',
+    Members: 'organization',
+    'Opening balances': 'inventory',
+    'Product families': 'inventory',
+    'Purchase orders': 'purchasing',
+    'Purchasing history': 'reports',
+    Recipes: 'recipes',
+    Receiving: 'purchasing',
+    Settings: 'organization',
+    'Stock adjustments': 'inventory',
+    'Stock counts': 'stock-counts',
+    'Stock movement ledger': 'reports',
+    'Stock on hand': 'reports',
+    'Stock transfers': 'stock-transfers',
+    Suppliers: 'purchasing',
+    'Units of measure': 'inventory',
+    Waste: 'waste',
+};

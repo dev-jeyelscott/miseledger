@@ -82,21 +82,20 @@ test('the user menu exposes the user guide in shared desktop and mobile navigati
 
 test('every sidebar navigation destination is assigned to a user guide module', function (): void {
     $sidebar = File::get(resource_path('js/components/app-sidebar.tsx'));
-    $guideContent = File::get(resource_path('js/pages/user-guide/content.ts'));
+    $coverage = File::get(resource_path('js/user-guide/coverage.ts'));
 
-    $sidebarLabels = [
-        'Dashboard', 'AI Assistant', 'Items', 'Categories', 'Brands',
-        'Product families', 'Units of measure', 'Opening balances',
-        'Stock adjustments', 'Stock counts', 'Waste', 'Stock transfers',
-        'Suppliers', 'Purchase orders', 'Receiving', 'Recipes',
-        'Stock on hand', 'Low stock', 'Stock movement ledger',
-        'Inventory valuation', 'Purchasing history', 'Locations', 'Members',
-        'Settings', 'Billing',
-    ];
+    preg_match_all("/title:\s*'([^']+)'/", $sidebar, $matches);
+    $sidebarLabels = array_values(array_diff(array_unique($matches[1]), [
+        'Inventory',
+        'Organization',
+        'Purchasing',
+        'Reports',
+    ]));
+
+    expect($sidebarLabels)->not->toBeEmpty();
 
     foreach ($sidebarLabels as $label) {
-        expect($sidebar)->toContain("title: '{$label}'");
-        expect($guideContent)->toContain(
+        expect($coverage)->toContain(
             preg_match('/^[A-Za-z]+$/', $label) === 1
                 ? "{$label}:"
                 : "'{$label}':",
