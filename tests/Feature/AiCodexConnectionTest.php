@@ -21,7 +21,9 @@ use Illuminate\Support\Facades\Queue;
 function runQueuedCodexLogin(User $user): void
 {
     Queue::assertPushed(AwaitCodexDeviceCodeLogin::class, function (AwaitCodexDeviceCodeLogin $job) use ($user): bool {
-        expect($job->userId)->toBe($user->id);
+        expect($job->userId)->toBe($user->id)
+            ->and($job->connection)->toBe('ai')
+            ->and($job->queue)->toBe('ai-login');
 
         $job->handle(
             app(AiProviderAdapter::class),

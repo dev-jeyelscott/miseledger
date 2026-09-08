@@ -6,6 +6,8 @@ use App\Actions\Ai\ActivateAiProviderConnection;
 use App\Enums\AiProvider;
 use App\Enums\AiProviderErrorCode;
 use App\Exceptions\AiProviderException;
+use App\Http\Controllers\Ai\CodexConnectionController;
+use App\Models\AiProviderConnection;
 use App\Models\User;
 use App\Support\Ai\Providers\AiProviderAdapter;
 use App\Support\Ai\Providers\CodexProfileLocator;
@@ -22,7 +24,7 @@ use Throwable;
  * CLI process keeps polling in the background, so this job keeps that
  * process alive for the whole login window instead of the request/response
  * cycle that dispatched it. Progress is reported through the cache so the
- * browser can poll {@see \App\Http\Controllers\Ai\CodexConnectionController::loginStatus()}.
+ * browser can poll {@see CodexConnectionController::loginStatus()}.
  */
 final class AwaitCodexDeviceCodeLogin implements ShouldQueue
 {
@@ -49,6 +51,15 @@ final class AwaitCodexDeviceCodeLogin implements ShouldQueue
         }
 
         $cacheKey = self::cacheKey($user);
+
+        // A worker restart can re-deliver a login waiter after the browser
+        // has already completed authentication. Do not begin another
+        // long-polling session or occupy the chat worker in that case.
+        if (AiProviderConnection::query()->forUser($user)->active()->exists()) {
+            Cache::put($cacheKey, ['status' => 'connected'], now()->addMinutes(5));
+
+            return;
+        }
 
         try {
             $success = $provider->runDeviceCodeLogin($user, function (array $details) use ($cacheKey): void {

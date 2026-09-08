@@ -25,7 +25,7 @@ final class ProcessAiRun implements ShouldQueue
     /** @var list<int> */
     public array $backoff = [5, 30, 120, 300];
 
-    public int $timeout = 90;
+    public int $timeout = 180;
 
     public bool $failOnTimeout = true;
 

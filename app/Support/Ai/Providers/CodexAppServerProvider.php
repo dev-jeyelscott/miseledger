@@ -51,6 +51,10 @@ final class CodexAppServerProvider implements AiProviderAdapter
             fn (array $priorResults): array => ['turn/start', [
                 'threadId' => $this->threadId($priorResults[0]),
                 'input' => [['type' => 'text', 'text' => $input]],
+                'sandboxPolicy' => [
+                    'type' => 'readOnly',
+                    'networkAccess' => true,
+                ],
             ], 'turn/completed'],
         ], $this->miseLedgerMcpConfig($mcpExecutionIdentity));
 

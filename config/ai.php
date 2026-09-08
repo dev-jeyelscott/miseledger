@@ -13,7 +13,11 @@ return [
         // instructions. Pointing this inside the repo leaked this project's
         // own developer-facing AGENTS.md into the customer-facing assistant.
         'workspace_path' => env('AI_CODEX_WORKSPACE', sys_get_temp_dir().'/miseledger-ai-workspace'),
-        'timeout_seconds' => 20,
+        // MCP startup and a tool-backed answer both happen within a single
+        // app-server turn. Twenty seconds expires before the first tool can
+        // be discovered on a cold worker, while this remains bounded below
+        // the AI job and queue retry windows.
+        'timeout_seconds' => (int) env('AI_CODEX_TIMEOUT_SECONDS', 75),
         // Device-code logins stay open in the background until the user
         // finishes signing in at the verification URL, so this window is
         // much longer than a normal RPC round trip.

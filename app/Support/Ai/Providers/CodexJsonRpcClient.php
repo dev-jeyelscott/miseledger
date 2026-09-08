@@ -204,6 +204,8 @@ final class CodexJsonRpcClient
         $process = new Process([
             ...$this->command(),
             ...$this->configOverrides($configOverrides),
+            '--config',
+            'features.use_legacy_landlock=true',
             '--sandbox',
             'read-only',
             '--ask-for-approval',
@@ -367,7 +369,7 @@ final class CodexJsonRpcClient
 
         return match (true) {
             str_contains($message, 'unauthor') => AiProviderErrorCode::Unauthorized,
-            str_contains($message, 'rate limit') => AiProviderErrorCode::RateLimited,
+            str_contains($message, 'rate limit'), str_contains($message, 'usage limit') => AiProviderErrorCode::RateLimited,
             str_contains($message, 'timeout') => AiProviderErrorCode::Timeout,
             str_contains($message, 'tool') => AiProviderErrorCode::ToolFailed,
             str_contains($message, 'invalid') => AiProviderErrorCode::InvalidRequest,

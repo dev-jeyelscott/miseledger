@@ -78,9 +78,7 @@ export function AiAssistant({
         Record<string, never>,
         { connected: boolean }
     >({});
-    const statusRequest = useHttp<Record<string, never>, CodexLoginStatus>(
-        {},
-    );
+    const statusRequest = useHttp<Record<string, never>, CodexLoginStatus>({});
     const hasActiveRun =
         data.conversation?.runs.some(
             (run) => run.status === 'queued' || run.status === 'running',
@@ -285,8 +283,7 @@ export function AiAssistant({
                             <strong className="font-mono">
                                 {loginStatus.user_code}
                             </strong>
-                            . This page checks automatically once you're
-                            done.
+                            . This page checks automatically once you're done.
                         </p>
                         <Button
                             size="sm"

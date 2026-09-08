@@ -96,20 +96,28 @@ services:
       CACHE_STORE: '${CACHE_STORE:-database}'
       AI_CODEX_PROFILE_ROOT: /var/lib/miseledger/codex/profiles
       AI_CODEX_WORKSPACE: /tmp/codex-workspace
+      AI_CODEX_TIMEOUT_SECONDS: '75'
       AI_REDIS_QUEUE_CONNECTION: default
       AI_QUEUE: ai
-      AI_QUEUE_RETRY_AFTER: '120'
+      AI_QUEUE_RETRY_AFTER: '210'
     tmpfs:
-      - /tmp/codex-workspace:mode=0700,uid=10001,gid=10001
-      - /var/lib/miseledger/codex:mode=0700,uid=10001,gid=10001
+      # Codex's Linux sandbox creates transient Bubblewrap mount targets
+      # directly under /tmp before it launches the local MCP server.
+      - /tmp:mode=1777
       - /var/www/html/storage:mode=0770,uid=10001,gid=10001
       - /var/www/html/bootstrap/cache:mode=0770,uid=10001,gid=10001
+    volumes:
+      # Preserve only the per-user Codex authentication/runtime profile across
+      # worker recreation. This is a Docker-managed volume, never a host bind.
+      - 'ai-codex-profiles:/var/lib/miseledger/codex/profiles'
     read_only: true
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
-    pids_limit: 64
+    # Codex code-mode starts a separate host with its own runtime threads.
+    # Keep a hard cap, but leave sufficient headroom for that local process.
+    pids_limit: 256
     cpus: 2.0
     mem_limit: 2g
     networks:
@@ -127,9 +135,71 @@ services:
         'ai',
         '--sleep=1',
         '--tries=3',
-        '--timeout=90',
+        '--timeout=190',
       ]
     restart: unless-stopped
+
+  ai-login-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ai-worker
+    image: miseledger-ai-worker-dev
+    environment:
+      DOCKER_DEV: '1'
+      APP_ENV: '${APP_ENV:-local}'
+      APP_NAME: '${APP_NAME:-MiseLedger}'
+      APP_KEY: '${APP_KEY}'
+      DB_CONNECTION: '${DB_CONNECTION:-pgsql}'
+      DB_HOST: '${DB_HOST:-pgsql}'
+      DB_PORT: '${DB_PORT:-5432}'
+      DB_DATABASE: '${DB_DATABASE:-miseledger}'
+      DB_USERNAME: '${DB_USERNAME:-miseledger}'
+      DB_PASSWORD: '${DB_PASSWORD:-miseledger}'
+      REDIS_HOST: '${REDIS_HOST:-redis}'
+      REDIS_PORT: '${REDIS_PORT:-6379}'
+      REDIS_PASSWORD: '${REDIS_PASSWORD:-null}'
+      CACHE_STORE: '${CACHE_STORE:-database}'
+      AI_CODEX_PROFILE_ROOT: /var/lib/miseledger/codex/profiles
+      AI_CODEX_WORKSPACE: /tmp/codex-workspace
+      AI_CODEX_TIMEOUT_SECONDS: '75'
+      AI_REDIS_QUEUE_CONNECTION: default
+      AI_QUEUE: ai
+      AI_QUEUE_RETRY_AFTER: '210'
+    tmpfs:
+      - /tmp:mode=1777
+      - /var/www/html/storage:mode=0770,uid=10001,gid=10001
+      - /var/www/html/bootstrap/cache:mode=0770,uid=10001,gid=10001
+    volumes:
+      - 'ai-codex-profiles:/var/lib/miseledger/codex/profiles'
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    cpus: 2.0
+    mem_limit: 2g
+    networks:
+      - miseledger
+    depends_on:
+      pgsql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command:
+      [
+        'php',
+        'artisan',
+        'queue:work',
+        'ai',
+        '--queue=ai-login',
+        '--sleep=1',
+        '--tries=1',
+        '--timeout=930',
+      ]
+    restart: unless-stopped
+
 
   scheduler:
     image: miseledger-dev
@@ -209,6 +279,8 @@ networks:
     driver: bridge
 
 volumes:
+  ai-codex-profiles:
+    driver: local
   sail-pgsql:
     driver: local
   sail-redis:

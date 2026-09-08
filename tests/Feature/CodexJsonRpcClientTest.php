@@ -110,6 +110,10 @@ test('the Codex provider uses documented direct stdio JSON-RPC for connection an
 
     expect($transcripts[4][2]['params']['cwd'])->toBe(config('ai.codex.workspace_path'))
         ->and($transcripts[4][3]['params']['threadId'])->toBe('thr_123')
+        ->and($transcripts[4][3]['params']['sandboxPolicy'])->toBe([
+            'type' => 'readOnly',
+            'networkAccess' => true,
+        ])
         ->and($transcripts[5][2]['params']['threadId'])->toBe('thr_123');
 
     $commands = readCodexCommands($profilePath);
