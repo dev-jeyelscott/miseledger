@@ -56,9 +56,19 @@ test('admin theme keeps generic content tokens separate from sidebar tokens', fu
         ->toContain('border-sidebar-border')
         ->toContain('ring-sidebar-ring');
 
+    // Keep the design-system token reader synchronized with every canonical surface and launcher token role.
     expect($designSystem)
         ->toContain('<link rel="stylesheet" href="./resources/css/app.css" />')
-        ->toContain("const tokenNames = ['background', 'card', 'popover', 'border', 'input', 'sidebar'];")
+        ->toContain('const tokenNames = [')
+        ->toContain("'background',")
+        ->toContain("'card',")
+        ->toContain("'popover',")
+        ->toContain("'border',")
+        ->toContain("'input',")
+        ->toContain("'sidebar',")
+        ->toContain("'ai-assistant-launcher',")
+        ->toContain("'ai-assistant-launcher-foreground',")
+        ->toContain("'ai-assistant-launcher-ring',")
         ->toContain('getComputedStyle(element)')
         ->toContain('const renderedTheme = container.lastElementChild;')
         ->not->toContain('fetch(')
@@ -67,6 +77,8 @@ test('admin theme keeps generic content tokens separate from sidebar tokens', fu
         ->toContain('Structural border')
         ->toContain('Input boundary')
         ->toContain('Sidebar navigation surface')
+        ->toContain('AI Assistant')
+        ->toContain('Ask AI')
         ->toContain("['Light mode', 'Dark mode'].forEach((label) => {")
         ->toContain("theme.classList.add('dark');");
 });
