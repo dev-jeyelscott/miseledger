@@ -1100,9 +1100,14 @@ export const guideModules: GuideModule[] = [
             'Purchasing keeps supplier details, purchase orders, and goods receipts in separate steps. Record a receipt only after you have checked the goods that actually arrived.',
         keywords: [
             'supplier',
+            'supplier item',
+            'supplier price',
             'purchase order',
+            'approve purchase order',
+            'cancel purchase order',
             'goods receipt',
             'partial receipt',
+            'complete receipt',
         ],
         navigationLabels: ['Suppliers', 'Purchase orders', 'Receiving'],
         tutorials: [
@@ -1110,7 +1115,7 @@ export const guideModules: GuideModule[] = [
                 id: 'create-and-approve-a-purchase-order',
                 title: 'Create and approve a purchase order',
                 steps: [
-                    'Create or select the supplier, then make sure its item mappings are ready for the items you buy from it.',
+                    'Create or select the supplier, then add an active supplier item mapping and current price for every item you will order.',
                     'Create a Purchase Order, choose the supplier and Location, then add the ordered items and quantities.',
                     'Review the draft carefully. You can still edit a Draft Purchase Order.',
                     'Select Approve purchase order only when the order is ready to receive against.',
@@ -1234,7 +1239,7 @@ export const guideModules: GuideModule[] = [
                     {
                         name: 'Current price',
                         description:
-                            'Shows the supplier-specific price when your access includes cost information.',
+                            'Shows the supplier-specific price when your access includes cost information. An active supplier item needs a current price before it can be added to a new Purchase Order.',
                     },
                 ],
                 notes: [
@@ -1266,7 +1271,7 @@ export const guideModules: GuideModule[] = [
                     {
                         title: 'Partially received and Received',
                         description:
-                            'Partially received means quantities remain to be received. Received means the ordered quantities are complete.',
+                            'Partially received means some accepted quantities were finalized and quantities remain to be received. Received means the full ordered quantities were accepted and finalized.',
                     },
                     {
                         title: 'Cancelled',
@@ -1322,7 +1327,7 @@ export const guideModules: GuideModule[] = [
                 id: 'approve-or-cancel-a-purchase-order',
                 title: 'Approve or cancel a Purchase Order',
                 summary:
-                    'Approval makes a Draft Purchase Order available for receiving. Cancellation closes an unreceived order.',
+                    'Approval makes a Draft Purchase Order available for receiving. Cancellation closes a Draft or Approved order only while it has no active Goods Receipt.',
                 controls: [
                     {
                         label: 'Approve purchase order',
@@ -1332,14 +1337,14 @@ export const guideModules: GuideModule[] = [
                     {
                         label: 'Cancel purchase order',
                         description:
-                            'Closes an order that has not received goods. Confirm the exact order before cancelling.',
+                            'Closes a Draft or Approved order with no active Goods Receipt. Confirm the exact order before cancelling. Partially received and Received orders cannot be cancelled.',
                     },
                 ],
                 troubleshooting: [
                     {
                         question:
                             'Why is approval or cancellation unavailable?',
-                        answer: 'Check the current status. These actions apply to the appropriate Draft or unreceived Purchase Order, and your access must allow the action.',
+                        answer: 'Check the current status. Approval applies to Draft orders. Cancellation applies to Draft or Approved orders with no active Goods Receipt. Your access must also allow the action.',
                     },
                     {
                         question: 'Why can I no longer edit the order?',
@@ -1363,9 +1368,9 @@ export const guideModules: GuideModule[] = [
                 ],
                 fields: [
                     {
-                        name: 'Received quantity',
+                        name: 'Accepted',
                         description:
-                            'Enter the quantity you physically checked for each item.',
+                            'Enter only the quantity you physically checked and accepted for each item. Accepted quantities are added to inventory when the receipt is finalized.',
                     },
                     {
                         name: 'Location',
@@ -1373,9 +1378,9 @@ export const guideModules: GuideModule[] = [
                             'Confirm the location where the received inventory belongs.',
                     },
                     {
-                        name: 'Non-stock details',
+                        name: 'Rejected and Damaged',
                         description:
-                            'Record any non-stock receipt details only when the form shows them for the item.',
+                            'Record quantities that arrived but were rejected or damaged. These remain on the receipt as evidence and are not added to inventory.',
                     },
                 ],
             },
@@ -1390,8 +1395,8 @@ export const guideModules: GuideModule[] = [
                         title: 'Record a partial receipt',
                         steps: [
                             'Create a Goods Receipt from the Approved Purchase Order.',
-                            'Enter only the quantity that arrived and save the draft for review.',
-                            'Finalize after checking the goods. The Purchase Order shows Partially received while quantities remain.',
+                            'Enter only the quantity you physically checked and accepted, then save the draft for review.',
+                            'Finalize after checking the goods. The Purchase Order shows Partially received when accepted quantities remain outstanding.',
                             'Create another Goods Receipt when the remaining goods arrive.',
                         ],
                     },
@@ -1399,9 +1404,9 @@ export const guideModules: GuideModule[] = [
                         id: 'record-a-complete-receipt',
                         title: 'Record a complete receipt',
                         steps: [
-                            'Create a Goods Receipt for all quantities that physically arrived.',
+                            'Create a Goods Receipt for the final quantities you physically checked and accepted.',
                             'Review each receipt line and finalize only after the physical check is complete.',
-                            'The Purchase Order shows Received when its ordered quantities are complete.',
+                            'The Purchase Order shows Received only when its full ordered quantities have been accepted and finalized.',
                         ],
                     },
                 ],
@@ -1417,7 +1422,7 @@ export const guideModules: GuideModule[] = [
                 id: 'finalize-or-cancel-a-goods-receipt',
                 title: 'Finalize or cancel a Goods Receipt',
                 summary:
-                    'Draft Goods Receipts can be checked and updated. Finalized receipts are locked and record the received inventory. Cancel a Draft receipt when it should not be used.',
+                    'Draft Goods Receipts can be checked and updated. Finalized receipts are locked and add only Accepted quantities to inventory. Cancel a Draft receipt when it should not be used.',
                 controls: [
                     {
                         label: 'Finalize receipt',
@@ -1447,10 +1452,16 @@ export const guideModules: GuideModule[] = [
         slug: 'recipes',
         title: 'Recipes',
         description:
-            'Define recipe ingredients and understand their calculated cost.',
+            'Manage recipe details, review version coverage, and understand calculated cost.',
         overview:
-            'Recipes bring item quantities together for production planning and costing. Keep the recipe details, yield, and components accurate so the current cost view is useful.',
-        keywords: ['ingredients', 'yield', 'costing'],
+            'Recipes keep each recipe identity separate from its formulation history. The list shows version coverage, while Cost uses the current effective published formulation for the Location you select.',
+        keywords: [
+            'ingredients',
+            'yield',
+            'costing',
+            'recipe version',
+            'recipe cost',
+        ],
         navigationLabels: ['Recipes'],
         tutorials: [
             {
@@ -1458,9 +1469,9 @@ export const guideModules: GuideModule[] = [
                 title: 'Build a recipe',
                 steps: [
                     'Create the recipe with its Code, Name, Type, and Status.',
-                    'Review the recipe version that defines its Yield and Components.',
-                    'Check each component quantity and unit before using the recipe for planning.',
-                    'Open Cost when it is available to you, choose a Location, and review the current breakdown.',
+                    'Use the Recipes list to review its latest version number and published and draft version coverage.',
+                    'Remember that Yield, Components, quantities, and units belong to a recipe version, not the recipe details page.',
+                    'Open Cost when it is available to you, choose a Location, and review the current effective published version and its breakdown.',
                 ],
             },
         ],
@@ -1563,7 +1574,7 @@ export const guideModules: GuideModule[] = [
                 id: 'recipe-components-and-yield',
                 title: 'Recipe components and yield',
                 summary:
-                    'A recipe version defines the Yield and the Components needed to make that yield.',
+                    'A recipe version defines the Yield and the Components needed to make that yield. The current Recipes screens show version coverage but do not provide version-composition editing controls.',
                 fields: [
                     {
                         name: 'Yield',
@@ -1582,7 +1593,7 @@ export const guideModules: GuideModule[] = [
                     },
                 ],
                 whatHappensNext: [
-                    'Review the version status and, when available to you, use Cost to understand the current result for a Location.',
+                    'Use Cost, when it is available to you, to review the current effective published version for a Location.',
                 ],
             },
             {
@@ -1594,12 +1605,12 @@ export const guideModules: GuideModule[] = [
                     {
                         title: 'Draft and published versions',
                         description:
-                            'Draft versions can still be changed. Published versions are the established formulation used by the current recipe cost view when effective.',
+                            'The Recipes list reports draft and published version coverage. A published version is used by the current recipe cost view only when it is in effect.',
                     },
                     {
-                        title: 'Make changes deliberately',
+                        title: 'What you can edit here',
                         description:
-                            'Review Yield, Components, quantities, and units together before publishing a changed formulation.',
+                            'Create recipe and Edit recipe change the recipe Code, Name, Type, and Status. They do not change a version Yield or Components, and the current Recipes screens do not include a version editing or publishing action.',
                     },
                 ],
             },

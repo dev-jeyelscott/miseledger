@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { guideModules } from '../pages/user-guide/content.ts';
 import { searchGuideTopics } from './search.ts';
 import type { GuideModule } from './types.ts';
 
@@ -83,4 +84,26 @@ test('guide search matches module metadata and troubleshooting', () => {
 /** Verify whitespace-only queries continue to represent the normal discovery state. */
 test('an empty guide search restores category browsing', () => {
     assert.deepEqual(searchGuideTopics(modules, '   '), []);
+});
+
+test('purchasing and recipe guidance topics remain discoverable by their customer-facing terms', () => {
+    const expectedTopics = [
+        ['supplier item', 'supplier-items-and-prices'],
+        ['current price', 'supplier-items-and-prices'],
+        ['approve purchase order', 'approve-or-cancel-a-purchase-order'],
+        ['cancel purchase order', 'approve-or-cancel-a-purchase-order'],
+        ['partial receipt', 'record-a-partial-receipt'],
+        ['complete receipt', 'record-a-complete-receipt'],
+        ['recipe version', 'recipe-versions'],
+        ['recipe cost', 'recipe-cost'],
+    ] as const;
+
+    for (const [query, anchor] of expectedTopics) {
+        assert.ok(
+            searchGuideTopics(guideModules, query).some(
+                (result) => result.anchor === anchor,
+            ),
+            `Expected guide search for "${query}" to find #${anchor}.`,
+        );
+    }
 });
