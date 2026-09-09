@@ -10,12 +10,12 @@ export const popularGuideTasks = [
     {
         label: 'Receive Stock',
         module: 'purchasing',
-        tutorialId: 'receive-a-purchase-order',
+        tutorialId: 'record-a-complete-receipt',
     },
     {
         label: 'Perform Stock Count',
         module: 'stock-counts',
-        tutorialId: 'complete-a-stock-count',
+        tutorialId: 'create-a-stock-count',
     },
     {
         label: 'Record Waste',
@@ -25,6 +25,6 @@ export const popularGuideTasks = [
     {
         label: 'Transfer Stock',
         module: 'stock-transfers',
-        tutorialId: 'transfer-stock-between-locations',
+        tutorialId: 'create-a-transfer-draft',
     },
 ] as const satisfies readonly PopularGuideTask[];

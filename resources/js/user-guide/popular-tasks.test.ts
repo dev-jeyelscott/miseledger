@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { guideModules } from '../pages/user-guide/content.ts';
 import { popularGuideTasks } from './popular-tasks.ts';
 
-/** Verify the four landing quick links always resolve to real tutorials in the canonical User Guide content. */
+/** Verify the four landing quick links always resolve to tutorials rendered by the canonical User Guide detail page. */
 test('popular guide tasks target existing module tutorials', () => {
     assert.equal(popularGuideTasks.length, 4);
 
@@ -17,13 +17,18 @@ test('popular guide tasks target existing module tutorials', () => {
             `Unknown User Guide module referenced by Popular Tasks: ${task.module}`,
         );
 
-        const tutorialExists = guideModule.tutorials.some(
+        const renderedTutorials =
+            guideModule.pages && guideModule.pages.length > 0
+                ? guideModule.pages.flatMap((page) => page.tutorials ?? [])
+                : guideModule.tutorials;
+
+        const tutorialExists = renderedTutorials.some(
             (tutorial) => tutorial.id === task.tutorialId,
         );
 
         assert.ok(
             tutorialExists,
-            `Unknown User Guide tutorial referenced by Popular Tasks: ${task.module}#${task.tutorialId}`,
+            `Unknown rendered User Guide tutorial referenced by Popular Tasks: ${task.module}#${task.tutorialId}`,
         );
     }
 });

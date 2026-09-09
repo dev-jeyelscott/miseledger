@@ -28,7 +28,7 @@ test('User Guide search and discovery remain keyboard operable', async ({
     await expect(popularTasksRegion.getByRole('link')).toHaveCount(4);
     await expect(browseModulesRegion.getByRole('link')).toHaveCount(13);
 
-    await searchInput.fill('Receive a purchase order');
+    await searchInput.fill('Record a complete receipt');
 
     await expect(popularTasksHeading).toBeHidden();
     await expect(browseModulesHeading).toBeHidden();
@@ -38,13 +38,13 @@ test('User Guide search and discovery remain keyboard operable', async ({
     await expect(page.getByText('1 result found', { exact: true })).toBeVisible();
 
     const tutorialResult = page.getByRole('link', {
-        name: /Receive a purchase order/i,
+        name: /Record a complete receipt/i,
     });
     const clearButton = page.getByRole('button', { name: 'Clear' });
 
     await expect(tutorialResult).toHaveAttribute(
         'href',
-        /\/user-guide\/purchasing#receive-a-purchase-order$/,
+        /\/user-guide\/purchasing#record-a-complete-receipt$/,
     );
 
     await clearButton.focus();
@@ -75,9 +75,16 @@ test('User Guide search and discovery remain keyboard operable', async ({
     await page.keyboard.press('Enter');
 
     await expect(page).toHaveURL(
-        /\/user-guide\/purchasing#receive-a-purchase-order$/,
+        /\/user-guide\/purchasing#record-a-complete-receipt$/,
     );
     await expect(
         page.getByRole('heading', { name: 'Purchasing' }),
     ).toBeVisible();
+
+    const receiptTutorial = page.getByRole('button', {
+        name: 'Record a complete receipt',
+    });
+
+    await expect(receiptTutorial).toBeVisible();
+    await expect(receiptTutorial).toHaveAttribute('aria-expanded', 'true');
 });
