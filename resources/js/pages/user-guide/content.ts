@@ -2041,10 +2041,22 @@ export const guideModules: GuideModule[] = [
     {
         slug: 'organization',
         title: 'Organization',
-        description: 'Manage organization identity, locations, and members.',
+        description:
+            'Create, switch, and configure organizations, and manage locations, storage locations, and members.',
         overview:
-            'Organization settings establish the context for all operational work. Permissions are assigned through membership and must be reviewed whenever a person’s responsibilities change.',
-        keywords: ['switch organization', 'members', 'locations', 'access'],
+            'An organization is the workspace for one business. Use Organization settings, Locations, Storage locations, and Members to set up and maintain that workspace. What you can see and change here depends on the role your organization assigned to you.',
+        keywords: [
+            'switch organization',
+            'create organization',
+            'members',
+            'role',
+            'locations',
+            'storage location',
+            'storage area',
+            'access',
+            'timezone',
+            'currency',
+        ],
         navigationLabels: ['Locations', 'Members', 'Settings'],
         tutorials: [
             {
@@ -2052,9 +2064,9 @@ export const guideModules: GuideModule[] = [
                 title: 'Manage organization access',
                 steps: [
                     'Select the correct active organization before making an administrative change.',
-                    'Invite or manage members according to their operational responsibilities.',
-                    'Configure locations before recording location-specific inventory activity.',
-                    'Keep organization timezone, currency, and active status accurate.',
+                    'Add or manage members and give each person the role that matches their responsibilities.',
+                    'Add locations and their storage locations before recording location-specific inventory activity.',
+                    'Keep organization timezone, currency, and status accurate.',
                 ],
             },
         ],
@@ -2062,7 +2074,7 @@ export const guideModules: GuideModule[] = [
             {
                 name: 'Organization name and slug',
                 description:
-                    'The public and system identifiers for the organization.',
+                    'The display name and the unique URL-friendly identifier for the organization.',
             },
             {
                 name: 'Timezone and currency',
@@ -2070,37 +2082,272 @@ export const guideModules: GuideModule[] = [
                     'Defaults used for business dates and monetary presentation.',
             },
             {
-                name: 'Member role and permissions',
+                name: 'Member role',
                 description:
-                    'The server-authoritative access granted to a member.',
+                    'The set of actions and pages a member can use in this organization, such as Owner, Manager, Inventory Staff, Kitchen Staff, or Auditor.',
             },
         ],
         troubleshooting: [
-            'If a location or member page is unavailable, ask an administrator to review your permissions and feature access.',
-            'Changing organization activity does not replace commercial subscription access decisions.',
+            'If a location, storage location, member, or settings page is unavailable, ask an organization owner or manager to review your role.',
+            'Changing organization status does not change billing. Review Billing separately for subscription and payment topics.',
         ],
         accessNote:
-            'You may not see organization features if your access level does not allow them.',
+            'You may not see organization features if your role does not allow them.',
         actions: ['organization-settings', 'locations', 'members'],
+        pages: [
+            {
+                id: 'create-and-switch-organizations',
+                title: 'Create and switch organizations',
+                summary:
+                    'The organization switcher in the sidebar shows the organization you are currently working in. Use it to move between every organization you belong to, or to create a new one.',
+                whenToUse:
+                    'Use this before starting work, and whenever you need to set up a new, fully separate business.',
+                controls: [
+                    {
+                        label: 'Switch organization',
+                        description:
+                            'Choose another organization that you belong to when you need to work with its information.',
+                    },
+                    {
+                        label: 'Create organization',
+                        description:
+                            'Starts a brand-new organization with its own locations, inventory, recipes, and members, kept fully separate from every other organization.',
+                    },
+                ],
+                fields: [
+                    {
+                        name: 'Organization name',
+                        description:
+                            'The name shown throughout MiseLedger while creating a new organization. You can invite members and add locations afterward.',
+                    },
+                ],
+                whatHappensNext: [
+                    'The Dashboard and available menu items update for the organization you selected.',
+                    'A newly created organization starts empty. Add locations, members, and inventory items before recording day-to-day activity.',
+                ],
+                troubleshooting: [
+                    {
+                        question: 'Why can I not find an organization?',
+                        answer: 'Ask an organization owner to add you as a member, or confirm you signed in with the account that was added.',
+                    },
+                ],
+            },
+            {
+                id: 'locations',
+                title: 'Locations',
+                summary:
+                    'A location is one physical site, such as a restaurant branch or warehouse. Each location contains one or more storage locations, the specific shelves, coolers, or rooms where inventory is actually tracked.',
+                whenToUse:
+                    'Set up locations before recording purchases, transfers, counts, or waste for that site.',
+                controls: [
+                    {
+                        label: 'Add location',
+                        description:
+                            'Creates a location with a name and code. A default storage location is created for it automatically.',
+                    },
+                    {
+                        label: 'Edit',
+                        description:
+                            'Updates a location name, code, or status.',
+                    },
+                    {
+                        label: 'Storage',
+                        description:
+                            'Opens the storage locations that belong to this location.',
+                    },
+                ],
+                fields: [
+                    {
+                        name: 'Location name and code',
+                        description:
+                            'The display name and the short code used to identify the location. The code must be unique within the organization and can contain letters, numbers, hyphens, and underscores.',
+                    },
+                    {
+                        name: 'Status',
+                        description:
+                            'Active locations can be used for new inventory activity. Deactivating a location keeps its storage locations and history but blocks new activity there, and may be blocked while the location is still required by an active workflow such as a shipped transfer awaiting receipt.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Open Storage for a new location to review or add the storage locations your team uses inside it.',
+                ],
+                troubleshooting: [
+                    {
+                        question: 'Why can I not deactivate a location?',
+                        answer: 'A location may still be required by an active workflow, such as a transfer awaiting receipt. Resolve or complete that workflow first.',
+                    },
+                ],
+            },
+            {
+                id: 'storage-locations',
+                title: 'Storage locations',
+                summary:
+                    'Storage locations are the specific places inside a location where inventory is stored, such as a walk-in chiller, a dry-storage shelf, or a bar well. Open a location and select Storage to manage them.',
+                whenToUse:
+                    'Use this when a location needs more than one storage area, or when you need to review or rename an existing storage location.',
+                controls: [
+                    {
+                        label: 'Add storage location',
+                        description:
+                            'Creates a new storage location inside the selected location, with a name and code that must be unique within that location.',
+                    },
+                    {
+                        label: 'Edit',
+                        description:
+                            'Updates a storage location name, code, or status.',
+                    },
+                ],
+                fields: [
+                    {
+                        name: 'Storage location name and code',
+                        description:
+                            'The display name and the short code used to identify the storage location within its parent location.',
+                    },
+                    {
+                        name: 'Status',
+                        description:
+                            'New storage locations are active by default. Deactivation may be blocked while a shipped stock transfer is awaiting receipt there.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Storage locations you add here become available when recording stock counts, waste, transfers, and receiving for that location.',
+                ],
+                troubleshooting: [
+                    {
+                        question:
+                            'Why can I not deactivate a storage location?',
+                        answer: 'Deactivation may be blocked while a shipped stock transfer is still awaiting receipt at that storage location. Complete or resolve the transfer first.',
+                    },
+                ],
+            },
+            {
+                id: 'members-and-access',
+                title: 'Members and access',
+                summary:
+                    'Organization members are the registered MiseLedger users who can access this organization. Each member has a role that determines what they can see and do.',
+                whenToUse:
+                    'Use this when adding a teammate, checking who has access, or reviewing why someone can or cannot use a feature.',
+                controls: [
+                    {
+                        label: 'Add member',
+                        description:
+                            'Adds an existing registered MiseLedger user to this organization by email and assigns their role.',
+                    },
+                    {
+                        label: 'AI access',
+                        description:
+                            'Turns the AI Assistant on or off for one member, when this control is available to you. Owners always have it enabled.',
+                    },
+                ],
+                fields: [
+                    {
+                        name: 'Role',
+                        description:
+                            'Owner has full access, including billing and organization settings. Manager handles day-to-day purchasing, receiving, counts, waste, transfers, recipes, and reports, including cost figures. Inventory Staff records day-to-day inventory work without cost figures. Kitchen Staff can view inventory, record waste, and view recipes. Auditor has read-only access to inventory, purchasing, recipes, reports, and cost figures for review.',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'Only registered users can be added',
+                        description:
+                            'The person must already have a MiseLedger account before you can add them to an organization.',
+                    },
+                ],
+                whatHappensNext: [
+                    'A new member sees this organization the next time they open the organization switcher, using the role you assigned.',
+                ],
+                troubleshooting: [
+                    {
+                        question: 'Why can I not add a member?',
+                        answer: 'Confirm the person already has a registered MiseLedger account and that you have access to manage members. Check the organization member limit if adding fails.',
+                    },
+                    {
+                        question:
+                            'Why can a teammate not see a feature I can see?',
+                        answer: 'Compare your assigned roles. Ask an organization owner or manager to review the role assigned to their membership.',
+                    },
+                ],
+            },
+            {
+                id: 'organization-settings',
+                title: 'Organization settings',
+                summary:
+                    'Organization settings hold the shared configuration used across the whole organization: its name, slug, timezone, currency, and whether it is currently active.',
+                whenToUse:
+                    'Review this after creating an organization, and whenever the business name, timezone, or currency changes.',
+                controls: [
+                    {
+                        label: 'Save changes',
+                        description:
+                            'Applies updates to the organization name, slug, timezone, currency, or status.',
+                    },
+                ],
+                fields: [
+                    {
+                        name: 'Name and Slug',
+                        description:
+                            'The name shown throughout MiseLedger, and the URL-friendly identifier used in links. The slug accepts letters, numbers, dashes, and underscores.',
+                    },
+                    {
+                        name: 'Timezone',
+                        description:
+                            'Used to display and interpret operational dates and times, such as when waste or a transfer occurred.',
+                    },
+                    {
+                        name: 'Currency',
+                        description:
+                            'The default currency used for monetary values across the organization.',
+                    },
+                    {
+                        name: 'Status',
+                        description:
+                            'Active or Inactive. Deactivating an active organization immediately blocks operational access for its members until it is reactivated. Deactivation does not affect billing.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Members see the updated timezone and currency the next time they load pages that display dates or money.',
+                ],
+                troubleshooting: [
+                    {
+                        question:
+                            'Why is Organization settings unavailable to me?',
+                        answer: 'Only members whose role includes organization management can open this page. Ask an organization owner for access if you need it.',
+                    },
+                ],
+            },
+        ],
     },
     {
         slug: 'billing',
         title: 'Billing',
         description:
-            'Review the organization subscription, plan access, and billing recovery options.',
+            'Review your organization plan, subscription status, and what to do if payment needs attention.',
         overview:
-            'Billing controls commercial access, while organization activity controls a separate administrative state. Billing changes never alter stock history, balances, or valuation.',
-        keywords: ['plan', 'subscription', 'read-only', 'payment'],
+            'Billing shows the plan and subscription currently assigned to your organization, whether the organization can make normal changes or is read-only, and the actions available to fix a payment problem. Billing never changes stock history, balances, or valuation.',
+        keywords: [
+            'plan',
+            'subscription',
+            'trial',
+            'active',
+            'past due',
+            'unpaid',
+            'read-only',
+            'payment',
+            'renew',
+            'upgrade',
+            'cancel renewal',
+            'manage billing',
+        ],
         navigationLabels: ['Billing'],
         tutorials: [
             {
-                id: 'review-commercial-access',
-                title: 'Review commercial access',
+                id: 'review-your-plan-and-fix-a-payment-problem',
+                title: 'Review your plan and fix a payment problem',
                 steps: [
                     'Open Billing for the active organization.',
-                    'Review the current plan, subscription status, and available feature access.',
-                    'Use the provided billing management flow for plan changes or payment recovery.',
-                    'Wait for the validated provider settlement path before treating a payment as confirmed.',
+                    'Review the current plan, subscription status, and whether the organization can make normal changes or is read-only.',
+                    'Use Manage billing, Renew subscription, or Cancel renewal, whichever is shown for your subscription.',
+                    'Treat a payment as confirmed only once Billing shows it, not from a browser success page or QR scan alone.',
                 ],
             },
         ],
@@ -2108,37 +2355,192 @@ export const guideModules: GuideModule[] = [
             {
                 name: 'Plan',
                 description:
-                    'The stable internal plan assigned to the organization.',
+                    'The plan currently assigned to your organization.',
             },
             {
                 name: 'Subscription status',
-                description: 'The current commercial lifecycle status.',
+                description:
+                    'Shows Trial, Active, Past due, Unpaid, or a similar status. Trial and Active let your organization make normal changes. Past due keeps normal access for now but shows a payment warning. Unpaid or an ended trial or subscription switches the organization to read-only until payment is resolved.',
             },
             {
-                name: 'Access mode',
+                name: 'Access',
                 description:
-                    'Whether normal business writes are available or read-only.',
+                    'Writable means your organization can make normal changes. Read-only means new purchases, counts, waste, transfers, and other changes are blocked until payment is resolved, while your existing records stay available.',
             },
         ],
         troubleshooting: [
-            'If a feature is read-only, use Billing to review recovery options. Historical records remain available.',
-            'A browser success page, QR scan, or pending invoice is not payment confirmation on its own.',
+            'If a feature is read-only, open Billing and use the available recovery action. Your existing records remain available while you resolve payment.',
+            'A browser success page, QR scan, or pending invoice is not payment confirmation on its own. Wait for Billing to show the payment as received.',
         ],
-        accessNote:
-            'You may not see billing if your access level does not allow it.',
+        accessNote: 'You may not see Billing if your role does not allow it.',
         actions: ['billing'],
+        pages: [
+            {
+                id: 'current-plan-and-subscription',
+                title: 'Current plan and subscription',
+                summary:
+                    'Billing shows the plan, subscription status, access, and, when they apply, the trial end date, renewal or end date, billing interval, and next billing date, all in the organization timezone.',
+                whenToUse:
+                    'Check this whenever you need to confirm what your organization is subscribed to or when its access will change.',
+                fields: [
+                    {
+                        name: 'Trial ends',
+                        description:
+                            'Shown while the organization is on a trial. Normal access continues until this date unless a subscription starts first.',
+                    },
+                    {
+                        name: 'Renews or cancels on / Ended on',
+                        description:
+                            'Shows when a writable subscription will renew or stop renewing, or when a read-only subscription already ended.',
+                    },
+                    {
+                        name: 'Billing interval and Next billing date',
+                        description:
+                            'Shown for an active recurring subscription, such as monthly or yearly billing and its next charge date.',
+                    },
+                ],
+            },
+            {
+                id: 'subscription-status-meanings',
+                title: 'What each subscription status means',
+                summary:
+                    'The subscription status explains what your organization can currently do and whether payment needs attention.',
+                notes: [
+                    {
+                        title: 'Trial',
+                        description:
+                            'Your organization is inside a trial period. Normal changes are available.',
+                    },
+                    {
+                        title: 'Active',
+                        description:
+                            'Your subscription is paid and current. Normal changes are available.',
+                    },
+                    {
+                        title: 'Past due',
+                        description:
+                            'A recent payment did not go through, but normal changes remain available for now. Billing shows a payment warning. Resolve payment soon to avoid losing write access.',
+                    },
+                    {
+                        title: 'Unpaid',
+                        description:
+                            'Payment recovery did not succeed. The organization is read-only until payment is resolved.',
+                    },
+                    {
+                        title: 'Ended',
+                        description:
+                            'The trial or subscription period ended without an active paid subscription. The organization is read-only until you subscribe or renew.',
+                    },
+                ],
+                troubleshooting: [
+                    {
+                        question:
+                            'Why does Billing show a payment warning banner?',
+                        answer: 'This appears when a recent payment needs attention but normal access has not been removed yet. Resolve payment through the available billing action before it becomes read-only.',
+                    },
+                ],
+            },
+            {
+                id: 'read-only-and-recovery',
+                title: 'Read-only access and how to recover',
+                summary:
+                    'When the organization is read-only, existing records remain available to view, but new purchases, counts, waste, transfers, and similar changes are blocked until payment is resolved.',
+                whenToUse:
+                    'Use this when your team reports that an action is unexpectedly blocked.',
+                controls: [
+                    {
+                        label: 'Manage billing',
+                        description:
+                            'Opens the billing management flow for organizations using this recovery path.',
+                    },
+                    {
+                        label: 'Renew subscription',
+                        description:
+                            'Starts renewal for organizations using this recovery path when it is shown.',
+                    },
+                    {
+                        label: 'Subscribe',
+                        description:
+                            'Starts a new subscription on a chosen plan and billing period when the organization has no active subscription.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Normal write access returns automatically once Billing shows the payment as received and the subscription as Active or Trial.',
+                ],
+                troubleshooting: [
+                    {
+                        question:
+                            'I paid, but the organization is still read-only. What should I do?',
+                        answer: 'Wait a short time for the payment to be confirmed and shown on the Billing page, then refresh. A success screen or QR scan alone does not confirm payment.',
+                    },
+                ],
+            },
+            {
+                id: 'plan-features-and-usage-limits',
+                title: 'Plan features and usage limits',
+                summary:
+                    'Plan entitlements list the features included in the current plan and the usage limits, such as the number of locations or members, along with how much of each limit is currently used.',
+                whenToUse:
+                    'Check this when a feature or action seems unavailable, or when you cannot add another location or member.',
+                notes: [
+                    {
+                        title: 'At or over a limit',
+                        description:
+                            'All existing data remains available, but creating a new record for a limit you have reached is blocked until you upgrade to a plan with enough capacity.',
+                    },
+                ],
+                troubleshooting: [
+                    {
+                        question:
+                            'Why can I not add another location or member?',
+                        answer: 'Check the usage limits on the Billing page. If you are at or over your plan limit, upgrade to a plan with enough capacity to add more.',
+                    },
+                ],
+            },
+            {
+                id: 'billing-management-actions',
+                title: 'Managing your subscription',
+                summary:
+                    'Depending on how your organization is billed, you can manage payment details, upgrade to a higher plan, renew a subscription, or cancel automatic renewal.',
+                controls: [
+                    {
+                        label: 'Manage billing',
+                        description:
+                            'Opens the billing management flow to update payment details or manage the subscription, when this option is available for your organization.',
+                    },
+                    {
+                        label: 'Upgrade to [plan]',
+                        description:
+                            'Moves the organization to a higher plan while keeping the current billing interval, when an eligible upgrade is available.',
+                    },
+                    {
+                        label: 'Cancel renewal',
+                        description:
+                            'Stops automatic renewal. Paid access remains available until the end of the current billing period, then the subscription will not renew.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Cancelling renewal does not end access immediately. Your organization keeps normal access until the current billing period ends.',
+                ],
+            },
+        ],
     },
     {
         slug: 'settings',
         title: 'Settings',
-        description: 'Maintain your profile, password, and sign-in security.',
+        description: 'Maintain your Profile, sign-in security, and Appearance.',
         overview:
-            'Personal settings apply to your user account, while organization settings apply to the active organization. Keep account security current without sharing credentials or recovery codes.',
+            'Personal settings apply only to your own account: Profile, Security, and Appearance. Organization settings, further above, apply to the active organization instead. Keep your account secure without sharing your password, passkeys, or recovery codes with anyone.',
         keywords: [
             'profile',
             'password',
             'two-factor authentication',
             'passkeys',
+            'recovery codes',
+            'appearance',
+            'theme',
+            'dark mode',
+            'light mode',
         ],
         navigationLabels: [],
         tutorials: [
@@ -2146,10 +2548,10 @@ export const guideModules: GuideModule[] = [
                 id: 'secure-your-account',
                 title: 'Secure your account',
                 steps: [
-                    'Review your profile name and email address.',
-                    'Use a strong, unique password and update it when needed.',
-                    'Enable two-factor authentication or passkeys when available to your account.',
-                    'Store recovery codes securely and never share them.',
+                    'Review your name and email address on Profile.',
+                    'Use a strong, unique password on Security and update it when needed.',
+                    'Add a passkey or enable two-factor authentication on Security when you want extra sign-in protection.',
+                    'Store recovery codes somewhere safe and never share them with anyone.',
                 ],
             },
         ],
@@ -2164,14 +2566,193 @@ export const guideModules: GuideModule[] = [
             },
             {
                 name: 'Two-factor authentication',
-                description: 'An additional account verification method.',
+                description:
+                    'An additional sign-in check using a code from an authenticator app on your phone.',
             },
         ],
         troubleshooting: [
-            'If you lose access to two-factor authentication, use your recovery path or contact an authorized administrator.',
-            'Use Organization settings, not personal Settings, when changing shared business information.',
+            'If you lose access to two-factor authentication, use a saved recovery code, or contact an organization owner or manager for help.',
+            'Use Organization settings, not personal Settings, when changing shared business information such as timezone or currency.',
         ],
-        actions: ['profile-settings'],
+        actions: [
+            'profile-settings',
+            'security-settings',
+            'appearance-settings',
+        ],
+        pages: [
+            {
+                id: 'profile-settings',
+                title: 'Profile',
+                summary:
+                    'Update your account name and email address. If your organization requires email verification, an unverified address is flagged here.',
+                whenToUse:
+                    'Use this when your name changes or you need to update the email address you sign in with.',
+                controls: [
+                    {
+                        label: 'Save',
+                        description:
+                            'Applies your updated name or email address.',
+                    },
+                    {
+                        label: 'Resend verification email',
+                        description:
+                            'Sends a new verification link when your email address is shown as unverified.',
+                    },
+                    {
+                        label: 'Delete account',
+                        description:
+                            'Permanently deletes your account and its resources after you confirm your password. This cannot be undone.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Changing your email may require verifying the new address before some features are fully available again.',
+                ],
+                troubleshooting: [
+                    {
+                        question: 'Why does my email show as unverified?',
+                        answer: 'Use Resend verification email, then check your inbox for the verification link.',
+                    },
+                ],
+            },
+            {
+                id: 'security-password',
+                title: 'Password',
+                summary:
+                    'Change your sign-in password from Security. You must enter your current password along with the new one.',
+                whenToUse:
+                    'Use this if you suspect your password is known to someone else, or on a routine basis to keep your account secure.',
+                fields: [
+                    {
+                        name: 'Current password',
+                        description:
+                            'Confirms it is really you making the change.',
+                    },
+                    {
+                        name: 'New password and Confirm password',
+                        description:
+                            'The replacement password. It must meet your organization’s password policy, such as a minimum length and a mix of character types.',
+                    },
+                ],
+                troubleshooting: [
+                    {
+                        question: 'Why is my new password rejected?',
+                        answer: 'Check that it meets the minimum length and character requirements shown on the page, and that it is not a commonly breached password.',
+                    },
+                ],
+            },
+            {
+                id: 'security-passkeys',
+                title: 'Passkeys',
+                summary:
+                    'A passkey lets you sign in without typing a password, using your device’s built-in screen lock, security key, or biometric check.',
+                whenToUse:
+                    'Add a passkey when you want a faster, password-free way to sign in on a trusted device.',
+                controls: [
+                    {
+                        label: 'Add passkey',
+                        description:
+                            'Registers a new passkey using your current device or a connected security key.',
+                    },
+                    {
+                        label: 'Remove',
+                        description:
+                            'Deletes a saved passkey so it can no longer be used to sign in.',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'Available only when enabled for your account',
+                        description:
+                            'Passkeys appear on Security only when this option is available to you.',
+                    },
+                ],
+                troubleshooting: [
+                    {
+                        question:
+                            'Why is Passkeys not shown on my Security page?',
+                        answer: 'Passkey management is only available when it is enabled for your account.',
+                    },
+                ],
+            },
+            {
+                id: 'security-two-factor',
+                title: 'Two-factor authentication',
+                summary:
+                    'Two-factor authentication adds a second check at sign-in: a short code from a TOTP-supported authenticator app on your phone, in addition to your password.',
+                whenToUse:
+                    'Enable this when you want stronger protection than a password alone.',
+                controls: [
+                    {
+                        label: 'Enable 2FA',
+                        description:
+                            'Starts setup by showing a QR code and manual setup key to scan or enter into your authenticator app.',
+                    },
+                    {
+                        label: 'Continue setup',
+                        description:
+                            'Resumes an in-progress setup that has not been confirmed yet.',
+                    },
+                    {
+                        label: 'Disable 2FA',
+                        description:
+                            'Turns off two-factor authentication for your account.',
+                    },
+                    {
+                        label: 'View recovery codes',
+                        description:
+                            'Shows your one-time recovery codes so you can save them somewhere safe.',
+                    },
+                    {
+                        label: 'Regenerate recovery codes',
+                        description:
+                            'Replaces your current recovery codes with a new set. Save the new codes immediately, since the old ones stop working.',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'Recovery codes are for you only',
+                        description:
+                            'Store recovery codes in a secure password manager and never share them. Anyone who has one can use it to sign in as you.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Once enabled, you will be asked for a code from your authenticator app on future sign-ins.',
+                ],
+                troubleshooting: [
+                    {
+                        question:
+                            'I lost access to my authenticator app. What should I do?',
+                        answer: 'Use one of your saved recovery codes to sign in, then set up two-factor authentication again. If you have no recovery codes, contact an organization owner or manager for help.',
+                    },
+                ],
+            },
+            {
+                id: 'appearance-settings',
+                title: 'Appearance',
+                summary:
+                    'Choose how MiseLedger looks on this device: Light, Dark, or System, which follows your device’s current setting.',
+                whenToUse:
+                    'Use this to match your preference or reduce glare in low-light conditions.',
+                controls: [
+                    {
+                        label: 'Light',
+                        description: 'Uses a light color theme.',
+                    },
+                    {
+                        label: 'Dark',
+                        description: 'Uses a dark color theme.',
+                    },
+                    {
+                        label: 'System',
+                        description:
+                            'Follows your device’s current light or dark setting automatically.',
+                    },
+                ],
+                whatHappensNext: [
+                    'The selected appearance applies immediately and is remembered on this device.',
+                ],
+            },
+        ],
     },
 ];
 

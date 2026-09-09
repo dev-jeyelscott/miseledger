@@ -17,7 +17,9 @@ import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/P
 import RecipeController from '@/actions/App/Http/Controllers/Recipes/RecipeController';
 import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
 import { dashboard } from '@/routes';
+import { edit as appearanceEdit } from '@/routes/appearance';
 import { edit as profileEdit } from '@/routes/profile';
+import { edit as securityEdit } from '@/routes/security';
 import {
     canOpenPurchasingGuideAction,
     canOpenRecipesGuideAction,
@@ -39,6 +41,16 @@ export function resolveGuideAction(
             return { label: 'Open dashboard', href: dashboard().url };
         case 'profile-settings':
             return { label: 'Open profile settings', href: profileEdit().url };
+        case 'security-settings':
+            return {
+                label: 'Open security settings',
+                href: securityEdit().url,
+            };
+        case 'appearance-settings':
+            return {
+                label: 'Open appearance settings',
+                href: appearanceEdit().url,
+            };
         case 'ai-assistant':
             return context.aiCanUse
                 ? {

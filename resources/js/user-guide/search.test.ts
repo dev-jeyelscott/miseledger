@@ -198,3 +198,67 @@ test('AI Assistant question examples and verification guidance remain discoverab
         );
     }
 });
+
+test('organization, billing, and settings topics remain discoverable by their customer-facing terms', () => {
+    const expectedTopics = [
+        [
+            'create organization',
+            'create-and-switch-organizations',
+            'organization',
+        ],
+        ['storage location', 'storage-locations', 'organization'],
+        ['storage area', 'storage-locations', 'organization'],
+        ['add member', 'members-and-access', 'organization'],
+        ['role', 'members-and-access', 'organization'],
+        ['ai access', 'members-and-access', 'organization'],
+        ['currency', 'organization-settings', 'organization'],
+        ['timezone', 'organization-settings', 'organization'],
+        ['subscription status', 'current-plan-and-subscription', 'billing'],
+        ['past due', 'subscription-status-meanings', 'billing'],
+        ['unpaid', 'subscription-status-meanings', 'billing'],
+        ['read-only', 'read-only-and-recovery', 'billing'],
+        ['usage limit', 'plan-features-and-usage-limits', 'billing'],
+        ['cancel renewal', 'billing-management-actions', 'billing'],
+        ['delete account', 'profile-settings', 'settings'],
+        ['password policy', 'security-password', 'settings'],
+        ['passkey', 'security-passkeys', 'settings'],
+        ['two-factor', 'security-two-factor', 'settings'],
+        ['recovery codes', 'security-two-factor', 'settings'],
+        ['dark', 'appearance-settings', 'settings'],
+        ['system', 'appearance-settings', 'settings'],
+    ] as const;
+
+    for (const [query, anchor, slug] of expectedTopics) {
+        assert.ok(
+            searchGuideTopics(guideModules, query).some(
+                (result) =>
+                    result.module.slug === slug && result.anchor === anchor,
+            ),
+            `Expected guide search for "${query}" to find #${anchor} in ${slug}.`,
+        );
+    }
+});
+
+test('billing copy never uses internal provider or lifecycle terminology', () => {
+    const billingModule = guideModules.find(
+        (module) => module.slug === 'billing',
+    );
+
+    assert.ok(billingModule, 'expected a billing module');
+
+    const serialized = JSON.stringify(billingModule);
+    const forbiddenTerms = [
+        'stable internal plan',
+        'commercial lifecycle status',
+        'validated provider settlement path',
+        'PlanCode',
+        'server-authoritative',
+    ];
+
+    for (const term of forbiddenTerms) {
+        assert.ok(
+            !serialized.includes(term),
+            `Expected billing guide content to avoid internal terminology: "${term}".`,
+        );
+    }
+});

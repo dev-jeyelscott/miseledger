@@ -41,6 +41,8 @@ export type GuideActionKey =
     | 'members'
     | 'billing'
     | 'profile-settings'
+    | 'security-settings'
+    | 'appearance-settings'
     | 'report-stock-on-hand'
     | 'report-low-stock'
     | 'report-stock-movements'

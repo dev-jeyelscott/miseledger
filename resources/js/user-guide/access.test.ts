@@ -177,3 +177,159 @@ for (const { key, label, urlContains } of reportGuideActions) {
         );
     });
 }
+
+function organizationScopedAccessContext({
+    activeOrganizationId = 1,
+    hasFeature = () => true,
+    permissions = [
+        'organization.manage',
+        'locations.manage',
+        'users.manage',
+        'billing.manage',
+    ],
+}: {
+    activeOrganizationId?: number | null;
+    hasFeature?: GuideAccessContext['hasFeature'];
+    permissions?: string[];
+} = {}): GuideAccessContext {
+    return {
+        activeOrganizationId,
+        aiCanUse: false,
+        hasFeature,
+        hasPermission: (permission) => permissions.includes(permission),
+    };
+}
+
+const organizationScopedActions: {
+    key: GuideActionKey;
+    label: string;
+    permission: string;
+    urlContains: string;
+}[] = [
+    {
+        key: 'organization-settings',
+        label: 'Open organization settings',
+        permission: 'organization.manage',
+        urlContains: '',
+    },
+    {
+        key: 'locations',
+        label: 'Open locations',
+        permission: 'locations.manage',
+        urlContains: 'locations',
+    },
+    {
+        key: 'members',
+        label: 'Open members',
+        permission: 'users.manage',
+        urlContains: 'members',
+    },
+    {
+        key: 'billing',
+        label: 'Open billing',
+        permission: 'billing.manage',
+        urlContains: 'billing',
+    },
+];
+
+for (const {
+    key,
+    label,
+    permission,
+    urlContains,
+} of organizationScopedActions) {
+    test(`${key} guide action resolves its label and destination when ${permission} is granted`, () => {
+        const action = resolveGuideAction(
+            key,
+            organizationScopedAccessContext(),
+        );
+
+        assert.ok(action, `expected ${key} to resolve an action`);
+        assert.equal(action?.label, label);
+
+        if (urlContains !== '') {
+            assert.ok(
+                action?.href.includes(urlContains),
+                `expected ${key} href "${action?.href}" to contain "${urlContains}"`,
+            );
+        }
+    });
+
+    test(`${key} guide action fails closed without ${permission}`, () => {
+        assert.equal(
+            resolveGuideAction(
+                key,
+                organizationScopedAccessContext({ permissions: [] }),
+            ),
+            null,
+        );
+    });
+
+    test(`${key} guide action fails closed without an active organization`, () => {
+        assert.equal(
+            resolveGuideAction(
+                key,
+                organizationScopedAccessContext({ activeOrganizationId: null }),
+            ),
+            null,
+        );
+    });
+}
+
+test('locations guide action fails closed without the locations.multi feature even when locations.manage is granted', () => {
+    assert.equal(
+        resolveGuideAction(
+            'locations',
+            organizationScopedAccessContext({ hasFeature: () => false }),
+        ),
+        null,
+    );
+});
+
+function personalAccessContext({
+    activeOrganizationId = null,
+}: {
+    activeOrganizationId?: number | null;
+} = {}): GuideAccessContext {
+    return {
+        activeOrganizationId,
+        aiCanUse: false,
+        hasFeature: () => false,
+        hasPermission: () => false,
+    };
+}
+
+const personalSettingsActions: {
+    key: GuideActionKey;
+    label: string;
+    urlContains: string;
+}[] = [
+    {
+        key: 'profile-settings',
+        label: 'Open profile settings',
+        urlContains: 'settings/profile',
+    },
+    {
+        key: 'security-settings',
+        label: 'Open security settings',
+        urlContains: 'settings/security',
+    },
+    {
+        key: 'appearance-settings',
+        label: 'Open appearance settings',
+        urlContains: 'settings/appearance',
+    },
+];
+
+for (const { key, label, urlContains } of personalSettingsActions) {
+    test(`${key} guide action is always available, including with no active organization or role`, () => {
+        const action = resolveGuideAction(key, personalAccessContext());
+
+        assert.ok(action, `expected ${key} to resolve an action`);
+        assert.equal(action?.label, label);
+        assert.ok(
+            action?.href.includes(urlContains),
+            `expected ${key} href "${action?.href}" to contain "${urlContains}"`,
+        );
+    });
+}
