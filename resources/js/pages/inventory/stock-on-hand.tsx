@@ -1,6 +1,7 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head, Link, usePage } from '@inertiajs/react';
 import {
     Boxes,
+    Download,
     Filter,
     MapPin,
     Package,
@@ -19,6 +20,7 @@ import { Field } from '@/components/ui/field';
 import { NativeSelect } from '@/components/ui/native-select';
 import { SearchInput } from '@/components/ui/search-input';
 import { dashboard } from '@/routes';
+import type { OrganizationContext } from '@/types';
 
 type StockOnHandRow = {
     id: number;
@@ -82,6 +84,42 @@ function formatCurrency(value: string, currency: string): string {
     return `${currency} ${formatDecimal(value)}`;
 }
 
+/** Keep the existing CSV export synchronized with every active report filter. */
+function buildExportUrl(filters: Props['filters']): string {
+    const params = new URLSearchParams();
+
+    if (filters.locationId !== null) {
+        params.set('location_id', filters.locationId.toString());
+    }
+
+    if (filters.storageLocationId !== null) {
+        params.set(
+            'storage_location_id',
+            filters.storageLocationId.toString(),
+        );
+    }
+
+    if (filters.inventoryCategoryId !== null) {
+        params.set(
+            'inventory_category_id',
+            filters.inventoryCategoryId.toString(),
+        );
+    }
+
+    if (filters.inventoryItemId !== null) {
+        params.set('inventory_item_id', filters.inventoryItemId.toString());
+    }
+
+    if (filters.itemSearch !== null) {
+        params.set('item', filters.itemSearch);
+    }
+
+    const baseUrl = StockOnHandReportController.export().url;
+    const query = params.toString();
+
+    return query === '' ? baseUrl : `${baseUrl}?${query}`;
+}
+
 export default function StockOnHandReport({
     rows,
     summary,
@@ -94,6 +132,13 @@ export default function StockOnHandReport({
 }: Props) {
     const itemSearchDefault =
         filters.itemSearch ?? filters.inventoryItemId?.toString() ?? '';
+    const exportUrl = buildExportUrl(filters);
+
+    const { organizationContext } = usePage<{
+        organizationContext: OrganizationContext;
+    }>().props;
+    const canExportReports =
+        organizationContext.entitlements?.grants['reports.export'] ?? false;
 
     return (
         <>
@@ -294,6 +339,18 @@ export default function StockOnHandReport({
                                 the selected filters
                             </p>
                         </div>
+
+                        {canExportReports && (
+                            <Button variant="outline" size="sm" asChild>
+                                <a href={exportUrl}>
+                                    <Download
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    Export CSV
+                                </a>
+                            </Button>
+                        )}
                     </div>
 
                     {rows.length === 0 ? (
