@@ -2429,7 +2429,7 @@ export const guideModules: GuideModule[] = [
                     {
                         title: 'Cancelled',
                         description:
-                            'The subscription was cancelled and is no longer renewing. The organization is read-only until you subscribe again.',
+                            'The subscription was cancelled and is no longer renewing. Normal changes stay available with a payment warning until the date shown, then the organization becomes read-only until you subscribe again.',
                     },
                     {
                         title: 'None',

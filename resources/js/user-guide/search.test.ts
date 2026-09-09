@@ -239,6 +239,36 @@ test('organization, billing, and settings topics remain discoverable by their cu
     }
 });
 
+test('cancelled subscription copy explains continued access until the end date, not immediate read-only', () => {
+    const billingModule = guideModules.find(
+        (module) => module.slug === 'billing',
+    );
+
+    assert.ok(billingModule, 'expected a billing module');
+
+    const statusPage = billingModule.pages?.find(
+        (page) => page.id === 'subscription-status-meanings',
+    );
+
+    assert.ok(statusPage, 'expected a subscription-status-meanings page');
+
+    const cancelledNote = statusPage.notes?.find(
+        (note) => note.title === 'Cancelled',
+    );
+
+    assert.ok(cancelledNote, 'expected a Cancelled note');
+    assert.ok(
+        cancelledNote.description.includes('Normal changes stay available'),
+        'Expected the Cancelled note to explain that normal access continues until the end date.',
+    );
+    assert.ok(
+        !cancelledNote.description.startsWith(
+            'The subscription was cancelled and is no longer renewing. The organization is read-only',
+        ),
+        'Cancelled note must not claim read-only access starts immediately.',
+    );
+});
+
 test('billing copy never uses internal provider or lifecycle terminology', () => {
     const billingModule = guideModules.find(
         (module) => module.slug === 'billing',
