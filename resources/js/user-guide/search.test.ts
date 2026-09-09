@@ -292,3 +292,18 @@ test('billing copy never uses internal provider or lifecycle terminology', () =>
         );
     }
 });
+
+test('organization guide directs role review requests to an owner only, not a manager', () => {
+    const organizationModule = guideModules.find(
+        (module) => module.slug === 'organization',
+    );
+
+    assert.ok(organizationModule, 'expected an organization module');
+
+    const serialized = JSON.stringify(organizationModule);
+
+    assert.ok(
+        !serialized.includes('owner or manager'),
+        'Manager cannot review or change member roles (only Owner has users.manage access); guide must not tell users to ask a manager.',
+    );
+});

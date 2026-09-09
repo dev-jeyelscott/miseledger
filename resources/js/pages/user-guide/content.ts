@@ -2088,7 +2088,7 @@ export const guideModules: GuideModule[] = [
             },
         ],
         troubleshooting: [
-            'If a location, storage location, member, or settings page is unavailable, ask an organization owner or manager to review your role.',
+            'If a location, storage location, member, or settings page is unavailable, ask an organization owner to review your role.',
             'Changing organization status does not change billing. Review Billing separately for subscription and payment topics.',
         ],
         accessNote:
@@ -2264,7 +2264,7 @@ export const guideModules: GuideModule[] = [
                     {
                         question:
                             'Why can a teammate not see a feature I can see?',
-                        answer: 'Compare your assigned roles. Ask an organization owner or manager to review the role assigned to their membership.',
+                        answer: 'Compare your assigned roles. Ask an organization owner to review the role assigned to their membership.',
                     },
                 ],
             },
