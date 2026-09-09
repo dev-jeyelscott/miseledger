@@ -2427,9 +2427,14 @@ export const guideModules: GuideModule[] = [
                             'Payment recovery did not succeed. The organization is read-only until payment is resolved.',
                     },
                     {
-                        title: 'Ended',
+                        title: 'Cancelled',
                         description:
-                            'The trial or subscription period ended without an active paid subscription. The organization is read-only until you subscribe or renew.',
+                            'The subscription was cancelled and is no longer renewing. The organization is read-only until you subscribe again.',
+                    },
+                    {
+                        title: 'None',
+                        description:
+                            'There is no active subscription, for example after a trial ends without one starting. The organization is read-only until you subscribe.',
                     },
                 ],
                 troubleshooting: [
@@ -2584,7 +2589,7 @@ export const guideModules: GuideModule[] = [
                 id: 'profile-settings',
                 title: 'Profile',
                 summary:
-                    'Update your account name and email address. If your organization requires email verification, an unverified address is flagged here.',
+                    'Update your account name and email address. Your account requires a verified email address, and an unverified address is flagged here.',
                 whenToUse:
                     'Use this when your name changes or you need to update the email address you sign in with.',
                 controls: [
@@ -2605,7 +2610,7 @@ export const guideModules: GuideModule[] = [
                     },
                 ],
                 whatHappensNext: [
-                    'Changing your email may require verifying the new address before some features are fully available again.',
+                    'Changing your email requires verifying the new address before you can continue using the app.',
                 ],
                 troubleshooting: [
                     {
@@ -2703,7 +2708,7 @@ export const guideModules: GuideModule[] = [
                             'Shows your one-time recovery codes so you can save them somewhere safe.',
                     },
                     {
-                        label: 'Regenerate recovery codes',
+                        label: 'Regenerate codes',
                         description:
                             'Replaces your current recovery codes with a new set. Save the new codes immediately, since the old ones stop working.',
                     },
