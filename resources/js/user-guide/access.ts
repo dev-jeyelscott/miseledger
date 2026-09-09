@@ -19,3 +19,10 @@ export function canOpenRecipesGuideAction(
         context.hasPermission('recipes.view')
     );
 }
+
+export function canOpenReportGuideAction(context: GuideAccessContext): boolean {
+    return (
+        context.activeOrganizationId !== null &&
+        context.hasPermission('reports.view')
+    );
+}

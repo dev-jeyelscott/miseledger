@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
     canOpenPurchasingGuideAction,
     canOpenRecipesGuideAction,
+    canOpenReportGuideAction,
 } from './access.ts';
 import type { GuideAccessContext } from './types.ts';
 
@@ -65,4 +66,42 @@ test('recipe guide actions fail closed without an active organization, feature, 
         false,
     );
     assert.equal(canOpenRecipesGuideAction(guideAccessContext()), true);
+});
+
+function reportGuideAccessContext({
+    activeOrganizationId = 1,
+    permissions = ['reports.view'],
+}: {
+    activeOrganizationId?: number | null;
+    permissions?: string[];
+} = {}): GuideAccessContext {
+    return {
+        activeOrganizationId,
+        aiCanUse: false,
+        hasFeature: () => false,
+        hasPermission: (permission) => permissions.includes(permission),
+    };
+}
+
+test('report guide actions require reports.view and fail closed without an active organization or membership', () => {
+    assert.equal(canOpenReportGuideAction(reportGuideAccessContext()), true);
+    assert.equal(
+        canOpenReportGuideAction(reportGuideAccessContext({ permissions: [] })),
+        false,
+    );
+    assert.equal(
+        canOpenReportGuideAction(
+            reportGuideAccessContext({ activeOrganizationId: null }),
+        ),
+        false,
+    );
+    assert.equal(
+        canOpenReportGuideAction(
+            reportGuideAccessContext({
+                activeOrganizationId: null,
+                permissions: [],
+            }),
+        ),
+        false,
+    );
 });

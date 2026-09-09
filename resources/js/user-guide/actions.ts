@@ -21,6 +21,7 @@ import { edit as profileEdit } from '@/routes/profile';
 import {
     canOpenPurchasingGuideAction,
     canOpenRecipesGuideAction,
+    canOpenReportGuideAction,
 } from './access';
 import type { GuideAccessContext, GuideActionKey } from './types';
 
@@ -146,35 +147,35 @@ export function resolveGuideAction(
                   }
                 : null;
         case 'report-stock-on-hand':
-            return context.hasPermission('reports.view')
+            return canOpenReportGuideAction(context)
                 ? {
                       label: 'Open Stock on hand',
                       href: StockOnHandReportController.index().url,
                   }
                 : null;
         case 'report-low-stock':
-            return context.hasPermission('reports.view')
+            return canOpenReportGuideAction(context)
                 ? {
                       label: 'Open Low stock',
                       href: LowStockReportController.index().url,
                   }
                 : null;
         case 'report-stock-movements':
-            return context.hasPermission('reports.view')
+            return canOpenReportGuideAction(context)
                 ? {
                       label: 'Open Stock movement ledger',
                       href: StockMovementLedgerReportController.index().url,
                   }
                 : null;
         case 'report-valuation':
-            return context.hasPermission('reports.view')
+            return canOpenReportGuideAction(context)
                 ? {
                       label: 'Open Inventory valuation',
                       href: InventoryValuationReportController.index().url,
                   }
                 : null;
         case 'report-purchasing-history':
-            return context.hasPermission('reports.view')
+            return canOpenReportGuideAction(context)
                 ? {
                       label: 'Open Purchasing history',
                       href: PurchasingHistoryReportController.index().url,

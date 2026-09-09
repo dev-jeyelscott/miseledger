@@ -134,8 +134,8 @@ test('report filters and export guidance remain discoverable', () => {
         ['storage location', 'stock-on-hand'],
         ['status', 'low-stock'],
         ['movement type', 'stock-movement-ledger'],
+        ['grand total', 'inventory-valuation'],
         ['receipt state', 'purchasing-history'],
-        ['export', 'stock-on-hand'],
     ] as const;
 
     for (const [query, anchor] of expectedTopics) {
@@ -146,6 +146,25 @@ test('report filters and export guidance remain discoverable', () => {
                     result.anchor === anchor,
             ),
             `Expected guide search for "${query}" to find #${anchor}.`,
+        );
+    }
+
+    const exportSupportedAnchors = [
+        'stock-on-hand',
+        'stock-movement-ledger',
+        'inventory-valuation',
+        'purchasing-history',
+    ] as const;
+    const exportResults = searchGuideTopics(guideModules, 'export');
+
+    for (const anchor of exportSupportedAnchors) {
+        assert.ok(
+            exportResults.some(
+                (result) =>
+                    result.module.slug === 'reports' &&
+                    result.anchor === anchor,
+            ),
+            `Expected export guidance to be discoverable for #${anchor}.`,
         );
     }
 
