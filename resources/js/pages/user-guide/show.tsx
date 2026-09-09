@@ -1,6 +1,6 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -30,13 +30,48 @@ function GuideTutorial({
 }) {
     const [open, setOpen] = useState(false);
 
+    useEffect(() => {
+        let revealFrame: number | undefined;
+        let scrollFrame: number | undefined;
+
+        const revealHashTarget = (): void => {
+            if (window.location.hash !== `#${id}`) {
+                return;
+            }
+
+            revealFrame = requestAnimationFrame(() => {
+                setOpen(true);
+                scrollFrame = requestAnimationFrame(() => {
+                    document
+                        .getElementById(id)
+                        ?.scrollIntoView({ block: 'start' });
+                });
+            });
+        };
+
+        revealHashTarget();
+        window.addEventListener('hashchange', revealHashTarget);
+
+        return () => {
+            window.removeEventListener('hashchange', revealHashTarget);
+
+            if (revealFrame !== undefined) {
+                cancelAnimationFrame(revealFrame);
+            }
+
+            if (scrollFrame !== undefined) {
+                cancelAnimationFrame(scrollFrame);
+            }
+        };
+    }, [id]);
+
     return (
         <Collapsible open={open} onOpenChange={setOpen}>
             <CollapsibleTrigger asChild>
                 <button
                     id={id}
                     type="button"
-                    className="flex w-full items-center justify-between gap-4 rounded-md py-2 text-left text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    className="flex w-full scroll-mt-20 items-center justify-between gap-4 rounded-md py-2 text-left text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 >
                     {title}
                     <ChevronDown

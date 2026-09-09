@@ -29,6 +29,10 @@ class E2ETestSeeder extends Seeder
 {
     public const string EMAIL = 'e2e-owner@miseledger.test';
 
+    public const string LIMITED_EMAIL = 'e2e-kitchen-staff@miseledger.test';
+
+    public const string NO_ORGANIZATION_EMAIL = 'e2e-no-organization@miseledger.test';
+
     public const string PASSWORD = 'password';
 
     public function run(): void
@@ -49,6 +53,22 @@ class E2ETestSeeder extends Seeder
             'organization_id' => $organization->id,
             'user_id' => $user->id,
             'role' => OrganizationRole::Owner,
+        ]);
+
+        $limitedUser = User::factory()->create([
+            'name' => 'E2E Kitchen Staff',
+            'email' => self::LIMITED_EMAIL,
+        ]);
+
+        OrganizationMembership::factory()->create([
+            'organization_id' => $organization->id,
+            'user_id' => $limitedUser->id,
+            'role' => OrganizationRole::KitchenStaff,
+        ]);
+
+        User::factory()->create([
+            'name' => 'E2E No Organization',
+            'email' => self::NO_ORGANIZATION_EMAIL,
         ]);
 
         $location = Location::factory()->create([

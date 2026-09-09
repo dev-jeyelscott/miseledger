@@ -10,7 +10,7 @@ export function searchGuideTopics(
     modules: GuideModule[],
     query: string,
 ): GuideSearchResult[] {
-    const normalizedQuery = query.trim().toLocaleLowerCase();
+    const normalizedQuery = normalizeSearchTerm(query);
 
     if (normalizedQuery === '') {
         return [];
@@ -26,7 +26,7 @@ function searchModule(module: GuideModule, query: string): GuideSearchResult[] {
         anchor: string | null,
         terms: string[],
     ): void => {
-        if (terms.some((term) => term.toLocaleLowerCase().includes(query))) {
+        if (terms.some((term) => normalizeSearchTerm(term).includes(query))) {
             results.push({ anchor, module, topic });
         }
     };
@@ -50,4 +50,8 @@ function searchModule(module: GuideModule, query: string): GuideSearchResult[] {
     module.troubleshooting.forEach((tip) => addResult(tip, null, [tip]));
 
     return results;
+}
+
+function normalizeSearchTerm(term: string): string {
+    return term.normalize('NFKC').trim().toLocaleLowerCase();
 }

@@ -94,11 +94,14 @@ test('every sidebar navigation destination is assigned to a user guide module', 
 
     expect($sidebarLabels)->not->toBeEmpty();
 
-    foreach ($sidebarLabels as $label) {
-        expect($coverage)->toContain(
-            preg_match('/^[A-Za-z]+$/', $label) === 1
-                ? "{$label}:"
-                : "'{$label}':",
-        );
-    }
+    preg_match_all("/^\\s+(?:'([^']+)'|([A-Za-z]+)):/m", $coverage, $matches);
+    $documentedLabels = array_values(array_filter([
+        ...$matches[1],
+        ...$matches[2],
+    ]));
+
+    sort($sidebarLabels);
+    sort($documentedLabels);
+
+    expect($documentedLabels)->toBe($sidebarLabels);
 });

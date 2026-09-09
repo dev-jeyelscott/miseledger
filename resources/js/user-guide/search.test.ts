@@ -41,9 +41,27 @@ test('guide search is case insensitive and matches tutorials', () => {
     );
 });
 
-test('guide search matches fields and returns no results for an unmatched query', () => {
+test('guide search indexes module, navigation, field, and troubleshooting content', () => {
+    for (const query of [
+        'manage suppliers',
+        'record received goods',
+        'purchasing',
+        'purchase orders',
+        'waste reason',
+        'active organization',
+    ]) {
+        assert.ok(
+            searchGuideTopics(modules, query).some(
+                (result) => result.module.slug === 'purchasing',
+            ),
+            `Expected ${query} to find the purchasing guide module.`,
+        );
+    }
+});
+
+test('guide search normalizes full-width input and returns no results for an unmatched query', () => {
     assert.ok(
-        searchGuideTopics(modules, 'Waste reason').some(
+        searchGuideTopics(modules, 'ＰＵＲＣＨＡＳＩＮＧ').some(
             (result) => result.module.slug === 'purchasing',
         ),
     );
