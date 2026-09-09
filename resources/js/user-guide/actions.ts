@@ -12,6 +12,10 @@ import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/P
 import RecipeController from '@/actions/App/Http/Controllers/Recipes/RecipeController';
 import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
 import { dashboard } from '@/routes';
+import {
+    canOpenPurchasingGuideAction,
+    canOpenRecipesGuideAction,
+} from './access';
 import { edit as profileEdit } from '@/routes/profile';
 import type { GuideAccessContext, GuideActionKey } from './types';
 
@@ -71,29 +75,28 @@ export function resolveGuideAction(
                   }
                 : null;
         case 'purchase-orders':
-            return canUsePurchasing(context)
+            return canOpenPurchasingGuideAction(context)
                 ? {
                       label: 'Open purchase orders',
                       href: PurchaseOrderController.index().url,
                   }
                 : null;
         case 'suppliers':
-            return canUsePurchasing(context)
+            return canOpenPurchasingGuideAction(context)
                 ? {
                       label: 'Open suppliers',
                       href: SupplierController.index().url,
                   }
                 : null;
         case 'receiving':
-            return canUsePurchasing(context)
+            return canOpenPurchasingGuideAction(context)
                 ? {
                       label: 'Open receiving',
                       href: GoodsReceiptController.index().url,
                   }
                 : null;
         case 'recipes':
-            return context.hasFeature('recipes') &&
-                context.hasPermission('recipes.view')
+            return canOpenRecipesGuideAction(context)
                 ? { label: 'Open recipes', href: RecipeController.index().url }
                 : null;
         case 'organization-settings':
@@ -138,13 +141,6 @@ export function resolveGuideAction(
                   }
                 : null;
     }
-}
-
-function canUsePurchasing(context: GuideAccessContext): boolean {
-    return (
-        context.hasFeature('purchasing') &&
-        context.hasPermission('purchasing.view')
-    );
 }
 
 function hasAnyPermission(

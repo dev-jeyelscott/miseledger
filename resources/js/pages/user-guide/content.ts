@@ -1097,7 +1097,7 @@ export const guideModules: GuideModule[] = [
         title: 'Purchasing',
         description: 'Manage suppliers, purchase orders, and goods receipts.',
         overview:
-            'Purchasing records the intention to buy and the actual receipt of stock separately. Inventory increases through goods receiving, using the established inbound cost and stock-ledger controls.',
+            'Purchasing keeps supplier details, purchase orders, and goods receipts in separate steps. Record a receipt only after you have checked the goods that actually arrived.',
         keywords: [
             'supplier',
             'purchase order',
@@ -1107,13 +1107,23 @@ export const guideModules: GuideModule[] = [
         navigationLabels: ['Suppliers', 'Purchase orders', 'Receiving'],
         tutorials: [
             {
-                id: 'receive-a-purchase-order',
-                title: 'Receive a purchase order',
+                id: 'create-and-approve-a-purchase-order',
+                title: 'Create and approve a purchase order',
                 steps: [
-                    'Create or select the supplier and prepare a purchase order.',
-                    'Review ordered quantities and expected costs before approval.',
-                    'Create a goods receipt only for stock physically received.',
-                    'Finalize the receipt after validating quantities and costs.',
+                    'Create or select the supplier, then make sure its item mappings are ready for the items you buy from it.',
+                    'Create a Purchase Order, choose the supplier and Location, then add the ordered items and quantities.',
+                    'Review the draft carefully. You can still edit a Draft Purchase Order.',
+                    'Select Approve purchase order only when the order is ready to receive against.',
+                ],
+            },
+            {
+                id: 'receive-part-or-all-of-an-order',
+                title: 'Receive part or all of an order',
+                steps: [
+                    'Open an Approved Purchase Order and select Create goods receipt when goods arrive.',
+                    'Enter only the quantities you physically received. Leave undelivered quantities for a later receipt.',
+                    'Check the receipt details, including its Location and any visible cost information.',
+                    'Finalize the Goods Receipt only after the physical check is complete. Create another receipt later if quantities are still outstanding.',
                 ],
             },
         ],
@@ -1134,12 +1144,303 @@ export const guideModules: GuideModule[] = [
             },
         ],
         troubleshooting: [
-            'If purchasing is unavailable, your plan may not include the feature or you may lack purchasing permission.',
+            'If Purchasing is not available, it may not be included for the active organization or your access level may not allow it.',
             'Do not finalize a receipt for goods that are still pending delivery.',
         ],
         accessNote:
-            'You may not see purchasing features if they are not included in your plan or your access level.',
+            'This guide remains available to everyone. Open links appear only when the active organization and your access allow the destination.',
         actions: ['purchase-orders', 'suppliers', 'receiving'],
+        pages: [
+            {
+                id: 'suppliers',
+                title: 'Suppliers',
+                summary:
+                    'Use Suppliers to keep the businesses you buy from organized for the active organization.',
+                whenToUse:
+                    'Create a supplier before you create a Purchase Order for that business.',
+                controls: [
+                    {
+                        label: 'Create supplier',
+                        description:
+                            'Adds a supplier from its own page when you can manage purchasing.',
+                    },
+                    {
+                        label: 'New supplier',
+                        description:
+                            'Adds a supplier without leaving the Suppliers list when this option is available to you.',
+                    },
+                ],
+                fields: [
+                    {
+                        name: 'Name and Code',
+                        description:
+                            'Identify the supplier clearly in lists and Purchase Orders.',
+                    },
+                    {
+                        name: 'Contact name, Email, and Phone',
+                        description:
+                            'Store the business contact details your team needs when ordering or following up.',
+                    },
+                    {
+                        name: 'Payment terms and Lead time (days)',
+                        description:
+                            'Record the supplier terms and expected lead time when your team uses them.',
+                    },
+                    {
+                        name: 'Status',
+                        description:
+                            'Use Active for suppliers you can use in day-to-day purchasing. Keep inactive suppliers for past records without selecting them for new work.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Open the supplier to add the inventory items and purchase units you buy from it.',
+                ],
+            },
+            {
+                id: 'supplier-items-and-prices',
+                title: 'Supplier items and prices',
+                summary:
+                    'A supplier item connects one supplier to an inventory item, the supplier SKU, and the unit in which you buy it.',
+                whenToUse:
+                    'Set up supplier items before adding lines to a Purchase Order for that supplier.',
+                controls: [
+                    {
+                        label: 'Add supplier item',
+                        description:
+                            'Adds an item mapping from the supplier detail page.',
+                    },
+                    {
+                        label: 'Record price',
+                        description:
+                            'Records a new supplier price when price information is available to you.',
+                    },
+                ],
+                fields: [
+                    {
+                        name: 'Inventory item',
+                        description:
+                            'The item your organization receives and uses.',
+                    },
+                    {
+                        name: 'Supplier SKU and Description',
+                        description:
+                            'The supplier-facing item identifier and optional description for clearer ordering.',
+                    },
+                    {
+                        name: 'Purchase unit and Base quantity',
+                        description:
+                            'Describe the buying unit and how much it represents for the linked inventory item.',
+                    },
+                    {
+                        name: 'Current price',
+                        description:
+                            'Shows the supplier-specific price when your access includes cost information.',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'Cost information may be hidden',
+                        description:
+                            'You can still work with supplier items when price values are not shown. Ask an organization administrator if you need cost information for your role.',
+                    },
+                ],
+            },
+            {
+                id: 'purchase-order-basics',
+                title: 'Purchase Order lifecycle',
+                summary:
+                    'A Purchase Order moves from Draft to Approved, then can show Partially received or Received as Goods Receipts are finalized. A cancelled order is closed.',
+                whenToUse:
+                    'Use the status to understand whether the order can still be edited, received, or needs follow-up.',
+                notes: [
+                    {
+                        title: 'Draft',
+                        description:
+                            'A Draft Purchase Order can be edited before approval.',
+                    },
+                    {
+                        title: 'Approved',
+                        description:
+                            'An Approved Purchase Order is ready for Goods Receipts. Its order details are no longer editable.',
+                    },
+                    {
+                        title: 'Partially received and Received',
+                        description:
+                            'Partially received means quantities remain to be received. Received means the ordered quantities are complete.',
+                    },
+                    {
+                        title: 'Cancelled',
+                        description:
+                            'A cancelled Purchase Order is closed and cannot be used for new receiving.',
+                    },
+                ],
+            },
+            {
+                id: 'create-and-edit-a-purchase-order',
+                title: 'Create and edit a Purchase Order',
+                summary:
+                    'Create a Draft Purchase Order to record what you intend to buy before it is approved.',
+                controls: [
+                    {
+                        label: 'Create purchase order',
+                        description:
+                            'Starts a new Draft Purchase Order when you can manage purchasing.',
+                    },
+                    {
+                        label: 'Save draft',
+                        description:
+                            'Saves the supplier, Location, dates, notes, and order lines while the Purchase Order is still a Draft.',
+                    },
+                ],
+                fields: [
+                    {
+                        name: 'Supplier and Location',
+                        description:
+                            'Choose who will supply the order and where the goods are expected to arrive.',
+                    },
+                    {
+                        name: 'Order date and Expected delivery date',
+                        description:
+                            'Record when the order was placed and, when known, the expected arrival date.',
+                    },
+                    {
+                        name: 'Order lines',
+                        description:
+                            'Choose supplier items and enter the ordered quantity for each line.',
+                    },
+                    {
+                        name: 'Notes',
+                        description:
+                            'Add ordering context your team needs to keep with the Purchase Order.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Review the saved Draft Purchase Order, then approve it when it is ready to receive against.',
+                ],
+            },
+            {
+                id: 'approve-or-cancel-a-purchase-order',
+                title: 'Approve or cancel a Purchase Order',
+                summary:
+                    'Approval makes a Draft Purchase Order available for receiving. Cancellation closes an unreceived order.',
+                controls: [
+                    {
+                        label: 'Approve purchase order',
+                        description:
+                            'Confirms the draft is ready for Goods Receipts. Review all lines first because the order can no longer be edited afterward.',
+                    },
+                    {
+                        label: 'Cancel purchase order',
+                        description:
+                            'Closes an order that has not received goods. Confirm the exact order before cancelling.',
+                    },
+                ],
+                troubleshooting: [
+                    {
+                        question: 'Why is approval or cancellation unavailable?',
+                        answer: 'Check the current status. These actions apply to the appropriate Draft or unreceived Purchase Order, and your access must allow the action.',
+                    },
+                    {
+                        question: 'Why can I no longer edit the order?',
+                        answer: 'Only Draft Purchase Orders are editable. Review the status and use receiving for an approved order.',
+                    },
+                ],
+            },
+            {
+                id: 'receiving-overview',
+                title: 'Receiving and Goods Receipts',
+                summary:
+                    'A Goods Receipt records what actually arrived for an Approved or Partially received Purchase Order.',
+                whenToUse:
+                    'Create a receipt as goods arrive, not when they are ordered or expected.',
+                controls: [
+                    {
+                        label: 'Create goods receipt',
+                        description:
+                            'Starts a Draft Goods Receipt from an order that can still receive goods.',
+                    },
+                ],
+                fields: [
+                    {
+                        name: 'Received quantity',
+                        description:
+                            'Enter the quantity you physically checked for each item.',
+                    },
+                    {
+                        name: 'Location',
+                        description:
+                            'Confirm the location where the received inventory belongs.',
+                    },
+                    {
+                        name: 'Non-stock details',
+                        description:
+                            'Record any non-stock receipt details only when the form shows them for the item.',
+                    },
+                ],
+            },
+            {
+                id: 'partial-and-complete-receipts',
+                title: 'Partial and complete receipts',
+                summary:
+                    'You can receive an order over more than one Goods Receipt. A partial receipt leaves the remaining quantity available for a later delivery.',
+                tutorials: [
+                    {
+                        id: 'record-a-partial-receipt',
+                        title: 'Record a partial receipt',
+                        steps: [
+                            'Create a Goods Receipt from the Approved Purchase Order.',
+                            'Enter only the quantity that arrived and save the draft for review.',
+                            'Finalize after checking the goods. The Purchase Order shows Partially received while quantities remain.',
+                            'Create another Goods Receipt when the remaining goods arrive.',
+                        ],
+                    },
+                    {
+                        id: 'record-a-complete-receipt',
+                        title: 'Record a complete receipt',
+                        steps: [
+                            'Create a Goods Receipt for all quantities that physically arrived.',
+                            'Review each receipt line and finalize only after the physical check is complete.',
+                            'The Purchase Order shows Received when its ordered quantities are complete.',
+                        ],
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'Do not fill in missing goods',
+                        description:
+                            'Leave undelivered quantities for a later receipt. This keeps the receipt aligned with what actually arrived.',
+                    },
+                ],
+            },
+            {
+                id: 'finalize-or-cancel-a-goods-receipt',
+                title: 'Finalize or cancel a Goods Receipt',
+                summary:
+                    'Draft Goods Receipts can be checked and updated. Finalized receipts are locked and record the received inventory. Cancel a Draft receipt when it should not be used.',
+                controls: [
+                    {
+                        label: 'Finalize receipt',
+                        description:
+                            'Completes the receipt after quantities and other details have been physically verified.',
+                    },
+                    {
+                        label: 'Cancel receipt',
+                        description:
+                            'Cancels a Draft Goods Receipt that should not be finalized.',
+                    },
+                ],
+                troubleshooting: [
+                    {
+                        question: 'Why can I not change a receipt?',
+                        answer: 'Only Draft Goods Receipts can be changed. Finalized and cancelled receipts stay locked.',
+                    },
+                    {
+                        question: 'Why can I not finalize a receipt?',
+                        answer: 'Check the receipt details, the Purchase Order status, and whether your access allows finalization.',
+                    },
+                ],
+            },
+        ],
     },
     {
         slug: 'recipes',
@@ -1147,7 +1448,7 @@ export const guideModules: GuideModule[] = [
         description:
             'Define recipe ingredients and understand their calculated cost.',
         overview:
-            'Recipes bring item quantities together for production planning and costing. Use the correct inventory items and base-unit conversions so calculated costs remain meaningful.',
+            'Recipes bring item quantities together for production planning and costing. Keep the recipe details, yield, and components accurate so the current cost view is useful.',
         keywords: ['ingredients', 'yield', 'costing'],
         navigationLabels: ['Recipes'],
         tutorials: [
@@ -1155,10 +1456,10 @@ export const guideModules: GuideModule[] = [
                 id: 'build-a-recipe',
                 title: 'Build a recipe',
                 steps: [
-                    'Create the recipe and add the yield information.',
-                    'Add each ingredient with its required quantity and unit.',
-                    'Review the calculated cost and update ingredient data only through the correct master-data workflow.',
-                    'Revisit the recipe after material changes to ingredients or yields.',
+                    'Create the recipe with its Code, Name, Type, and Status.',
+                    'Review the recipe version that defines its Yield and Components.',
+                    'Check each component quantity and unit before using the recipe for planning.',
+                    'Open Cost when it is available to you, choose a Location, and review the current breakdown.',
                 ],
             },
         ],
@@ -1178,12 +1479,168 @@ export const guideModules: GuideModule[] = [
             },
         ],
         troubleshooting: [
-            'If recipes are unavailable, confirm recipe entitlement and recipe-view permission.',
-            'Unexpected costs usually require checking the ingredient, quantity, unit conversion, and current inventory cost.',
+            'If Recipes is not available, it may not be included for the active organization or your access level may not allow it.',
+            'Unexpected costs usually require checking the component, quantity, unit, Location, and current item cost.',
         ],
         accessNote:
-            'You may not see recipes if they are not included in your plan or your access level.',
+            'This guide remains available to everyone. Open links appear only when the active organization and your access allow the destination.',
         actions: ['recipes'],
+        pages: [
+            {
+                id: 'recipes-list',
+                title: 'Recipes list',
+                summary:
+                    'The Recipes list helps you find recipe records and see their Type, Status, and version coverage.',
+                whenToUse:
+                    'Use filters and search to locate a recipe before reviewing its details or cost.',
+                controls: [
+                    {
+                        label: 'Create recipe',
+                        description:
+                            'Creates a recipe record when your access allows recipe management.',
+                    },
+                    {
+                        label: 'Edit recipe',
+                        description:
+                            'Updates the recipe Code, Name, Type, and Status.',
+                    },
+                    {
+                        label: 'Cost',
+                        description:
+                            'Opens the current recipe cost view when cost information is available to you.',
+                    },
+                ],
+                fields: [
+                    {
+                        name: 'Type',
+                        description:
+                            'Classifies the recipe as a Menu item, Prepared item, or Batch.',
+                    },
+                    {
+                        name: 'Status',
+                        description:
+                            'Shows whether the recipe is Active or Inactive.',
+                    },
+                    {
+                        name: 'Versions',
+                        description:
+                            'Shows the latest version number and the number of published and draft versions.',
+                    },
+                ],
+            },
+            {
+                id: 'create-and-edit-recipes',
+                title: 'Create and edit recipes',
+                summary:
+                    'Create the recipe record first, then keep its identifying details accurate as the recipe evolves.',
+                fields: [
+                    {
+                        name: 'Code and Name',
+                        description:
+                            'Give the recipe a clear, consistent identity for your team.',
+                    },
+                    {
+                        name: 'Type',
+                        description:
+                            'Choose Menu item, Prepared item, or Batch to match how your organization uses the recipe.',
+                    },
+                    {
+                        name: 'Status',
+                        description:
+                            'Use Active for recipes in use. Inactive recipes remain available for past reference.',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'Recipe details and formulation are separate',
+                        description:
+                            'The Edit recipe page changes the recipe identity. Yield and Components belong to its recipe versions.',
+                    },
+                ],
+            },
+            {
+                id: 'recipe-components-and-yield',
+                title: 'Recipe components and yield',
+                summary:
+                    'A recipe version defines the Yield and the Components needed to make that yield.',
+                fields: [
+                    {
+                        name: 'Yield',
+                        description:
+                            'The output quantity and unit the recipe version produces.',
+                    },
+                    {
+                        name: 'Components',
+                        description:
+                            'The ingredients or nested recipes required for the yield.',
+                    },
+                    {
+                        name: 'Quantity and unit',
+                        description:
+                            'The required amount and unit for each component. Review both whenever the formulation changes.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Review the version status and, when available to you, use Cost to understand the current result for a Location.',
+                ],
+            },
+            {
+                id: 'recipe-versions',
+                title: 'Recipe versions',
+                summary:
+                    'Versions preserve how a recipe changes over time. The Recipes list shows draft and published version coverage and the latest version number.',
+                notes: [
+                    {
+                        title: 'Draft and published versions',
+                        description:
+                            'Draft versions can still be changed. Published versions are the established formulation used by the current recipe cost view when effective.',
+                    },
+                    {
+                        title: 'Make changes deliberately',
+                        description:
+                            'Review Yield, Components, quantities, and units together before publishing a changed formulation.',
+                    },
+                ],
+            },
+            {
+                id: 'recipe-cost',
+                title: 'Recipe cost',
+                summary:
+                    'Cost shows the current breakdown for the effective published recipe version at a selected Location.',
+                whenToUse:
+                    'Use it to review the current total, component costs, and yield-based result for one Location.',
+                controls: [
+                    {
+                        label: 'Location',
+                        description:
+                            'Choose the Location whose current item costs you want to review.',
+                    },
+                    {
+                        label: 'Cost breakdown',
+                        description:
+                            'Shows the recipe total and its components when a published version and Location are available.',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'Cost access varies by role',
+                        description:
+                            'You may be able to view and work with recipes without seeing Cost. Ask an organization administrator if your role needs cost information.',
+                    },
+                    {
+                        title: 'Current, location-specific view',
+                        description:
+                            'The displayed result reflects the selected Location and current item costs. Choose the Location before comparing costs.',
+                    },
+                ],
+                troubleshooting: [
+                    {
+                        question: 'Why is there no cost result?',
+                        answer: 'Choose a Location and confirm that the recipe has a published version currently in effect.',
+                    },
+                ],
+            },
+        ],
     },
     {
         slug: 'reports',
