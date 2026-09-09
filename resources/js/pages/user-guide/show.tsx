@@ -103,7 +103,7 @@ function DesktopGuideNavigation({
     currentSlug: GuideModuleSlug;
 }) {
     return (
-        <aside className="hidden 2xl:col-span-2 2xl:block 2xl:self-start">
+        <aside className="hidden 2xl:col-span-2 2xl:block 2xl:self-stretch">
             <nav aria-label="Guide navigation" className="sticky top-24">
                 <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                     Guide Nav
@@ -167,7 +167,7 @@ function CompactPageNavigation({ pages }: { pages: GuideModulePage[] }) {
 /** Render a quiet sticky table of contents for wide documentation layouts. */
 function DesktopPageNavigation({ pages }: { pages: GuideModulePage[] }) {
     return (
-        <aside className="hidden 2xl:col-span-2 2xl:block 2xl:self-start">
+        <aside className="hidden 2xl:col-span-2 2xl:block 2xl:self-stretch">
             <nav aria-label="On this page" className="sticky top-24">
                 <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                     On this page
