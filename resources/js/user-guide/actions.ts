@@ -39,6 +39,11 @@ export function resolveGuideAction(
     switch (key) {
         case 'dashboard':
             return { label: 'Open dashboard', href: dashboard().url };
+        case 'create-organization':
+            return {
+                label: 'Create organization',
+                href: OrganizationController.create().url,
+            };
         case 'profile-settings':
             return { label: 'Open profile settings', href: profileEdit().url };
         case 'security-settings':

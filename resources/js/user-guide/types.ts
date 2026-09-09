@@ -27,6 +27,7 @@ export type GuideAccessContext = {
 
 export type GuideActionKey =
     | 'dashboard'
+    | 'create-organization'
     | 'ai-assistant'
     | 'inventory-items'
     | 'stock-counts'

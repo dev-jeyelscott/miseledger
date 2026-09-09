@@ -2093,7 +2093,12 @@ export const guideModules: GuideModule[] = [
         ],
         accessNote:
             'You may not see organization features if your role does not allow them.',
-        actions: ['organization-settings', 'locations', 'members'],
+        actions: [
+            'create-organization',
+            'organization-settings',
+            'locations',
+            'members',
+        ],
         pages: [
             {
                 id: 'create-and-switch-organizations',

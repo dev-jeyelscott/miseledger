@@ -200,6 +200,23 @@ function organizationScopedAccessContext({
     };
 }
 
+test('create-organization guide action is available without an active organization or organization role', () => {
+    const action = resolveGuideAction(
+        'create-organization',
+        organizationScopedAccessContext({
+            activeOrganizationId: null,
+            permissions: [],
+        }),
+    );
+
+    assert.ok(action, 'expected create-organization to resolve an action');
+    assert.equal(action?.label, 'Create organization');
+    assert.ok(
+        action?.href.includes('organizations/create'),
+        `expected create-organization href "${action?.href}" to contain "organizations/create"`,
+    );
+});
+
 const organizationScopedActions: {
     key: GuideActionKey;
     label: string;
