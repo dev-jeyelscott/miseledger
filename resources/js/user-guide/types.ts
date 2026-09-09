@@ -19,7 +19,8 @@ export type GuideAccessContext = {
     activeOrganizationId: number | null;
     aiCanUse: boolean;
     hasFeature: (
-        feature: 'purchasing' | 'recipes' | 'locations.multi',
+        feature:
+            'purchasing' | 'recipes' | 'locations.multi' | 'reports.export',
     ) => boolean;
     hasPermission: (permission: OrganizationPermission) => boolean;
 };
@@ -39,7 +40,12 @@ export type GuideActionKey =
     | 'locations'
     | 'members'
     | 'billing'
-    | 'profile-settings';
+    | 'profile-settings'
+    | 'report-stock-on-hand'
+    | 'report-low-stock'
+    | 'report-stock-movements'
+    | 'report-valuation'
+    | 'report-purchasing-history';
 
 export type GuideField = {
     description: string;

@@ -1,7 +1,12 @@
 import AiAssistantController from '@/actions/App/Http/Controllers/Ai/AiAssistantController';
 import OrganizationBillingController from '@/actions/App/Http/Controllers/Billing/OrganizationBillingController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
+import InventoryValuationReportController from '@/actions/App/Http/Controllers/Inventory/InventoryValuationReportController';
+import LowStockReportController from '@/actions/App/Http/Controllers/Inventory/LowStockReportController';
+import PurchasingHistoryReportController from '@/actions/App/Http/Controllers/Inventory/PurchasingHistoryReportController';
 import StockCountController from '@/actions/App/Http/Controllers/Inventory/StockCountController';
+import StockMovementLedgerReportController from '@/actions/App/Http/Controllers/Inventory/StockMovementLedgerReportController';
+import StockOnHandReportController from '@/actions/App/Http/Controllers/Inventory/StockOnHandReportController';
 import StockTransferController from '@/actions/App/Http/Controllers/Inventory/StockTransferController';
 import WasteController from '@/actions/App/Http/Controllers/Inventory/WasteController';
 import OrganizationController from '@/actions/App/Http/Controllers/OrganizationController';
@@ -138,6 +143,41 @@ export function resolveGuideAction(
                       href: OrganizationBillingController.show(
                           context.activeOrganizationId,
                       ).url,
+                  }
+                : null;
+        case 'report-stock-on-hand':
+            return context.hasPermission('reports.view')
+                ? {
+                      label: 'Open Stock on hand',
+                      href: StockOnHandReportController.index().url,
+                  }
+                : null;
+        case 'report-low-stock':
+            return context.hasPermission('reports.view')
+                ? {
+                      label: 'Open Low stock',
+                      href: LowStockReportController.index().url,
+                  }
+                : null;
+        case 'report-stock-movements':
+            return context.hasPermission('reports.view')
+                ? {
+                      label: 'Open Stock movement ledger',
+                      href: StockMovementLedgerReportController.index().url,
+                  }
+                : null;
+        case 'report-valuation':
+            return context.hasPermission('reports.view')
+                ? {
+                      label: 'Open Inventory valuation',
+                      href: InventoryValuationReportController.index().url,
+                  }
+                : null;
+        case 'report-purchasing-history':
+            return context.hasPermission('reports.view')
+                ? {
+                      label: 'Open Purchasing history',
+                      href: PurchasingHistoryReportController.index().url,
                   }
                 : null;
     }

@@ -107,3 +107,75 @@ test('purchasing and recipe guidance topics remain discoverable by their custome
         );
     }
 });
+
+test('every report title is discoverable by its exact customer-facing name', () => {
+    const expectedTopics = [
+        ['Stock on hand', 'stock-on-hand'],
+        ['Low stock', 'low-stock'],
+        ['Stock movement ledger', 'stock-movement-ledger'],
+        ['Inventory valuation', 'inventory-valuation'],
+        ['Purchasing history', 'purchasing-history'],
+    ] as const;
+
+    for (const [query, anchor] of expectedTopics) {
+        assert.ok(
+            searchGuideTopics(guideModules, query).some(
+                (result) =>
+                    result.module.slug === 'reports' &&
+                    result.anchor === anchor,
+            ),
+            `Expected guide search for "${query}" to find #${anchor}.`,
+        );
+    }
+});
+
+test('report filters and export guidance remain discoverable', () => {
+    const expectedTopics = [
+        ['storage location', 'stock-on-hand'],
+        ['status', 'low-stock'],
+        ['movement type', 'stock-movement-ledger'],
+        ['receipt state', 'purchasing-history'],
+        ['export', 'stock-on-hand'],
+    ] as const;
+
+    for (const [query, anchor] of expectedTopics) {
+        assert.ok(
+            searchGuideTopics(guideModules, query).some(
+                (result) =>
+                    result.module.slug === 'reports' &&
+                    result.anchor === anchor,
+            ),
+            `Expected guide search for "${query}" to find #${anchor}.`,
+        );
+    }
+
+    assert.ok(
+        searchGuideTopics(guideModules, 'no export option').some(
+            (result) =>
+                result.module.slug === 'reports' &&
+                result.anchor === 'low-stock',
+        ),
+        'Expected guide search for "no export option" to find #low-stock.',
+    );
+});
+
+test('AI Assistant question examples and verification guidance remain discoverable', () => {
+    const expectedTopics = [
+        ['how much of', 'asking-useful-questions'],
+        ['stock movements happened', 'asking-useful-questions'],
+        ['purchase orders from', 'asking-useful-questions'],
+        ['currently out of stock', 'asking-useful-questions'],
+        ['verify an ai assistant answer', 'verify-an-answer'],
+    ] as const;
+
+    for (const [query, anchor] of expectedTopics) {
+        assert.ok(
+            searchGuideTopics(guideModules, query).some(
+                (result) =>
+                    result.module.slug === 'ai-assistant' &&
+                    result.anchor === anchor,
+            ),
+            `Expected guide search for "${query}" to find #${anchor}.`,
+        );
+    }
+});

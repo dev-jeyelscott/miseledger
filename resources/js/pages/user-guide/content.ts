@@ -371,8 +371,15 @@ export const guideModules: GuideModule[] = [
         description:
             'Ask context-aware questions about the active organization.',
         overview:
-            'The AI Assistant uses the current organization context. It is available only when your organization plan and individual member access permit it.',
-        keywords: ['ask', 'question', 'organization context'],
+            'The AI Assistant answers questions about your active organization using its current inventory and procurement data. It is available only when your organization plan and individual member access permit it, and its answers are assistance, not authoritative product state.',
+        keywords: [
+            'ask',
+            'question',
+            'organization context',
+            'conversation',
+            'unavailable',
+            'verify',
+        ],
         navigationLabels: ['AI Assistant'],
         tutorials: [
             {
@@ -404,6 +411,104 @@ export const guideModules: GuideModule[] = [
         accessNote:
             'You may not see the AI Assistant if it is not included in your plan or your access level.',
         actions: ['ai-assistant'],
+        pages: [
+            {
+                id: 'opening-the-ai-assistant',
+                title: 'Open the AI Assistant',
+                summary:
+                    'Open AI Assistant from the navigation to start or continue a conversation scoped to your active organization.',
+                whenToUse:
+                    'Use this when you want a quick answer about the active organization instead of building a report from scratch.',
+                controls: [
+                    {
+                        label: 'AI Assistant',
+                        description:
+                            'Opens the assistant when it is included in your plan and your member access allows it.',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'Conversations are per organization',
+                        description:
+                            'A conversation reflects the organization that was active when you asked. Switch organizations first if your question is about a different business.',
+                    },
+                ],
+            },
+            {
+                id: 'asking-useful-questions',
+                title: 'Ask useful inventory and procurement questions',
+                summary:
+                    'The AI Assistant works best with specific, active-organization questions about inventory and procurement, such as current stock, recent movements, or purchasing activity.',
+                whenToUse:
+                    'Use these as a starting point when deciding how to phrase a question.',
+                fields: [
+                    {
+                        name: 'Example: current stock',
+                        description:
+                            '"How much of [item] do we have on hand at [location]?"',
+                    },
+                    {
+                        name: 'Example: recent activity',
+                        description:
+                            '"What stock movements happened for [item] in the last week?"',
+                    },
+                    {
+                        name: 'Example: purchasing status',
+                        description:
+                            '"Which purchase orders from [supplier] are still outstanding?"',
+                    },
+                    {
+                        name: 'Example: low stock',
+                        description:
+                            '"Which items are currently out of stock at [location]?"',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'Cost questions depend on your access',
+                        description:
+                            'Cost and value figures are only available to members with cost visibility. Do not expect cost answers if your role does not include it.',
+                    },
+                ],
+            },
+            {
+                id: 'verifying-ai-answers',
+                title: 'Verify answers before acting on them',
+                summary:
+                    'Treat AI Assistant responses as assistance, not as the authoritative record. Confirm important operational decisions against the relevant MiseLedger page.',
+                whenToUse:
+                    'Use this before making a decision, such as reordering stock or following up with a supplier, based on an assistant response.',
+                tutorials: [
+                    {
+                        id: 'verify-an-answer',
+                        title: 'Verify an AI Assistant answer',
+                        steps: [
+                            'Note the item, location, supplier, or date range the answer refers to.',
+                            'Open the matching report, such as Stock on hand, Stock movement ledger, or Purchasing history.',
+                            'Apply the same filters and compare the result to the assistant response before acting on it.',
+                        ],
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'When information is unavailable',
+                        description:
+                            'If the assistant cannot answer or says information is unavailable, check the relevant report directly or ask an organization administrator. Do not assume the requested activity did not happen.',
+                    },
+                ],
+                troubleshooting: [
+                    {
+                        question:
+                            'The assistant gave an answer that looks wrong. What should I do?',
+                        answer: 'Verify it against the matching report page using the same organization, item, location, and date range before relying on it.',
+                    },
+                    {
+                        question: 'Why does the assistant say it cannot help?',
+                        answer: 'It may be a question outside active-organization inventory and procurement topics, or the underlying data may be unavailable. Try rephrasing with specific items, locations, or dates, or check the relevant report directly.',
+                    },
+                ],
+            },
+        ],
     },
     {
         slug: 'inventory',
@@ -1660,8 +1765,19 @@ export const guideModules: GuideModule[] = [
         description:
             'Inspect stock, movement history, valuation, and purchasing activity.',
         overview:
-            'Reports read from the authoritative stock ledger and its balance projections. Use filters to narrow the organization, location, item, and date context before drawing conclusions.',
-        keywords: ['export', 'filters', 'history', 'valuation'],
+            'Reports are read-only views for viewing and analysis. They do not edit stock. Each report reads from the authoritative stock ledger and its balance projections, so use filters to narrow the organization, location, item, and date context before drawing conclusions.',
+        keywords: [
+            'export',
+            'filters',
+            'history',
+            'valuation',
+            'stock on hand',
+            'low stock',
+            'stock movement ledger',
+            'inventory valuation',
+            'purchasing history',
+            'csv',
+        ],
         navigationLabels: [
             'Stock on hand',
             'Low stock',
@@ -1701,7 +1817,226 @@ export const guideModules: GuideModule[] = [
             'If a report is empty, check the active organization, filters, and whether the selected period contains activity.',
             'Use the ledger report to investigate a balance before attempting a corrective workflow.',
         ],
-        actions: [],
+        accessNote:
+            'This guide remains available to everyone. Open links appear only when your access allows the destination, and cost figures only appear for members with cost visibility.',
+        actions: [
+            'report-stock-on-hand',
+            'report-low-stock',
+            'report-stock-movements',
+            'report-valuation',
+            'report-purchasing-history',
+        ],
+        pages: [
+            {
+                id: 'stock-on-hand',
+                title: 'Stock on hand',
+                summary:
+                    'Stock on hand shows current balance quantities for every item across your locations and storage locations, right now.',
+                whenToUse:
+                    'Use this when you need to know how much of an item you currently have before ordering, transferring, or planning production.',
+                fields: [
+                    {
+                        name: 'Location, Storage location, Category, Item',
+                        description:
+                            'Narrow the report to the part of the business you need. Combine filters to zero in on a single storage location or item.',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'Reading the results',
+                        description:
+                            'Each row shows the item, its SKU, category, quantity on hand, and unit. Average unit cost and inventory value appear only if your access includes cost visibility.',
+                    },
+                    {
+                        title: 'No matching rows',
+                        description:
+                            'An empty table usually means the filters are too narrow or the location has no recorded stock yet. Clear a filter at a time to widen the search.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Export the current view to CSV when your organization plan and access include report exports.',
+                ],
+                troubleshooting: [
+                    {
+                        question: 'Why can I not export this report?',
+                        answer: 'Export is only available when your organization plan includes report exports and your access allows it. Ask an organization administrator if you expect to have it.',
+                    },
+                ],
+            },
+            {
+                id: 'low-stock',
+                title: 'Low stock',
+                summary:
+                    'Low stock lists balances that are at zero or negative quantity for the active organization, so you can spot items that need attention.',
+                whenToUse:
+                    'Use this to find items that are out of stock or show a negative balance, which usually points to a data or process issue worth investigating.',
+                fields: [
+                    {
+                        name: 'Location, Storage location, Category, Item, Status',
+                        description:
+                            'Filter by business context, and use Status to separate items that are exactly out of stock from those showing a negative quantity.',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'No reorder thresholds',
+                        description:
+                            'This report does not use minimum-stock or PAR levels. It only shows items already at zero or below, not items approaching a target level.',
+                    },
+                    {
+                        title: 'No matching rows',
+                        description:
+                            'An empty result is good news here: it means no balances are currently at zero or negative for the selected filters.',
+                    },
+                ],
+                troubleshooting: [
+                    {
+                        question:
+                            'Why is there no export option on this report?',
+                        answer: 'Low stock does not currently offer a CSV export. Use Stock on hand or Stock movement ledger if you need an exportable record.',
+                    },
+                ],
+            },
+            {
+                id: 'stock-movement-ledger',
+                title: 'Stock movement ledger',
+                summary:
+                    'Stock movement ledger lists every recorded stock event for the active organization in the order it happened, so you can trace why a balance changed.',
+                whenToUse:
+                    'Use this to investigate a specific balance, confirm a receipt or waste entry was recorded, or reconstruct what happened to an item over a date range.',
+                fields: [
+                    {
+                        name: 'Location, Storage location, Item',
+                        description:
+                            'Narrow the ledger to the part of the business you are investigating.',
+                    },
+                    {
+                        name: 'Movement type',
+                        description:
+                            'Filter to a specific kind of event, such as a purchase receipt, waste entry, transfer, count adjustment, manual adjustment, or opening balance.',
+                    },
+                    {
+                        name: 'From and To dates',
+                        description:
+                            'Limit the ledger to the period under review. The From date cannot be after the To date.',
+                    },
+                    {
+                        name: 'Source / reference',
+                        description:
+                            'Search by the workflow or record that created the event, such as a receipt or transfer number.',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'Reading the results',
+                        description:
+                            'Each row shows when the event occurred, the location, item, movement type, quantity, and who recorded it. Unit cost and total cost appear only with cost visibility.',
+                    },
+                    {
+                        title: 'No matching rows',
+                        description:
+                            'If the ledger is empty, check that the date range covers the period you expect and that the location or item filters are not too narrow.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Export the filtered ledger to CSV when your organization plan and access include report exports.',
+                ],
+                troubleshooting: [
+                    {
+                        question: 'Why can I not export this report?',
+                        answer: 'Export is only available when your organization plan includes report exports and your access allows it.',
+                    },
+                ],
+            },
+            {
+                id: 'inventory-valuation',
+                title: 'Inventory valuation',
+                summary:
+                    'Inventory valuation shows the current monetary value of stock on hand, grouped by location and category, for members with cost visibility.',
+                whenToUse:
+                    'Use this when you need to understand how much your current stock is worth, broken down by location or category.',
+                fields: [
+                    {
+                        name: 'Location, Category',
+                        description:
+                            'Narrow the valuation to a single location or category of items.',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'Cost visibility required',
+                        description:
+                            'Value totals, category totals, and the grand total only appear for members with cost visibility. Without it, quantities still show but monetary figures do not.',
+                    },
+                    {
+                        title: 'No matching rows',
+                        description:
+                            'An empty result usually means the selected location or category has no recorded stock.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Export the current view to CSV when your organization plan and access include report exports.',
+                ],
+                troubleshooting: [
+                    {
+                        question: 'Why do I not see any cost or value figures?',
+                        answer: 'Cost and value figures require cost visibility access. Ask an organization administrator if you believe your role should include it.',
+                    },
+                ],
+            },
+            {
+                id: 'purchasing-history',
+                title: 'Purchasing history',
+                summary:
+                    'Purchasing history reports purchase orders and their receiving progress, line by line, so you can review procurement activity over time.',
+                whenToUse:
+                    'Use this to review what was ordered from a supplier, how much has been received, and what remains outstanding.',
+                fields: [
+                    {
+                        name: 'Supplier, Location',
+                        description:
+                            'Narrow purchasing activity to a specific supplier or location.',
+                    },
+                    {
+                        name: 'From and To dates',
+                        description:
+                            'Limit results to purchase orders placed within the selected period.',
+                    },
+                    {
+                        name: 'Search',
+                        description:
+                            'Search by purchase order number, supplier, item, or supplier SKU.',
+                    },
+                    {
+                        name: 'Receipt state',
+                        description:
+                            'Filter by whether a line is fully received, partially received, not yet received, or over-received.',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'Reading the results',
+                        description:
+                            'Each row shows one purchase order line, including ordered and received quantities and the receipt state. Unit price and line total appear only with cost visibility.',
+                    },
+                    {
+                        title: 'No matching rows',
+                        description:
+                            'An empty result usually means no purchase orders match the selected supplier, location, date range, or receipt state.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Export the filtered report to CSV when your organization plan and access include report exports.',
+                    'Open a purchase order from Purchasing when you have access, to see full order and receiving detail.',
+                ],
+                troubleshooting: [
+                    {
+                        question: 'Why can I not export this report?',
+                        answer: 'Export is only available when your organization plan includes report exports and your access allows it.',
+                    },
+                ],
+            },
+        ],
     },
     {
         slug: 'organization',
