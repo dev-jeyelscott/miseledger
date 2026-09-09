@@ -1765,7 +1765,7 @@ export const guideModules: GuideModule[] = [
         description:
             'Inspect stock, movement history, valuation, and purchasing activity.',
         overview:
-            'Reports are read-only views for viewing and analysis. They do not edit stock. Each report reads from the authoritative stock ledger and its balance projections, so use filters to narrow the organization, location, item, and date context before drawing conclusions.',
+            'Reports are read-only views for viewing and analysis. They do not edit stock. Stock on hand, Low stock, Stock movement ledger, and Inventory valuation read from the authoritative stock ledger and its balance projections; Purchasing history reads from purchase order and receiving records instead. Use filters to narrow the organization, location, item, and date context before drawing conclusions.',
         keywords: [
             'export',
             'filters',
