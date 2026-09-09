@@ -52,6 +52,34 @@ export type GuideTutorial = {
     title: string;
 };
 
+export type GuideControl = {
+    description: string;
+    label: string;
+};
+
+export type GuideNote = {
+    description: string;
+    title: string;
+};
+
+export type GuideTroubleshootingQuestion = {
+    answer: string;
+    question: string;
+};
+
+export type GuideModulePage = {
+    controls?: GuideControl[];
+    fields?: GuideField[];
+    id: string;
+    notes?: GuideNote[];
+    summary: string;
+    title: string;
+    troubleshooting?: GuideTroubleshootingQuestion[];
+    tutorials?: GuideTutorial[];
+    whatHappensNext?: string[];
+    whenToUse?: string;
+};
+
 export type GuideModule = {
     accessNote?: string;
     actions: GuideActionKey[];
@@ -60,6 +88,7 @@ export type GuideModule = {
     keywords: string[];
     navigationLabels: string[];
     overview: string;
+    pages?: GuideModulePage[];
     slug: GuideModuleSlug;
     title: string;
     troubleshooting: string[];

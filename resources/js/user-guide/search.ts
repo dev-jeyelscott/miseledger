@@ -38,16 +38,48 @@ function searchModule(module: GuideModule, query: string): GuideSearchResult[] {
         ...module.keywords,
         ...module.navigationLabels,
     ]);
-    module.tutorials.forEach((tutorial) =>
-        addResult(tutorial.title, tutorial.id, [
-            tutorial.title,
-            ...tutorial.steps,
-        ]),
-    );
-    module.fields.forEach((field) =>
-        addResult(field.name, null, [field.name, field.description]),
-    );
-    module.troubleshooting.forEach((tip) => addResult(tip, null, [tip]));
+
+    if (!module.pages) {
+        module.tutorials.forEach((tutorial) =>
+            addResult(tutorial.title, tutorial.id, [
+                tutorial.title,
+                ...tutorial.steps,
+            ]),
+        );
+        module.fields.forEach((field) =>
+            addResult(field.name, null, [field.name, field.description]),
+        );
+        module.troubleshooting.forEach((tip) => addResult(tip, null, [tip]));
+    }
+
+    module.pages?.forEach((page) => {
+        addResult(page.title, page.id, [
+            page.title,
+            page.summary,
+            page.whenToUse ?? '',
+            ...(page.controls?.flatMap((control) => [
+                control.label,
+                control.description,
+            ]) ?? []),
+            ...(page.fields?.flatMap((field) => [
+                field.name,
+                field.description,
+            ]) ?? []),
+            ...(page.whatHappensNext ?? []),
+            ...(page.notes?.flatMap((note) => [note.title, note.description]) ??
+                []),
+            ...(page.troubleshooting?.flatMap((item) => [
+                item.question,
+                item.answer,
+            ]) ?? []),
+        ]);
+        page.tutorials?.forEach((tutorial) =>
+            addResult(tutorial.title, tutorial.id, [
+                tutorial.title,
+                ...tutorial.steps,
+            ]),
+        );
+    });
 
     return results;
 }

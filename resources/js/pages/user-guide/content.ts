@@ -11,44 +11,169 @@ export const guideModules: GuideModule[] = [
         slug: 'getting-started',
         title: 'Getting started',
         description:
-            'Set up your organization and establish a reliable inventory workflow.',
+            'Learn the basics before you start working with inventory.',
         overview:
-            'MiseLedger keeps stock history and current balances in sync. Start with your organization, locations, units, and item catalog before recording day-to-day activity.',
-        keywords: ['setup', 'organization', 'location', 'opening balance'],
+            'Use this guide to sign in, choose the right organization, and set up the essentials in a sensible order.',
+        keywords: [
+            'setup',
+            'organization',
+            'location',
+            'opening balance',
+            'sign in',
+        ],
         navigationLabels: [],
-        tutorials: [
+        pages: [
             {
-                id: 'prepare-your-workspace',
-                title: 'Prepare your workspace',
-                steps: [
-                    'Create or switch to the organization you will manage.',
-                    'Confirm the timezone and currency in Organization settings.',
-                    'Add locations, then build units of measure and inventory items.',
-                    'Record opening balances before processing purchases, transfers, counts, or waste.',
+                id: 'welcome-to-miseledger',
+                title: 'Welcome to MiseLedger',
+                summary:
+                    'MiseLedger helps your team keep track of inventory across the organizations you belong to.',
+                whenToUse:
+                    'Read this first when you are new to MiseLedger or joining another organization.',
+                controls: [
+                    {
+                        label: 'User Guide',
+                        description:
+                            'Open it from your account menu whenever you need help with a task.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Sign in to your account.',
+                    'Choose the organization you want to work in.',
+                ],
+            },
+            {
+                id: 'sign-in-and-account-basics',
+                title: 'Sign in and account basics',
+                summary:
+                    'Use your email address and password to sign in. Keep your profile and security details up to date from the account menu.',
+                whenToUse:
+                    'Use this when you are signing in for the first time or need to update your own account details.',
+                controls: [
+                    {
+                        label: 'Profile settings',
+                        description:
+                            'Update your personal account details from the account menu.',
+                    },
+                    {
+                        label: 'Security settings',
+                        description:
+                            'Manage your password and available sign-in security options.',
+                    },
+                ],
+                troubleshooting: [
+                    {
+                        question: 'I cannot sign in. What should I do?',
+                        answer: 'Check your email address and password, then use the password reset option if you need a new password.',
+                    },
+                ],
+            },
+            {
+                id: 'organization-selection',
+                title: 'Choose the right organization',
+                summary:
+                    'The organization switcher shows the business you are currently viewing. Its name appears in the sidebar.',
+                whenToUse:
+                    'Check this before reading the dashboard, adding records, or reviewing reports.',
+                controls: [
+                    {
+                        label: 'Switch organization',
+                        description:
+                            'Choose another organization that you belong to when you need to work with its information.',
+                    },
+                ],
+                whatHappensNext: [
+                    'The Dashboard and available menu items update for the organization you selected.',
+                    'Your access can be different in each organization.',
+                ],
+                troubleshooting: [
+                    {
+                        question: 'Why can I not find an organization?',
+                        answer: 'Ask an organization owner to invite you, or check that you signed in with the account that was invited.',
+                    },
+                ],
+            },
+            {
+                id: 'plans-and-access',
+                title: 'Plans and access',
+                summary:
+                    'Your organization plan and your access level can affect which features and actions you see.',
+                whenToUse:
+                    'Read this when a feature or action is not available to you.',
+                notes: [
+                    {
+                        title: 'Good to know',
+                        description:
+                            'You can still read the User Guide even when a feature is not available in your current organization.',
+                    },
+                ],
+                troubleshooting: [
+                    {
+                        question: 'Why is an action missing or unavailable?',
+                        answer: 'Make sure you selected the right organization. If it is still unavailable, ask an organization owner about your access level or the organization plan.',
+                    },
+                ],
+            },
+            {
+                id: 'recommended-setup-order',
+                title: 'Set up your workspace',
+                summary:
+                    'Set up the information your team needs before recording day-to-day inventory activity.',
+                whenToUse:
+                    'Use this order when you are setting up a new organization.',
+                tutorials: [
+                    {
+                        id: 'prepare-your-workspace',
+                        title: 'Prepare your workspace',
+                        steps: [
+                            'Open Organization settings and confirm the timezone and currency.',
+                            'Add Locations where your team stores or uses stock.',
+                            'Add Units of measure, then create your inventory items.',
+                            'Record Opening balances before processing purchases, transfers, counts, or waste.',
+                        ],
+                    },
+                ],
+                fields: [
+                    {
+                        name: 'Organization',
+                        description:
+                            'The workspace for one business and its team.',
+                    },
+                    {
+                        name: 'Location',
+                        description:
+                            'A place where inventory is stored or used.',
+                    },
+                    {
+                        name: 'Base unit',
+                        description:
+                            'The main unit used for an inventory item, such as piece, bottle, or kilogram.',
+                    },
+                ],
+                whatHappensNext: [
+                    'You can begin recording purchases, stock counts, transfers, and waste when your setup is ready.',
+                ],
+            },
+            {
+                id: 'find-help-later',
+                title: 'Find help later',
+                summary:
+                    'The User Guide is always available from your account menu after you sign in.',
+                controls: [
+                    {
+                        label: 'User Guide',
+                        description:
+                            'Search for a topic or open a guide section from the guide home page.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Choose Dashboard to learn how to read your organization overview.',
                 ],
             },
         ],
-        fields: [
-            {
-                name: 'Organization',
-                description:
-                    'The business context that owns members, stock, and billing.',
-            },
-            {
-                name: 'Location',
-                description:
-                    'A physical site where inventory is stored or used.',
-            },
-            {
-                name: 'Base unit',
-                description:
-                    'The unit used for authoritative stock quantities and costing.',
-            },
-        ],
-        troubleshooting: [
-            'If a feature is not visible, confirm you selected the right organization and have the required permission.',
-            'Do not use opening balances to correct later mistakes. Use the appropriate stock adjustment, count, transfer, or waste workflow instead.',
-        ],
+        tutorials: [],
+        fields: [],
+        troubleshooting: [],
         actions: ['dashboard'],
     },
     {
@@ -57,36 +182,187 @@ export const guideModules: GuideModule[] = [
         description:
             'Review the operational picture for your active organization.',
         overview:
-            'The dashboard is the starting point for organization-aware work. Its summaries are based on the active organization, so use the organization switcher before interpreting the data.',
+            'Dashboard gives you a quick view of the selected organization. Check the organization name before using any information on the page.',
         keywords: ['overview', 'active organization', 'summary'],
         navigationLabels: ['Dashboard'],
-        tutorials: [
+        pages: [
             {
-                id: 'review-your-dashboard',
-                title: 'Review your dashboard',
-                steps: [
-                    'Use the organization switcher to select the organization you want to review.',
-                    'Review the available operational summaries and follow linked workflows for details.',
-                    'Return here after stock activity to orient yourself before the next task.',
+                id: 'dashboard-header-and-actions',
+                title: 'Dashboard header and actions',
+                summary:
+                    'The header shows the selected organization, your role, timezone, and when Dashboard was last updated. It can also show actions such as Receive stock and Create purchase order.',
+                whenToUse:
+                    'Use the header to confirm your context and refresh the overview before you start work.',
+                controls: [
+                    {
+                        label: 'Refresh',
+                        description:
+                            'Update the Dashboard information without leaving the page.',
+                    },
+                    {
+                        label: 'Receive stock',
+                        description:
+                            'Open the receiving workflow when this action is available to you.',
+                    },
+                    {
+                        label: 'Create purchase order',
+                        description:
+                            'Start a new purchase order when this action is available to you.',
+                    },
+                ],
+            },
+            {
+                id: 'dashboard-at-a-glance',
+                title: 'Dashboard at a glance',
+                summary:
+                    'Dashboard is your starting point for a quick view of the work that needs attention in the selected organization.',
+                whenToUse:
+                    'Open Dashboard when you sign in, change organizations, or want to decide what to work on next.',
+                whatHappensNext: [
+                    'Use a panel or link to open the related list, report, or task.',
+                ],
+            },
+            {
+                id: 'active-organization',
+                title: 'Active organization',
+                summary:
+                    'The organization name near the top of Dashboard tells you which organization the information belongs to.',
+                whenToUse:
+                    'Check it before acting on any number, alert, or task shown on Dashboard.',
+                controls: [
+                    {
+                        label: 'Switch organization',
+                        description:
+                            'Choose another organization from the sidebar when you need to review its Dashboard.',
+                    },
+                    {
+                        label: 'Organization settings',
+                        description:
+                            'Open the organization details when you need to review its timezone, currency, or status.',
+                    },
+                ],
+                troubleshooting: [
+                    {
+                        question:
+                            'The Dashboard shows the wrong business. What should I do?',
+                        answer: 'Use Switch organization in the sidebar, then check the organization name again before continuing.',
+                    },
+                ],
+            },
+            {
+                id: 'summary-cards',
+                title: 'Summary cards',
+                summary:
+                    'The cards can show Inventory value, Low-stock items, Open purchase orders, Pending receiving, and Open stock counts when they are available to you.',
+                whenToUse:
+                    'Use the cards to spot areas that may need attention without opening every section.',
+                controls: [
+                    {
+                        label: 'Inventory value',
+                        description:
+                            'Shows the current value of the inventory you can review.',
+                    },
+                    {
+                        label: 'Low-stock items',
+                        description:
+                            'Shows how many items are at or below their low-stock level.',
+                    },
+                    {
+                        label: 'Open purchase orders',
+                        description:
+                            'Shows purchase orders that are still open.',
+                    },
+                    {
+                        label: 'Pending receiving',
+                        description:
+                            'Shows receipts that still need to be completed.',
+                    },
+                    {
+                        label: 'Open stock counts',
+                        description:
+                            'Shows stock counts that are still in progress.',
+                    },
+                ],
+            },
+            {
+                id: 'alerts-and-pending-work',
+                title: 'Alerts and pending work',
+                summary:
+                    'Low-stock alerts help you notice items that need attention. Pending work lists purchase orders, receipts, and stock counts that are waiting for the next step.',
+                whenToUse:
+                    'Review these sections at the start of a shift or before planning stock work.',
+                controls: [
+                    {
+                        label: 'Low-stock alerts',
+                        description:
+                            'Open the low-stock report to review the affected items.',
+                    },
+                    {
+                        label: 'Pending work',
+                        description:
+                            'Open a listed task to continue the related workflow.',
+                    },
+                    {
+                        label: 'Quick actions',
+                        description:
+                            'Start a task such as New purchase order, Finalize receipt, Start stock count, or Record waste when it is available to you.',
+                    },
+                ],
+                whatHappensNext: [
+                    'Open the linked task or report to review the details before making a change.',
+                ],
+            },
+            {
+                id: 'recent-inventory-activity',
+                title: 'Recent inventory activity',
+                summary:
+                    'This section lists recent inventory activity so you can see what changed most recently.',
+                whenToUse:
+                    'Use it when you want a quick check after inventory work is recorded.',
+                controls: [
+                    {
+                        label: 'View ledger',
+                        description:
+                            'Open the full history when you need more detail about recent activity.',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'No activity yet',
+                        description:
+                            'This section stays empty until inventory activity has been recorded for the organization.',
+                    },
+                ],
+            },
+            {
+                id: 'organization-summary',
+                title: 'Organization summary',
+                summary:
+                    'This section shows the number of Locations and Members, your role, the organization currency and timezone, and available subscription details.',
+                whenToUse:
+                    'Use it when you need a quick reminder of the organization setup and your access.',
+                fields: [
+                    {
+                        name: 'Locations',
+                        description:
+                            'The number of places set up for this organization.',
+                    },
+                    {
+                        name: 'Members',
+                        description:
+                            'The number of people who belong to this organization.',
+                    },
+                    {
+                        name: 'Subscription',
+                        description:
+                            'The current plan and access status when this information is available.',
+                    },
                 ],
             },
         ],
-        fields: [
-            {
-                name: 'Active organization',
-                description:
-                    'The organization whose data is currently displayed.',
-            },
-            {
-                name: 'Operational summary',
-                description:
-                    'A current view of the data available to your role.',
-            },
-        ],
-        troubleshooting: [
-            'If information looks unexpected, first verify the active organization.',
-            'Dashboard visibility follows your organization membership and permissions.',
-        ],
+        tutorials: [],
+        fields: [],
+        troubleshooting: [],
         actions: ['dashboard'],
     },
     {

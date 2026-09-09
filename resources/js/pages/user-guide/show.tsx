@@ -12,7 +12,11 @@ import {
 import { index, show } from '@/routes/user-guide';
 import type { OrganizationContext } from '@/types';
 import { resolveGuideAction } from '@/user-guide/actions';
-import type { GuideAccessContext, GuideModuleSlug } from '@/user-guide/types';
+import type {
+    GuideAccessContext,
+    GuideModulePage,
+    GuideModuleSlug,
+} from '@/user-guide/types';
 import { guideModulesBySlug } from './content';
 
 type Props = {
@@ -91,6 +95,124 @@ function GuideTutorial({
     );
 }
 
+function GuidePage({ page }: { page: GuideModulePage }) {
+    return (
+        <article
+            id={page.id}
+            className="scroll-mt-20 rounded-xl border border-border bg-card p-5 shadow-sm"
+        >
+            <h2 className="text-lg font-semibold tracking-tight">
+                {page.title}
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+                {page.summary}
+            </p>
+
+            {page.whenToUse ? (
+                <section className="mt-5">
+                    <h3 className="text-sm font-semibold">When to use it</h3>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        {page.whenToUse}
+                    </p>
+                </section>
+            ) : null}
+
+            {page.controls && page.controls.length > 0 ? (
+                <section className="mt-5">
+                    <h3 className="text-sm font-semibold">
+                        Important controls
+                    </h3>
+                    <dl className="mt-3 space-y-3">
+                        {page.controls.map((control) => (
+                            <div key={control.label}>
+                                <dt className="text-sm font-medium">
+                                    {control.label}
+                                </dt>
+                                <dd className="mt-1 text-sm leading-6 text-muted-foreground">
+                                    {control.description}
+                                </dd>
+                            </div>
+                        ))}
+                    </dl>
+                </section>
+            ) : null}
+
+            {page.fields && page.fields.length > 0 ? (
+                <section className="mt-5">
+                    <h3 className="text-sm font-semibold">Important fields</h3>
+                    <dl className="mt-3 space-y-3">
+                        {page.fields.map((field) => (
+                            <div key={field.name}>
+                                <dt className="text-sm font-medium">
+                                    {field.name}
+                                </dt>
+                                <dd className="mt-1 text-sm leading-6 text-muted-foreground">
+                                    {field.description}
+                                </dd>
+                            </div>
+                        ))}
+                    </dl>
+                </section>
+            ) : null}
+
+            {page.tutorials && page.tutorials.length > 0 ? (
+                <section className="mt-5">
+                    <h3 className="text-sm font-semibold">Tutorials</h3>
+                    <div className="mt-3 divide-y divide-border">
+                        {page.tutorials.map((tutorial) => (
+                            <GuideTutorial key={tutorial.id} {...tutorial} />
+                        ))}
+                    </div>
+                </section>
+            ) : null}
+
+            {page.whatHappensNext && page.whatHappensNext.length > 0 ? (
+                <section className="mt-5 rounded-lg bg-muted/50 p-4">
+                    <h3 className="text-sm font-semibold">What happens next</h3>
+                    <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-muted-foreground">
+                        {page.whatHappensNext.map((outcome) => (
+                            <li key={outcome}>{outcome}</li>
+                        ))}
+                    </ul>
+                </section>
+            ) : null}
+
+            {page.notes && page.notes.length > 0 ? (
+                <section className="mt-5 space-y-3">
+                    {page.notes.map((note) => (
+                        <Alert key={note.title}>
+                            <AlertDescription>
+                                <span className="font-medium">
+                                    {note.title}:
+                                </span>{' '}
+                                {note.description}
+                            </AlertDescription>
+                        </Alert>
+                    ))}
+                </section>
+            ) : null}
+
+            {page.troubleshooting && page.troubleshooting.length > 0 ? (
+                <section className="mt-5">
+                    <h3 className="text-sm font-semibold">Troubleshooting</h3>
+                    <dl className="mt-3 space-y-4">
+                        {page.troubleshooting.map((item) => (
+                            <div key={item.question}>
+                                <dt className="text-sm font-medium">
+                                    {item.question}
+                                </dt>
+                                <dd className="mt-1 text-sm leading-6 text-muted-foreground">
+                                    {item.answer}
+                                </dd>
+                            </div>
+                        ))}
+                    </dl>
+                </section>
+            ) : null}
+        </article>
+    );
+}
+
 export default function UserGuideShow({ module }: Props) {
     const guide = guideModulesBySlug[module as GuideModuleSlug];
     const { organizationContext } = usePage<{
@@ -165,44 +287,83 @@ export default function UserGuideShow({ module }: Props) {
                     </section>
                 ) : null}
 
-                <div className="grid gap-6 lg:grid-cols-2">
-                    <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-                        <h2 className="text-sm font-semibold">Tutorials</h2>
-                        <div className="mt-3 divide-y divide-border">
-                            {guide.tutorials.map((tutorial) => (
-                                <GuideTutorial
-                                    key={tutorial.id}
-                                    {...tutorial}
-                                />
+                {guide.pages && guide.pages.length > 0 ? (
+                    <>
+                        <nav
+                            aria-label={`${guide.title} topics`}
+                            className="rounded-xl border border-border bg-card p-5 shadow-sm"
+                        >
+                            <h2 className="text-sm font-semibold">
+                                On this page
+                            </h2>
+                            <ol className="mt-3 grid gap-2 sm:grid-cols-2">
+                                {guide.pages.map((page) => (
+                                    <li key={page.id}>
+                                        <a
+                                            href={`#${page.id}`}
+                                            className="block rounded-md px-2 py-1 text-sm text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                        >
+                                            {page.title}
+                                        </a>
+                                    </li>
+                                ))}
+                            </ol>
+                        </nav>
+
+                        <div className="space-y-6">
+                            {guide.pages.map((page) => (
+                                <GuidePage key={page.id} page={page} />
                             ))}
                         </div>
-                    </section>
-
-                    <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-                        <h2 className="text-sm font-semibold">Key fields</h2>
-                        <dl className="mt-4 space-y-4">
-                            {guide.fields.map((field) => (
-                                <div key={field.name}>
-                                    <dt className="text-sm font-medium">
-                                        {field.name}
-                                    </dt>
-                                    <dd className="mt-1 text-sm leading-6 text-muted-foreground">
-                                        {field.description}
-                                    </dd>
+                    </>
+                ) : (
+                    <>
+                        <div className="grid gap-6 lg:grid-cols-2">
+                            <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                                <h2 className="text-sm font-semibold">
+                                    Tutorials
+                                </h2>
+                                <div className="mt-3 divide-y divide-border">
+                                    {guide.tutorials.map((tutorial) => (
+                                        <GuideTutorial
+                                            key={tutorial.id}
+                                            {...tutorial}
+                                        />
+                                    ))}
                                 </div>
-                            ))}
-                        </dl>
-                    </section>
-                </div>
+                            </section>
 
-                <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-                    <h2 className="text-sm font-semibold">Troubleshooting</h2>
-                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-muted-foreground">
-                        {guide.troubleshooting.map((tip) => (
-                            <li key={tip}>{tip}</li>
-                        ))}
-                    </ul>
-                </section>
+                            <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                                <h2 className="text-sm font-semibold">
+                                    Key fields
+                                </h2>
+                                <dl className="mt-4 space-y-4">
+                                    {guide.fields.map((field) => (
+                                        <div key={field.name}>
+                                            <dt className="text-sm font-medium">
+                                                {field.name}
+                                            </dt>
+                                            <dd className="mt-1 text-sm leading-6 text-muted-foreground">
+                                                {field.description}
+                                            </dd>
+                                        </div>
+                                    ))}
+                                </dl>
+                            </section>
+                        </div>
+
+                        <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                            <h2 className="text-sm font-semibold">
+                                Troubleshooting
+                            </h2>
+                            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-muted-foreground">
+                                {guide.troubleshooting.map((tip) => (
+                                    <li key={tip}>{tip}</li>
+                                ))}
+                            </ul>
+                        </section>
+                    </>
+                )}
             </div>
         </>
     );
