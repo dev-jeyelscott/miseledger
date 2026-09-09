@@ -2571,7 +2571,7 @@ export const guideModules: GuideModule[] = [
             },
         ],
         troubleshooting: [
-            'If you lose access to two-factor authentication, use a saved recovery code, or contact an organization owner or manager for help.',
+            'If you lose access to two-factor authentication, use one of your saved recovery codes to sign in. There is no way to sign in without a recovery code or your authenticator app, so keep your recovery codes stored somewhere safe.',
             'Use Organization settings, not personal Settings, when changing shared business information such as timezone or currency.',
         ],
         actions: [
@@ -2722,7 +2722,7 @@ export const guideModules: GuideModule[] = [
                     {
                         question:
                             'I lost access to my authenticator app. What should I do?',
-                        answer: 'Use one of your saved recovery codes to sign in, then set up two-factor authentication again. If you have no recovery codes, contact an organization owner or manager for help.',
+                        answer: 'Use one of your saved recovery codes to sign in, then set up two-factor authentication again. There is no other way to sign back in if you have no recovery codes, so save them somewhere safe as soon as you enable two-factor authentication.',
                     },
                 ],
             },
