@@ -93,10 +93,7 @@ function buildExportUrl(filters: Props['filters']): string {
     }
 
     if (filters.storageLocationId !== null) {
-        params.set(
-            'storage_location_id',
-            filters.storageLocationId.toString(),
-        );
+        params.set('storage_location_id', filters.storageLocationId.toString());
     }
 
     if (filters.inventoryCategoryId !== null) {
