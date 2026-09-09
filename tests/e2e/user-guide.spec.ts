@@ -126,6 +126,44 @@ test('guide search reaches page-level topics through the local navigation', asyn
     ).toBeVisible();
 });
 
+test('stock workflow tutorial anchors open their collapsible instructions', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    const targets = [
+        {
+            url: '/user-guide/stock-counts#create-a-stock-count',
+            text: 'Select Create stock count from the list.',
+        },
+        {
+            url: '/user-guide/stock-counts#finalize-a-count',
+            text: 'Select Finalize count and confirm the finalization dialog.',
+        },
+        {
+            url: '/user-guide/waste#record-waste',
+            text: 'Select Review and record waste, verify the confirmation details, then confirm the record.',
+        },
+        {
+            url: '/user-guide/stock-transfers#ship-a-transfer',
+            text: 'Select the shipment action and confirm shipment.',
+        },
+        {
+            url: '/user-guide/stock-transfers#receive-a-transfer',
+            text: 'Select Review receipt, verify the destination and quantities, then confirm receipt.',
+        },
+    ];
+
+    for (const target of targets) {
+        await page.goto(target.url);
+
+        const tutorial = page.locator(new URL(target.url, 'http://test').hash);
+        await expect(tutorial).toBeVisible();
+        await expect(tutorial).toHaveAttribute('aria-expanded', 'true');
+        await expect(page.getByText(target.text)).toBeVisible();
+    }
+});
+
 test('guide hides unavailable Open links for limited access', async ({
     page,
 }) => {
