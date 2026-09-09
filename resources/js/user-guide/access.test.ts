@@ -39,9 +39,7 @@ test('purchasing guide actions fail closed without an active organization, featu
         false,
     );
     assert.equal(
-        canOpenPurchasingGuideAction(
-            guideAccessContext({ purchasing: false }),
-        ),
+        canOpenPurchasingGuideAction(guideAccessContext({ purchasing: false })),
         false,
     );
     assert.equal(

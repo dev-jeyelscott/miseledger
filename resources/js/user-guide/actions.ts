@@ -12,11 +12,11 @@ import PurchaseOrderController from '@/actions/App/Http/Controllers/Purchasing/P
 import RecipeController from '@/actions/App/Http/Controllers/Recipes/RecipeController';
 import SupplierController from '@/actions/App/Http/Controllers/Suppliers/SupplierController';
 import { dashboard } from '@/routes';
+import { edit as profileEdit } from '@/routes/profile';
 import {
     canOpenPurchasingGuideAction,
     canOpenRecipesGuideAction,
 } from './access';
-import { edit as profileEdit } from '@/routes/profile';
 import type { GuideAccessContext, GuideActionKey } from './types';
 
 type AvailableGuideAction = {

@@ -52,10 +52,7 @@ const popularTaskIcons = {
     'Perform Stock Count': ClipboardCheck,
     'Record Waste': Trash2,
     'Transfer Stock': ArrowLeftRight,
-} satisfies Record<
-    (typeof popularGuideTasks)[number]['label'],
-    LucideIcon
->;
+} satisfies Record<(typeof popularGuideTasks)[number]['label'], LucideIcon>;
 
 /** Render the search-first User Guide landing page while preserving existing guide search and navigation semantics. */
 export default function UserGuideIndex() {
@@ -133,8 +130,8 @@ export default function UserGuideIndex() {
 
                         <p className="mt-3 text-sm leading-6 text-muted-foreground">
                             Searches modules, tutorials, fields, and
-                            troubleshooting across the full guide. Some
-                            features depend on your plan or access level.
+                            troubleshooting across the full guide. Some features
+                            depend on your plan or access level.
                         </p>
                     </div>
                 </section>

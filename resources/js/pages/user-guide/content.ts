@@ -1337,7 +1337,8 @@ export const guideModules: GuideModule[] = [
                 ],
                 troubleshooting: [
                     {
-                        question: 'Why is approval or cancellation unavailable?',
+                        question:
+                            'Why is approval or cancellation unavailable?',
                         answer: 'Check the current status. These actions apply to the appropriate Draft or unreceived Purchase Order, and your access must allow the action.',
                     },
                     {
