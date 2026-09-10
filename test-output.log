@@ -1,0 +1,404 @@
+
+> test
+> node --test resources/js/**/*.test.ts
+
+TAP version 13
+# Subtest: a past_due organization receives a persistent high-priority warning that retains write-access messaging
+ok 1 - a past_due organization receives a persistent high-priority warning that retains write-access messaging
+  ---
+  duration_ms: 1.140203
+  type: 'test'
+  ...
+# Subtest: an unpaid organization receives a persistent explanation that mutations are unavailable
+ok 2 - an unpaid organization receives a persistent explanation that mutations are unavailable
+  ---
+  duration_ms: 0.177744
+  type: 'test'
+  ...
+# Subtest: a read-only organization receives a persistent explanation that mutations are unavailable
+ok 3 - a read-only organization receives a persistent explanation that mutations are unavailable
+  ---
+  duration_ms: 0.173836
+  type: 'test'
+  ...
+# Subtest: a scheduled cancellation surfaces the ends-at date while remaining writable
+ok 4 - a scheduled cancellation surfaces the ends-at date while remaining writable
+  ---
+  duration_ms: 16.30754
+  type: 'test'
+  ...
+# Subtest: a trial ending soon surfaces the trial-ends-at date
+ok 5 - a trial ending soon surfaces the trial-ends-at date
+  ---
+  duration_ms: 0.485372
+  type: 'test'
+  ...
+# Subtest: a subscription with no notable state produces no notice
+ok 6 - a subscription with no notable state produces no notice
+  ---
+  duration_ms: 0.149902
+  type: 'test'
+  ...
+# Subtest: resolveCallToAction targets only the active organization, never another organization
+ok 7 - resolveCallToAction targets only the active organization, never another organization
+  ---
+  duration_ms: 1.021029
+  type: 'test'
+  ...
+# Subtest: a billing-authorized member receives a direct Billing call to action
+ok 8 - a billing-authorized member receives a direct Billing call to action
+  ---
+  duration_ms: 0.171512
+  type: 'test'
+  ...
+# Subtest: a non-billing role receives the non-sensitive owner-contact call to action
+ok 9 - a non-billing role receives the non-sensitive owner-contact call to action
+  ---
+  duration_ms: 0.425099
+  type: 'test'
+  ...
+# Subtest: a billing-authorized member for another organization does not receive a Billing call to action for the active organization
+ok 10 - a billing-authorized member for another organization does not receive a Billing call to action for the active organization
+  ---
+  duration_ms: 0.496333
+  type: 'test'
+  ...
+# Subtest: all entries have unique IDs
+ok 11 - all entries have unique IDs
+  ---
+  duration_ms: 1.190427
+  type: 'test'
+  ...
+# Subtest: all entries have valid ISO dates
+ok 12 - all entries have valid ISO dates
+  ---
+  duration_ms: 0.690087
+  type: 'test'
+  ...
+# Subtest: all entries have valid types
+ok 13 - all entries have valid types
+  ---
+  duration_ms: 0.179378
+  type: 'test'
+  ...
+# Subtest: all entries have title and summary
+ok 14 - all entries have title and summary
+  ---
+  duration_ms: 0.161012
+  type: 'test'
+  ...
+# Subtest: entries are sorted newest first
+ok 15 - entries are sorted newest first
+  ---
+  duration_ms: 0.269457
+  type: 'test'
+  ...
+# Subtest: related guide slugs are optional
+ok 16 - related guide slugs are optional
+  ---
+  duration_ms: 0.17575
+  type: 'test'
+  ...
+# Subtest: all related guide slugs reference valid guide modules
+ok 17 - all related guide slugs reference valid guide modules
+  ---
+  duration_ms: 0.286839
+  type: 'test'
+  ...
+# Subtest: purchasing guide actions fail closed without an active organization, feature, or view access
+ok 18 - purchasing guide actions fail closed without an active organization, feature, or view access
+  ---
+  duration_ms: 1.50051
+  type: 'test'
+  ...
+# Subtest: recipe guide actions fail closed without an active organization, feature, or view access
+ok 19 - recipe guide actions fail closed without an active organization, feature, or view access
+  ---
+  duration_ms: 0.185218
+  type: 'test'
+  ...
+# Subtest: report guide actions require reports.view and fail closed without an active organization or membership
+ok 20 - report guide actions require reports.view and fail closed without an active organization or membership
+  ---
+  duration_ms: 0.178635
+  type: 'test'
+  ...
+# Subtest: report-stock-on-hand guide action resolves its label and destination when reports.view is granted
+ok 21 - report-stock-on-hand guide action resolves its label and destination when reports.view is granted
+  ---
+  duration_ms: 0.471256
+  type: 'test'
+  ...
+# Subtest: report-stock-on-hand guide action fails closed without reports.view
+ok 22 - report-stock-on-hand guide action fails closed without reports.view
+  ---
+  duration_ms: 0.121939
+  type: 'test'
+  ...
+# Subtest: report-stock-on-hand guide action fails closed without an active organization
+ok 23 - report-stock-on-hand guide action fails closed without an active organization
+  ---
+  duration_ms: 0.108664
+  type: 'test'
+  ...
+# Subtest: report-low-stock guide action resolves its label and destination when reports.view is granted
+ok 24 - report-low-stock guide action resolves its label and destination when reports.view is granted
+  ---
+  duration_ms: 0.192853
+  type: 'test'
+  ...
+# Subtest: report-low-stock guide action fails closed without reports.view
+ok 25 - report-low-stock guide action fails closed without reports.view
+  ---
+  duration_ms: 0.089338
+  type: 'test'
+  ...
+# Subtest: report-low-stock guide action fails closed without an active organization
+ok 26 - report-low-stock guide action fails closed without an active organization
+  ---
+  duration_ms: 0.250851
+  type: 'test'
+  ...
+# Subtest: report-stock-movements guide action resolves its label and destination when reports.view is granted
+ok 27 - report-stock-movements guide action resolves its label and destination when reports.view is granted
+  ---
+  duration_ms: 0.419759
+  type: 'test'
+  ...
+# Subtest: report-stock-movements guide action fails closed without reports.view
+ok 28 - report-stock-movements guide action fails closed without reports.view
+  ---
+  duration_ms: 0.091742
+  type: 'test'
+  ...
+# Subtest: report-stock-movements guide action fails closed without an active organization
+ok 29 - report-stock-movements guide action fails closed without an active organization
+  ---
+  duration_ms: 0.080882
+  type: 'test'
+  ...
+# Subtest: report-valuation guide action resolves its label and destination when reports.view is granted
+ok 30 - report-valuation guide action resolves its label and destination when reports.view is granted
+  ---
+  duration_ms: 0.172043
+  type: 'test'
+  ...
+# Subtest: report-valuation guide action fails closed without reports.view
+ok 31 - report-valuation guide action fails closed without reports.view
+  ---
+  duration_ms: 0.067367
+  type: 'test'
+  ...
+# Subtest: report-valuation guide action fails closed without an active organization
+ok 32 - report-valuation guide action fails closed without an active organization
+  ---
+  duration_ms: 0.057809
+  type: 'test'
+  ...
+# Subtest: report-purchasing-history guide action resolves its label and destination when reports.view is granted
+ok 33 - report-purchasing-history guide action resolves its label and destination when reports.view is granted
+  ---
+  duration_ms: 0.108353
+  type: 'test'
+  ...
+# Subtest: report-purchasing-history guide action fails closed without reports.view
+ok 34 - report-purchasing-history guide action fails closed without reports.view
+  ---
+  duration_ms: 0.07994
+  type: 'test'
+  ...
+# Subtest: report-purchasing-history guide action fails closed without an active organization
+ok 35 - report-purchasing-history guide action fails closed without an active organization
+  ---
+  duration_ms: 0.071695
+  type: 'test'
+  ...
+# Subtest: create-organization guide action is available without an active organization or organization role
+ok 36 - create-organization guide action is available without an active organization or organization role
+  ---
+  duration_ms: 0.171803
+  type: 'test'
+  ...
+# Subtest: organization-settings guide action resolves its label and destination when organization.manage is granted
+ok 37 - organization-settings guide action resolves its label and destination when organization.manage is granted
+  ---
+  duration_ms: 0.327235
+  type: 'test'
+  ...
+# Subtest: organization-settings guide action fails closed without organization.manage
+ok 38 - organization-settings guide action fails closed without organization.manage
+  ---
+  duration_ms: 0.141025
+  type: 'test'
+  ...
+# Subtest: organization-settings guide action fails closed without an active organization
+ok 39 - organization-settings guide action fails closed without an active organization
+  ---
+  duration_ms: 0.124043
+  type: 'test'
+  ...
+# Subtest: locations guide action resolves its label and destination when locations.manage is granted
+ok 40 - locations guide action resolves its label and destination when locations.manage is granted
+  ---
+  duration_ms: 0.22348
+  type: 'test'
+  ...
+# Subtest: locations guide action fails closed without locations.manage
+ok 41 - locations guide action fails closed without locations.manage
+  ---
+  duration_ms: 0.657506
+  type: 'test'
+  ...
+# Subtest: locations guide action fails closed without an active organization
+ok 42 - locations guide action fails closed without an active organization
+  ---
+  duration_ms: 0.05881
+  type: 'test'
+  ...
+# Subtest: members guide action resolves its label and destination when users.manage is granted
+ok 43 - members guide action resolves its label and destination when users.manage is granted
+  ---
+  duration_ms: 0.142458
+  type: 'test'
+  ...
+# Subtest: members guide action fails closed without users.manage
+ok 44 - members guide action fails closed without users.manage
+  ---
+  duration_ms: 0.060183
+  type: 'test'
+  ...
+# Subtest: members guide action fails closed without an active organization
+ok 45 - members guide action fails closed without an active organization
+  ---
+  duration_ms: 0.056135
+  type: 'test'
+  ...
+# Subtest: billing guide action resolves its label and destination when billing.manage is granted
+ok 46 - billing guide action resolves its label and destination when billing.manage is granted
+  ---
+  duration_ms: 0.143991
+  type: 'test'
+  ...
+# Subtest: billing guide action fails closed without billing.manage
+ok 47 - billing guide action fails closed without billing.manage
+  ---
+  duration_ms: 0.059292
+  type: 'test'
+  ...
+# Subtest: billing guide action fails closed without an active organization
+ok 48 - billing guide action fails closed without an active organization
+  ---
+  duration_ms: 0.050164
+  type: 'test'
+  ...
+# Subtest: locations guide action fails closed without the locations.multi feature even when locations.manage is granted
+ok 49 - locations guide action fails closed without the locations.multi feature even when locations.manage is granted
+  ---
+  duration_ms: 0.094147
+  type: 'test'
+  ...
+# Subtest: profile-settings guide action is always available, including with no active organization or role
+ok 50 - profile-settings guide action is always available, including with no active organization or role
+  ---
+  duration_ms: 0.131156
+  type: 'test'
+  ...
+# Subtest: security-settings guide action is always available, including with no active organization or role
+ok 51 - security-settings guide action is always available, including with no active organization or role
+  ---
+  duration_ms: 0.088427
+  type: 'test'
+  ...
+# Subtest: appearance-settings guide action is always available, including with no active organization or role
+ok 52 - appearance-settings guide action is always available, including with no active organization or role
+  ---
+  duration_ms: 0.091963
+  type: 'test'
+  ...
+# Subtest: popular guide tasks target existing module tutorials
+ok 53 - popular guide tasks target existing module tutorials
+  ---
+  duration_ms: 0.778003
+  type: 'test'
+  ...
+# Subtest: guide search is case insensitive and matches tutorials
+ok 54 - guide search is case insensitive and matches tutorials
+  ---
+  duration_ms: 1.274786
+  type: 'test'
+  ...
+# Subtest: guide search matches fields and returns no results for an unmatched query
+ok 55 - guide search matches fields and returns no results for an unmatched query
+  ---
+  duration_ms: 0.64925
+  type: 'test'
+  ...
+# Subtest: guide search matches module metadata and troubleshooting
+ok 56 - guide search matches module metadata and troubleshooting
+  ---
+  duration_ms: 0.209594
+  type: 'test'
+  ...
+# Subtest: an empty guide search restores category browsing
+ok 57 - an empty guide search restores category browsing
+  ---
+  duration_ms: 0.150783
+  type: 'test'
+  ...
+# Subtest: purchasing and recipe guidance topics remain discoverable by their customer-facing terms
+ok 58 - purchasing and recipe guidance topics remain discoverable by their customer-facing terms
+  ---
+  duration_ms: 6.595898
+  type: 'test'
+  ...
+# Subtest: every report title is discoverable by its exact customer-facing name
+ok 59 - every report title is discoverable by its exact customer-facing name
+  ---
+  duration_ms: 3.278883
+  type: 'test'
+  ...
+# Subtest: report filters and export guidance remain discoverable
+ok 60 - report filters and export guidance remain discoverable
+  ---
+  duration_ms: 4.010859
+  type: 'test'
+  ...
+# Subtest: AI Assistant question examples and verification guidance remain discoverable
+ok 61 - AI Assistant question examples and verification guidance remain discoverable
+  ---
+  duration_ms: 3.046276
+  type: 'test'
+  ...
+# Subtest: organization, billing, and settings topics remain discoverable by their customer-facing terms
+ok 62 - organization, billing, and settings topics remain discoverable by their customer-facing terms
+  ---
+  duration_ms: 14.014872
+  type: 'test'
+  ...
+# Subtest: cancelled subscription copy explains continued access until the end date, not immediate read-only
+ok 63 - cancelled subscription copy explains continued access until the end date, not immediate read-only
+  ---
+  duration_ms: 0.472177
+  type: 'test'
+  ...
+# Subtest: billing copy never uses internal provider or lifecycle terminology
+ok 64 - billing copy never uses internal provider or lifecycle terminology
+  ---
+  duration_ms: 0.253727
+  type: 'test'
+  ...
+# Subtest: organization guide directs role review requests to an owner only, not a manager
+ok 65 - organization guide directs role review requests to an owner only, not a manager
+  ---
+  duration_ms: 0.141055
+  type: 'test'
+  ...
+1..65
+# tests 65
+# suites 0
+# pass 65
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 287.868178

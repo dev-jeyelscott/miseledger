@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { guideModulesBySlug } from '../pages/user-guide/content.ts';
 import { entries } from './index.ts';
 import type { ReleaseNoteType } from './types.ts';
 
@@ -60,31 +61,47 @@ test('related guide slugs are optional', () => {
 });
 
 test('all related guide slugs reference valid guide modules', () => {
-    // Import the valid guide slugs from the User Guide types contract
-    const validSlugs = [
-        'getting-started',
-        'dashboard',
-        'ai-assistant',
-        'inventory',
-        'stock-counts',
-        'waste',
-        'stock-transfers',
-        'purchasing',
-        'recipes',
-        'reports',
-        'organization',
-        'billing',
-        'settings',
-    ];
+    // Derive valid slugs from the current guide registry
+    const validSlugs = Object.keys(guideModulesBySlug);
 
     entries.forEach((entry) => {
         if (entry.relatedGuideSlugs) {
             entry.relatedGuideSlugs.forEach((slug) => {
                 assert.ok(
                     validSlugs.includes(slug),
-                    `Invalid guide slug "${slug}" in entry "${entry.id}"`,
+                    `Invalid guide slug "${slug}" in entry "${entry.id}" — not found in current guide registry`,
                 );
             });
         }
+    });
+});
+
+test('related guide slugs resolve to valid guide modules', () => {
+    entries.forEach((entry) => {
+        if (entry.relatedGuideSlugs) {
+            entry.relatedGuideSlugs.forEach((slug) => {
+                const module = guideModulesBySlug[slug];
+                assert.ok(
+                    module,
+                    `Guide slug "${slug}" in entry "${entry.id}" does not resolve to a module`,
+                );
+                assert.strictEqual(
+                    module.slug,
+                    slug,
+                    `Module slug mismatch for "${slug}" in entry "${entry.id}"`,
+                );
+            });
+        }
+    });
+});
+
+test('entries without related guides render cleanly', () => {
+    const entriesWithoutGuides = entries.filter(
+        (e) => !e.relatedGuideSlugs || e.relatedGuideSlugs.length === 0,
+    );
+    // Simply verify these entries exist and are valid
+    entriesWithoutGuides.forEach((entry) => {
+        assert.strictEqual(entry.title.length > 0, true);
+        assert.strictEqual(entry.summary.length > 0, true);
     });
 });
