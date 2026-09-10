@@ -21,18 +21,25 @@ use Illuminate\Support\Carbon;
  * @property string $description
  * @property ProblemReportStatus $status
  * @property string|null $notion_id
+ * @property string|null $notion_status
  * @property Carbon|null $notion_synced_at
  * @property Carbon|null $email_notified_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['reference', 'user_id', 'organization_id', 'organization_name_snapshot', 'title', 'description', 'status', 'notion_id', 'notion_synced_at'])]
+#[Fillable(['reference', 'user_id', 'organization_id', 'organization_name_snapshot', 'title', 'description', 'status'])]
 class ProblemReport extends Model
 {
     /** @use HasFactory<ProblemReportFactory> */
     use HasFactory;
 
-    protected $hidden = ['notion_id', 'notion_synced_at', 'email_notified_at', 'user_id'];
+    protected $hidden = [
+        'notion_id',
+        'notion_status',
+        'notion_synced_at',
+        'email_notified_at',
+        'user_id',
+    ];
 
     /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
@@ -52,6 +59,11 @@ class ProblemReport extends Model
         return $this->hasMany(ProblemReportAttachment::class);
     }
 
+    /**
+     * Cast local business and synchronization timestamps to their domain types.
+     *
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
         return [

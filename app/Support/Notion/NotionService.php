@@ -6,7 +6,6 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
-use Throwable;
 
 final class NotionService
 {
@@ -16,103 +15,184 @@ final class NotionService
 
     private const READ_ATTEMPTS = 2;
 
+    private const DEFAULT_RETRY_DELAY_MILLISECONDS = 150;
+
     private const MAX_RETRY_AFTER_MILLISECONDS = 2_000;
 
+    /**
+     * Create the HTTP service from validated server-side Notion configuration.
+     */
     public function __construct(
         private readonly NotionConfig $config,
     ) {}
 
     /**
-     * Query the Notion database for an existing page with the given Report ID.
-     * Returns all matching pages (0, 1, or more).
+     * Query by exact Report ID and return at most two matches for integrity classification.
      *
-     * @return array<int, array<string, mixed>>
+     * @return list<array<string, mixed>>
      */
     public function queryByReportId(string $reportId): array
     {
-        if (! $this->config->isValid()) {
-            return [];
-        }
+        $this->assertConfigured();
 
-        try {
-            $request = $this->request();
+        $matches = [];
+        $cursor = null;
 
-            $response = $this->postWithBoundedRetries(
-                $request,
-                "/databases/{$this->config->dataSourceId}/query",
-                [
-                    'filter' => [
-                        'property' => 'Report ID',
-                        'rich_text' => [
-                            'equals' => $reportId,
-                        ],
+        do {
+            $payload = [
+                'filter' => [
+                    'property' => 'Report ID',
+                    'rich_text' => [
+                        'equals' => $reportId,
                     ],
                 ],
+                'page_size' => 2,
+            ];
+
+            if ($cursor !== null) {
+                $payload['start_cursor'] = $cursor;
+            }
+
+            $response = $this->postReadWithBoundedRetries(
+                "/databases/{$this->config->dataSourceId}/query",
+                $payload,
             );
-        } catch (ConnectionException $exception) {
-            return [];
-        } catch (Throwable) {
-            return [];
-        }
 
-        if (! $response->successful()) {
-            return [];
-        }
+            $body = $response->json();
 
-        $body = $response->json();
+            if (! is_array($body)) {
+                throw NotionRequestException::transient(
+                    operation: 'query',
+                    reason: 'invalid_response',
+                );
+            }
 
-        return is_array($body) && isset($body['results'])
-            ? (array) $body['results']
-            : [];
+            /** @var array<string, mixed> $body */
+            $results = $body['results'] ?? null;
+
+            if (! is_array($results)) {
+                throw NotionRequestException::transient(
+                    operation: 'query',
+                    reason: 'invalid_response',
+                );
+            }
+
+            foreach ($results as $result) {
+                if (! is_array($result)) {
+                    throw NotionRequestException::transient(
+                        operation: 'query',
+                        reason: 'invalid_response',
+                    );
+                }
+
+                /** @var array<string, mixed> $result */
+                $matches[] = $result;
+
+                if (count($matches) >= 2) {
+                    return $matches;
+                }
+            }
+
+            $hasMore = $body['has_more'] ?? false;
+
+            if (! is_bool($hasMore)) {
+                throw NotionRequestException::transient(
+                    operation: 'query',
+                    reason: 'invalid_response',
+                );
+            }
+
+            if (! $hasMore) {
+                return $matches;
+            }
+
+            $nextCursor = $body['next_cursor'] ?? null;
+
+            if (! is_string($nextCursor) || $nextCursor === '') {
+                throw NotionRequestException::transient(
+                    operation: 'query',
+                    reason: 'invalid_response',
+                );
+            }
+
+            $cursor = $nextCursor;
+        } while (true);
     }
 
     /**
-     * Create a new page in the Notion database.
+     * Create one Notion page without retrying the non-idempotent HTTP request in place.
      *
      * @param  array<string, mixed>  $properties
-     * @param  array<int, array<string, mixed>>  $content
+     * @param  list<array<string, mixed>>  $content
      * @return array<string, mixed>
      */
     public function createPage(array $properties, array $content): array
     {
-        if (! $this->config->isValid()) {
-            return [];
+        $this->assertConfigured();
+
+        $payload = [
+            'parent' => [
+                'database_id' => $this->config->dataSourceId,
+            ],
+            'properties' => $properties,
+        ];
+
+        if ($content !== []) {
+            $payload['children'] = $content;
         }
 
         try {
-            $request = $this->request();
-
-            $payload = [
-                'parent' => [
-                    'database_id' => $this->config->dataSourceId,
-                ],
-                'properties' => $properties,
-            ];
-
-            if (! empty($content)) {
-                $payload['children'] = $content;
-            }
-
-            $response = $this->postWithBoundedRetries(
-                $request,
-                '/pages',
-                $payload,
-            );
+            $response = $this->request()->post('/pages', $payload);
         } catch (ConnectionException $exception) {
-            return [];
-        } catch (Throwable) {
-            return [];
+            throw NotionRequestException::transient(
+                operation: 'create',
+                reason: 'connection',
+                previous: $exception,
+            );
         }
 
         if (! $response->successful()) {
-            return [];
+            $this->throwForResponse($response, 'create');
         }
 
         $body = $response->json();
 
-        return is_array($body) ? $body : [];
+        if (! is_array($body)) {
+            throw NotionRequestException::transient(
+                operation: 'create',
+                reason: 'ambiguous_response',
+            );
+        }
+
+        /** @var array<string, mixed> $body */
+        $pageId = $body['id'] ?? null;
+
+        if (! is_string($pageId) || $pageId === '') {
+            throw NotionRequestException::transient(
+                operation: 'create',
+                reason: 'ambiguous_response',
+            );
+        }
+
+        return $body;
     }
 
+    /**
+     * Reject disabled or incomplete configuration before any network call.
+     */
+    private function assertConfigured(): void
+    {
+        if (! $this->config->enabled || ! $this->config->isValid()) {
+            throw NotionRequestException::permanent(
+                operation: 'configuration',
+                reason: 'invalid_configuration',
+            );
+        }
+    }
+
+    /**
+     * Build a finite-timeout HTTP client with server-only authentication headers.
+     */
     private function request(): PendingRequest
     {
         return Http::baseUrl('https://api.notion.com/v1')
@@ -125,60 +205,101 @@ final class NotionService
     }
 
     /**
+     * Retry only read-only query requests and only for bounded transient failures.
+     *
      * @param  array<string, mixed>  $payload
      */
-    private function postWithBoundedRetries(
-        PendingRequest $request,
-        string $path,
-        array $payload,
-    ): Response {
-        $attempt = 0;
-
-        while (true) {
-            $attempt++;
-
+    private function postReadWithBoundedRetries(string $path, array $payload): Response
+    {
+        for ($attempt = 1; $attempt <= self::READ_ATTEMPTS; $attempt++) {
             try {
-                $response = $request->post($path, $payload);
+                $response = $this->request()->post($path, $payload);
             } catch (ConnectionException $exception) {
-                if ($attempt >= self::READ_ATTEMPTS) {
-                    throw $exception;
+                if ($attempt === self::READ_ATTEMPTS) {
+                    throw NotionRequestException::transient(
+                        operation: 'query',
+                        reason: 'connection',
+                        previous: $exception,
+                    );
                 }
 
-                usleep(150_000);
+                usleep(self::DEFAULT_RETRY_DELAY_MILLISECONDS * 1_000);
 
                 continue;
             }
 
-            if (! $this->isRetryableResponse($response)
-                || $attempt >= self::READ_ATTEMPTS) {
+            if ($response->successful()) {
                 return $response;
             }
 
-            usleep(
-                $this->retryDelayMicroseconds(
-                    $response,
-                ),
+            if (! $this->isTransientStatus($response->status())) {
+                throw NotionRequestException::permanent(
+                    operation: 'query',
+                    status: $response->status(),
+                    reason: 'http',
+                );
+            }
+
+            if ($attempt === self::READ_ATTEMPTS) {
+                throw NotionRequestException::transient(
+                    operation: 'query',
+                    status: $response->status(),
+                    reason: 'http',
+                );
+            }
+
+            usleep($this->retryDelayMicroseconds($response));
+        }
+
+        throw NotionRequestException::transient(
+            operation: 'query',
+            reason: 'retry_exhausted',
+        );
+    }
+
+    /**
+     * Classify a non-success response without exposing its body.
+     */
+    private function throwForResponse(Response $response, string $operation): never
+    {
+        if ($this->isTransientStatus($response->status())) {
+            throw NotionRequestException::transient(
+                operation: $operation,
+                status: $response->status(),
+                reason: 'http',
             );
         }
+
+        throw NotionRequestException::permanent(
+            operation: $operation,
+            status: $response->status(),
+            reason: 'http',
+        );
     }
 
-    private function isRetryableResponse(Response $response): bool
+    /**
+     * Identify retryable timeout, conflict, rate-limit, and server responses.
+     */
+    private function isTransientStatus(int $status): bool
     {
-        return $response->status() === 429
-            || $response->serverError();
+        return in_array($status, [408, 409, 429], true)
+            || $status >= 500;
     }
 
+    /**
+     * Resolve a bounded Retry-After delay for a read-only query.
+     */
     private function retryDelayMicroseconds(Response $response): int
     {
         $retryAfter = $response->header('Retry-After');
 
         if (is_numeric($retryAfter)) {
             return min(
-                (int) $retryAfter * 1_000_000,
+                max((int) $retryAfter, 0) * 1_000_000,
                 self::MAX_RETRY_AFTER_MILLISECONDS * 1_000,
             );
         }
 
-        return 150_000;
+        return self::DEFAULT_RETRY_DELAY_MILLISECONDS * 1_000;
     }
 }
