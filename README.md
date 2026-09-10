@@ -21,7 +21,7 @@ Build the development image, install project dependencies, create the local envi
 
 ```bash
 docker compose build --pull
-docker compose run --rm webapp composer setup
+docker compose run --rm app composer setup
 docker compose up -d
 ```
 
@@ -36,7 +36,7 @@ docker compose up -d
 Follow application, worker, scheduler, and Vite logs:
 
 ```bash
-docker compose logs -f webapp worker scheduler vite
+docker compose logs -f app worker scheduler vite
 ```
 
 Stop services while retaining local PostgreSQL and Redis data:
@@ -50,12 +50,12 @@ docker compose down
 Run these from the project root while the stack is running:
 
 ```bash
-docker compose exec webapp composer lint:check
-docker compose exec webapp npm run lint:check
-docker compose exec webapp npm run format:check
-docker compose exec webapp npm run types:check
-docker compose exec webapp composer test
-docker compose exec webapp npm run build
+docker compose exec app composer lint:check
+docker compose exec app npm run lint:check
+docker compose exec app npm run format:check
+docker compose exec app npm run types:check
+docker compose exec app composer test
+docker compose exec app npm run build
 ```
 
 `composer ci:check` combines frontend linting, formatting and type checks, an asset build, and the test suite.
