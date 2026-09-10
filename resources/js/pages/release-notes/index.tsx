@@ -59,7 +59,7 @@ export default function ReleaseNotesIndex() {
                                             className="mt-1 block text-sm text-muted-foreground"
                                         >
                                             {new Date(
-                                                `${entry.publishedOn}T00:00:00`,
+                                                `${entry.publishedOn}T00:00:00Z`,
                                             ).toLocaleDateString('en-US', {
                                                 year: 'numeric',
                                                 month: 'long',

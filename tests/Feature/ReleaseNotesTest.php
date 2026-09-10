@@ -43,7 +43,7 @@ test('the account menu exposes release notes in shared navigation', function ():
     $settingsPos = strpos($menu, 'Settings');
     $userGuidePos = strpos($menu, 'User Guide');
     $releaseNotesPos = strpos($menu, 'Release Notes');
-    $separatorPos = strpos($menu, 'DropdownMenu.Separator', $releaseNotesPos);
+    $separatorPos = strpos($menu, 'DropdownMenuSeparator', $releaseNotesPos);
 
     expect($settingsPos)->toBeLessThan($userGuidePos);
     expect($userGuidePos)->toBeLessThan($releaseNotesPos);
