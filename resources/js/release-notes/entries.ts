@@ -19,6 +19,6 @@ export const entries: ReleaseNoteEntry[] = [
         title: 'Improved Reporting Performance',
         summary: 'Report generation is now faster for large datasets.',
         details:
-            'Optimized database queries and caching to reduce report load times by up to 40%.',
+            'Large financial reports now load significantly faster, helping you review your ledger more quickly.',
     },
 ];
