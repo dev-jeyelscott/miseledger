@@ -1,5 +1,5 @@
 import { Link, router } from '@inertiajs/react';
-import { BookOpen, LogOut, Settings } from 'lucide-react';
+import { BookOpen, LogOut, Newspaper, Settings } from 'lucide-react';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,
@@ -10,6 +10,7 @@ import { UserInfo } from '@/components/user-info';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { logout } from '@/routes';
 import { edit } from '@/routes/profile';
+import { index as releaseNotesIndex } from '@/routes/release-notes';
 import { index as userGuideIndex } from '@/routes/user-guide';
 import type { User } from '@/types';
 
@@ -37,6 +38,17 @@ export function UserMenuContent({ user }: Props) {
                 <DropdownMenuItem asChild>
                     <Link
                         className="block w-full cursor-pointer"
+                        href={edit()}
+                        prefetch
+                        onClick={cleanup}
+                    >
+                        <Settings className="mr-2" />
+                        Settings
+                    </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                    <Link
+                        className="block w-full cursor-pointer"
                         href={userGuideIndex()}
                         prefetch
                         onClick={cleanup}
@@ -48,12 +60,12 @@ export function UserMenuContent({ user }: Props) {
                 <DropdownMenuItem asChild>
                     <Link
                         className="block w-full cursor-pointer"
-                        href={edit()}
+                        href={releaseNotesIndex()}
                         prefetch
                         onClick={cleanup}
                     >
-                        <Settings className="mr-2" />
-                        Settings
+                        <Newspaper className="mr-2" />
+                        Release Notes
                     </Link>
                 </DropdownMenuItem>
             </DropdownMenuGroup>

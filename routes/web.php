@@ -13,6 +13,7 @@ use App\Http\Controllers\Billing\PayMongoWebhookController;
 use App\Http\Controllers\Billing\StripeWebhookController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Inventory\InventoryAdjustmentController;
+use App\Http\Controllers\ReleaseNotesController;
 use App\Http\Controllers\Inventory\InventoryBrandController;
 use App\Http\Controllers\Inventory\InventoryCategoryController;
 use App\Http\Controllers\Inventory\InventoryItemBarcodeController;
@@ -78,6 +79,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         'user-guide/{module}',
         [UserGuideController::class, 'show'],
     )->name('user-guide.show');
+
+    Route::get(
+        'release-notes',
+        [ReleaseNotesController::class, 'index'],
+    )->name('release-notes.index');
 
     Route::get(
         'organizations/create',
