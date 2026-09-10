@@ -1,5 +1,11 @@
 import { Link, router } from '@inertiajs/react';
-import { AlertCircle, BookOpen, LogOut, Newspaper, Settings } from 'lucide-react';
+import {
+    AlertCircle,
+    BookOpen,
+    LogOut,
+    Newspaper,
+    Settings,
+} from 'lucide-react';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,

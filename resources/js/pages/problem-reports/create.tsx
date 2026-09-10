@@ -1,31 +1,25 @@
-import { useForm, Link } from '@inertiajs/react';
+import { Link, useForm } from '@inertiajs/react';
+import { AlertCircle, Loader2, Upload, X } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+
 import { PageHeader } from '@/components/page-header';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertCircle, Loader2, Upload, X } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 
 /** Renders the problem report submission form and manages its Inertia form state. */
 export default function CreateProblemReport() {
-    const {
-        data,
-        setData,
-        post,
-        processing,
-        errors,
-        setError,
-        clearErrors,
-    } = useForm({
-        title: '',
-        description: '',
-        screenshots: [] as File[],
-    });
+    const { data, setData, post, processing, errors, setError, clearErrors } =
+        useForm({
+            title: '',
+            description: '',
+            screenshots: [] as File[],
+        });
 
     const [previewUrls, setPreviewUrls] = useState<string[]>([]);
 
@@ -51,36 +45,25 @@ export default function CreateProblemReport() {
         setPreviewUrls([...previewUrls, ...newPreviews]);
     };
 
-    /** Removes a selected screenshot and clears any resolved file-count error. */
+    /** Removes a selected screenshot and clears the resolved screenshot error. */
     const removeScreenshot = (index: number) => {
         const newScreenshots = data.screenshots.filter(
-            (_, i) => i !== index,
+            (_, currentIndex) => currentIndex !== index,
         );
-        const newPreviews = previewUrls.filter((_, i) => i !== index);
+        const newPreviews = previewUrls.filter(
+            (_, currentIndex) => currentIndex !== index,
+        );
 
         setData('screenshots', newScreenshots);
         setPreviewUrls(newPreviews);
         clearErrors('screenshots');
     };
 
-    /** Submits the problem report and screenshots as multipart form data. */
+    /** Submits the current Inertia form state to create the problem report. */
     const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
 
-        const formData = new FormData();
-        formData.append('title', data.title);
-        formData.append('description', data.description);
-
-        data.screenshots.forEach((file) => {
-            formData.append('screenshots[]', file);
-        });
-
-        post('/problem-reports', {
-            data: formData,
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
-        });
+        post('/problem-reports');
     };
 
     return (
@@ -117,9 +100,7 @@ export default function CreateProblemReport() {
                         disabled={processing}
                     />
                     {errors.title && (
-                        <p className="text-sm text-red-500">
-                            {errors.title}
-                        </p>
+                        <p className="text-sm text-red-500">{errors.title}</p>
                     )}
                 </div>
 
@@ -133,9 +114,7 @@ export default function CreateProblemReport() {
                         placeholder="Please describe the problem in detail..."
                         rows={6}
                         value={data.description}
-                        onChange={(e) =>
-                            setData('description', e.target.value)
-                        }
+                        onChange={(e) => setData('description', e.target.value)}
                         disabled={processing}
                         className="resize-none"
                     />
@@ -163,7 +142,7 @@ export default function CreateProblemReport() {
                         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                             {previewUrls.map((url, index) => (
                                 <div
-                                    key={index}
+                                    key={url}
                                     className="relative aspect-video overflow-hidden rounded-lg border border-gray-200 bg-gray-100"
                                 >
                                     <img
@@ -173,13 +152,15 @@ export default function CreateProblemReport() {
                                     />
                                     <button
                                         type="button"
-                                        onClick={() =>
-                                            removeScreenshot(index)
-                                        }
+                                        onClick={() => removeScreenshot(index)}
                                         disabled={processing}
+                                        aria-label={`Remove screenshot ${index + 1}`}
                                         className="absolute top-1 right-1 rounded bg-red-500 p-1 text-white hover:bg-red-600"
                                     >
-                                        <X className="h-4 w-4" />
+                                        <X
+                                            className="h-4 w-4"
+                                            aria-hidden="true"
+                                        />
                                     </button>
                                 </div>
                             ))}
@@ -188,6 +169,7 @@ export default function CreateProblemReport() {
 
                     <div className="relative">
                         <input
+                            id="screenshots"
                             type="file"
                             multiple
                             accept="image/jpeg,image/png,image/webp"
@@ -196,13 +178,15 @@ export default function CreateProblemReport() {
                                 processing || data.screenshots.length >= 5
                             }
                             className="sr-only"
-                            id="screenshots"
                         />
                         <Label
                             htmlFor="screenshots"
                             className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 px-6 py-8 transition-colors hover:border-gray-400"
                         >
-                            <Upload className="h-6 w-6 text-gray-400" />
+                            <Upload
+                                className="h-6 w-6 text-gray-400"
+                                aria-hidden="true"
+                            />
                             <span className="text-sm font-medium text-gray-700">
                                 Click to upload screenshots
                             </span>
@@ -226,7 +210,10 @@ export default function CreateProblemReport() {
                     >
                         {processing ? (
                             <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                <Loader2
+                                    className="mr-2 h-4 w-4 animate-spin"
+                                    aria-hidden="true"
+                                />
                                 Submitting...
                             </>
                         ) : (
@@ -239,7 +226,7 @@ export default function CreateProblemReport() {
     );
 }
 
-/** Wraps the create page in the application layout and report breadcrumbs. */
+/** Wraps the create page with the canonical application layout and breadcrumbs. */
 CreateProblemReport.layout = (page: ReactNode) => (
     <AppLayout
         breadcrumbs={[

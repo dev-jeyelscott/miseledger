@@ -2,9 +2,9 @@ import { Link } from '@inertiajs/react';
 import { Copy } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 
@@ -143,13 +143,14 @@ export default function ShowProblemReport({ report }: Props) {
                                 Updated
                             </p>
                             <p className="mt-2 text-sm text-gray-900">
-                                {new Date(
-                                    report.updated_at,
-                                ).toLocaleDateString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric',
-                                })}
+                                {new Date(report.updated_at).toLocaleDateString(
+                                    'en-US',
+                                    {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        year: 'numeric',
+                                    },
+                                )}
                             </p>
                         </div>
                     )}
@@ -219,9 +220,7 @@ export default function ShowProblemReport({ report }: Props) {
 
             <div className="flex gap-4 border-t pt-4">
                 <Link href="/problem-reports">
-                    <Button variant="outline">
-                        Back to My Reports
-                    </Button>
+                    <Button variant="outline">Back to My Reports</Button>
                 </Link>
             </div>
         </div>
