@@ -68,6 +68,16 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     }
 
     /**
+     * Get problem reports submitted by this user.
+     *
+     * @return HasMany<ProblemReport, $this>
+     */
+    public function problemReports(): HasMany
+    {
+        return $this->hasMany(ProblemReport::class);
+    }
+
+    /**
      * Get organizations this user belongs to.
      *
      * @return BelongsToMany<Organization, $this>

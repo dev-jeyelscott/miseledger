@@ -40,6 +40,7 @@ use App\Http\Controllers\Purchasing\GoodsReceiptController;
 use App\Http\Controllers\Purchasing\PurchaseOrderController;
 use App\Http\Controllers\Recipes\RecipeController;
 use App\Http\Controllers\Recipes\RecipeCostController;
+use App\Http\Controllers\ProblemReportController;
 use App\Http\Controllers\ReleaseNotesController;
 use App\Http\Controllers\Suppliers\SupplierController;
 use App\Http\Controllers\Suppliers\SupplierItemController;
@@ -84,6 +85,21 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         'release-notes',
         [ReleaseNotesController::class, 'index'],
     )->name('release-notes.index');
+
+    Route::get(
+        'problem-reports/create',
+        [ProblemReportController::class, 'create'],
+    )->name('problem-reports.create');
+
+    Route::post(
+        'problem-reports',
+        [ProblemReportController::class, 'store'],
+    )->name('problem-reports.store');
+
+    Route::get(
+        'problem-reports/{reference}',
+        [ProblemReportController::class, 'show'],
+    )->name('problem-reports.show');
 
     Route::get(
         'organizations/create',

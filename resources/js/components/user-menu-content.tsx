@@ -1,5 +1,5 @@
 import { Link, router } from '@inertiajs/react';
-import { BookOpen, LogOut, Newspaper, Settings } from 'lucide-react';
+import { AlertCircle, BookOpen, LogOut, Newspaper, Settings } from 'lucide-react';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,
@@ -55,6 +55,17 @@ export function UserMenuContent({ user }: Props) {
                     >
                         <BookOpen className="mr-2" />
                         User Guide
+                    </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                    <Link
+                        className="block w-full cursor-pointer"
+                        href="/problem-reports/create"
+                        prefetch
+                        onClick={cleanup}
+                    >
+                        <AlertCircle className="mr-2" />
+                        Report a Problem
                     </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>

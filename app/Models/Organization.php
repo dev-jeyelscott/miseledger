@@ -81,6 +81,16 @@ class Organization extends Model
     }
 
     /**
+     * Get problem reports submitted for this organization.
+     *
+     * @return HasMany<ProblemReport, $this>
+     */
+    public function problemReports(): HasMany
+    {
+        return $this->hasMany(ProblemReport::class);
+    }
+
+    /**
      * Get users belonging to this organization.
      *
      * @return BelongsToMany<User, $this>
