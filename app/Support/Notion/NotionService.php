@@ -211,11 +211,15 @@ final class NotionService
      */
     private function postReadWithBoundedRetries(string $path, array $payload): Response
     {
-        for ($attempt = 1; $attempt <= self::READ_ATTEMPTS; $attempt++) {
+        $attempt = 0;
+
+        while (true) {
+            $attempt++;
+
             try {
                 $response = $this->request()->post($path, $payload);
             } catch (ConnectionException $exception) {
-                if ($attempt === self::READ_ATTEMPTS) {
+                if ($attempt >= self::READ_ATTEMPTS) {
                     throw NotionRequestException::transient(
                         operation: 'query',
                         reason: 'connection',
@@ -240,7 +244,7 @@ final class NotionService
                 );
             }
 
-            if ($attempt === self::READ_ATTEMPTS) {
+            if ($attempt >= self::READ_ATTEMPTS) {
                 throw NotionRequestException::transient(
                     operation: 'query',
                     status: $response->status(),
@@ -250,11 +254,6 @@ final class NotionService
 
             usleep($this->retryDelayMicroseconds($response));
         }
-
-        throw NotionRequestException::transient(
-            operation: 'query',
-            reason: 'retry_exhausted',
-        );
     }
 
     /**
