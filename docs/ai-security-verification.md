@@ -38,7 +38,7 @@ remain authoritative.
 1. Run the focused AI, MCP, billing-access, and worker-runtime tests:
 
    ```bash
-   docker compose exec app php artisan test --compact tests/Feature/AiSecurityHardeningTest.php tests/Feature/AiChatOrchestrationTest.php tests/Feature/AiDurableStateTest.php tests/Feature/AiWorkerRuntimeTest.php tests/Feature/Mcp tests/Feature/Billing/MemberAIAccessResolverTest.php
+   docker compose exec webapp php artisan test --compact tests/Feature/AiSecurityHardeningTest.php tests/Feature/AiChatOrchestrationTest.php tests/Feature/AiDurableStateTest.php tests/Feature/AiWorkerRuntimeTest.php tests/Feature/Mcp tests/Feature/Billing/MemberAIAccessResolverTest.php
    ```
 
 2. Run the browser check against the isolated E2E database. It must not be
@@ -51,7 +51,7 @@ remain authoritative.
 3. Run the repository quality gate from the application container:
 
    ```bash
-   docker compose exec app composer ci:check
+   docker compose exec webapp composer ci:check
    ```
 
 4. Confirm the deployed services independently: web `/up`, normal worker,

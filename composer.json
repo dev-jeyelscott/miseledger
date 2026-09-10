@@ -56,7 +56,7 @@
         "dev": [
             "Composer\\Config::disableProcessTimeout",
             "docker compose up -d",
-            "docker compose logs -f app worker scheduler vite"
+            "docker compose logs -f webapp worker scheduler vite"
         ],
         "lint": [
             "pint"

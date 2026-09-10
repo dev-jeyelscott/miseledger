@@ -308,7 +308,7 @@ test('the backup command fails safely when an approved-scheme repository host re
         ->assertFailed();
 })->with([
     'rest over localhost' => ['rest:http://localhost:8000/miseledger'],
-    'rest over the app service name' => ['rest:http://app:8000/miseledger'],
+    'rest over the webapp service name' => ['rest:http://webapp:8000/miseledger'],
     'sftp over the pgsql service name' => ['sftp:backup@pgsql:/miseledger'],
     's3 endpoint over loopback' => ['s3:http://127.0.0.1:9000/miseledger-backups'],
     's3 bare endpoint over host.docker.internal' => ['s3:host.docker.internal/miseledger-backups'],
@@ -341,7 +341,7 @@ test('the backup command fails safely when the alert webhook resolves to the app
         ->assertFailed();
 })->with([
     'localhost' => ['http://localhost:8080/alerts'],
-    'the app service name' => ['http://app/alerts'],
+    'the webapp service name' => ['http://webapp/alerts'],
     'loopback address' => ['http://127.0.0.1/alerts'],
 ]);
 

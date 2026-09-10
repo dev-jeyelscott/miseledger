@@ -69,7 +69,7 @@ test('release notes page exposes user guide navigation action', function (): voi
     $page = File::get(resource_path('js/pages/release-notes/index.tsx'));
 
     expect($page)
-        ->toContain("import { show } from '@/routes/user-guide';")
+        ->toContain("import { index as userGuideIndex, show } from '@/routes/user-guide';")
         ->toContain("import { BookOpen } from 'lucide-react';")
         ->toContain('actions={')
         ->toContain('Button')

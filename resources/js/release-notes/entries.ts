@@ -13,12 +13,11 @@ export const entries: ReleaseNoteEntry[] = [
         relatedGuideSlugs: ['getting-started'],
     },
     {
-        id: 'internal-improvements-september',
-        publishedOn: '2026-09-08',
+        id: 'documentation-announcement',
+        publishedOn: '2026-09-10',
         type: 'improved',
-        title: 'Improved Reporting Performance',
-        summary: 'Report generation is now faster for large datasets.',
-        details:
-            'Large financial reports now load significantly faster, helping you review your ledger more quickly.',
+        title: 'Documentation System Improvements',
+        summary:
+            'New integrated documentation system launched for better discoverability.',
     },
 ];
