@@ -38,4 +38,14 @@ test('the account menu exposes release notes in shared navigation', function ():
         ->toContain('<Newspaper className="mr-2" />')
         ->toContain('href={releaseNotesIndex()}')
         ->toContain('Release Notes');
+
+    // Verify Settings, User Guide, Release Notes order with separator
+    $settingsPos = strpos($menu, 'Settings');
+    $userGuidePos = strpos($menu, 'User Guide');
+    $releaseNotesPos = strpos($menu, 'Release Notes');
+    $separatorPos = strpos($menu, 'DropdownMenu.Separator', $releaseNotesPos);
+
+    expect($settingsPos)->toBeLessThan($userGuidePos);
+    expect($userGuidePos)->toBeLessThan($releaseNotesPos);
+    expect($releaseNotesPos)->toBeLessThan($separatorPos);
 });

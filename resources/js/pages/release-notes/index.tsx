@@ -59,11 +59,12 @@ export default function ReleaseNotesIndex() {
                                             className="mt-1 block text-sm text-muted-foreground"
                                         >
                                             {new Date(
-                                                entry.publishedOn,
+                                                `${entry.publishedOn}T00:00:00`,
                                             ).toLocaleDateString('en-US', {
                                                 year: 'numeric',
                                                 month: 'long',
                                                 day: 'numeric',
+                                                timeZone: 'UTC',
                                             })}
                                         </time>
                                     </div>

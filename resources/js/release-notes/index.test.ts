@@ -11,9 +11,19 @@ test('all entries have unique IDs', () => {
 
 test('all entries have valid ISO dates', () => {
     entries.forEach((entry) => {
-        const date = new Date(entry.publishedOn);
-        assert.strictEqual(isNaN(date.getTime()), false);
-        assert.strictEqual(/^\d{4}-\d{2}-\d{2}$/.test(entry.publishedOn), true);
+        const dateRegex = /^(\d{4})-(\d{2})-(\d{2})$/;
+        assert.strictEqual(dateRegex.test(entry.publishedOn), true);
+
+        const match = entry.publishedOn.match(dateRegex);
+        assert.ok(match, `Date ${entry.publishedOn} does not match ISO format`);
+
+        const date = new Date(`${entry.publishedOn}T00:00:00Z`);
+        const roundTrip = date.toISOString().split('T')[0];
+        assert.strictEqual(
+            roundTrip,
+            entry.publishedOn,
+            `Date ${entry.publishedOn} does not round-trip correctly (got ${roundTrip})`,
+        );
     });
 });
 
