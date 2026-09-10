@@ -43,4 +43,11 @@ return [
         'webhook_secret' => $billing['stripe']['webhook_secret'],
     ],
 
+    'notion' => [
+        'enabled' => env('NOTION_ENABLED', false),
+        'api_key' => env('NOTION_API_KEY'),
+        'api_version' => env('NOTION_API_VERSION', '2022-06-28'),
+        'data_source_id' => env('NOTION_DATA_SOURCE_ID'),
+    ],
+
 ];

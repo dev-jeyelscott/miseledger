@@ -6,7 +6,9 @@ use App\Console\Commands\StartMiseLedgerMcpServer;
 use App\Enums\OrganizationPermission;
 use App\Mcp\AiMcpExecutionContext;
 use App\Models\Organization;
+use App\Models\ProblemReport;
 use App\Models\User;
+use App\Observers\ProblemReportObserver;
 use App\Support\Ai\Providers\AiProviderAdapter;
 use App\Support\Ai\Providers\CodexAppServerProvider;
 use App\Support\Billing\BillingConfigurationValidator;
@@ -44,6 +46,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureAiRateLimiting();
         $this->configureAuthorization();
         $this->configureBilling();
+        $this->configureModelObservers();
 
         $this->commands([
             StartMiseLedgerMcpServer::class,
@@ -138,5 +141,13 @@ class AppServiceProvider extends ServiceProvider
         }
 
         BillingConfigurationValidator::validateProduction((array) config('billing'));
+    }
+
+    /**
+     * Register model observers for background job dispatch.
+     */
+    protected function configureModelObservers(): void
+    {
+        ProblemReport::observe(ProblemReportObserver::class);
     }
 }
