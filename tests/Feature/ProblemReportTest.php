@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\OrganizationRole;
 use App\Enums\ProblemReportStatus;
 use App\Models\Organization;
 use App\Models\ProblemReport;
@@ -88,7 +89,7 @@ describe('Problem Report', function () {
         it('stores active organization context', function () {
             $user = User::factory()->create();
             $organization = Organization::factory()->create();
-            $user->organizations()->attach($organization);
+            $user->organizations()->attach($organization, ['role' => OrganizationRole::Owner->value]);
 
             $this->actingAs($user)
                 ->post('/problem-reports', [
@@ -120,6 +121,10 @@ describe('Problem Report', function () {
         });
 
         it('accepts up to 5 screenshots', function () {
+            if (!extension_loaded('gd')) {
+                $this->markTestSkipped('GD extension is required for this test');
+            }
+
             $user = User::factory()->create();
             $screenshots = array_map(
                 fn () => UploadedFile::fake()->image('screenshot.png'),
@@ -138,6 +143,10 @@ describe('Problem Report', function () {
         });
 
         it('stores screenshot metadata correctly', function () {
+            if (!extension_loaded('gd')) {
+                $this->markTestSkipped('GD extension is required for this test');
+            }
+
             $user = User::factory()->create();
             $screenshot = UploadedFile::fake()->image('test.png', width: 800, height: 600);
 
@@ -158,6 +167,10 @@ describe('Problem Report', function () {
         });
 
         it('rejects more than 5 screenshots', function () {
+            if (!extension_loaded('gd')) {
+                $this->markTestSkipped('GD extension is required for this test');
+            }
+
             $user = User::factory()->create();
             $screenshots = array_map(
                 fn () => UploadedFile::fake()->image('screenshot.png'),
@@ -347,8 +360,8 @@ describe('Problem Report', function () {
             $response = $this->actingAs($user)->get('/problem-reports');
             $response->assertInertia(fn ($page) => $page
                 ->has('reports.data', 10)
-                ->where('reports.meta.total', 15)
-                ->where('reports.meta.per_page', 10)
+                ->where('reports.total', 15)
+                ->where('reports.per_page', 10)
             );
         });
 
@@ -384,7 +397,7 @@ describe('Problem Report', function () {
         it('displays report with title and screenshots', function () {
             $user = User::factory()->create();
             $report = ProblemReport::factory()
-                ->has(\App\Models\ProblemReportAttachment::factory(2))
+                ->has(\App\Models\ProblemReportAttachment::factory(2), 'attachments')
                 ->create([
                     'user_id' => $user->id,
                     'title' => 'Test issue',
@@ -412,8 +425,12 @@ describe('Problem Report', function () {
         it('allows owner to view attachment', function () {
             $user = User::factory()->create();
             $report = ProblemReport::factory()->create(['user_id' => $user->id]);
+
+            $path = "problem-reports/{$report->id}/test-image.jpg";
+            Storage::disk('local')->put($path, 'fake image content');
+
             $attachment = \App\Models\ProblemReportAttachment::factory()
-                ->create(['problem_report_id' => $report->id]);
+                ->create(['problem_report_id' => $report->id, 'path' => $path]);
 
             $response = $this->actingAs($user)
                 ->get("/problem-reports/{$report->reference}/attachments/{$attachment->id}");
@@ -424,8 +441,12 @@ describe('Problem Report', function () {
             $user1 = User::factory()->create();
             $user2 = User::factory()->create();
             $report = ProblemReport::factory()->create(['user_id' => $user1->id]);
+
+            $path = "problem-reports/{$report->id}/test-image.jpg";
+            Storage::disk('local')->put($path, 'fake image content');
+
             $attachment = \App\Models\ProblemReportAttachment::factory()
-                ->create(['problem_report_id' => $report->id]);
+                ->create(['problem_report_id' => $report->id, 'path' => $path]);
 
             $response = $this->actingAs($user2)
                 ->get("/problem-reports/{$report->reference}/attachments/{$attachment->id}");
@@ -453,6 +474,10 @@ describe('Problem Report', function () {
 
     describe('Transaction rollback', function () {
         it('rolls back database changes when file storage fails', function () {
+            if (!extension_loaded('gd')) {
+                $this->markTestSkipped('GD extension is required for this test');
+            }
+
             $user = User::factory()->create();
 
             Storage::shouldReceive('disk->putFileAs')

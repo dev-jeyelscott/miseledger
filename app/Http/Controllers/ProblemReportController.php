@@ -8,6 +8,7 @@ use App\Models\ProblemReport;
 use App\Models\ProblemReportAttachment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -24,7 +25,8 @@ class ProblemReportController extends Controller
 
         $reports = ProblemReport::where('user_id', $user->id)
             ->with('attachments')
-            ->latest('created_at')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->paginate($perPage);
 
         return Inertia::render('problem-reports/index', [
@@ -100,7 +102,7 @@ class ProblemReportController extends Controller
             ->with('attachments')
             ->firstOrFail();
 
-        $this->authorize('view', $problemReport);
+        Gate::authorize('view', $problemReport);
 
         return Inertia::render('problem-reports/show', [
             'report' => $problemReport,
@@ -114,7 +116,7 @@ class ProblemReportController extends Controller
         $problemReport = ProblemReport::where('reference', $reference)
             ->firstOrFail();
 
-        $this->authorize('viewAttachment', $problemReport);
+        Gate::authorize('viewAttachment', $problemReport);
 
         $attachment = ProblemReportAttachment::where('id', $attachmentId)
             ->where('problem_report_id', $problemReport->id)
