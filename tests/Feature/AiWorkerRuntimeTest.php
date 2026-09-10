@@ -15,9 +15,9 @@ test('the production web image excludes Codex and isolated workers separate inte
     $compose = file_get_contents(base_path('compose.yaml'));
     [, $productionAndAiWorker] = explode('FROM runtime-base AS production', (string) $dockerfile, 2);
     [$productionTarget] = explode('# Dedicated, non-HTTP AI runtime.', $productionAndAiWorker);
-    [, $aiWorkerService] = explode("\n  ai-worker:", (string) $compose, 2);
-    [$aiWorkerService, $aiLoginWorkerService] = explode("\n  ai-login-worker:", $aiWorkerService, 2);
-    [$aiLoginWorkerService] = explode("\n  scheduler:", $aiLoginWorkerService, 2);
+    [, $aiWorkerService] = explode("\n    ai-worker:", (string) $compose, 2);
+    [$aiWorkerService, $aiLoginWorkerService] = explode("\n    ai-login-worker:", $aiWorkerService, 2);
+    [$aiLoginWorkerService] = explode("\n    scheduler:", $aiLoginWorkerService, 2);
     $codexClient = file_get_contents(base_path('app/Support/Ai/Providers/CodexJsonRpcClient.php'));
 
     expect($dockerfile)->toContain('FROM php:${PHP_VERSION}-cli-bookworm AS ai-worker')
@@ -25,11 +25,11 @@ test('the production web image excludes Codex and isolated workers separate inte
         ->toContain('CMD ["php", "artisan", "queue:work", "ai", "--sleep=1", "--tries=3", "--timeout=190"]')
         ->and($productionTarget)->not->toContain('COPY --from=codex')
         ->not->toContain('/usr/local/bin/node')
-        ->and($compose)->toContain('  ai-worker:')
-        ->and($aiWorkerService)->toContain("        'ai',")
+        ->and($compose)->toContain('    ai-worker:')
+        ->and($aiWorkerService)->toContain("                'ai',")
         ->toContain("'--timeout=190'")
         ->not->toContain("'--queue=ai-login'")
-        ->and($compose)->toContain('  ai-login-worker:')
+        ->and($compose)->toContain('    ai-login-worker:')
         ->and($aiLoginWorkerService)->toContain("'--queue=ai-login'")
         ->toContain('/tmp:mode=1777')
         ->toContain('/var/lib/miseledger/codex/profiles:mode=0700,uid=10001,gid=10001')

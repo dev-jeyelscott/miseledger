@@ -26,7 +26,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['reference', 'user_id', 'organization_id', 'organization_name_snapshot', 'title', 'description', 'status'])]
+#[Fillable(['reference', 'user_id', 'organization_id', 'organization_name_snapshot', 'title', 'description', 'status', 'notion_id', 'notion_synced_at'])]
 class ProblemReport extends Model
 {
     /** @use HasFactory<ProblemReportFactory> */

@@ -12,7 +12,6 @@ use Illuminate\Support\Facades\Queue;
 describe('Sync Problem Report to Notion', function () {
     beforeEach(function () {
         Queue::fake();
-        Http::fake();
     });
 
     describe('Configuration', function () {
@@ -121,6 +120,8 @@ describe('Sync Problem Report to Notion', function () {
 
         it('returns early when notion is disabled', function () {
             config(['notion.enabled' => false]);
+
+            Http::fake();
 
             $report = ProblemReport::factory()->create([
                 'notion_id' => null,
@@ -257,6 +258,10 @@ describe('Sync Problem Report to Notion', function () {
             $job->handle();
 
             Http::assertSent(function ($request) {
+                if ($request->url() !== 'https://api.notion.com/v1/pages') {
+                    return false;
+                }
+
                 $payload = json_decode($request->body(), true);
 
                 // Verify Title is system-generated, not user-controlled
@@ -293,6 +298,10 @@ describe('Sync Problem Report to Notion', function () {
             $job->handle();
 
             Http::assertSent(function ($request) {
+                if ($request->url() !== 'https://api.notion.com/v1/pages') {
+                    return false;
+                }
+
                 $payload = json_decode($request->body(), true);
                 $status = $payload['properties']['Status']['status']['name'] ?? null;
                 expect($status)->toBe('Submitted');
@@ -329,6 +338,10 @@ describe('Sync Problem Report to Notion', function () {
             $job->handle();
 
             Http::assertSent(function ($request) {
+                if ($request->url() !== 'https://api.notion.com/v1/pages') {
+                    return false;
+                }
+
                 $payload = json_decode($request->body(), true);
 
                 // User title in User Title property
@@ -372,6 +385,10 @@ describe('Sync Problem Report to Notion', function () {
             $job->handle();
 
             Http::assertSent(function ($request) {
+                if ($request->url() !== 'https://api.notion.com/v1/pages') {
+                    return false;
+                }
+
                 $payload = json_decode($request->body(), true);
 
                 expect($payload['properties']['Reporter Name']['rich_text'][0]['text']['content'])
@@ -410,6 +427,10 @@ describe('Sync Problem Report to Notion', function () {
             $job->handle();
 
             Http::assertSent(function ($request) {
+                if ($request->url() !== 'https://api.notion.com/v1/pages') {
+                    return false;
+                }
+
                 $payload = json_decode($request->body(), true);
                 $project = $payload['properties']['Project']['select']['name'] ?? null;
                 expect($project)->toBe('miseledger');
@@ -446,6 +467,10 @@ describe('Sync Problem Report to Notion', function () {
             $job->handle();
 
             Http::assertSent(function ($request) {
+                if ($request->url() !== 'https://api.notion.com/v1/pages') {
+                    return false;
+                }
+
                 $payload = json_decode($request->body(), true);
                 $children = $payload['children'] ?? [];
 
@@ -493,6 +518,10 @@ describe('Sync Problem Report to Notion', function () {
             $job->handle();
 
             Http::assertSent(function ($request) {
+                if ($request->url() !== 'https://api.notion.com/v1/pages') {
+                    return false;
+                }
+
                 $payload = json_decode($request->body(), true);
                 $richText = $payload['properties']['User Description']['rich_text'] ?? [];
 
@@ -606,7 +635,7 @@ describe('Sync Problem Report to Notion', function () {
 
             $user = User::factory()->create();
 
-            $response = $this->actingAs($user)
+            $this->actingAs($user)
                 ->post('/problem-reports', [
                     'description' => 'Test report',
                 ])
@@ -675,6 +704,10 @@ describe('Sync Problem Report to Notion', function () {
             $job->handle();
 
             Http::assertSent(function ($request) {
+                if ($request->url() !== 'https://api.notion.com/v1/pages') {
+                    return false;
+                }
+
                 $payload = json_decode($request->body(), true);
                 $status = $payload['properties']['Status']['status']['name'] ?? null;
 
