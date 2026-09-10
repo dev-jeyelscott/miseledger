@@ -11,6 +11,9 @@ final class NotionConfig
         public readonly ?string $dataSourceId,
     ) {}
 
+    /**
+     * @param  array<string, mixed>  $config
+     */
     public static function fromConfig(array $config): self
     {
         return new self(

@@ -70,7 +70,7 @@ final class NotionService
      * Create a new page in the Notion database.
      *
      * @param  array<string, mixed>  $properties
-     * @param  array<string, mixed>  $content
+     * @param  array<int, array<string, mixed>>  $content
      * @return array<string, mixed>
      */
     public function createPage(array $properties, array $content): array
