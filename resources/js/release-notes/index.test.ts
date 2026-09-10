@@ -58,3 +58,33 @@ test('related guide slugs are optional', () => {
         }
     });
 });
+
+test('all related guide slugs reference valid guide modules', () => {
+    // Import the valid guide slugs from the User Guide types contract
+    const validSlugs = [
+        'getting-started',
+        'dashboard',
+        'ai-assistant',
+        'inventory',
+        'stock-counts',
+        'waste',
+        'stock-transfers',
+        'purchasing',
+        'recipes',
+        'reports',
+        'organization',
+        'billing',
+        'settings',
+    ];
+
+    entries.forEach((entry) => {
+        if (entry.relatedGuideSlugs) {
+            entry.relatedGuideSlugs.forEach((slug) => {
+                assert.ok(
+                    validSlugs.includes(slug),
+                    `Invalid guide slug "${slug}" in entry "${entry.id}"`,
+                );
+            });
+        }
+    });
+});

@@ -105,3 +105,15 @@ test('every sidebar navigation destination is assigned to a user guide module', 
 
     expect($documentedLabels)->toBe($sidebarLabels);
 });
+
+test('user guide home exposes release notes navigation action', function (): void {
+    $page = File::get(resource_path('js/pages/user-guide/index.tsx'));
+
+    expect($page)
+        ->toContain("import { index as releaseNotesIndex } from '@/routes/release-notes';")
+        ->toContain('Newspaper')
+        ->toContain('actions={')
+        ->toContain('Button')
+        ->toContain('href={releaseNotesIndex()}')
+        ->toContain('Release Notes');
+});

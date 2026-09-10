@@ -64,3 +64,34 @@ test('the account menu exposes release notes in shared navigation', function ():
     );
     expect($afterGroupMatch)->toBe(1);
 });
+
+test('release notes page exposes user guide navigation action', function (): void {
+    $page = File::get(resource_path('js/pages/release-notes/index.tsx'));
+
+    expect($page)
+        ->toContain("import { show } from '@/routes/user-guide';")
+        ->toContain("import { BookOpen } from 'lucide-react';")
+        ->toContain('actions={')
+        ->toContain('Button')
+        ->toContain('href={show(')
+        ->toContain('Open User Guide');
+});
+
+test('release notes page renders related guide links when present', function (): void {
+    $page = File::get(resource_path('js/pages/release-notes/index.tsx'));
+
+    expect($page)
+        ->toContain('relatedGuideSlugs')
+        ->toContain('guideModulesBySlug')
+        ->toContain('Read the')
+        ->toContain('guide')
+        ->toContain('variant="outline"');
+});
+
+test('release notes page safely handles missing guide modules', function (): void {
+    $page = File::get(resource_path('js/pages/release-notes/index.tsx'));
+
+    expect($page)
+        ->toContain('if (!module)')
+        ->toContain('return null');
+});

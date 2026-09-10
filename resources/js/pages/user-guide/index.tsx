@@ -8,6 +8,7 @@ import {
     CreditCard,
     History,
     LayoutGrid,
+    Newspaper,
     NotebookText,
     PackageCheck,
     PackagePlus,
@@ -25,6 +26,7 @@ import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
+import { index as releaseNotesIndex } from '@/routes/release-notes';
 import { index, show } from '@/routes/user-guide';
 import { popularGuideTasks } from '@/user-guide/popular-tasks';
 import { searchGuideTopics } from '@/user-guide/search';
@@ -71,6 +73,14 @@ export default function UserGuideIndex() {
                 <PageHeader
                     title="User Guide"
                     description="Find clear instructions for using MiseLedger."
+                    actions={
+                        <Button variant="outline" asChild>
+                            <Link href={releaseNotesIndex()}>
+                                <Newspaper className="mr-2 size-4" />
+                                Release Notes
+                            </Link>
+                        </Button>
+                    }
                 />
 
                 <section

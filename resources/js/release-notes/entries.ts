@@ -10,5 +10,6 @@ export const entries: ReleaseNoteEntry[] = [
             'Discover product updates and learn MiseLedger features from the account menu.',
         details:
             'Access Release Notes and User Guide directly from the account menu to stay informed about improvements and get help using MiseLedger.',
+        relatedGuideSlugs: ['getting-started'],
     },
 ];

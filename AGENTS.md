@@ -388,6 +388,31 @@ Do not patch symptoms, bypass validation, weaken authorization, suppress type er
 - Update the affected guide content when a user-facing workflow, label, field, action, access rule, expected result, or user-visible bug fix changes.
 - Internal fixes that do not change documented behavior need no guide update. Do not infer customer documentation from commit messages; use simple English and avoid implementation jargon.
 
+### Release Notes Publishing Policy
+
+When deciding whether to add a Release Note entry, follow these rules. User Guide updates and Release Notes are separate concerns.
+
+**Publish a Release Note for:**
+- New user-facing features
+- Meaningful user-facing improvements
+- User-visible bug fixes
+
+**Do not publish a Release Note for:**
+- Internal refactors, code cleanup, or structural changes
+- CI/build/formatting/dependency/infrastructure-only changes
+- Developer-only fixes or fixes invisible to end users
+- Performance optimizations that do not change observable behavior
+- Sensitive security implementation details or internal security controls
+- Changes that only affect internal systems, API behavior, or admin-only tools
+
+**When writing Release Notes:**
+- Write simple, clear English that explains customer impact, not implementation
+- Never auto-publish from Git commit messages or pull request titles
+- Update the User Guide separately whenever current instructions, expected behavior, or documented workflows change
+- Keep Release Note copy concise and customer-focused; do not duplicate User Guide tutorials
+- If a change requires a User Guide update, update the Guide first, then write a Release Note only if customers need to know the change happened
+- Link Release Notes to affected User Guide modules using `relatedGuideSlugs` when cross-reference improves understanding
+
 - Keep diffs focused on the requested scope.
 - Do not refactor unrelated code opportunistically.
 - Do not rename routes, fields, enums, permissions, or lifecycle states without explicit scope.
