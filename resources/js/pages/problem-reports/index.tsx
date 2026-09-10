@@ -1,6 +1,5 @@
-import { Link, usePage } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { AppLayout } from '@/components/app-layout';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -73,28 +72,25 @@ function getStatusLabel(status: string): string {
 export default function ProblemReportsIndex({ reports }: Props) {
     if (reports.data.length === 0) {
         return (
-            <AppLayout>
-                <div className="space-y-6">
-                    <PageHeader
-                        title="My Reports"
-                        description="Track your submitted problem reports"
-                    />
-                    <EmptyState
-                        title="No reports yet"
-                        description="You haven't submitted any problem reports."
-                        action={{
-                            label: 'Submit a report',
-                            href: '/problem-reports/create',
-                        }}
-                    />
-                </div>
-            </AppLayout>
+            <div className="space-y-6">
+                <PageHeader
+                    title="My Reports"
+                    description="Track your submitted problem reports"
+                />
+                <EmptyState
+                    title="No reports yet"
+                    description="You haven't submitted any problem reports."
+                    action={{
+                        label: 'Submit a report',
+                        href: '/problem-reports/create',
+                    }}
+                />
+            </div>
         );
     }
 
     return (
-        <AppLayout>
-            <div className="space-y-6">
+        <div className="space-y-6">
                 <div className="flex justify-between items-center">
                     <PageHeader
                         title="My Reports"
@@ -186,6 +182,5 @@ export default function ProblemReportsIndex({ reports }: Props) {
                     </div>
                 )}
             </div>
-        </AppLayout>
     );
 }

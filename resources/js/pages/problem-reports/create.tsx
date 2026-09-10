@@ -1,6 +1,5 @@
 import { useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { AppLayout } from '@/components/app-layout';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,7 +65,6 @@ export default function CreateProblemReport() {
     };
 
     return (
-        <AppLayout>
             <div className="space-y-6">
                 <PageHeader title="Report a Problem" description="Help us improve by reporting any issues you encounter" />
 
@@ -196,6 +194,5 @@ export default function CreateProblemReport() {
                     </div>
                 </form>
             </div>
-        </AppLayout>
     );
 }

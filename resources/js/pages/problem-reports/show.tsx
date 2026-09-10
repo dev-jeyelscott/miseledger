@@ -1,7 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { Copy } from 'lucide-react';
 import { useState } from 'react';
-import { AppLayout } from '@/components/app-layout';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -68,7 +67,6 @@ export default function ShowProblemReport({ report }: Props) {
     };
 
     return (
-        <AppLayout>
             <div className="space-y-6 max-w-4xl">
                 <div className="flex justify-between items-start gap-4">
                     <PageHeader
@@ -182,6 +180,5 @@ export default function ShowProblemReport({ report }: Props) {
                     </Link>
                 </div>
             </div>
-        </AppLayout>
     );
 }
