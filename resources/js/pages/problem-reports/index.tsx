@@ -1,9 +1,12 @@
 import { Link } from '@inertiajs/react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/empty-state';
+import AppLayout from '@/layouts/app-layout';
+import type { BreadcrumbItem } from '@/types';
 
 interface Attachment {
     id: number;
@@ -47,9 +50,13 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
     switch (status.toLowerCase()) {
         case 'submitted':
             return 'default';
-        case 'acknowledged':
+        case 'in-review':
+            return 'secondary';
+        case 'in-progress':
             return 'secondary';
         case 'resolved':
+            return 'outline';
+        case 'closed':
             return 'outline';
         default:
             return 'default';
@@ -60,10 +67,14 @@ function getStatusLabel(status: string): string {
     switch (status.toLowerCase()) {
         case 'submitted':
             return 'Submitted';
-        case 'acknowledged':
-            return 'Acknowledged';
+        case 'in-review':
+            return 'In Review';
+        case 'in-progress':
+            return 'In Progress';
         case 'resolved':
             return 'Resolved';
+        case 'closed':
+            return 'Closed';
         default:
             return status;
     }
@@ -184,3 +195,13 @@ export default function ProblemReportsIndex({ reports }: Props) {
             </div>
     );
 }
+
+ProblemReportsIndex.layout = (page: ReactNode) => (
+    <AppLayout
+        breadcrumbs={[
+            { title: 'My Reports', href: '/problem-reports' } satisfies BreadcrumbItem,
+        ]}
+    >
+        {page}
+    </AppLayout>
+);

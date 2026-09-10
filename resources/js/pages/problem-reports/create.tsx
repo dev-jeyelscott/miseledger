@@ -1,5 +1,6 @@
-import { useForm } from '@inertiajs/react';
+import { useForm, Link } from '@inertiajs/react';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle, Loader2, Upload, X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import AppLayout from '@/layouts/app-layout';
+import type { BreadcrumbItem } from '@/types';
 
 export default function CreateProblemReport() {
     const { data, setData, post, processing, errors } = useForm({
@@ -66,7 +69,12 @@ export default function CreateProblemReport() {
 
     return (
             <div className="space-y-6">
-                <PageHeader title="Report a Problem" description="Help us improve by reporting any issues you encounter" />
+                <div className="flex justify-between items-center">
+                    <PageHeader title="Report a Problem" description="Help us improve by reporting any issues you encounter" />
+                    <Link href="/problem-reports">
+                        <Button variant="outline">My Reports</Button>
+                    </Link>
+                </div>
 
                 {Object.keys(errors).length > 0 && (
                     <Alert variant="destructive">
@@ -196,3 +204,14 @@ export default function CreateProblemReport() {
             </div>
     );
 }
+
+CreateProblemReport.layout = (page: ReactNode) => (
+    <AppLayout
+        breadcrumbs={[
+            { title: 'My Reports', href: '/problem-reports' } satisfies BreadcrumbItem,
+            { title: 'Submit Report', href: '/problem-reports/create' } satisfies BreadcrumbItem,
+        ]}
+    >
+        {page}
+    </AppLayout>
+);

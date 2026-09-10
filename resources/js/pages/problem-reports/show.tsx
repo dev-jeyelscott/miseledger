@@ -1,10 +1,13 @@
 import { Link } from '@inertiajs/react';
 import { Copy } from 'lucide-react';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import AppLayout from '@/layouts/app-layout';
+import type { BreadcrumbItem } from '@/types';
 
 interface Attachment {
     id: number;
@@ -31,9 +34,13 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
     switch (status.toLowerCase()) {
         case 'submitted':
             return 'default';
-        case 'acknowledged':
+        case 'in-review':
+            return 'secondary';
+        case 'in-progress':
             return 'secondary';
         case 'resolved':
+            return 'outline';
+        case 'closed':
             return 'outline';
         default:
             return 'default';
@@ -44,10 +51,14 @@ function getStatusLabel(status: string): string {
     switch (status.toLowerCase()) {
         case 'submitted':
             return 'Submitted';
-        case 'acknowledged':
-            return 'Acknowledged';
+        case 'in-review':
+            return 'In Review';
+        case 'in-progress':
+            return 'In Progress';
         case 'resolved':
             return 'Resolved';
+        case 'closed':
+            return 'Closed';
         default:
             return status;
     }
@@ -182,3 +193,14 @@ export default function ShowProblemReport({ report }: Props) {
             </div>
     );
 }
+
+ShowProblemReport.layout = (page: ReactNode, { report }: { report: Report }) => (
+    <AppLayout
+        breadcrumbs={[
+            { title: 'My Reports', href: '/problem-reports' } satisfies BreadcrumbItem,
+            { title: report.reference, href: `/problem-reports/${report.reference}` } satisfies BreadcrumbItem,
+        ]}
+    >
+        {page}
+    </AppLayout>
+);

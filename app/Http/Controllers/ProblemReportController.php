@@ -23,6 +23,7 @@ class ProblemReportController extends Controller
         $perPage = 10;
 
         $reports = ProblemReport::where('user_id', $user->id)
+            ->with('attachments')
             ->latest('created_at')
             ->paginate($perPage);
 
