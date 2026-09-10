@@ -87,6 +87,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     )->name('release-notes.index');
 
     Route::get(
+        'problem-reports',
+        [ProblemReportController::class, 'index'],
+    )->name('problem-reports.index');
+
+    Route::get(
         'problem-reports/create',
         [ProblemReportController::class, 'create'],
     )->name('problem-reports.create');
@@ -100,6 +105,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         'problem-reports/{reference}',
         [ProblemReportController::class, 'show'],
     )->name('problem-reports.show');
+
+    Route::get(
+        'problem-reports/{reference}/attachments/{attachmentId}',
+        [ProblemReportController::class, 'attachment'],
+    )->name('problem-reports.attachment');
 
     Route::get(
         'organizations/create',

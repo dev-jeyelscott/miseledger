@@ -292,29 +292,162 @@ describe('Problem Report', function () {
         });
     });
 
-    describe('Show report', function () {
-        it('displays submitted report', function () {
-            $report = ProblemReport::factory()->create();
+    describe('Index reports', function () {
+        it('requires authentication', function () {
+            $response = $this->get('/problem-reports');
+            $response->assertRedirect('/login');
+        });
 
-            $response = $this->get("/problem-reports/{$report->reference}");
+        it('displays user owned reports', function () {
+            $user = User::factory()->create();
+            $report1 = ProblemReport::factory()->create(['user_id' => $user->id]);
+            $report2 = ProblemReport::factory()->create(['user_id' => $user->id]);
+
+            $response = $this->actingAs($user)->get('/problem-reports');
+            $response->assertOk();
+            $response->assertInertia(fn ($page) => $page
+                ->component('problem-reports/index')
+                ->where('reports.data.0.id', $report2->id)
+                ->where('reports.data.1.id', $report1->id)
+            );
+        });
+
+        it('excludes other users reports', function () {
+            $user1 = User::factory()->create();
+            $user2 = User::factory()->create();
+            $report1 = ProblemReport::factory()->create(['user_id' => $user1->id]);
+            $report2 = ProblemReport::factory()->create(['user_id' => $user2->id]);
+
+            $response = $this->actingAs($user1)->get('/problem-reports');
+            $response->assertOk();
+            $response->assertInertia(fn ($page) => $page
+                ->has('reports.data', 1)
+                ->where('reports.data.0.id', $report1->id)
+            );
+        });
+
+        it('orders reports newest first', function () {
+            $user = User::factory()->create();
+            $report1 = ProblemReport::factory()->create(['user_id' => $user->id]);
+            $report2 = ProblemReport::factory()->create(['user_id' => $user->id]);
+            $report3 = ProblemReport::factory()->create(['user_id' => $user->id]);
+
+            $response = $this->actingAs($user)->get('/problem-reports');
+            $response->assertInertia(fn ($page) => $page
+                ->where('reports.data.0.id', $report3->id)
+                ->where('reports.data.1.id', $report2->id)
+                ->where('reports.data.2.id', $report1->id)
+            );
+        });
+
+        it('paginates reports', function () {
+            $user = User::factory()->create();
+            ProblemReport::factory(15)->create(['user_id' => $user->id]);
+
+            $response = $this->actingAs($user)->get('/problem-reports');
+            $response->assertInertia(fn ($page) => $page
+                ->has('reports.data', 10)
+                ->where('reports.meta.total', 15)
+                ->where('reports.meta.per_page', 10)
+            );
+        });
+
+        it('empty state when no reports exist', function () {
+            $user = User::factory()->create();
+
+            $response = $this->actingAs($user)->get('/problem-reports');
+            $response->assertOk();
+            $response->assertInertia(fn ($page) => $page
+                ->has('reports.data', 0)
+            );
+        });
+    });
+
+    describe('Show report', function () {
+        it('displays owned report', function () {
+            $user = User::factory()->create();
+            $report = ProblemReport::factory()->create(['user_id' => $user->id]);
+
+            $response = $this->actingAs($user)->get("/problem-reports/{$report->reference}");
             $response->assertOk();
         });
 
+        it('denies access to other users report', function () {
+            $user1 = User::factory()->create();
+            $user2 = User::factory()->create();
+            $report = ProblemReport::factory()->create(['user_id' => $user1->id]);
+
+            $response = $this->actingAs($user2)->get("/problem-reports/{$report->reference}");
+            $response->assertForbidden();
+        });
+
         it('displays report with title and screenshots', function () {
+            $user = User::factory()->create();
             $report = ProblemReport::factory()
                 ->has(\App\Models\ProblemReportAttachment::factory(2))
                 ->create([
+                    'user_id' => $user->id,
                     'title' => 'Test issue',
                     'description' => 'This is a test',
                 ]);
 
-            $response = $this->get("/problem-reports/{$report->reference}");
+            $response = $this->actingAs($user)->get("/problem-reports/{$report->reference}");
             $response->assertOk();
         });
 
         it('returns 404 for non-existent report', function () {
-            $response = $this->get('/problem-reports/PR-invalid-reference');
+            $user = User::factory()->create();
+            $response = $this->actingAs($user)->get('/problem-reports/PR-invalid-reference');
             $response->assertNotFound();
+        });
+
+        it('requires authentication', function () {
+            $report = ProblemReport::factory()->create();
+            $response = $this->get("/problem-reports/{$report->reference}");
+            $response->assertRedirect('/login');
+        });
+    });
+
+    describe('Attachment access', function () {
+        it('allows owner to view attachment', function () {
+            $user = User::factory()->create();
+            $report = ProblemReport::factory()->create(['user_id' => $user->id]);
+            $attachment = \App\Models\ProblemReportAttachment::factory()
+                ->create(['problem_report_id' => $report->id]);
+
+            $response = $this->actingAs($user)
+                ->get("/problem-reports/{$report->reference}/attachments/{$attachment->id}");
+            $response->assertOk();
+        });
+
+        it('denies cross-user attachment access', function () {
+            $user1 = User::factory()->create();
+            $user2 = User::factory()->create();
+            $report = ProblemReport::factory()->create(['user_id' => $user1->id]);
+            $attachment = \App\Models\ProblemReportAttachment::factory()
+                ->create(['problem_report_id' => $report->id]);
+
+            $response = $this->actingAs($user2)
+                ->get("/problem-reports/{$report->reference}/attachments/{$attachment->id}");
+            $response->assertForbidden();
+        });
+
+        it('returns 404 for non-existent attachment', function () {
+            $user = User::factory()->create();
+            $report = ProblemReport::factory()->create(['user_id' => $user->id]);
+
+            $response = $this->actingAs($user)
+                ->get("/problem-reports/{$report->reference}/attachments/9999");
+            $response->assertNotFound();
+        });
+
+        it('requires authentication', function () {
+            $report = ProblemReport::factory()->create();
+            $attachment = \App\Models\ProblemReportAttachment::factory()
+                ->create(['problem_report_id' => $report->id]);
+
+            $response = $this->get("/problem-reports/{$report->reference}/attachments/{$attachment->id}");
+            $response->assertRedirect('/login');
         });
     });
 

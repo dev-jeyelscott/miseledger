@@ -17,6 +17,20 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class ProblemReportController extends Controller
 {
+    public function index(Request $request): Response
+    {
+        $user = $request->user();
+        $perPage = 10;
+
+        $reports = ProblemReport::where('user_id', $user->id)
+            ->latest('created_at')
+            ->paginate($perPage);
+
+        return Inertia::render('problem-reports/index', [
+            'reports' => $reports,
+        ]);
+    }
+
     public function create(): Response
     {
         return Inertia::render('problem-reports/create');
@@ -79,15 +93,45 @@ class ProblemReportController extends Controller
         }
     }
 
-    public function show(string $reference): Response
+    public function show(string $reference, Request $request): Response
     {
         $problemReport = ProblemReport::where('reference', $reference)
             ->with('attachments')
             ->firstOrFail();
 
+        $this->authorize('view', $problemReport);
+
         return Inertia::render('problem-reports/show', [
             'report' => $problemReport,
         ]);
+    }
+
+    public function attachment(Request $request, string $reference, int $attachmentId): SymfonyResponse
+    {
+        $user = $request->user();
+
+        $problemReport = ProblemReport::where('reference', $reference)
+            ->firstOrFail();
+
+        $this->authorize('viewAttachment', $problemReport);
+
+        $attachment = ProblemReportAttachment::where('id', $attachmentId)
+            ->where('problem_report_id', $problemReport->id)
+            ->firstOrFail();
+
+        try {
+            $path = $attachment->path;
+            if (! Storage::disk($attachment->disk)->exists($path)) {
+                abort(404, 'File not found');
+            }
+
+            return response()->file(
+                Storage::disk($attachment->disk)->path($path),
+                ['Content-Type' => $attachment->mime_type]
+            );
+        } catch (\Exception $e) {
+            abort(404, 'File not found');
+        }
     }
 
     private function generateReference(int $userId): string

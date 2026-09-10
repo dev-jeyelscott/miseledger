@@ -32,6 +32,8 @@ class ProblemReport extends Model
     /** @use HasFactory<ProblemReportFactory> */
     use HasFactory;
 
+    protected $hidden = ['notion_id', 'notion_synced_at', 'email_notified_at', 'user_id'];
+
     /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {

@@ -26,6 +26,8 @@ class ProblemReportAttachment extends Model
     /** @use HasFactory<ProblemReportAttachmentFactory> */
     use HasFactory;
 
+    protected $hidden = ['disk', 'path'];
+
     /** @return BelongsTo<ProblemReport, $this> */
     public function report(): BelongsTo
     {
