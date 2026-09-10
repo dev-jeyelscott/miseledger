@@ -6,6 +6,7 @@ use App\Enums\ProblemReportStatus;
 use App\Http\Requests\CreateProblemReportRequest;
 use App\Models\ProblemReport;
 use App\Models\ProblemReportAttachment;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -14,10 +15,14 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class ProblemReportController extends Controller
 {
+    /**
+     * Display the authenticated user's problem reports.
+     */
     public function index(Request $request): Response
     {
         $user = $request->user();
@@ -34,12 +39,18 @@ class ProblemReportController extends Controller
         ]);
     }
 
+    /**
+     * Display the problem report creation page.
+     */
     public function create(): Response
     {
         return Inertia::render('problem-reports/create');
     }
 
-    public function store(CreateProblemReportRequest $request)
+    /**
+     * Store a problem report and its optional screenshots atomically.
+     */
+    public function store(CreateProblemReportRequest $request): RedirectResponse
     {
         $user = $request->user();
         $rateLimitKey = "problem-report:{$user->id}";
@@ -52,7 +63,7 @@ class ProblemReportController extends Controller
         $storedPaths = [];
 
         try {
-            return DB::transaction(function () use ($request, $user, $activeOrganization, &$storedPaths) {
+            return DB::transaction(function () use ($request, $user, $activeOrganization, &$storedPaths): RedirectResponse {
                 $reference = $this->generateReference($user->id);
 
                 $problemReport = ProblemReport::create([
@@ -66,6 +77,7 @@ class ProblemReportController extends Controller
                 ]);
 
                 $screenshots = $request->file('screenshots') ?? [];
+
                 foreach ($screenshots as $screenshot) {
                     $mimeType = $screenshot->getMimeType();
                     $path = Storage::disk('local')->putFileAs(
@@ -73,6 +85,11 @@ class ProblemReportController extends Controller
                         $screenshot,
                         Str::random(32).'.'.$screenshot->extension(),
                     );
+
+                    if ($path === false) {
+                        throw new RuntimeException('Problem report screenshot could not be stored.');
+                    }
+
                     $storedPaths[] = $path;
 
                     ProblemReportAttachment::create([
@@ -96,6 +113,9 @@ class ProblemReportController extends Controller
         }
     }
 
+    /**
+     * Display a problem report owned by the authorized user.
+     */
     public function show(string $reference, Request $request): Response
     {
         $problemReport = ProblemReport::where('reference', $reference)
@@ -109,6 +129,9 @@ class ProblemReportController extends Controller
         ]);
     }
 
+    /**
+     * Return an authorized problem report attachment.
+     */
     public function attachment(Request $request, string $reference, int $attachmentId): SymfonyResponse
     {
         $user = $request->user();
@@ -124,6 +147,7 @@ class ProblemReportController extends Controller
 
         try {
             $path = $attachment->path;
+
             if (! Storage::disk($attachment->disk)->exists($path)) {
                 abort(404, 'File not found');
             }
@@ -137,6 +161,9 @@ class ProblemReportController extends Controller
         }
     }
 
+    /**
+     * Generate the public reference used to identify a problem report.
+     */
     private function generateReference(int $userId): string
     {
         $date = now()->format('ymd');
