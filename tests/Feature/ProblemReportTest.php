@@ -4,6 +4,7 @@ use App\Enums\OrganizationRole;
 use App\Enums\ProblemReportStatus;
 use App\Models\Organization;
 use App\Models\ProblemReport;
+use App\Models\ProblemReportAttachment;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -121,7 +122,7 @@ describe('Problem Report', function () {
         });
 
         it('accepts up to 5 screenshots', function () {
-            if (!extension_loaded('gd')) {
+            if (! extension_loaded('gd')) {
                 $this->markTestSkipped('GD extension is required for this test');
             }
 
@@ -143,7 +144,7 @@ describe('Problem Report', function () {
         });
 
         it('stores screenshot metadata correctly', function () {
-            if (!extension_loaded('gd')) {
+            if (! extension_loaded('gd')) {
                 $this->markTestSkipped('GD extension is required for this test');
             }
 
@@ -167,7 +168,7 @@ describe('Problem Report', function () {
         });
 
         it('rejects more than 5 screenshots', function () {
-            if (!extension_loaded('gd')) {
+            if (! extension_loaded('gd')) {
                 $this->markTestSkipped('GD extension is required for this test');
             }
 
@@ -397,7 +398,7 @@ describe('Problem Report', function () {
         it('displays report with title and screenshots', function () {
             $user = User::factory()->create();
             $report = ProblemReport::factory()
-                ->has(\App\Models\ProblemReportAttachment::factory(2), 'attachments')
+                ->has(ProblemReportAttachment::factory(2), 'attachments')
                 ->create([
                     'user_id' => $user->id,
                     'title' => 'Test issue',
@@ -429,7 +430,7 @@ describe('Problem Report', function () {
             $path = "problem-reports/{$report->id}/test-image.jpg";
             Storage::disk('local')->put($path, 'fake image content');
 
-            $attachment = \App\Models\ProblemReportAttachment::factory()
+            $attachment = ProblemReportAttachment::factory()
                 ->create(['problem_report_id' => $report->id, 'path' => $path]);
 
             $response = $this->actingAs($user)
@@ -445,7 +446,7 @@ describe('Problem Report', function () {
             $path = "problem-reports/{$report->id}/test-image.jpg";
             Storage::disk('local')->put($path, 'fake image content');
 
-            $attachment = \App\Models\ProblemReportAttachment::factory()
+            $attachment = ProblemReportAttachment::factory()
                 ->create(['problem_report_id' => $report->id, 'path' => $path]);
 
             $response = $this->actingAs($user2)
@@ -464,7 +465,7 @@ describe('Problem Report', function () {
 
         it('requires authentication', function () {
             $report = ProblemReport::factory()->create();
-            $attachment = \App\Models\ProblemReportAttachment::factory()
+            $attachment = ProblemReportAttachment::factory()
                 ->create(['problem_report_id' => $report->id]);
 
             $response = $this->get("/problem-reports/{$report->reference}/attachments/{$attachment->id}");
@@ -474,14 +475,14 @@ describe('Problem Report', function () {
 
     describe('Transaction rollback', function () {
         it('rolls back database changes when file storage fails', function () {
-            if (!extension_loaded('gd')) {
+            if (! extension_loaded('gd')) {
                 $this->markTestSkipped('GD extension is required for this test');
             }
 
             $user = User::factory()->create();
 
             Storage::shouldReceive('disk->putFileAs')
-                ->andThrow(new \Exception('Storage failure'));
+                ->andThrow(new Exception('Storage failure'));
 
             $screenshot = UploadedFile::fake()->image('screenshot.png');
 
@@ -490,7 +491,7 @@ describe('Problem Report', function () {
                     'description' => 'Report with storage failure',
                     'screenshots' => [$screenshot],
                 ]);
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 //
             }
 
