@@ -221,12 +221,11 @@ test('Release Notes renders correctly in dark mode', async ({ page }) => {
 
 /** Verify Release Notes at 200% zoom. */
 test('Release Notes remains usable at 200% zoom', async ({ page }) => {
+    await loginAsOwner(page);
     await page.goto('/release-notes');
     await page.evaluate(() => {
         document.body.style.zoom = '200%';
     });
-
-    await loginAsOwner(page);
 
     await expect(
         page.getByRole('heading', {

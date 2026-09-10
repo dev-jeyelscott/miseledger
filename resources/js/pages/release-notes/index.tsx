@@ -9,7 +9,7 @@ import { guideModulesBySlug } from '@/pages/user-guide/content';
 import { entries } from '@/release-notes';
 import type { ReleaseNoteType } from '@/release-notes/types';
 import { index } from '@/routes/release-notes';
-import { show } from '@/routes/user-guide';
+import { index as userGuideIndex, show } from '@/routes/user-guide';
 
 const typeLabels: Record<ReleaseNoteType, string> = {
     new: 'New',
@@ -37,7 +37,7 @@ export default function ReleaseNotesIndex() {
                     description="Stay updated with the latest changes and improvements to MiseLedger."
                     actions={
                         <Button variant="outline" asChild>
-                            <Link href={show('getting-started')}>
+                            <Link href={userGuideIndex().url}>
                                 <BookOpen className="mr-2 size-4" />
                                 Open User Guide
                             </Link>
