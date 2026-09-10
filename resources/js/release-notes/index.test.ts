@@ -99,9 +99,19 @@ test('entries without related guides render cleanly', () => {
     const entriesWithoutGuides = entries.filter(
         (e) => !e.relatedGuideSlugs || e.relatedGuideSlugs.length === 0,
     );
-    // Simply verify these entries exist and are valid
+    // Ensure at least one entry has no related guides to test the code path
+    assert.ok(
+        entriesWithoutGuides.length > 0,
+        'At least one entry must have no related guides to test rendering behavior',
+    );
+    // Verify entries without guides are valid
     entriesWithoutGuides.forEach((entry) => {
         assert.strictEqual(entry.title.length > 0, true);
         assert.strictEqual(entry.summary.length > 0, true);
+        // Verify relatedGuideSlugs is either undefined or an empty array
+        assert.ok(
+            entry.relatedGuideSlugs === undefined ||
+                entry.relatedGuideSlugs.length === 0,
+        );
     });
 });

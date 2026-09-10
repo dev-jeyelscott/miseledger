@@ -16,16 +16,16 @@ test('Release Notes page renders with User Guide navigation', async ({
     ).toBeVisible();
 
     await expect(
-        page.getByRole('button', {
+        page.getByRole('link', {
             name: /Open User Guide/i,
         }),
     ).toBeVisible();
 
-    // Verify the button links to the User Guide
-    const openGuideButton = page.getByRole('button', {
+    // Verify the link points to the User Guide
+    const openGuideLink = page.getByRole('link', {
         name: /Open User Guide/i,
     });
-    await expect(openGuideButton).toHaveAttribute('href', /\/user-guide/);
+    await expect(openGuideLink).toHaveAttribute('href', /\/user-guide/);
 });
 
 /** Verify Release Notes entries with related guides render working links. */
@@ -114,18 +114,18 @@ test('User Guide home exposes Release Notes navigation', async ({ page }) => {
     await loginAsOwner(page);
     await page.goto('/user-guide');
 
-    const releaseNotesButton = page.getByRole('button', {
+    const releaseNotesLink = page.getByRole('link', {
         name: /Release Notes/i,
     });
 
-    await expect(releaseNotesButton).toBeVisible();
-    await expect(releaseNotesButton).toHaveAttribute(
+    await expect(releaseNotesLink).toBeVisible();
+    await expect(releaseNotesLink).toHaveAttribute(
         'href',
         /\/release-notes/,
     );
 
     // Click and verify navigation works
-    await releaseNotesButton.click();
+    await releaseNotesLink.click();
     await expect(page).toHaveURL(/\/release-notes/);
     await expect(
         page.getByRole('heading', { name: 'Release Notes', level: 1 }),
@@ -139,14 +139,14 @@ test('Release Notes and User Guide navigation remain keyboard operable', async (
     await loginAsOwner(page);
     await page.goto('/release-notes');
 
-    // Find the Open User Guide button
-    const openGuideButton = page.getByRole('button', {
+    // Find the Open User Guide link
+    const openGuideLink = page.getByRole('link', {
         name: /Open User Guide/i,
     });
 
     // Focus and press Enter
-    await openGuideButton.focus();
-    await expect(openGuideButton).toBeFocused();
+    await openGuideLink.focus();
+    await expect(openGuideLink).toBeFocused();
     await page.keyboard.press('Enter');
 
     // Should navigate to User Guide
@@ -156,12 +156,12 @@ test('Release Notes and User Guide navigation remain keyboard operable', async (
     ).toBeVisible();
 
     // Navigate back from User Guide
-    const releaseNotesButton = page.getByRole('button', {
+    const releaseNotesLink = page.getByRole('link', {
         name: /Release Notes/i,
     });
 
-    await releaseNotesButton.focus();
-    await expect(releaseNotesButton).toBeFocused();
+    await releaseNotesLink.focus();
+    await expect(releaseNotesLink).toBeFocused();
     await page.keyboard.press('Enter');
 
     // Should navigate back to Release Notes
@@ -188,12 +188,12 @@ test('Release Notes page renders correctly on mobile', async ({ page }) => {
         }),
     ).toBeVisible();
 
-    // Verify Open User Guide button is accessible on mobile
-    const openGuideButton = page.getByRole('button', {
+    // Verify Open User Guide link is accessible on mobile
+    const openGuideLink = page.getByRole('link', {
         name: /Open User Guide/i,
     });
 
-    await expect(openGuideButton).toBeVisible();
+    await expect(openGuideLink).toBeVisible();
 });
 
 /** Verify Release Notes and User Guide work in dark mode. */
@@ -211,12 +211,12 @@ test('Release Notes renders correctly in dark mode', async ({ page }) => {
         }),
     ).toBeVisible();
 
-    // Verify buttons are visible
-    const openGuideButton = page.getByRole('button', {
+    // Verify links are visible
+    const openGuideLink = page.getByRole('link', {
         name: /Open User Guide/i,
     });
 
-    await expect(openGuideButton).toBeVisible();
+    await expect(openGuideLink).toBeVisible();
 });
 
 /** Verify Release Notes at 200% zoom. */
