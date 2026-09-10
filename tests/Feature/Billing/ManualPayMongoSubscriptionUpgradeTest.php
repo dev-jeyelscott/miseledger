@@ -150,27 +150,36 @@ test('a Starter to Business upgrade and a Growth to Business upgrade both price 
 });
 
 test('a same-plan request is rejected before any invoice is created', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-08-31 00:00:00', 'UTC'));
     $subscription = upgradeTestSubscription();
 
     expect(fn () => app(CreateUpgradeInvoice::class)->handle($subscription, PlanCode::from('starter')))
         ->toThrow(RuntimeException::class, 'This plan change is not a supported upgrade.');
     expect(BillingInvoice::query()->count())->toBe(0);
+
+    Carbon::setTestNow();
 });
 
 test('a downgrade request is rejected before any invoice is created', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-08-31 00:00:00', 'UTC'));
     $subscription = upgradeTestSubscription(['plan_code' => 'business']);
 
     expect(fn () => app(CreateUpgradeInvoice::class)->handle($subscription, PlanCode::from('starter')))
         ->toThrow(RuntimeException::class, 'This plan change is not a supported upgrade.');
     expect(BillingInvoice::query()->count())->toBe(0);
+
+    Carbon::setTestNow();
 });
 
 test('an upgrade target unavailable at the subscription interval is rejected', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-08-31 00:00:00', 'UTC'));
     $subscription = upgradeTestSubscription(['interval' => 'yearly']);
 
     expect(fn () => app(CreateUpgradeInvoice::class)->handle($subscription, PlanCode::from('business')))
         ->toThrow(RuntimeException::class);
     expect(BillingInvoice::query()->count())->toBe(0);
+
+    Carbon::setTestNow();
 });
 
 test('duplicate upgrade requests for the same target reuse the pending invoice', function (): void {
