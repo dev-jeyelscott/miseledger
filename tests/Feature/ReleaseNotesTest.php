@@ -39,13 +39,28 @@ test('the account menu exposes release notes in shared navigation', function ():
         ->toContain('href={releaseNotesIndex()}')
         ->toContain('Release Notes');
 
-    // Verify Settings, User Guide, Release Notes order with separator
-    $settingsPos = strpos($menu, 'Settings');
-    $userGuidePos = strpos($menu, 'User Guide');
-    $releaseNotesPos = strpos($menu, 'Release Notes');
-    $separatorPos = strpos($menu, 'DropdownMenuSeparator', $releaseNotesPos);
+    // Extract the DropdownMenuGroup block to avoid matching imports or other text
+    preg_match(
+        '/<DropdownMenuGroup>.*?<\/DropdownMenuGroup>/s',
+        $menu,
+        $matches,
+    );
+    expect($matches)->toHaveCount(1);
+    $menuGroup = $matches[0];
 
-    expect($settingsPos)->toBeLessThan($userGuidePos);
-    expect($userGuidePos)->toBeLessThan($releaseNotesPos);
-    expect($releaseNotesPos)->toBeLessThan($separatorPos);
+    // Verify ordered menu items: Settings, User Guide, Release Notes
+    $settingsPos = strpos($menuGroup, '<Settings className="mr-2" />');
+    $userGuidePos = strpos($menuGroup, '<BookOpen className="mr-2" />');
+    $releaseNotesPos = strpos($menuGroup, '<Newspaper className="mr-2" />');
+
+    expect($settingsPos)->toBeGreaterThan(0)->toBeLessThan($userGuidePos);
+    expect($userGuidePos)->toBeGreaterThan(0)->toBeLessThan($releaseNotesPos);
+    expect($releaseNotesPos)->toBeGreaterThan(0);
+
+    // Verify separator after Release Notes before Log out
+    $afterGroupMatch = preg_match(
+        '/<\/DropdownMenuGroup>\s*<DropdownMenuSeparator/s',
+        $menu,
+    );
+    expect($afterGroupMatch)->toBe(1);
 });
