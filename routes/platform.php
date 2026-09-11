@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Platform\PlatformBillingController;
 use App\Http\Controllers\Platform\PlatformDashboardController;
 use App\Http\Controllers\Platform\PlatformOrganizationController;
 use App\Http\Controllers\Platform\PlatformUserController;
@@ -28,4 +29,17 @@ Route::prefix('admin')
             '/organizations/{organization}',
             [PlatformOrganizationController::class, 'show'],
         )->name('organizations.show');
+
+        Route::get('/billing', [PlatformBillingController::class, 'index'])
+            ->name('billing.index');
+
+        Route::get(
+            '/billing/subscriptions',
+            [PlatformBillingController::class, 'subscriptions'],
+        )->name('billing.subscriptions.index');
+
+        Route::get(
+            '/billing/payments',
+            [PlatformBillingController::class, 'payments'],
+        )->name('billing.payments.index');
     });

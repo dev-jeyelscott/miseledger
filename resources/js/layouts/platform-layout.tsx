@@ -1,6 +1,7 @@
 import { Link } from '@inertiajs/react';
-import { Building2, LayoutDashboard, Users } from 'lucide-react';
+import { Building2, CreditCard, LayoutDashboard, Users } from 'lucide-react';
 
+import PlatformBillingController from '@/actions/App/Http/Controllers/Platform/PlatformBillingController';
 import PlatformOrganizationController from '@/actions/App/Http/Controllers/Platform/PlatformOrganizationController';
 import PlatformUserController from '@/actions/App/Http/Controllers/Platform/PlatformUserController';
 import { AppContent } from '@/components/app-content';
@@ -40,6 +41,11 @@ const platformNavigation: NavGroup[] = [
                 title: 'Organizations',
                 href: PlatformOrganizationController.index(),
                 icon: Building2,
+            },
+            {
+                title: 'Billing',
+                href: PlatformBillingController.index(),
+                icon: CreditCard,
             },
         ],
     },
