@@ -13,7 +13,9 @@ final class ProblemReportObserver
         SyncProblemReportToNotion::dispatch($report->id)
             ->afterCommit();
 
-        SendProblemReportOperatorEmail::dispatch($report->id)
-            ->afterCommit();
+        if (config('problem-reports.email.enabled')) {
+            SendProblemReportOperatorEmail::dispatch($report->id)
+                ->afterCommit();
+        }
     }
 }

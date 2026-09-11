@@ -13,6 +13,7 @@ class ProblemReportOperatorNotification extends Notification
         public ProblemReport $report,
     ) {}
 
+    /** @return array<int, string> */
     public function via(object $notifiable): array
     {
         return ['mail'];

@@ -51,6 +51,14 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
             return;
         }
 
+        if (! filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+            Log::error('Problem report operator email recipient is not a valid email address', [
+                'recipient' => $recipient,
+            ]);
+
+            return;
+        }
+
         $effect = DB::transaction(function (): ?ProblemReport {
             $report = ProblemReport::query()
                 ->lockForUpdate()
@@ -66,7 +74,7 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
                 );
             }
 
-            $report->update(['email_notification_claimed_at' => now()]);
+            $report->forceFill(['email_notification_claimed_at' => now()])->save();
 
             return $report;
         });
@@ -82,7 +90,7 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
                 ->route('mail', $recipient)
                 ->notify(new ProblemReportOperatorNotification($report));
 
-            $report->update(['email_notified_at' => now()]);
+            $report->forceFill(['email_notified_at' => now()])->save();
         } catch (Throwable $exception) {
             Log::error('Problem report operator email delivery failed', [
                 'problem_report_id' => $this->reportId,
