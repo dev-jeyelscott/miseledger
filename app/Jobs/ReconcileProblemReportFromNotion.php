@@ -128,6 +128,13 @@ final class ReconcileProblemReportFromNotion implements ShouldBeUnique, ShouldQu
                 ? $exception->isTransient
                 : null,
         ]);
+
+        if ($exception instanceof NotionRequestException && $exception->isTransient) {
+            $report = ProblemReport::query()->find($this->reportId);
+            if ($report !== null) {
+                $this->recordError($report, $exception);
+            }
+        }
     }
 
     /**
@@ -140,7 +147,7 @@ final class ReconcileProblemReportFromNotion implements ShouldBeUnique, ShouldQu
         $remoteStatus = data_get($page, 'properties.Status.status.name');
 
         if (! is_string($remoteStatus) || $remoteStatus === '') {
-            $this->preserveLocalState($report);
+            $this->preserveLocalState($report, null);
 
             return;
         }
@@ -148,7 +155,7 @@ final class ReconcileProblemReportFromNotion implements ShouldBeUnique, ShouldQu
         $mapped = $this->mapRemoteStatusToLocal($remoteStatus);
 
         if ($mapped === null) {
-            $this->preserveLocalState($report);
+            $this->preserveLocalState($report, $remoteStatus);
 
             return;
         }
@@ -190,16 +197,22 @@ final class ReconcileProblemReportFromNotion implements ShouldBeUnique, ShouldQu
     }
 
     /**
-     * Preserve local status and log the safe integration diagnostic.
+     * Preserve local status and persist safe diagnostic after successful read of unmapped/missing status.
      */
-    private function preserveLocalState(ProblemReport $report): void
+    private function preserveLocalState(ProblemReport $report, ?string $remoteStatus): void
     {
         Log::warning('Unknown Notion status for problem report', [
             'problem_report_id' => $report->id,
             'notion_id' => $report->notion_id,
-            'notion_status' => $report->notion_status,
+            'notion_status' => $remoteStatus,
             'local_status' => $report->status->value,
         ]);
+
+        $report->forceFill([
+            'notion_status' => $remoteStatus,
+            'notion_last_checked_at' => now(),
+            'notion_check_error' => 'unknown_status',
+        ])->save();
     }
 
     /**
