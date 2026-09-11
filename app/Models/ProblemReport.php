@@ -23,6 +23,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $notion_id
  * @property string|null $notion_status
  * @property Carbon|null $notion_synced_at
+ * @property Carbon|null $notion_last_checked_at
  * @property Carbon|null $email_notified_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -37,6 +38,7 @@ class ProblemReport extends Model
         'notion_id',
         'notion_status',
         'notion_synced_at',
+        'notion_last_checked_at',
         'email_notified_at',
         'user_id',
     ];
@@ -69,6 +71,7 @@ class ProblemReport extends Model
         return [
             'status' => ProblemReportStatus::class,
             'notion_synced_at' => 'datetime',
+            'notion_last_checked_at' => 'datetime',
             'email_notified_at' => 'datetime',
         ];
     }

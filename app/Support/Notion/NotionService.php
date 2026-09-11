@@ -120,6 +120,70 @@ final class NotionService
     }
 
     /**
+     * Retrieve one Notion page by exact stored ID with bounded retries.
+     *
+     * @return array<string, mixed>
+     */
+    public function retrievePageById(string $pageId): array
+    {
+        $this->assertConfigured();
+
+        $attempt = 0;
+
+        while (true) {
+            $attempt++;
+
+            try {
+                $response = $this->request()->get("/pages/{$pageId}");
+            } catch (ConnectionException $exception) {
+                if ($attempt >= self::READ_ATTEMPTS) {
+                    throw NotionRequestException::transient(
+                        operation: 'retrieve',
+                        reason: 'connection',
+                        previous: $exception,
+                    );
+                }
+
+                usleep(self::DEFAULT_RETRY_DELAY_MILLISECONDS * 1_000);
+
+                continue;
+            }
+
+            if ($response->successful()) {
+                $body = $response->json();
+
+                if (! is_array($body)) {
+                    throw NotionRequestException::transient(
+                        operation: 'retrieve',
+                        reason: 'invalid_response',
+                    );
+                }
+
+                /** @var array<string, mixed> $body */
+                return $body;
+            }
+
+            if (! $this->isTransientStatus($response->status())) {
+                throw NotionRequestException::permanent(
+                    operation: 'retrieve',
+                    status: $response->status(),
+                    reason: 'http',
+                );
+            }
+
+            if ($attempt >= self::READ_ATTEMPTS) {
+                throw NotionRequestException::transient(
+                    operation: 'retrieve',
+                    status: $response->status(),
+                    reason: 'http',
+                );
+            }
+
+            usleep($this->retryDelayMicroseconds($response));
+        }
+    }
+
+    /**
      * Create one Notion page without retrying the non-idempotent HTTP request in place.
      *
      * @param  array<string, mixed>  $properties

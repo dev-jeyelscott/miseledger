@@ -25,3 +25,9 @@ Schedule::command('backup:database')
     ->withoutOverlapping(120)
     ->onOneServer()
     ->runInBackground();
+
+Schedule::command('problem-report:sync-from-notion')
+    ->hourly()
+    ->withoutOverlapping(30)
+    ->onOneServer()
+    ->runInBackground();
