@@ -15,26 +15,39 @@ describe('Problem Report Notion Reconciliation Schedule', function () {
     });
 
     it('registers with withoutOverlapping coordination', function () {
-        Artisan::call('schedule:list');
+        $schedule = app(Schedule::class);
+        $events = $schedule->events();
 
-        $output = Artisan::output();
+        $event = collect($events)->first(
+            fn ($e) => str_contains($e->command, 'problem-report:sync-from-notion'),
+        );
 
-        expect($output)->toContain('problem-report:sync-from-notion');
+        expect($event)->not->toBeNull();
+        expect($event->withoutOverlapping)->toBe(true);
+        expect($event->mutexName())->not->toBeNull();
     });
 
     it('registers with onOneServer coordination', function () {
-        Artisan::call('schedule:list');
+        $schedule = app(Schedule::class);
+        $events = $schedule->events();
 
-        $output = Artisan::output();
+        $event = collect($events)->first(
+            fn ($e) => str_contains($e->command, 'problem-report:sync-from-notion'),
+        );
 
-        expect($output)->toContain('problem-report:sync-from-notion');
+        expect($event)->not->toBeNull();
+        expect($event->onOneServer)->toBe(true);
     });
 
     it('registers with runInBackground mode', function () {
-        Artisan::call('schedule:list');
+        $schedule = app(Schedule::class);
+        $events = $schedule->events();
 
-        $output = Artisan::output();
+        $event = collect($events)->first(
+            fn ($e) => str_contains($e->command, 'problem-report:sync-from-notion'),
+        );
 
-        expect($output)->toContain('problem-report:sync-from-notion');
+        expect($event)->not->toBeNull();
+        expect($event->runInBackground)->toBe(true);
     });
 });

@@ -31,7 +31,7 @@ final class ProblemReportSyncFromNotion extends Command
                     foreach ($batch as $report) {
                         ReconcileProblemReportFromNotion::dispatch(
                             $report->id,
-                        );
+                        )->onConnection('redis');
 
                         $reconciled++;
                     }
