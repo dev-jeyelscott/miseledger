@@ -337,6 +337,7 @@ describe('Reconcile Problem Report From Notion', function () {
             'status' => ProblemReportStatus::InProgress,
             'notion_id' => 'page-123',
             'notion_status' => 'In Progress',
+            'notion_last_checked_at' => null,
         ]);
 
         Log::spy();
@@ -346,7 +347,7 @@ describe('Reconcile Problem Report From Notion', function () {
 
         $report->refresh();
         expect($report->status)->toBe(ProblemReportStatus::InProgress);
-        expect($report->notion_last_checked_at)->not->toBeNull();
+        expect($report->notion_last_checked_at)->toBeNull();
 
         Log::shouldHaveReceived('warning')
             ->with('Unknown Notion status for problem report', Mockery::on(function ($context) use ($report) {
@@ -370,6 +371,7 @@ describe('Reconcile Problem Report From Notion', function () {
         $report = ProblemReport::factory()->create([
             'status' => ProblemReportStatus::InProgress,
             'notion_id' => 'page-123',
+            'notion_last_checked_at' => null,
         ]);
 
         $job = new ReconcileProblemReportFromNotion($report->id);
@@ -377,7 +379,7 @@ describe('Reconcile Problem Report From Notion', function () {
 
         $report->refresh();
         expect($report->status)->toBe(ProblemReportStatus::InProgress);
-        expect($report->notion_last_checked_at)->not->toBeNull();
+        expect($report->notion_last_checked_at)->toBeNull();
     });
 
     it('preserves local status on permanent HTTP error (404)', function () {
@@ -389,6 +391,7 @@ describe('Reconcile Problem Report From Notion', function () {
         $report = ProblemReport::factory()->create([
             'status' => ProblemReportStatus::InProgress,
             'notion_id' => 'page-123',
+            'notion_last_checked_at' => null,
         ]);
 
         $job = new ReconcileProblemReportFromNotion($report->id);
@@ -396,7 +399,29 @@ describe('Reconcile Problem Report From Notion', function () {
 
         $report->refresh();
         expect($report->status)->toBe(ProblemReportStatus::InProgress);
-        expect($report->notion_last_checked_at)->not->toBeNull();
+        expect($report->notion_last_checked_at)->toBeNull();
+        expect($report->notion_check_error)->toBe('not_found');
+    });
+
+    it('preserves prior successful-check timestamp when a read fails', function () {
+        configureNotionForReconciliation();
+        Http::fake([
+            'https://api.notion.com/v1/pages/page-123' => Http::response(null, 404),
+        ]);
+
+        $priorCheckTime = now()->subHours(2);
+        $report = ProblemReport::factory()->create([
+            'status' => ProblemReportStatus::InProgress,
+            'notion_id' => 'page-123',
+            'notion_last_checked_at' => $priorCheckTime,
+        ]);
+
+        $job = new ReconcileProblemReportFromNotion($report->id);
+        $job->handle();
+
+        $report->refresh();
+        expect($report->status)->toBe(ProblemReportStatus::InProgress);
+        expect($report->notion_last_checked_at->timestamp)->toBe($priorCheckTime->timestamp);
         expect($report->notion_check_error)->toBe('not_found');
     });
 

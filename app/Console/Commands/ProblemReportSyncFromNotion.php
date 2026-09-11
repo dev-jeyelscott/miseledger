@@ -19,23 +19,16 @@ final class ProblemReportSyncFromNotion extends Command
     public function handle(): int
     {
         $reconciled = 0;
-        $skipped = 0;
 
         ProblemReport::query()
             ->whereNotNull('notion_id')
+            ->where('status', '!=', ProblemReportStatus::Closed)
             ->chunkById(
                 $this->chunkSize(),
                 function (Collection $batch) use (
                     &$reconciled,
-                    &$skipped,
                 ): void {
                     foreach ($batch as $report) {
-                        if ($report->status === ProblemReportStatus::Closed) {
-                            $skipped++;
-
-                            continue;
-                        }
-
                         ReconcileProblemReportFromNotion::dispatch(
                             $report->id,
                         );
@@ -44,6 +37,11 @@ final class ProblemReportSyncFromNotion extends Command
                     }
                 },
             );
+
+        $skipped = ProblemReport::query()
+            ->whereNotNull('notion_id')
+            ->where('status', '=', ProblemReportStatus::Closed)
+            ->count();
 
         $this->line(
             sprintf(

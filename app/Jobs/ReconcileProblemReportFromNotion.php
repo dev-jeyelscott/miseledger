@@ -194,10 +194,6 @@ final class ReconcileProblemReportFromNotion implements ShouldBeUnique, ShouldQu
      */
     private function preserveLocalState(ProblemReport $report): void
     {
-        $report->forceFill([
-            'notion_last_checked_at' => now(),
-        ])->save();
-
         Log::warning('Unknown Notion status for problem report', [
             'problem_report_id' => $report->id,
             'notion_id' => $report->notion_id,
@@ -229,7 +225,6 @@ final class ReconcileProblemReportFromNotion implements ShouldBeUnique, ShouldQu
     {
         $report->forceFill([
             'notion_check_error' => $error,
-            'notion_last_checked_at' => now(),
         ])->save();
     }
 
