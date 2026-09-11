@@ -8,6 +8,7 @@ use App\Enums\OrganizationAccessMode;
 use App\Enums\PlanCode;
 use App\Models\BillingSubscription;
 use App\Models\Organization;
+use Illuminate\Database\Eloquent\Collection;
 use Laravel\Cashier\Subscription as CashierSubscription;
 
 /**
@@ -16,6 +17,9 @@ use Laravel\Cashier\Subscription as CashierSubscription;
  */
 final class OrganizationSubscriptionAccessResolver
 {
+    /**
+     * Resolve the organization's commercial access from local synchronized state.
+     */
     public static function resolve(
         Organization $organization,
         ?PlanCatalog $planCatalog = null,
@@ -25,16 +29,17 @@ final class OrganizationSubscriptionAccessResolver
             return self::resolveExempt();
         }
 
-        $subscriptions = $organization->billingSubscriptions()
-            ->where(
-                'type',
-                (string) config('billing.subscription_type'),
-            )
-            ->get();
+        $subscriptionType = (string) config('billing.subscription_type');
+
+        $subscriptions = self::billingSubscriptions(
+            $organization,
+            $subscriptionType,
+        );
 
         if ($subscriptions->isEmpty()) {
-            $cashierSubscription = $organization->subscription(
-                (string) config('billing.subscription_type'),
+            $cashierSubscription = self::cashierSubscription(
+                $organization,
+                $subscriptionType,
             );
 
             if ($cashierSubscription instanceof CashierSubscription) {
@@ -57,6 +62,55 @@ final class OrganizationSubscriptionAccessResolver
         );
     }
 
+    /**
+     * Use a preloaded provider-neutral subscription collection when available.
+     *
+     * @return Collection<int, BillingSubscription>
+     */
+    private static function billingSubscriptions(
+        Organization $organization,
+        string $subscriptionType,
+    ): Collection {
+        if ($organization->relationLoaded('billingSubscriptions')) {
+            return $organization->billingSubscriptions
+                ->where('type', $subscriptionType)
+                ->values();
+        }
+
+        return $organization->billingSubscriptions()
+            ->where('type', $subscriptionType)
+            ->get();
+    }
+
+    /**
+     * Use preloaded Cashier subscriptions before falling back to its query API.
+     */
+    private static function cashierSubscription(
+        Organization $organization,
+        string $subscriptionType,
+    ): ?CashierSubscription {
+        if ($organization->relationLoaded('subscriptions')) {
+            $subscription = $organization->subscriptions->first(
+                static fn (
+                    CashierSubscription $subscription,
+                ): bool => $subscription->type === $subscriptionType,
+            );
+
+            return $subscription instanceof CashierSubscription
+                ? $subscription
+                : null;
+        }
+
+        $subscription = $organization->subscription($subscriptionType);
+
+        return $subscription instanceof CashierSubscription
+            ? $subscription
+            : null;
+    }
+
+    /**
+     * Resolve permanently exempt organizations as writable without billing state.
+     */
     private static function resolveExempt(): OrganizationSubscriptionAccess
     {
         return new OrganizationSubscriptionAccess(
@@ -71,6 +125,9 @@ final class OrganizationSubscriptionAccessResolver
         );
     }
 
+    /**
+     * Resolve an organization that has no synchronized subscription.
+     */
     private static function resolveWithoutSubscription(
         Organization $organization,
     ): OrganizationSubscriptionAccess {
@@ -98,8 +155,7 @@ final class OrganizationSubscriptionAccessResolver
     }
 
     /**
-     * Preserve pre-billing organizations that have never entered any billing
-     * ownership or checkout flow.
+     * Determine whether an unclassified organization predates billing ownership.
      */
     private static function isUnclassifiedLegacyOrganization(
         Organization $organization,
@@ -107,9 +163,25 @@ final class OrganizationSubscriptionAccessResolver
         return $organization->rollout_classification === null
             && $organization->trial_ends_at === null
             && blank($organization->stripe_id)
-            && ! $organization->billingCustomers()->exists();
+            && ! self::hasBillingCustomers($organization);
     }
 
+    /**
+     * Check billing-customer presence without querying when already eager loaded.
+     */
+    private static function hasBillingCustomers(
+        Organization $organization,
+    ): bool {
+        if ($organization->relationLoaded('billingCustomers')) {
+            return $organization->billingCustomers->isNotEmpty();
+        }
+
+        return $organization->billingCustomers()->exists();
+    }
+
+    /**
+     * Resolve provider-neutral subscription state into commercial access.
+     */
     private static function resolveWithSubscription(
         BillingSubscription $subscription,
         PlanCatalog $planCatalog,
@@ -153,8 +225,7 @@ final class OrganizationSubscriptionAccessResolver
     }
 
     /**
-     * Preserve commercial access for legacy Cashier rows during projection
-     * migration while still failing closed for unknown plans and statuses.
+     * Resolve legacy Cashier rows while provider-neutral projections migrate.
      */
     private static function resolveWithCashierSubscription(
         CashierSubscription $subscription,
@@ -224,6 +295,8 @@ final class OrganizationSubscriptionAccessResolver
     }
 
     /**
+     * Convert normalized subscription status into write access and warning state.
+     *
      * @return array{0: OrganizationAccessMode, 1: bool}
      */
     private static function resolveAccessModeAndWarning(
@@ -265,6 +338,9 @@ final class OrganizationSubscriptionAccessResolver
         };
     }
 
+    /**
+     * Normalize provider-neutral subscription fields into resolver vocabulary.
+     */
     private static function normalizedStatus(
         BillingSubscription $subscription,
     ): ?string {
@@ -288,6 +364,9 @@ final class OrganizationSubscriptionAccessResolver
         };
     }
 
+    /**
+     * Determine whether cancellation still retains already-paid access.
+     */
     private static function isCancelledWithPaidAccess(
         BillingSubscription $subscription,
     ): bool {
@@ -295,6 +374,9 @@ final class OrganizationSubscriptionAccessResolver
             && $subscription->ends_at?->isFuture() === true;
     }
 
+    /**
+     * Determine whether the normalized subscription is cancelled.
+     */
     private static function isCancelled(
         BillingSubscription $subscription,
     ): bool {
@@ -317,6 +399,9 @@ final class OrganizationSubscriptionAccessResolver
             );
     }
 
+    /**
+     * Determine whether paid access has reached its synchronized end timestamp.
+     */
     private static function hasEnded(
         BillingSubscription $subscription,
     ): bool {
@@ -324,6 +409,9 @@ final class OrganizationSubscriptionAccessResolver
             && ! $subscription->ends_at->isFuture();
     }
 
+    /**
+     * Fail closed when synchronized subscription state is ambiguous.
+     */
     private static function resolveDenied(): OrganizationSubscriptionAccess
     {
         return new OrganizationSubscriptionAccess(

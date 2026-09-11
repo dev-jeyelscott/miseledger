@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Platform\PlatformDashboardController;
+use App\Http\Controllers\Platform\PlatformOrganizationController;
+use App\Http\Controllers\Platform\PlatformUserController;
 use Illuminate\Support\Facades\Route;
 
 // Platform authority is independent from every organization-scoped capability.
@@ -10,4 +12,20 @@ Route::prefix('admin')
     ->group(function (): void {
         Route::get('/', [PlatformDashboardController::class, 'index'])
             ->name('dashboard');
+
+        Route::get('/users', [PlatformUserController::class, 'index'])
+            ->name('users.index');
+
+        Route::get('/users/{user}', [PlatformUserController::class, 'show'])
+            ->name('users.show');
+
+        Route::get(
+            '/organizations',
+            [PlatformOrganizationController::class, 'index'],
+        )->name('organizations.index');
+
+        Route::get(
+            '/organizations/{organization}',
+            [PlatformOrganizationController::class, 'show'],
+        )->name('organizations.show');
     });
