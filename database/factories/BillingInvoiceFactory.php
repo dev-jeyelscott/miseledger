@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\BillingInvoiceStatus;
+use App\Enums\BillingProvider;
 use App\Models\BillingInvoice;
 use App\Models\BillingSubscription;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -25,7 +26,7 @@ class BillingInvoiceFactory extends Factory
             'organization_id' => fn (array $attributes): int => BillingSubscription::query()
                 ->whereKey($attributes['billing_subscription_id'])
                 ->value('organization_id'),
-            'provider' => fn (array $attributes): string => BillingSubscription::query()
+            'provider' => fn (array $attributes): BillingProvider => BillingSubscription::query()
                 ->whereKey($attributes['billing_subscription_id'])
                 ->value('provider'),
             'invoice_number' => 'INV-'.Str::upper((string) Str::ulid()),

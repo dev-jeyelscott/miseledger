@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\BillingPaymentMethod;
 use App\Enums\BillingPaymentStatus;
+use App\Enums\BillingProvider;
 use App\Models\BillingInvoice;
 use App\Models\BillingPayment;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -26,7 +27,7 @@ class BillingPaymentFactory extends Factory
             'organization_id' => fn (array $attributes): int => BillingInvoice::query()
                 ->whereKey($attributes['billing_invoice_id'])
                 ->value('organization_id'),
-            'provider' => fn (array $attributes): string => BillingInvoice::query()
+            'provider' => fn (array $attributes): BillingProvider => BillingInvoice::query()
                 ->whereKey($attributes['billing_invoice_id'])
                 ->value('provider'),
             'payment_method' => BillingPaymentMethod::QrPh,
