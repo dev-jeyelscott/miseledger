@@ -91,9 +91,8 @@ final class OrganizationSubscriptionAccessResolver
     ): ?CashierSubscription {
         if ($organization->relationLoaded('subscriptions')) {
             $subscription = $organization->subscriptions->first(
-                static fn (
-                    CashierSubscription $subscription,
-                ): bool => $subscription->type === $subscriptionType,
+                static fn ($subscription): bool => $subscription instanceof CashierSubscription
+                    && $subscription->type === $subscriptionType,
             );
 
             return $subscription instanceof CashierSubscription

@@ -80,7 +80,7 @@ final class PlatformOrganizationController extends Controller
             ])
             ->with([
                 'billingSubscriptions' => static function (
-                    Builder $query,
+                    $query,
                 ) use ($subscriptionType): void {
                     $query
                         ->select([
@@ -97,7 +97,7 @@ final class PlatformOrganizationController extends Controller
                         ->where('type', $subscriptionType);
                 },
                 'billingCustomers' => static function (
-                    Builder $query,
+                    $query,
                 ): void {
                     $query->select([
                         'id',
@@ -105,7 +105,7 @@ final class PlatformOrganizationController extends Controller
                     ]);
                 },
                 'subscriptions' => static function (
-                    Builder $query,
+                    $query,
                 ) use ($subscriptionType): void {
                     $query->where('type', $subscriptionType);
                 },
@@ -220,7 +220,7 @@ final class PlatformOrganizationController extends Controller
 
         $organization->load([
             'billingSubscriptions' => static function (
-                Builder $query,
+                $query,
             ) use ($subscriptionType): void {
                 $query
                     ->select([
@@ -237,7 +237,7 @@ final class PlatformOrganizationController extends Controller
                     ->where('type', $subscriptionType);
             },
             'billingCustomers' => static function (
-                Builder $query,
+                $query,
             ): void {
                 $query->select([
                     'id',
@@ -245,7 +245,7 @@ final class PlatformOrganizationController extends Controller
                 ]);
             },
             'subscriptions' => static function (
-                Builder $query,
+                $query,
             ) use ($subscriptionType): void {
                 $query->where('type', $subscriptionType);
             },
