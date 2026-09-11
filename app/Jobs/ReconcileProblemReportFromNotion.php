@@ -69,7 +69,7 @@ final class ReconcileProblemReportFromNotion implements ShouldBeUnique, ShouldQu
      */
     public function handle(): void
     {
-        $config = NotionConfig::fromConfig((array) config('services.notion'));
+        $config = NotionConfig::fromConfig((array) config('services.notion', []));
 
         if (! $config->enabled) {
             return;
@@ -95,8 +95,10 @@ final class ReconcileProblemReportFromNotion implements ShouldBeUnique, ShouldQu
             return;
         }
 
+        $notionId = $report->notion_id;
+
         try {
-            $this->reconcile($report, new NotionService($config));
+            $this->reconcile($report, new NotionService($config), $notionId);
         } catch (NotionRequestException $exception) {
             if ($exception->isTransient) {
                 throw $exception;
@@ -140,9 +142,9 @@ final class ReconcileProblemReportFromNotion implements ShouldBeUnique, ShouldQu
     /**
      * Fetch remote status and reconcile local state, preserving on failure.
      */
-    private function reconcile(ProblemReport $report, NotionService $service): void
+    private function reconcile(ProblemReport $report, NotionService $service, string $notionId): void
     {
-        $page = $service->retrievePageById($report->notion_id);
+        $page = $service->retrievePageById($notionId);
 
         $remoteStatus = data_get($page, 'properties.Status.status.name');
 
