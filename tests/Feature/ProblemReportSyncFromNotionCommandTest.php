@@ -3,7 +3,9 @@
 use App\Enums\ProblemReportStatus;
 use App\Jobs\ReconcileProblemReportFromNotion;
 use App\Models\ProblemReport;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use Mockery;
 
 describe('Problem Report Sync From Notion Command', function () {
     beforeEach(function () {
@@ -115,5 +117,27 @@ describe('Problem Report Sync From Notion Command', function () {
         $result = $this->artisan('problem-report:sync-from-notion');
 
         $result->assertSuccessful();
+    });
+
+    it('emits structured log with safe counts', function () {
+        Log::spy();
+
+        ProblemReport::factory(3)->create([
+            'status' => ProblemReportStatus::Submitted,
+            'notion_id' => 'page-123',
+        ]);
+
+        ProblemReport::factory(2)->create([
+            'status' => ProblemReportStatus::Closed,
+            'notion_id' => 'page-456',
+        ]);
+
+        $this->artisan('problem-report:sync-from-notion');
+
+        Log::shouldHaveReceived('info')
+            ->with('Problem report reconciliation scheduled', Mockery::on(function ($context) {
+                return $context['dispatched'] === 3
+                    && $context['skipped'] === 2;
+            }));
     });
 });

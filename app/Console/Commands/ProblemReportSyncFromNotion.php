@@ -7,6 +7,7 @@ use App\Jobs\ReconcileProblemReportFromNotion;
 use App\Models\ProblemReport;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 final class ProblemReportSyncFromNotion extends Command
 {
@@ -42,6 +43,11 @@ final class ProblemReportSyncFromNotion extends Command
             ->whereNotNull('notion_id')
             ->where('status', '=', ProblemReportStatus::Closed)
             ->count();
+
+        Log::info('Problem report reconciliation scheduled', [
+            'dispatched' => $reconciled,
+            'skipped' => $skipped,
+        ]);
 
         $this->line(
             sprintf(
