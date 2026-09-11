@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Enums\OrganizationPermission;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
+use App\Models\User;
 use App\Support\Billing\FeatureCode;
 use App\Support\Billing\MemberAIAccessResolver;
 use App\Support\Billing\OrganizationFeatureEntitlement;
@@ -47,11 +48,15 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $user = $request->user();
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
             'auth' => [
-                'user' => $request->user(),
+                'user' => $user,
+                'isPlatformAdmin' => $user instanceof User
+                    && $user->isPlatformAdmin(),
             ],
             'organizationContext' => $this->organizationContext($request),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',

@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnforceFeatureEntitlement;
 use App\Http\Middleware\EnsureAiFeatureEnabled;
+use App\Http\Middleware\EnsurePlatformAdmin;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\ResolveActiveOrganization;
@@ -14,7 +15,10 @@ use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__.'/../routes/web.php',
+        web: [
+            __DIR__.'/../routes/web.php',
+            __DIR__.'/../routes/platform.php',
+        ],
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
@@ -35,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'feature' => EnforceFeatureEntitlement::class,
             'ai.enabled' => EnsureAiFeatureEnabled::class,
+            'platform.admin' => EnsurePlatformAdmin::class,
             'paymongo.webhook' => VerifyPayMongoWebhookSignature::class,
         ]);
 

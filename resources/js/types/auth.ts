@@ -12,6 +12,7 @@ export type User = {
 
 export type Auth = {
     user: User;
+    isPlatformAdmin: boolean;
 };
 
 /* @chisel-passkeys */
