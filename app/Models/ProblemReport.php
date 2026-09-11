@@ -26,6 +26,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $notion_last_checked_at
  * @property string|null $notion_check_error
  * @property Carbon|null $email_notified_at
+ * @property Carbon|null $email_notification_claimed_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -42,6 +43,7 @@ class ProblemReport extends Model
         'notion_last_checked_at',
         'notion_check_error',
         'email_notified_at',
+        'email_notification_claimed_at',
         'user_id',
     ];
 
@@ -75,6 +77,7 @@ class ProblemReport extends Model
             'notion_synced_at' => 'datetime',
             'notion_last_checked_at' => 'datetime',
             'email_notified_at' => 'datetime',
+            'email_notification_claimed_at' => 'datetime',
         ];
     }
 }
