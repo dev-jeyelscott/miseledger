@@ -1,10 +1,10 @@
 <?php
 
-use App\Exceptions\AmbiguousBillingNotificationDeliveryException;
 use App\Jobs\SendProblemReportOperatorEmail;
 use App\Models\ProblemReport;
 use App\Models\ProblemReportAttachment;
 use App\Models\User;
+use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 
@@ -112,7 +112,7 @@ describe('Send Problem Report Operator Email', function () {
         expect($report->email_notified_at)->not()->toBeNull();
     });
 
-    it('marks email_notification_claimed_at after successful send', function () {
+    it('marks both email_notification_claimed_at and email_notified_at after successful send', function () {
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -125,6 +125,7 @@ describe('Send Problem Report Operator Email', function () {
 
         $report->refresh();
         expect($report->email_notification_claimed_at)->not()->toBeNull();
+        expect($report->email_notified_at)->not()->toBeNull();
     });
 
     it('skips already notified reports', function () {
@@ -143,21 +144,30 @@ describe('Send Problem Report Operator Email', function () {
         expect($report->email_notified_at)->not()->toBeNull();
     });
 
-    it('fails with AmbiguousBillingNotificationDeliveryException when claim already exists', function () {
+    it('retries bounded mail delivery attempts after initial failure', function () {
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
         ]);
 
-        $report = ProblemReport::factory()->create([
-            'email_notification_claimed_at' => now(),
-        ]);
+        $report = ProblemReport::factory()->create();
+
+        Mail::shouldReceive('send')
+            ->times(3)
+            ->andThrow(new Exception('Mail service temporarily down'));
 
         $job = new SendProblemReportOperatorEmail($report->id);
 
+        expect($job->tries)->toBe(3);
+        expect($job->backoff)->toBe([60, 300]);
+
         expect(function () use ($job) {
             $job->handle();
-        })->toThrow(AmbiguousBillingNotificationDeliveryException::class);
+        })->toThrow(Exception::class);
+
+        $report->refresh();
+        expect($report->email_notified_at)->toBeNull();
+        expect($report->email_notification_claimed_at)->toBeNull();
     });
 
     it('uses unique job ID for deduplication', function () {
@@ -196,7 +206,7 @@ describe('Send Problem Report Operator Email', function () {
 
         $report->refresh();
         expect($report->email_notified_at)->toBeNull();
-        expect($report->email_notification_claimed_at)->not()->toBeNull();
+        expect($report->email_notification_claimed_at)->toBeNull();
     });
 
     it('skips email when report not found', function () {
@@ -231,7 +241,7 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function ($mailable) {
+        Mail::assertSent(function (Mailable $mailable): bool {
             return in_array(
                 'operator@example.com',
                 array_column((array) $mailable->to, 'address'),
@@ -251,7 +261,7 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function ($mailable) use ($report) {
+        Mail::assertSent(function (Mailable $mailable) use ($report): bool {
             return str_contains($mailable->subject, "MiseLedger Problem Report {$report->reference}");
         });
     });
@@ -279,7 +289,7 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function ($mailable) use ($report) {
+        Mail::assertSent(function (Mailable $mailable) use ($report): bool {
             $html = $mailable->render();
 
             return str_contains($html, $report->reference)
@@ -303,7 +313,7 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function ($mailable) use ($report) {
+        Mail::assertSent(function (Mailable $mailable) use ($report): bool {
             $html = $mailable->render();
             $expectedUrl = route('problem-reports.show-operator', $report->reference);
 
@@ -322,7 +332,7 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function ($mailable) use ($report) {
+        Mail::assertSent(function (Mailable $mailable) use ($report): bool {
             $messageId = sprintf(
                 'problem-report.%s@%s',
                 $report->reference,
@@ -348,7 +358,7 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function ($mailable) {
+        Mail::assertSent(function (Mailable $mailable): bool {
             return empty($mailable->attachments);
         });
     });
@@ -366,7 +376,7 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function ($mailable) {
+        Mail::assertSent(function (Mailable $mailable): bool {
             $html = $mailable->render();
 
             return ! str_contains($html, '/storage/')
@@ -386,7 +396,7 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function ($mailable) {
+        Mail::assertSent(function (Mailable $mailable): bool {
             $html = $mailable->render();
 
             return ! str_contains($html, 'notion')
@@ -413,8 +423,8 @@ describe('Send Problem Report Operator Email', function () {
         $job->handle();
 
         $report->refresh();
-        expect($report->email_notified_at)->toBe($firstNotifiedAt);
-        Mail::assertNotSent(function () {
+        expect($report->email_notified_at->toDateTimeString())->toBe($firstNotifiedAt->toDateTimeString());
+        Mail::assertNotSent(function (Mailable $mailable): bool {
             return true;
         });
     });
@@ -437,26 +447,41 @@ describe('Send Problem Report Operator Email', function () {
 
         $report->refresh();
         expect($report->email_notified_at)->toBeNull();
-        expect($report->email_notification_claimed_at)->not()->toBeNull();
+        expect($report->email_notification_claimed_at)->toBeNull();
     });
 });
 
 describe('Problem Report Operator Authorization', function () {
-    it('allows any authenticated user to view report as operator', function () {
+    it('prevents non-admin user from viewing report as operator', function () {
         $reporter = User::factory()->create();
-        $operator = User::factory()->create();
+        $nonAdmin = User::factory()->create();
 
         $report = ProblemReport::factory()->create([
             'user_id' => $reporter->id,
         ]);
 
-        $this->actingAs($operator)
+        $this->actingAs($nonAdmin)
+            ->get(route('problem-reports.show-operator', $report->reference))
+            ->assertForbidden();
+    });
+
+    it('allows platform admin to view any report as operator', function () {
+        $reporter = User::factory()->create();
+        $admin = User::factory()->create();
+        $admin->platformAdmin()->create();
+
+        $report = ProblemReport::factory()->create([
+            'user_id' => $reporter->id,
+        ]);
+
+        $this->actingAs($admin)
             ->get(route('problem-reports.show-operator', $report->reference))
             ->assertSuccessful();
     });
 
-    it('allows report owner to view report as operator', function () {
+    it('allows report owner who is platform admin to view report as operator', function () {
         $reporter = User::factory()->create();
+        $reporter->platformAdmin()->create();
 
         $report = ProblemReport::factory()->create([
             'user_id' => $reporter->id,

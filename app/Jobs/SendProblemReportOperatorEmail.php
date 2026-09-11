@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Exceptions\AmbiguousBillingNotificationDeliveryException;
 use App\Models\ProblemReport;
 use App\Notifications\ProblemReportOperatorNotification;
 use Illuminate\Bus\Queueable;
@@ -68,16 +67,6 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
                 return null;
             }
 
-            if ($report->email_notification_claimed_at !== null) {
-                throw new AmbiguousBillingNotificationDeliveryException(
-                    "problem-report:{$report->reference}"
-                );
-            }
-
-            $report->forceFill([
-                'email_notification_claimed_at' => now(),
-            ])->save();
-
             return $report;
         });
 
@@ -92,6 +81,7 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
 
             DB::transaction(function () use ($report): void {
                 $report->forceFill([
+                    'email_notification_claimed_at' => now(),
                     'email_notified_at' => now(),
                 ])->save();
             });

@@ -19,6 +19,6 @@ class ProblemReportPolicy
 
     public function viewAsOperator(User $user, ProblemReport $report): bool
     {
-        return true;
+        return $user->isPlatformAdmin();
     }
 }
