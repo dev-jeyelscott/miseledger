@@ -130,6 +130,22 @@ class ProblemReportController extends Controller
     }
 
     /**
+     * Display a problem report for operator viewing.
+     */
+    public function showOperator(string $reference, Request $request): Response
+    {
+        $problemReport = ProblemReport::where('reference', $reference)
+            ->with('attachments')
+            ->firstOrFail();
+
+        Gate::authorize('viewAsOperator', $problemReport);
+
+        return Inertia::render('problem-reports/show', [
+            'report' => $problemReport,
+        ]);
+    }
+
+    /**
      * Return an authorized problem report attachment.
      */
     public function attachment(Request $request, string $reference, int $attachmentId): SymfonyResponse

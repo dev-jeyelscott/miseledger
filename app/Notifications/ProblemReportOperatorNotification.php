@@ -27,7 +27,7 @@ class ProblemReportOperatorNotification extends Notification
             parse_url(config('app.url'), PHP_URL_HOST) ?: 'miseledger.app',
         );
 
-        $reportUrl = route('problem-reports.show', $this->report->reference);
+        $reportUrl = route('problem-reports.show-operator', $this->report->reference);
 
         return (new MailMessage)
             ->subject("MiseLedger Problem Report {$this->report->reference}")

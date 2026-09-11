@@ -196,7 +196,7 @@ describe('Send Problem Report Operator Email', function () {
 
         $report->refresh();
         expect($report->email_notified_at)->toBeNull();
-        expect($report->email_notification_claimed_at)->toBeNull();
+        expect($report->email_notification_claimed_at)->not()->toBeNull();
     });
 
     it('skips email when report not found', function () {
@@ -305,7 +305,7 @@ describe('Send Problem Report Operator Email', function () {
 
         Mail::assertSent(function ($mailable) use ($report) {
             $html = $mailable->render();
-            $expectedUrl = route('problem-reports.show', $report->reference);
+            $expectedUrl = route('problem-reports.show-operator', $report->reference);
 
             return str_contains($html, $expectedUrl);
         });
@@ -437,6 +437,49 @@ describe('Send Problem Report Operator Email', function () {
 
         $report->refresh();
         expect($report->email_notified_at)->toBeNull();
-        expect($report->email_notification_claimed_at)->toBeNull();
+        expect($report->email_notification_claimed_at)->not()->toBeNull();
+    });
+});
+
+describe('Problem Report Operator Authorization', function () {
+    it('allows any authenticated user to view report as operator', function () {
+        $reporter = User::factory()->create();
+        $operator = User::factory()->create();
+
+        $report = ProblemReport::factory()->create([
+            'user_id' => $reporter->id,
+        ]);
+
+        $this->actingAs($operator)
+            ->get(route('problem-reports.show-operator', $report->reference))
+            ->assertSuccessful();
+    });
+
+    it('allows report owner to view report as operator', function () {
+        $reporter = User::factory()->create();
+
+        $report = ProblemReport::factory()->create([
+            'user_id' => $reporter->id,
+        ]);
+
+        $this->actingAs($reporter)
+            ->get(route('problem-reports.show-operator', $report->reference))
+            ->assertSuccessful();
+    });
+
+    it('prevents unauthenticated access to operator route', function () {
+        $report = ProblemReport::factory()->create();
+
+        $this->get(route('problem-reports.show-operator', $report->reference))
+            ->assertRedirectToRoute('login');
+    });
+
+    it('prevents unverified user from accessing operator route', function () {
+        $user = User::factory()->unverified()->create();
+        $report = ProblemReport::factory()->create();
+
+        $this->actingAs($user)
+            ->get(route('problem-reports.show-operator', $report->reference))
+            ->assertRedirectToRoute('verification.notice');
     });
 });

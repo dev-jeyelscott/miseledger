@@ -74,6 +74,10 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
                 );
             }
 
+            $report->forceFill([
+                'email_notification_claimed_at' => now(),
+            ])->save();
+
             return $report;
         });
 
@@ -88,7 +92,6 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
 
             DB::transaction(function () use ($report): void {
                 $report->forceFill([
-                    'email_notification_claimed_at' => now(),
                     'email_notified_at' => now(),
                 ])->save();
             });
@@ -100,6 +103,7 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
 
             throw $exception;
         }
+
     }
 
     public function uniqueId(): string

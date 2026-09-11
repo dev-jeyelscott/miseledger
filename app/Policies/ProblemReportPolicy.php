@@ -16,4 +16,9 @@ class ProblemReportPolicy
     {
         return $user->id === $report->user_id;
     }
+
+    public function viewAsOperator(User $user, ProblemReport $report): bool
+    {
+        return true;
+    }
 }

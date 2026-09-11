@@ -107,6 +107,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     )->name('problem-reports.show');
 
     Route::get(
+        'problem-reports/{reference}/operator',
+        [ProblemReportController::class, 'showOperator'],
+    )->name('problem-reports.show-operator');
+
+    Route::get(
         'problem-reports/{reference}/attachments/{attachmentId}',
         [ProblemReportController::class, 'attachment'],
     )->name('problem-reports.attachment');
