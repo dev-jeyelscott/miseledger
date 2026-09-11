@@ -112,7 +112,7 @@ describe('Send Problem Report Operator Email', function () {
         expect($report->email_notified_at)->not()->toBeNull();
     });
 
-    it('marks email_notification_claimed_at during processing', function () {
+    it('marks email_notification_claimed_at after successful send', function () {
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -178,7 +178,7 @@ describe('Send Problem Report Operator Email', function () {
         expect($job->uniqueFor)->toBe(3600);
     });
 
-    it('does not disable other report operations on email failure', function () {
+    it('retries on mail delivery failure without marking notified', function () {
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -195,7 +195,8 @@ describe('Send Problem Report Operator Email', function () {
         })->toThrow(Exception::class);
 
         $report->refresh();
-        expect($report->id)->toBe($report->id);
+        expect($report->email_notified_at)->toBeNull();
+        expect($report->email_notification_claimed_at)->toBeNull();
     });
 
     it('skips email when report not found', function () {
@@ -210,7 +211,52 @@ describe('Send Problem Report Operator Email', function () {
         expect(true)->toBeTrue();
     });
 
-    it('can successfully send email with all report data', function () {
+    it('sends email to configured recipient', function () {
+        config([
+            'problem-reports.email.enabled' => true,
+            'problem-reports.email.to' => 'operator@example.com',
+        ]);
+
+        $user = User::factory()->create([
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+        ]);
+
+        $report = ProblemReport::factory()->create([
+            'user_id' => $user->id,
+            'title' => 'Test Title',
+            'description' => 'Test Description',
+        ]);
+
+        $job = new SendProblemReportOperatorEmail($report->id);
+        $job->handle();
+
+        Mail::assertSent(function ($mailable) {
+            return in_array(
+                'operator@example.com',
+                array_column((array) $mailable->to, 'address'),
+                true
+            );
+        });
+    });
+
+    it('includes report reference in subject line', function () {
+        config([
+            'problem-reports.email.enabled' => true,
+            'problem-reports.email.to' => 'operator@example.com',
+        ]);
+
+        $report = ProblemReport::factory()->create();
+
+        $job = new SendProblemReportOperatorEmail($report->id);
+        $job->handle();
+
+        Mail::assertSent(function ($mailable) use ($report) {
+            return str_contains($mailable->subject, "MiseLedger Problem Report {$report->reference}");
+        });
+    });
+
+    it('includes report metadata in email body', function () {
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -222,7 +268,7 @@ describe('Send Problem Report Operator Email', function () {
         ]);
 
         $report = ProblemReport::factory()
-            ->has(ProblemReportAttachment::factory(2), 'attachments')
+            ->has(ProblemReportAttachment::factory(3), 'attachments')
             ->create([
                 'user_id' => $user->id,
                 'title' => 'Test Title',
@@ -233,8 +279,164 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
+        Mail::assertSent(function ($mailable) use ($report) {
+            $html = $mailable->render();
+
+            return str_contains($html, $report->reference)
+                && str_contains($html, 'Test Title')
+                && str_contains($html, 'Test Description')
+                && str_contains($html, 'Test User')
+                && str_contains($html, 'test@example.com')
+                && str_contains($html, 'Test Org')
+                && str_contains($html, 'Screenshot Count: 3');
+        });
+    });
+
+    it('includes authenticated URL with report reference', function () {
+        config([
+            'problem-reports.email.enabled' => true,
+            'problem-reports.email.to' => 'operator@example.com',
+        ]);
+
+        $report = ProblemReport::factory()->create();
+
+        $job = new SendProblemReportOperatorEmail($report->id);
+        $job->handle();
+
+        Mail::assertSent(function ($mailable) use ($report) {
+            $html = $mailable->render();
+            $expectedUrl = route('problem-reports.show', $report->reference);
+
+            return str_contains($html, $expectedUrl);
+        });
+    });
+
+    it('sets deterministic Message-ID header', function () {
+        config([
+            'problem-reports.email.enabled' => true,
+            'problem-reports.email.to' => 'operator@example.com',
+        ]);
+
+        $report = ProblemReport::factory()->create();
+
+        $job = new SendProblemReportOperatorEmail($report->id);
+        $job->handle();
+
+        Mail::assertSent(function ($mailable) use ($report) {
+            $messageId = sprintf(
+                'problem-report.%s@%s',
+                $report->reference,
+                parse_url(config('app.url'), PHP_URL_HOST) ?: 'miseledger.app',
+            );
+
+            $html = $mailable->render();
+
+            return str_contains($html, $messageId);
+        });
+    });
+
+    it('does not include screenshot attachments in email', function () {
+        config([
+            'problem-reports.email.enabled' => true,
+            'problem-reports.email.to' => 'operator@example.com',
+        ]);
+
+        $report = ProblemReport::factory()
+            ->has(ProblemReportAttachment::factory(2), 'attachments')
+            ->create();
+
+        $job = new SendProblemReportOperatorEmail($report->id);
+        $job->handle();
+
+        Mail::assertSent(function ($mailable) {
+            return empty($mailable->attachments);
+        });
+    });
+
+    it('does not expose private storage paths in email', function () {
+        config([
+            'problem-reports.email.enabled' => true,
+            'problem-reports.email.to' => 'operator@example.com',
+        ]);
+
+        $report = ProblemReport::factory()
+            ->has(ProblemReportAttachment::factory(2), 'attachments')
+            ->create();
+
+        $job = new SendProblemReportOperatorEmail($report->id);
+        $job->handle();
+
+        Mail::assertSent(function ($mailable) {
+            $html = $mailable->render();
+
+            return ! str_contains($html, '/storage/')
+                && ! str_contains($html, 'app/problem-reports/')
+                && ! str_contains($html, '.env');
+        });
+    });
+
+    it('does not include Notion credentials or metadata', function () {
+        config([
+            'problem-reports.email.enabled' => true,
+            'problem-reports.email.to' => 'operator@example.com',
+        ]);
+
+        $report = ProblemReport::factory()->create();
+
+        $job = new SendProblemReportOperatorEmail($report->id);
+        $job->handle();
+
+        Mail::assertSent(function ($mailable) {
+            $html = $mailable->render();
+
+            return ! str_contains($html, 'notion')
+                && ! str_contains($html, 'notion_page_id')
+                && ! str_contains($html, 'notion_sync');
+        });
+    });
+
+    it('prevents duplicate sends after successful delivery', function () {
+        config([
+            'problem-reports.email.enabled' => true,
+            'problem-reports.email.to' => 'operator@example.com',
+        ]);
+
+        $report = ProblemReport::factory()->create();
+
+        $job = new SendProblemReportOperatorEmail($report->id);
+        $job->handle();
+
         $report->refresh();
-        expect($report->email_notified_at)->not()->toBeNull();
-        expect($report->email_notification_claimed_at)->not()->toBeNull();
+        $firstNotifiedAt = $report->email_notified_at;
+
+        Mail::fake();
+        $job->handle();
+
+        $report->refresh();
+        expect($report->email_notified_at)->toBe($firstNotifiedAt);
+        Mail::assertNotSent(function () {
+            return true;
+        });
+    });
+
+    it('does not mutate report lifecycle on email failure', function () {
+        config([
+            'problem-reports.email.enabled' => true,
+            'problem-reports.email.to' => 'operator@example.com',
+        ]);
+
+        $report = ProblemReport::factory()->create();
+
+        Mail::shouldReceive('send')->andThrow(new Exception('Mail service down'));
+
+        $job = new SendProblemReportOperatorEmail($report->id);
+
+        expect(function () use ($job) {
+            $job->handle();
+        })->toThrow(Exception::class);
+
+        $report->refresh();
+        expect($report->email_notified_at)->toBeNull();
+        expect($report->email_notification_claimed_at)->toBeNull();
     });
 });

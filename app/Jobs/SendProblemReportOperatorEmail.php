@@ -59,7 +59,7 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
             return;
         }
 
-        $effect = DB::transaction(function (): ?ProblemReport {
+        $report = DB::transaction(function (): ?ProblemReport {
             $report = ProblemReport::query()
                 ->lockForUpdate()
                 ->find($this->reportId);
@@ -74,23 +74,24 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
                 );
             }
 
-            $report->forceFill(['email_notification_claimed_at' => now()])->save();
-
             return $report;
         });
 
-        if ($effect === null) {
+        if ($report === null) {
             return;
         }
-
-        $report = $effect;
 
         try {
             (new AnonymousNotifiable)
                 ->route('mail', $recipient)
                 ->notify(new ProblemReportOperatorNotification($report));
 
-            $report->forceFill(['email_notified_at' => now()])->save();
+            DB::transaction(function () use ($report): void {
+                $report->forceFill([
+                    'email_notification_claimed_at' => now(),
+                    'email_notified_at' => now(),
+                ])->save();
+            });
         } catch (Throwable $exception) {
             Log::error('Problem report operator email delivery failed', [
                 'problem_report_id' => $this->reportId,
