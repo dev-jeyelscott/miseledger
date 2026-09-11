@@ -81,9 +81,8 @@ describe('Problem Report Sync From Notion Command', function () {
             'notion_id' => 'page-123',
         ]);
 
-        $result = $this->artisan('problem-report:sync-from-notion', ['--chunk' => '2']);
-
-        $result->assertSuccessful();
+        $this->artisan('problem-report:sync-from-notion', ['--chunk' => '2'])
+            ->assertSuccessful();
 
         Queue::assertPushedTimes(ReconcileProblemReportFromNotion::class, 5);
     });

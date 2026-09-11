@@ -24,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $notion_status
  * @property Carbon|null $notion_synced_at
  * @property Carbon|null $notion_last_checked_at
+ * @property string|null $notion_check_error
  * @property Carbon|null $email_notified_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -39,6 +40,7 @@ class ProblemReport extends Model
         'notion_status',
         'notion_synced_at',
         'notion_last_checked_at',
+        'notion_check_error',
         'email_notified_at',
         'user_id',
     ];

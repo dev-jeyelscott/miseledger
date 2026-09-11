@@ -102,6 +102,7 @@ final class ReconcileProblemReportFromNotion implements ShouldBeUnique, ShouldQu
                 throw $exception;
             }
 
+            $this->recordError($report, $exception);
             $this->fail($exception);
         }
     }
@@ -153,6 +154,7 @@ final class ReconcileProblemReportFromNotion implements ShouldBeUnique, ShouldQu
         }
 
         $this->persistReconciliation($report, $remoteStatus, $mapped);
+        $this->clearReconciliationError($report);
     }
 
     /**
@@ -179,8 +181,7 @@ final class ReconcileProblemReportFromNotion implements ShouldBeUnique, ShouldQu
         ProblemReport $report,
         string $remoteStatus,
         ProblemReportStatus $mapped,
-    ): void
-    {
+    ): void {
         $report->forceFill([
             'notion_status' => $remoteStatus,
             'status' => $mapped,
@@ -203,5 +204,46 @@ final class ReconcileProblemReportFromNotion implements ShouldBeUnique, ShouldQu
             'notion_status' => $report->notion_status,
             'local_status' => $report->status->value,
         ]);
+    }
+
+    /**
+     * Record safe, non-secret integration diagnostic from exception.
+     */
+    private function recordError(ProblemReport $report, NotionRequestException $exception): void
+    {
+        $error = match ($exception->status) {
+            404 => 'not_found',
+            401, 403 => 'auth_failure',
+            429 => 'rate_limited',
+            500, 502, 503 => 'service_error',
+            default => 'request_failed',
+        };
+
+        $this->recordReconciliationError($report, $error);
+    }
+
+    /**
+     * Record safe, non-secret integration diagnostic when a read fails.
+     */
+    private function recordReconciliationError(ProblemReport $report, string $error): void
+    {
+        $report->forceFill([
+            'notion_check_error' => $error,
+            'notion_last_checked_at' => now(),
+        ])->save();
+    }
+
+    /**
+     * Clear integration error diagnostic after a successful read.
+     */
+    private function clearReconciliationError(ProblemReport $report): void
+    {
+        if ($report->notion_check_error === null) {
+            return;
+        }
+
+        $report->forceFill([
+            'notion_check_error' => null,
+        ])->save();
     }
 }

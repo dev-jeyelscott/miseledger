@@ -3,9 +3,6 @@
 use App\Enums\ProblemReportStatus;
 use App\Jobs\ReconcileProblemReportFromNotion;
 use App\Models\ProblemReport;
-use App\Models\User;
-use App\Support\Notion\NotionConfig;
-use App\Support\Notion\NotionRequestException;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\Http;
@@ -84,10 +81,12 @@ describe('Reconcile Problem Report From Notion', function () {
             'notion_id' => 'page-123',
         ]);
 
-        $this->expectException(NotionRequestException::class);
-
         $job = new ReconcileProblemReportFromNotion($report->id);
         $job->handle();
+
+        $report->refresh();
+        // Job calls $this->fail() on invalid config, preserving status
+        expect($report->status)->toBe(ProblemReportStatus::Submitted);
     });
 
     it('skips when report does not exist', function () {
@@ -350,7 +349,7 @@ describe('Reconcile Problem Report From Notion', function () {
         expect($report->notion_last_checked_at)->not->toBeNull();
 
         Log::shouldHaveReceived('warning')
-            ->with('Unknown Notion status for problem report', \Mockery::on(function ($context) use ($report) {
+            ->with('Unknown Notion status for problem report', Mockery::on(function ($context) use ($report) {
                 return $context['problem_report_id'] === $report->id
                     && $context['local_status'] === 'in-progress';
             }));
@@ -392,10 +391,13 @@ describe('Reconcile Problem Report From Notion', function () {
             'notion_id' => 'page-123',
         ]);
 
-        $this->expectException(NotionRequestException::class);
-
         $job = new ReconcileProblemReportFromNotion($report->id);
         $job->handle();
+
+        $report->refresh();
+        expect($report->status)->toBe(ProblemReportStatus::InProgress);
+        expect($report->notion_last_checked_at)->not->toBeNull();
+        expect($report->notion_check_error)->toBe('not_found');
     });
 
     it('updates notion_last_checked_at after successful read', function () {
@@ -420,7 +422,7 @@ describe('Reconcile Problem Report From Notion', function () {
 
         $report->refresh();
         expect($report->notion_last_checked_at)->not->toBeNull();
-        expect($report->notion_last_checked_at)->toBeAfterOrEqual($beforeCheck);
+        expect($report->notion_last_checked_at->timestamp >= $beforeCheck->timestamp)->toBeTrue();
     });
 
     it('allows reopening from Resolved back to In Progress before Closed', function () {

@@ -23,7 +23,6 @@ final class ProblemReportSyncFromNotion extends Command
 
         ProblemReport::query()
             ->whereNotNull('notion_id')
-            ->where('status', '!=', ProblemReportStatus::Closed->value)
             ->chunkById(
                 $this->chunkSize(),
                 function (Collection $batch) use (
@@ -31,8 +30,7 @@ final class ProblemReportSyncFromNotion extends Command
                     &$skipped,
                 ): void {
                     foreach ($batch as $report) {
-                        if ($report->notion_id === null
-                            || $report->status === ProblemReportStatus::Closed) {
+                        if ($report->status === ProblemReportStatus::Closed) {
                             $skipped++;
 
                             continue;
