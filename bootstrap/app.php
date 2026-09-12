@@ -5,6 +5,7 @@ use App\Http\Middleware\EnsureAiFeatureEnabled;
 use App\Http\Middleware\EnsurePlatformAdmin;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\ObserveStripeWebhookSignature;
 use App\Http\Middleware\ResolveActiveOrganization;
 use App\Http\Middleware\VerifyPayMongoWebhookSignature;
 use Illuminate\Foundation\Application;
@@ -41,6 +42,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'ai.enabled' => EnsureAiFeatureEnabled::class,
             'platform.admin' => EnsurePlatformAdmin::class,
             'paymongo.webhook' => VerifyPayMongoWebhookSignature::class,
+            'stripe.webhook' => ObserveStripeWebhookSignature::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [

@@ -21,14 +21,33 @@ class ObserveStripeWebhookSignature
      */
     public function handle(Request $request, Closure $next): mixed
     {
-        try {
-            WebhookSignature::verifyHeader($request->getContent(), $request->header('Stripe-Signature'), config('cashier.webhook.secret'), config('cashier.webhook.tolerance'));
-        } catch (SignatureVerificationException $exception) {
-            $this->observability->invalidWebhookSignature(BillingProvider::Stripe);
+        $secret = config('cashier.webhook.secret');
 
-            throw new AccessDeniedHttpException($exception->getMessage(), $exception);
+        if (! is_string($secret) || preg_match('/^whsec_[^\s]+$/D', $secret) !== 1) {
+            $this->reject();
+        }
+
+        try {
+            WebhookSignature::verifyHeader(
+                $request->getContent(),
+                $request->header('Stripe-Signature'),
+                $secret,
+                config('cashier.webhook.tolerance'),
+            );
+        } catch (SignatureVerificationException $exception) {
+            $this->reject($exception);
         }
 
         return $next($request);
+    }
+
+    private function reject(?SignatureVerificationException $exception = null): never
+    {
+        $this->observability->invalidWebhookSignature(BillingProvider::Stripe);
+
+        throw new AccessDeniedHttpException(
+            'Invalid Stripe webhook signature.',
+            $exception,
+        );
     }
 }

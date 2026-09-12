@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Billing;
 
 use App\Enums\BillingProvider;
-use App\Http\Middleware\ObserveStripeWebhookSignature;
 use App\Models\Organization;
 use App\Support\Billing\BillingObservability;
 use Illuminate\Http\Request;
@@ -13,12 +12,7 @@ use Throwable;
 
 final class StripeWebhookController extends WebhookController
 {
-    public function __construct(private readonly BillingObservability $observability)
-    {
-        if (config('cashier.webhook.secret')) {
-            $this->middleware(ObserveStripeWebhookSignature::class);
-        }
-    }
+    public function __construct(private readonly BillingObservability $observability) {}
 
     public function handleWebhook(Request $request): Response
     {

@@ -59,6 +59,7 @@ Route::get('stripe/payment/{id}', [PaymentController::class, 'show'])
     ->name('cashier.payment');
 
 Route::post('billing/webhooks/stripe', [StripeWebhookController::class, 'handleWebhook'])
+    ->middleware('stripe.webhook')
     ->name('cashier.webhook');
 
 Route::post('billing/webhooks/paymongo', PayMongoWebhookController::class)

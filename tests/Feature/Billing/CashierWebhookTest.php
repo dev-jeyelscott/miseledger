@@ -36,6 +36,19 @@ function signAndPostStripeWebhook(array $payload, string $secret): TestResponse
     );
 }
 
+function postUnsignedStripeWebhook(array $payload): TestResponse
+{
+    return test()->call(
+        'POST',
+        route('cashier.webhook'),
+        [],
+        [],
+        [],
+        ['CONTENT_TYPE' => 'application/json'],
+        json_encode($payload),
+    );
+}
+
 function subscriptionUpdatedPayload(string $customerId, string $subscriptionId, array $overrides = []): array
 {
     return array_replace_recursive([
@@ -93,6 +106,39 @@ test('an invalidly signed event is rejected without changing subscription state'
     $response = signAndPostStripeWebhook($payload, 'whsec_wrong_secret');
 
     $response->assertForbidden();
+
+    expect($organization->fresh()->subscriptions()->count())->toBe(0);
+});
+
+test('an unsigned event is rejected without changing subscription state', function () {
+    $organization = Organization::factory()->create(['stripe_id' => 'cus_matched']);
+
+    Config::set('cashier.webhook.secret', 'whsec_test_secret');
+
+    postUnsignedStripeWebhook(subscriptionUpdatedPayload('cus_matched', 'sub_unsigned_123'))
+        ->assertForbidden();
+
+    expect($organization->fresh()->subscriptions()->count())->toBe(0);
+});
+
+test('an event is rejected when the Stripe webhook secret is missing', function () {
+    $organization = Organization::factory()->create(['stripe_id' => 'cus_matched']);
+    $payload = subscriptionUpdatedPayload('cus_matched', 'sub_missing_secret_123');
+
+    Config::set('cashier.webhook.secret', null);
+
+    signAndPostStripeWebhook($payload, 'whsec_test_secret')->assertForbidden();
+
+    expect($organization->fresh()->subscriptions()->count())->toBe(0);
+});
+
+test('an event is rejected when the Stripe webhook secret is malformed', function () {
+    $organization = Organization::factory()->create(['stripe_id' => 'cus_matched']);
+    $payload = subscriptionUpdatedPayload('cus_matched', 'sub_malformed_secret_123');
+
+    Config::set('cashier.webhook.secret', 'invalid-secret');
+
+    signAndPostStripeWebhook($payload, 'invalid-secret')->assertForbidden();
 
     expect($organization->fresh()->subscriptions()->count())->toBe(0);
 });
