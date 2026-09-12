@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\AmbiguousProblemReportEmailDeliveryException;
 use App\Models\ProblemReport;
 use App\Notifications\ProblemReportOperatorNotification;
 use Illuminate\Bus\Queueable;
@@ -67,6 +68,18 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
                 return null;
             }
 
+            // A claim already recorded by a prior attempt, with no delivery marker, is
+            // ambiguous: that attempt may have terminated before or after delivery
+            // actually occurred, and there is no local or provider-side signal capable
+            // of resolving that. Resending here risks a duplicate externally visible
+            // email, so the claim is left untouched and delivery is refused;
+            // manual reconciliation is needed for stale claims like this.
+            if ($report->email_notification_claimed_at !== null) {
+                throw new AmbiguousProblemReportEmailDeliveryException($this->reportId);
+            }
+
+            $report->update(['email_notification_claimed_at' => now()]);
+
             return $report;
         });
 
@@ -74,6 +87,12 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
             return;
         }
 
+        // The claim recorded above is left in place if this throws: a transport can
+        // accept a message and then throw on a lost acknowledgement, and a
+        // multi-recipient send can throw after earlier recipients already received
+        // it, so a thrown send is not provable non-delivery. Any subsequent retry
+        // attempt will find the claim already set and refuse to redeliver via the
+        // ambiguous-claim guard above, instead surfacing for manual reconciliation.
         try {
             (new AnonymousNotifiable)
                 ->route('mail', $recipient)
@@ -81,7 +100,6 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
 
             DB::transaction(function () use ($report): void {
                 $report->forceFill([
-                    'email_notification_claimed_at' => now(),
                     'email_notified_at' => now(),
                 ])->save();
             });

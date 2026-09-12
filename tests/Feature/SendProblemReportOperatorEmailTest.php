@@ -167,7 +167,7 @@ describe('Send Problem Report Operator Email', function () {
 
         $report->refresh();
         expect($report->email_notified_at)->toBeNull();
-        expect($report->email_notification_claimed_at)->toBeNull();
+        expect($report->email_notification_claimed_at)->not()->toBeNull();
     });
 
     it('uses unique job ID for deduplication', function () {
@@ -206,7 +206,7 @@ describe('Send Problem Report Operator Email', function () {
 
         $report->refresh();
         expect($report->email_notified_at)->toBeNull();
-        expect($report->email_notification_claimed_at)->toBeNull();
+        expect($report->email_notification_claimed_at)->not()->toBeNull();
     });
 
     it('skips email when report not found', function () {
@@ -447,7 +447,56 @@ describe('Send Problem Report Operator Email', function () {
 
         $report->refresh();
         expect($report->email_notified_at)->toBeNull();
-        expect($report->email_notification_claimed_at)->toBeNull();
+        expect($report->email_notification_claimed_at)->not()->toBeNull();
+    });
+
+    it('refuses to redeliver when ambiguous claim exists', function () {
+        config([
+            'problem-reports.email.enabled' => true,
+            'problem-reports.email.to' => 'operator@example.com',
+        ]);
+
+        $report = ProblemReport::factory()->create([
+            'email_notification_claimed_at' => now()->subHour(),
+        ]);
+
+        $job = new SendProblemReportOperatorEmail($report->id);
+
+        expect(function () use ($job) {
+            $job->handle();
+        })->toThrow(\App\Exceptions\AmbiguousProblemReportEmailDeliveryException::class);
+
+        $report->refresh();
+        expect($report->email_notified_at)->toBeNull();
+
+        Mail::assertNotSent(function (): bool {
+            return true;
+        });
+    });
+
+    it('prevents concurrent execution from sending multiple emails', function () {
+        config([
+            'problem-reports.email.enabled' => true,
+            'problem-reports.email.to' => 'operator@example.com',
+        ]);
+
+        $report = ProblemReport::factory()->create();
+
+        $job = new SendProblemReportOperatorEmail($report->id);
+        $job->handle();
+
+        $report->refresh();
+        $firstNotifiedAt = $report->email_notified_at;
+
+        Mail::fake();
+        $job->handle();
+
+        $report->refresh();
+        expect($report->email_notified_at->toDateTimeString())->toBe($firstNotifiedAt->toDateTimeString());
+
+        Mail::assertNotSent(function (): bool {
+            return true;
+        });
     });
 });
 
