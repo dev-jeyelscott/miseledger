@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\AmbiguousProblemReportEmailDeliveryException;
 use App\Jobs\SendProblemReportOperatorEmail;
 use App\Models\ProblemReport;
 use App\Models\ProblemReportAttachment;
@@ -145,6 +146,9 @@ describe('Send Problem Report Operator Email', function () {
     });
 
     it('retries bounded mail delivery attempts after initial failure', function () {
+        Queue::fake();
+        Mail::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -152,22 +156,36 @@ describe('Send Problem Report Operator Email', function () {
 
         $report = ProblemReport::factory()->create();
 
-        Mail::shouldReceive('send')
-            ->times(3)
-            ->andThrow(new Exception('Mail service temporarily down'));
+        // Configure mail to fail on the first two attempts, succeed on third
+        $attemptCount = 0;
+        Mail::shouldReceive('send')->andReturnUsing(function () use (&$attemptCount) {
+            $attemptCount++;
+            if ($attemptCount < 3) {
+                throw new Exception('Mail service temporarily down');
+            }
+        });
 
         $job = new SendProblemReportOperatorEmail($report->id);
 
         expect($job->tries)->toBe(3);
         expect($job->backoff)->toBe([60, 300]);
 
+        // Manually process retries through the job's handle method
+        // First attempt fails
         expect(function () use ($job) {
             $job->handle();
         })->toThrow(Exception::class);
 
+        // Report should show claimed but not notified yet
         $report->refresh();
         expect($report->email_notified_at)->toBeNull();
         expect($report->email_notification_claimed_at)->not()->toBeNull();
+
+        // Retry succeeds
+        $job->handle();
+
+        $report->refresh();
+        expect($report->email_notified_at)->not()->toBeNull();
     });
 
     it('uses unique job ID for deduplication', function () {
@@ -333,15 +351,23 @@ describe('Send Problem Report Operator Email', function () {
         $job->handle();
 
         Mail::assertSent(function (Mailable $mailable) use ($report): bool {
-            $messageId = sprintf(
+            $expectedMessageId = sprintf(
                 'problem-report.%s@%s',
                 $report->reference,
                 parse_url(config('app.url'), PHP_URL_HOST) ?: 'miseledger.app',
             );
 
-            $html = $mailable->render();
+            // Access the built Symfony message to check the Message-Id header
+            $message = $mailable->build();
+            if (method_exists($message, 'getSymfonyMessage')) {
+                $symfonyMessage = $message->getSymfonyMessage();
+                $messageId = $symfonyMessage->getHeaders()->get('Message-Id')?->getBodyAsString();
 
-            return str_contains($html, $messageId);
+                return $messageId === sprintf('<%s>', $expectedMessageId);
+            }
+
+            // Fallback for accessing headers if getSymfonyMessage is not available
+            return false;
         });
     });
 
@@ -464,7 +490,7 @@ describe('Send Problem Report Operator Email', function () {
 
         expect(function () use ($job) {
             $job->handle();
-        })->toThrow(\App\Exceptions\AmbiguousProblemReportEmailDeliveryException::class);
+        })->toThrow(AmbiguousProblemReportEmailDeliveryException::class);
 
         $report->refresh();
         expect($report->email_notified_at)->toBeNull();
