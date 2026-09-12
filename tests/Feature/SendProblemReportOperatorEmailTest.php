@@ -145,7 +145,7 @@ describe('Send Problem Report Operator Email', function () {
         expect($report->email_notified_at)->not()->toBeNull();
     });
 
-    it('retries bounded mail delivery attempts after initial failure', function () {
+    it('refuses to retry after initial send failure due to ambiguous outcome', function () {
         Queue::fake();
         Mail::fake();
 
@@ -156,22 +156,11 @@ describe('Send Problem Report Operator Email', function () {
 
         $report = ProblemReport::factory()->create();
 
-        // Configure mail to fail on the first two attempts, succeed on third
-        $attemptCount = 0;
-        Mail::shouldReceive('send')->andReturnUsing(function () use (&$attemptCount) {
-            $attemptCount++;
-            if ($attemptCount < 3) {
-                throw new Exception('Mail service temporarily down');
-            }
-        });
+        Mail::shouldReceive('send')->andThrow(new Exception('Mail service temporarily down'));
 
         $job = new SendProblemReportOperatorEmail($report->id);
 
-        expect($job->tries)->toBe(3);
-        expect($job->backoff)->toBe([60, 300]);
-
-        // Manually process retries through the job's handle method
-        // First attempt fails
+        // First attempt fails and sets claim
         expect(function () use ($job) {
             $job->handle();
         })->toThrow(Exception::class);
@@ -181,11 +170,14 @@ describe('Send Problem Report Operator Email', function () {
         expect($report->email_notified_at)->toBeNull();
         expect($report->email_notification_claimed_at)->not()->toBeNull();
 
-        // Retry succeeds
-        $job->handle();
+        // Retry refuses to redeliver due to ambiguous claim
+        expect(function () use ($job) {
+            $job->handle();
+        })->toThrow(AmbiguousProblemReportEmailDeliveryException::class);
 
         $report->refresh();
-        expect($report->email_notified_at)->not()->toBeNull();
+        expect($report->email_notified_at)->toBeNull();
+        expect($report->email_notification_claimed_at)->not()->toBeNull();
     });
 
     it('uses unique job ID for deduplication', function () {

@@ -68,22 +68,14 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
                 return null;
             }
 
-            // A claim older than the retry window (600s allows backoffs of 60/300s plus
-            // timeout) indicates a prior execution that ended without confirmation.
-            // Delivery outcome is ambiguous: the prior attempt may have succeeded with
-            // only the ack lost, so retrying risks a duplicate. Refuse delivery and
-            // surface for manual reconciliation.
+            // Any existing claim indicates a prior send attempt whose outcome is ambiguous.
+            // The prior attempt may have succeeded with only the ack lost, so resending
+            // risks a duplicate. Do not redeliver; surface for manual reconciliation.
             if ($report->email_notification_claimed_at !== null) {
-                $claimAgeSeconds = now()->diffInSeconds($report->email_notification_claimed_at);
-                if ($claimAgeSeconds > 600) {
-                    throw new AmbiguousProblemReportEmailDeliveryException($this->reportId);
-                }
-
-                // Fresh claim from current retry, proceed to resend
-                return $report;
+                throw new AmbiguousProblemReportEmailDeliveryException($this->reportId);
             }
 
-            $report->update(['email_notification_claimed_at' => now()]);
+            $report->forceFill(['email_notification_claimed_at' => now()])->save();
 
             return $report;
         });
