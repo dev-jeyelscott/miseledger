@@ -242,7 +242,11 @@ final class PayMongoWebhookController extends Controller
         return $this->acknowledge();
     }
 
-    /** Verify exact local payment-attempt attributes before any webhook effect. */
+    /**
+     * Verify exact local payment-attempt attributes before any webhook effect.
+     *
+     * @param  PaymentEvent  $event
+     */
     private function assertPaymentEventMatches(
         BillingPayment $payment,
         array $event,

@@ -39,6 +39,11 @@ beforeEach(function (): void {
     Http::preventStrayRequests();
 });
 
+/**
+ * Create one manual PayMongo subscription fixture for upgrade tests.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
 function upgradeTestSubscription(array $attributes = []): BillingSubscription
 {
     $organization = Organization::factory()->create();
@@ -61,6 +66,7 @@ function upgradeTestSubscription(array $attributes = []): BillingSubscription
     ], $attributes));
 }
 
+/** Fake the PayMongo QR Ph checkout calls for one upgrade Payment Intent. */
 function fakeUpgradeCheckout(string $paymentIntentId): void
 {
     Http::fake([
@@ -83,8 +89,15 @@ function fakeUpgradeCheckout(string $paymentIntentId): void
     ]);
 }
 
-function postUpgradeWebhook(array $payload, string $secret = 'whsk_paymongo_webhook_test'): TestResponse
-{
+/**
+ * Sign and post one exact PayMongo webhook payload.
+ *
+ * @param  array<string, mixed>  $payload
+ */
+function postUpgradeWebhook(
+    array $payload,
+    string $secret = 'whsk_paymongo_webhook_test',
+): TestResponse {
     $body = json_encode($payload, JSON_THROW_ON_ERROR);
     $timestamp = (string) time();
     $signature = hash_hmac('sha256', $timestamp.'.'.$body, $secret);
@@ -95,8 +108,16 @@ function postUpgradeWebhook(array $payload, string $secret = 'whsk_paymongo_webh
     ], $body);
 }
 
-function upgradePaymentPaidPayload(string $eventId, string $paymentIntentId, int $amount): array
-{
+/**
+ * Build one successful PayMongo payment webhook for an upgrade Payment Intent.
+ *
+ * @return array<string, mixed>
+ */
+function upgradePaymentPaidPayload(
+    string $eventId,
+    string $paymentIntentId,
+    int $amount,
+): array {
     return ['data' => ['id' => $eventId, 'type' => 'event', 'attributes' => [
         'type' => 'payment.paid',
         'livemode' => false,
@@ -217,7 +238,10 @@ test('a pending upgrade invoice priced under stale config is cancelled and repla
 
 test('a Stripe-owned subscription is rejected with a not-yet-available error', function (): void {
     $organization = Organization::factory()->create();
-    $customer = BillingCustomer::factory()->for($organization)->create(['provider' => BillingProvider::Stripe]);
+    $customer = BillingCustomer::factory()->for($organization)->create([
+        'provider' => BillingProvider::Stripe,
+    ]);
+
     BillingSubscription::factory()->for($customer, 'billingCustomer')->create([
         'organization_id' => $organization->getKey(),
         'provider' => BillingProvider::Stripe,
@@ -228,11 +252,21 @@ test('a Stripe-owned subscription is rejected with a not-yet-available error', f
         'provider_status' => 'active',
         'current_period_ends_at' => now()->addDays(10),
     ]);
+
     $user = User::factory()->create();
-    OrganizationMembership::factory()->for($organization)->for($user)->create(['role' => OrganizationRole::Owner]);
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
 
     $this->actingAs($user)
-        ->postJson(route('organizations.billing.upgrade', $organization), ['plan' => 'growth'])
+        ->postJson(
+            route('organizations.billing.upgrade', $organization),
+            ['plan' => 'growth'],
+        )
         ->assertStatus(422);
 
     expect(BillingInvoice::query()->count())->toBe(0);
@@ -242,15 +276,33 @@ test('successful settlement flips the plan exactly once and preserves the paid-t
     Carbon::setTestNow(Carbon::parse('2026-08-31 00:00:00', 'UTC'));
     $subscription = upgradeTestSubscription();
     $originalPeriodEnd = $subscription->current_period_ends_at;
-    fakeUpgradeCheckout('pi_upgrade_settle');
-    $invoice = app(CreateUpgradeInvoice::class)->handle($subscription, PlanCode::from('growth'));
-    app(CreatePayMongoQrPhPayment::class)->handle($invoice);
-    $payment = $invoice->fresh()->payments()->sole();
-    $payment->update(['external_payment_intent_id' => 'pi_upgrade_settle']);
 
-    $payload = upgradePaymentPaidPayload('evt_upgrade_settle', 'pi_upgrade_settle', 10_000);
-    postUpgradeWebhook($payload)->assertNoContent();
-    postUpgradeWebhook($payload)->assertNoContent();
+    fakeUpgradeCheckout('pi_upgrade_settle');
+
+    $invoice = app(CreateUpgradeInvoice::class)
+        ->handle($subscription, PlanCode::from('growth'));
+
+    app(CreatePayMongoQrPhPayment::class)->handle($invoice);
+
+    $payment = $invoice->fresh()->payments()->sole();
+
+    $payment->update([
+        'external_payment_intent_id' => 'pi_upgrade_settle',
+    ]);
+
+    $payload = upgradePaymentPaidPayload(
+        'evt_upgrade_settle',
+        'pi_upgrade_settle',
+        10_000,
+    );
+
+    postUpgradeWebhook($payload)
+        ->assertOk()
+        ->assertExactJson(['received' => true]);
+
+    postUpgradeWebhook($payload)
+        ->assertOk()
+        ->assertExactJson(['received' => true]);
 
     expect($subscription->fresh()->plan_code)->toBe('growth')
         ->and($subscription->fresh()->current_period_ends_at->equalTo($originalPeriodEnd))->toBeTrue()
@@ -258,9 +310,18 @@ test('successful settlement flips the plan exactly once and preserves the paid-t
         ->and(BillingWebhookEffect::query()->count())->toBe(1)
         ->and(AuditLog::query()->where('action', 'billing.subscription.upgraded')->count())->toBe(1);
 
-    $audit = AuditLog::query()->where('action', 'billing.subscription.upgraded')->sole();
-    expect($audit->before_data)->toBe(['plan' => 'starter', 'interval' => 'monthly'])
-        ->and($audit->after_data)->toBe(['plan' => 'growth', 'interval' => 'monthly', 'provider' => 'paymongo']);
+    $audit = AuditLog::query()
+        ->where('action', 'billing.subscription.upgraded')
+        ->sole();
+
+    expect($audit->before_data)->toBe([
+        'plan' => 'starter',
+        'interval' => 'monthly',
+    ])->and($audit->after_data)->toBe([
+        'plan' => 'growth',
+        'interval' => 'monthly',
+        'provider' => 'paymongo',
+    ]);
 
     Carbon::setTestNow();
 });
@@ -268,28 +329,45 @@ test('successful settlement flips the plan exactly once and preserves the paid-t
 test('a failed upgrade audit rolls back settlement atomically and a retry records the audit', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-08-31 00:00:00', 'UTC'));
     $subscription = upgradeTestSubscription();
+
     fakeUpgradeCheckout('pi_upgrade_audit_failure');
-    $invoice = app(CreateUpgradeInvoice::class)->handle($subscription, PlanCode::from('growth'));
+
+    $invoice = app(CreateUpgradeInvoice::class)
+        ->handle($subscription, PlanCode::from('growth'));
+
     app(CreatePayMongoQrPhPayment::class)->handle($invoice);
+
     $payment = $invoice->fresh()->payments()->sole();
-    $payment->update(['external_payment_intent_id' => 'pi_upgrade_audit_failure']);
+
+    $payment->update([
+        'external_payment_intent_id' => 'pi_upgrade_audit_failure',
+    ]);
 
     $shouldFailAuditWrite = true;
+
     AuditLog::creating(function () use (&$shouldFailAuditWrite): void {
         if ($shouldFailAuditWrite) {
             $shouldFailAuditWrite = false;
+
             throw new RuntimeException('audit storage unavailable');
         }
     });
 
-    $payload = upgradePaymentPaidPayload('evt_upgrade_audit_failure', 'pi_upgrade_audit_failure', 10_000);
+    $payload = upgradePaymentPaidPayload(
+        'evt_upgrade_audit_failure',
+        'pi_upgrade_audit_failure',
+        10_000,
+    );
+
     postUpgradeWebhook($payload)->assertServerError();
 
     expect($subscription->fresh()->plan_code)->toBe('starter')
         ->and($invoice->fresh()->status)->toBe(BillingInvoiceStatus::PaymentPending)
         ->and(AuditLog::query()->where('action', 'billing.subscription.upgraded')->count())->toBe(0);
 
-    postUpgradeWebhook($payload)->assertNoContent();
+    postUpgradeWebhook($payload)
+        ->assertOk()
+        ->assertExactJson(['received' => true]);
 
     expect($subscription->fresh()->plan_code)->toBe('growth')
         ->and($invoice->fresh()->status)->toBe(BillingInvoiceStatus::Paid)
@@ -301,12 +379,20 @@ test('a failed upgrade audit rolls back settlement atomically and a retry record
 test('an unpaid, expired, or failed QR attempt leaves the plan unchanged', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-08-31 00:00:00', 'UTC'));
     $subscription = upgradeTestSubscription();
+
     fakeUpgradeCheckout('pi_upgrade_unpaid');
-    $invoice = app(CreateUpgradeInvoice::class)->handle($subscription, PlanCode::from('growth'));
+
+    $invoice = app(CreateUpgradeInvoice::class)
+        ->handle($subscription, PlanCode::from('growth'));
+
     app(CreatePayMongoQrPhPayment::class)->handle($invoice);
 
     $payment = $invoice->fresh()->payments()->sole();
-    $payment->update(['status' => BillingPaymentStatus::Expired, 'external_payment_intent_id' => 'pi_upgrade_unpaid']);
+
+    $payment->update([
+        'status' => BillingPaymentStatus::Expired,
+        'external_payment_intent_id' => 'pi_upgrade_unpaid',
+    ]);
 
     expect($subscription->fresh()->plan_code)->toBe('starter')
         ->and(BillingPayment::query()->where('status', BillingPaymentStatus::Paid)->count())->toBe(0);
@@ -317,12 +403,24 @@ test('an unpaid, expired, or failed QR attempt leaves the plan unchanged', funct
 test('a mismatched settlement amount is rejected and leaves the plan untouched', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-08-31 00:00:00', 'UTC'));
     $subscription = upgradeTestSubscription();
-    fakeUpgradeCheckout('pi_upgrade_forged');
-    $invoice = app(CreateUpgradeInvoice::class)->handle($subscription, PlanCode::from('growth'));
-    app(CreatePayMongoQrPhPayment::class)->handle($invoice);
-    $invoice->fresh()->payments()->sole()->update(['external_payment_intent_id' => 'pi_upgrade_forged']);
 
-    $payload = upgradePaymentPaidPayload('evt_upgrade_forged', 'pi_upgrade_forged', 1);
+    fakeUpgradeCheckout('pi_upgrade_forged');
+
+    $invoice = app(CreateUpgradeInvoice::class)
+        ->handle($subscription, PlanCode::from('growth'));
+
+    app(CreatePayMongoQrPhPayment::class)->handle($invoice);
+
+    $invoice->fresh()->payments()->sole()->update([
+        'external_payment_intent_id' => 'pi_upgrade_forged',
+    ]);
+
+    $payload = upgradePaymentPaidPayload(
+        'evt_upgrade_forged',
+        'pi_upgrade_forged',
+        1,
+    );
+
     postUpgradeWebhook($payload)->assertServerError();
 
     expect($subscription->fresh()->plan_code)->toBe('starter')
@@ -335,13 +433,27 @@ test('a mismatched settlement amount is rejected and leaves the plan untouched',
 test('the manual upgrade flow never mutates the stock ledger', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-08-31 00:00:00', 'UTC'));
     $subscription = upgradeTestSubscription();
-    fakeUpgradeCheckout('pi_upgrade_ledger');
-    $invoice = app(CreateUpgradeInvoice::class)->handle($subscription, PlanCode::from('growth'));
-    app(CreatePayMongoQrPhPayment::class)->handle($invoice);
-    $invoice->fresh()->payments()->sole()->update(['external_payment_intent_id' => 'pi_upgrade_ledger']);
 
-    postUpgradeWebhook(upgradePaymentPaidPayload('evt_upgrade_ledger', 'pi_upgrade_ledger', 10_000))
-        ->assertNoContent();
+    fakeUpgradeCheckout('pi_upgrade_ledger');
+
+    $invoice = app(CreateUpgradeInvoice::class)
+        ->handle($subscription, PlanCode::from('growth'));
+
+    app(CreatePayMongoQrPhPayment::class)->handle($invoice);
+
+    $invoice->fresh()->payments()->sole()->update([
+        'external_payment_intent_id' => 'pi_upgrade_ledger',
+    ]);
+
+    postUpgradeWebhook(
+        upgradePaymentPaidPayload(
+            'evt_upgrade_ledger',
+            'pi_upgrade_ledger',
+            10_000,
+        ),
+    )
+        ->assertOk()
+        ->assertExactJson(['received' => true]);
 
     expect(StockMovement::query()->count())->toBe(0)
         ->and(StockBalance::query()->count())->toBe(0);
@@ -353,11 +465,21 @@ test('the upgrade endpoint returns a QR checkout carrying the requested target p
     Carbon::setTestNow(Carbon::parse('2026-08-31 00:00:00', 'UTC'));
     $subscription = upgradeTestSubscription();
     $user = User::factory()->create();
-    OrganizationMembership::factory()->for($subscription->organization)->for($user)->create(['role' => OrganizationRole::Owner]);
+
+    OrganizationMembership::factory()
+        ->for($subscription->organization)
+        ->for($user)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
     fakeUpgradeCheckout('pi_upgrade_endpoint');
 
     $this->actingAs($user)
-        ->postJson(route('organizations.billing.upgrade', $subscription->organization), ['plan' => 'growth'])
+        ->postJson(
+            route('organizations.billing.upgrade', $subscription->organization),
+            ['plan' => 'growth'],
+        )
         ->assertOk()
         ->assertJson([
             'kind' => 'upgrade',
@@ -365,7 +487,10 @@ test('the upgrade endpoint returns a QR checkout carrying the requested target p
             'amount' => 10_000,
         ]);
 
-    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.paymongo.test/v1/payment_intents');
+    Http::assertSent(
+        fn (Request $request): bool => $request->url()
+            === 'https://api.paymongo.test/v1/payment_intents',
+    );
 
     Carbon::setTestNow();
 });
