@@ -2,8 +2,10 @@
 
 namespace App\Support\Billing;
 
+use App\Enums\BillingCollectionMethod;
 use App\Enums\BillingProvider;
 use App\Enums\PlanCode;
+use App\Models\BillingPlanVersion;
 use InvalidArgumentException;
 
 /**
@@ -35,7 +37,82 @@ final readonly class PlanCatalog
 
     public function get(PlanCode $code): ?PlanDefinition
     {
+        return $this->legacyGet($code);
+    }
+
+    /**
+     * Resolve the pre-cutover configuration definition for bootstrap and provider infrastructure.
+     */
+    public function legacyGet(PlanCode $code): ?PlanDefinition
+    {
         return $this->definitions[$code->value] ?? null;
+    }
+
+    /**
+     * Resolve one immutable published or superseded commercial version by database ID.
+     */
+    public function definitionForVersion(int $planVersionId): ?PlanDefinition
+    {
+        if ($planVersionId < 1) {
+            return null;
+        }
+
+        $version = BillingPlanVersion::query()
+            ->whereKey($planVersionId)
+            ->whereNotNull('published_at')
+            ->first();
+
+        return $version instanceof BillingPlanVersion
+            ? $this->definitionFromVersion($version)
+            : null;
+    }
+
+    /**
+     * Return configured recurring-price tuples that require authoritative numeric pricing.
+     *
+     * @return list<array{
+     *     provider: BillingProvider,
+     *     collectionMethod: BillingCollectionMethod,
+     *     interval: string
+     * }>
+     */
+    public function priceRequirements(PlanCode $code): array
+    {
+        $definition = $this->legacyGet($code);
+
+        if ($definition === null) {
+            return [];
+        }
+
+        $requirements = [];
+
+        foreach (BillingProvider::cases() as $provider) {
+            foreach (self::INTERVALS as $interval) {
+                if ($definition->externalPlanId($provider, $interval) === null) {
+                    continue;
+                }
+
+                $requirements[] = [
+                    'provider' => $provider,
+                    'collectionMethod' => BillingCollectionMethod::Automatic,
+                    'interval' => $interval,
+                ];
+            }
+        }
+
+        foreach (self::INTERVALS as $interval) {
+            if ($definition->manualAmount($interval) === null) {
+                continue;
+            }
+
+            $requirements[] = [
+                'provider' => BillingProvider::PayMongo,
+                'collectionMethod' => BillingCollectionMethod::Manual,
+                'interval' => $interval,
+            ];
+        }
+
+        return $requirements;
     }
 
     public function externalPlanId(
@@ -117,6 +194,140 @@ final readonly class PlanCatalog
             BillingProvider::Stripe,
             $priceId,
         );
+    }
+
+    /**
+     * Build a fail-closed entitlement snapshot from a durable plan version.
+     */
+    private function definitionFromVersion(
+        BillingPlanVersion $version,
+    ): ?PlanDefinition {
+        $rawPlanCode = $version->getAttribute('plan_code');
+        $name = $version->getAttribute('name');
+        $tier = $version->getAttribute('tier');
+        $features = self::featureCodes(
+            $version->getAttribute('feature_codes'),
+        );
+        $limits = self::limits(
+            $version->getAttribute('limits'),
+        );
+
+        if (! is_string($rawPlanCode)
+            || ! is_string($name)
+            || trim($name) === ''
+            || ! is_int($tier)
+            || $tier < 1
+            || $features === null
+            || $limits === null) {
+            return null;
+        }
+
+        try {
+            $planCode = PlanCode::from($rawPlanCode);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
+
+        $legacy = $this->legacyGet($planCode);
+        $providers = $legacy?->providers
+            ?? self::emptyProviderPlans();
+
+        return new PlanDefinition(
+            $planCode,
+            $name,
+            $tier,
+            $features,
+            $limits,
+            $providers,
+            $providers[BillingProvider::Stripe->value],
+            self::emptyManualAmounts(),
+        );
+    }
+
+    /**
+     * Validate persisted feature codes against the application-owned registry.
+     *
+     * @return list<string>|null
+     */
+    private static function featureCodes(mixed $value): ?array
+    {
+        if (! is_array($value) || ! array_is_list($value)) {
+            return null;
+        }
+
+        $known = FeatureCode::all();
+        $features = [];
+
+        foreach ($value as $feature) {
+            if (! is_string($feature)
+                || ! in_array($feature, $known, true)
+                || in_array($feature, $features, true)) {
+                return null;
+            }
+
+            $features[] = $feature;
+        }
+
+        return $features;
+    }
+
+    /**
+     * Validate persisted limit keys against the application-owned registry.
+     *
+     * @return array<string, int|null>|null
+     */
+    private static function limits(mixed $value): ?array
+    {
+        if (! is_array($value)) {
+            return null;
+        }
+
+        $known = UsageLimitKey::all();
+        $limits = [];
+
+        foreach ($value as $key => $limit) {
+            if (! is_string($key)
+                || ! in_array($key, $known, true)
+                || ($limit !== null
+                    && (! is_int($limit) || $limit < 0))) {
+                return null;
+            }
+
+            $limits[$key] = $limit;
+        }
+
+        return $limits;
+    }
+
+    /**
+     * Provider identifiers remain infrastructure configuration, not DB plan identity.
+     *
+     * @return array<string, array<string, string|null>>
+     */
+    private static function emptyProviderPlans(): array
+    {
+        return [
+            BillingProvider::Stripe->value => self::emptyIntervals(),
+            BillingProvider::PayMongo->value => self::emptyIntervals(),
+        ];
+    }
+
+    /** @return array<string, string|null> */
+    private static function emptyIntervals(): array
+    {
+        return [
+            'monthly' => null,
+            'yearly' => null,
+        ];
+    }
+
+    /** @return array<string, int|null> */
+    private static function emptyManualAmounts(): array
+    {
+        return [
+            'monthly' => null,
+            'yearly' => null,
+        ];
     }
 
     /**
