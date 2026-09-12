@@ -55,17 +55,19 @@ test('the import-opening-balances command reads a CSV file and reports row error
         "location_code,storage_location_code,item_sku,quantity,unit_symbol,unit_cost\nMAIN,MAIN,FLOUR-001,1,kg,1.00\nMAIN,MAIN,UNKNOWN-SKU,1,kg,1.00\n",
     );
 
-    $this->artisan('inventory:import-opening-balances', [
-        'organization' => $organization->id,
-        'actor' => $actor->id,
-        'batch' => 'cli-batch',
-        'file' => $path,
-    ])
-        ->assertExitCode(1)
-        ->expectsOutputToContain('1 created, 0 skipped as already imported, 1 row error')
-        ->expectsOutputToContain('Row 3:');
-
-    unlink($path);
+    try {
+        $this->artisan('inventory:import-opening-balances', [
+            'organization' => $organization->id,
+            'actor' => $actor->id,
+            'batch' => 'cli-batch',
+            'file' => $path,
+        ])
+            ->assertExitCode(1)
+            ->expectsOutputToContain('1 created, 0 skipped as already imported, 1 row error')
+            ->expectsOutputToContain('Row 3:');
+    } finally {
+        unlink($path);
+    }
 
     expect(StockMovement::query()->count())->toBe(1);
 });
@@ -74,14 +76,16 @@ test('the import-opening-balances command fails for an unknown organization', fu
     $path = tempnam(sys_get_temp_dir(), 'opening-balances-');
     file_put_contents($path, "location_code,storage_location_code,item_sku,quantity,unit_symbol,unit_cost\n");
 
-    $this->artisan('inventory:import-opening-balances', [
-        'organization' => 999999,
-        'actor' => 1,
-        'batch' => 'cli-batch',
-        'file' => $path,
-    ])->assertExitCode(1);
-
-    unlink($path);
+    try {
+        $this->artisan('inventory:import-opening-balances', [
+            'organization' => 999999,
+            'actor' => 1,
+            'batch' => 'cli-batch',
+            'file' => $path,
+        ])->assertExitCode(1);
+    } finally {
+        unlink($path);
+    }
 });
 
 test('the import-opening-balances command fails for an unknown actor', function () {
@@ -90,14 +94,16 @@ test('the import-opening-balances command fails for an unknown actor', function 
     $path = tempnam(sys_get_temp_dir(), 'opening-balances-');
     file_put_contents($path, "location_code,storage_location_code,item_sku,quantity,unit_symbol,unit_cost\n");
 
-    $this->artisan('inventory:import-opening-balances', [
-        'organization' => $organization->id,
-        'actor' => 999999,
-        'batch' => 'cli-batch',
-        'file' => $path,
-    ])->assertExitCode(1);
-
-    unlink($path);
+    try {
+        $this->artisan('inventory:import-opening-balances', [
+            'organization' => $organization->id,
+            'actor' => 999999,
+            'batch' => 'cli-batch',
+            'file' => $path,
+        ])->assertExitCode(1);
+    } finally {
+        unlink($path);
+    }
 });
 
 test('the import-opening-balances command refuses to import into a commercially read-only organization', function () {
@@ -147,16 +153,18 @@ test('the import-opening-balances command refuses to import into a commercially 
         "location_code,storage_location_code,item_sku,quantity,unit_symbol,unit_cost\nMAIN,MAIN,FLOUR-001,1,kg,1.00\n",
     );
 
-    $this->artisan('inventory:import-opening-balances', [
-        'organization' => $organization->id,
-        'actor' => $actor->id,
-        'batch' => 'cli-batch',
-        'file' => $path,
-    ])
-        ->assertExitCode(1)
-        ->expectsOutputToContain('read-only');
-
-    unlink($path);
+    try {
+        $this->artisan('inventory:import-opening-balances', [
+            'organization' => $organization->id,
+            'actor' => $actor->id,
+            'batch' => 'cli-batch',
+            'file' => $path,
+        ])
+            ->assertExitCode(1)
+            ->expectsOutputToContain('read-only');
+    } finally {
+        unlink($path);
+    }
 
     expect(StockMovement::query()->count())->toBe(0);
 });

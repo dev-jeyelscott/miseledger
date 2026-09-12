@@ -92,8 +92,7 @@ final class BillingBootstrapPlanVersions extends Command
             }
 
             foreach (
-                $catalog->priceRequirements($planCode)
-                as $requirement
+                $catalog->priceRequirements($planCode) as $requirement
             ) {
                 if (
                     $requirement['collectionMethod']
@@ -139,8 +138,7 @@ final class BillingBootstrapPlanVersions extends Command
                     }
 
                     foreach (
-                        ['monthly', 'yearly']
-                        as $interval
+                        ['monthly', 'yearly'] as $interval
                     ) {
                         $amount = $definition
                             ->manualAmount($interval);

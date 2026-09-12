@@ -9,15 +9,17 @@ test('the import-master command reads CSV files and reports row errors', functio
     $path = tempnam(sys_get_temp_dir(), 'categories-');
     file_put_contents($path, "name,active\nDry Goods,true\n,true\n");
 
-    $this->artisan('inventory:import-master', [
-        'organization' => $organization->id,
-        '--categories' => $path,
-    ])
-        ->assertExitCode(1)
-        ->expectsOutputToContain('1 created, 0 updated, 1 row error')
-        ->expectsOutputToContain('Row 3:');
-
-    unlink($path);
+    try {
+        $this->artisan('inventory:import-master', [
+            'organization' => $organization->id,
+            '--categories' => $path,
+        ])
+            ->assertExitCode(1)
+            ->expectsOutputToContain('1 created, 0 updated, 1 row error')
+            ->expectsOutputToContain('Row 3:');
+    } finally {
+        unlink($path);
+    }
 
     expect(InventoryCategory::query()->where('name', 'Dry Goods')->exists())->toBeTrue();
 });
@@ -36,14 +38,16 @@ test('the import-master command refuses to import into a commercially read-only 
     $path = tempnam(sys_get_temp_dir(), 'categories-');
     file_put_contents($path, "name,active\nDry Goods,true\n");
 
-    $this->artisan('inventory:import-master', [
-        'organization' => $organization->id,
-        '--categories' => $path,
-    ])
-        ->assertExitCode(1)
-        ->expectsOutputToContain('read-only');
-
-    unlink($path);
+    try {
+        $this->artisan('inventory:import-master', [
+            'organization' => $organization->id,
+            '--categories' => $path,
+        ])
+            ->assertExitCode(1)
+            ->expectsOutputToContain('read-only');
+    } finally {
+        unlink($path);
+    }
 
     expect(InventoryCategory::query()->where('name', 'Dry Goods')->exists())->toBeFalse();
 });
