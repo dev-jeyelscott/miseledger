@@ -145,10 +145,7 @@ describe('Send Problem Report Operator Email', function () {
         expect($report->email_notified_at)->not()->toBeNull();
     });
 
-    it('refuses to retry after initial send failure due to ambiguous outcome', function () {
-        Queue::fake();
-        Mail::fake();
-
+    it('retries mail send on transient provider failure', function () {
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -156,11 +153,11 @@ describe('Send Problem Report Operator Email', function () {
 
         $report = ProblemReport::factory()->create();
 
-        Mail::shouldReceive('send')->andThrow(new Exception('Mail service temporarily down'));
-
         $job = new SendProblemReportOperatorEmail($report->id);
 
-        // First attempt fails and sets claim
+        // First attempt: mock mail to fail
+        Mail::shouldReceive('send')->once()->andThrow(new Exception('Mail service temporarily down'));
+
         expect(function () use ($job) {
             $job->handle();
         })->toThrow(Exception::class);
@@ -170,14 +167,14 @@ describe('Send Problem Report Operator Email', function () {
         expect($report->email_notified_at)->toBeNull();
         expect($report->email_notification_claimed_at)->not()->toBeNull();
 
-        // Retry refuses to redeliver due to ambiguous claim
-        expect(function () use ($job) {
-            $job->handle();
-        })->toThrow(AmbiguousProblemReportEmailDeliveryException::class);
+        // Retry should attempt send again and succeed
+        Mail::shouldReceive('send')->once();
 
+        $job->handle();
+
+        // Verify second attempt succeeded
         $report->refresh();
-        expect($report->email_notified_at)->toBeNull();
-        expect($report->email_notification_claimed_at)->not()->toBeNull();
+        expect($report->email_notified_at)->not()->toBeNull();
     });
 
     it('uses unique job ID for deduplication', function () {

@@ -68,13 +68,18 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
                 return null;
             }
 
-            // Any existing claim indicates a prior send attempt whose outcome is ambiguous.
-            // The prior attempt may have succeeded with only the ack lost, so resending
-            // risks a duplicate. Do not redeliver; surface for manual reconciliation.
-            if ($report->email_notification_claimed_at !== null) {
+            // If a claim exists and is old (>10 minutes), it's genuinely ambiguous:
+            // a prior attempt failed, was never retried successfully, and enough time
+            // has passed that we can't confidently re-deliver. Surface for manual review.
+            if ($report->email_notification_claimed_at !== null
+                && $report->email_notification_claimed_at->diffInMinutes(now()) > 10) {
                 throw new AmbiguousProblemReportEmailDeliveryException($this->reportId);
             }
 
+            // Set or update the claim timestamp. If this is a fresh attempt or a
+            // recent retry due to provider failure, we'll attempt the send. The claim
+            // tracks that we've tried, and email_notified_at tracks confirmed success.
+            // ShouldBeUnique prevents concurrent execution of the same job.
             $report->forceFill(['email_notification_claimed_at' => now()])->save();
 
             return $report;
@@ -87,9 +92,9 @@ final class SendProblemReportOperatorEmail implements ShouldBeUnique, ShouldQueu
         // The claim recorded above is left in place if this throws: a transport can
         // accept a message and then throw on a lost acknowledgement, and a
         // multi-recipient send can throw after earlier recipients already received
-        // it, so a thrown send is not provable non-delivery. Any subsequent retry
-        // attempt will find the claim already set and refuse to redeliver via the
-        // ambiguous-claim guard above, instead surfacing for manual reconciliation.
+        // it, so a thrown send is not provable non-delivery. Subsequent retry attempts
+        // within the ambiguity threshold will re-attempt the send. After the threshold,
+        // the ambiguous-claim guard surfaces for manual reconciliation.
         try {
             (new AnonymousNotifiable)
                 ->route('mail', $recipient)
