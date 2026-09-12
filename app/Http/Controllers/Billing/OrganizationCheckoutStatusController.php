@@ -14,7 +14,7 @@ use Inertia\Response;
 class OrganizationCheckoutStatusController extends Controller
 {
     /**
-     * Show the post-Checkout success page from synchronized local billing state.
+     * Show post-checkout status from synchronized local billing state.
      */
     public function success(Organization $organization): Response
     {
@@ -28,9 +28,12 @@ class OrganizationCheckoutStatusController extends Controller
         return Inertia::render('organizations/billing/checkout-success', [
             'organization' => $this->organizationData($organization),
             'subscription' => $this->subscriptionData($access),
-            'synchronized' => $organization->subscription(
-                (string) config('billing.subscription_type'),
-            ) !== null,
+
+            // A non-null normalized status means an authoritative local
+            // lifecycle state exists. PayMongo's initial "incomplete" state
+            // intentionally normalizes to null and therefore remains pending.
+            'synchronized' => $access->subscriptionStatus !== null,
+
             'payment' => $this->paymentData(),
         ]);
     }

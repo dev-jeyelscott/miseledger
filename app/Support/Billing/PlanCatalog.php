@@ -132,11 +132,13 @@ final readonly class PlanCatalog
     ): ?PlanDefinition {
         $provider = self::provider($provider);
 
-        if ($provider === null
+        if (
+            $provider === null
             || ! self::isValidExternalPlanId(
                 $externalPlanId,
                 $provider,
-            )) {
+            )
+        ) {
             return null;
         }
 
@@ -212,13 +214,15 @@ final readonly class PlanCatalog
             $version->getAttribute('limits'),
         );
 
-        if (! is_string($rawPlanCode)
+        if (
+            ! is_string($rawPlanCode)
             || ! is_string($name)
             || trim($name) === ''
             || ! is_int($tier)
             || $tier < 1
             || $features === null
-            || $limits === null) {
+            || $limits === null
+        ) {
             return null;
         }
 
@@ -229,7 +233,7 @@ final readonly class PlanCatalog
         }
 
         $legacy = $this->legacyGet($planCode);
-        $providers = $legacy?->providers
+        $providers = $legacy->providers
             ?? self::emptyProviderPlans();
 
         return new PlanDefinition(
@@ -259,9 +263,11 @@ final readonly class PlanCatalog
         $features = [];
 
         foreach ($value as $feature) {
-            if (! is_string($feature)
+            if (
+                ! is_string($feature)
                 || ! in_array($feature, $known, true)
-                || in_array($feature, $features, true)) {
+                || in_array($feature, $features, true)
+            ) {
                 return null;
             }
 
@@ -286,10 +292,12 @@ final readonly class PlanCatalog
         $limits = [];
 
         foreach ($value as $key => $limit) {
-            if (! is_string($key)
+            if (
+                ! is_string($key)
                 || ! in_array($key, $known, true)
                 || ($limit !== null
-                    && (! is_int($limit) || $limit < 0))) {
+                    && (! is_int($limit) || $limit < 0))
+            ) {
                 return null;
             }
 
@@ -343,9 +351,11 @@ final readonly class PlanCatalog
         $occurrences = [];
 
         foreach ($config as $code => $plan) {
-            if (! is_string($code)
+            if (
+                ! is_string($code)
                 || $code === ''
-                || ! is_array($plan)) {
+                || ! is_array($plan)
+            ) {
                 continue;
             }
 
@@ -411,11 +421,13 @@ final readonly class PlanCatalog
         foreach ($definitions as $code => $definition) {
             foreach ($definition->providers as $provider => $intervals) {
                 foreach ($intervals as $externalPlanId) {
-                    if ($externalPlanId !== null
+                    if (
+                        $externalPlanId !== null
                         && (
                             $occurrences[$provider][$externalPlanId]
                             ?? 0
-                        ) === 1) {
+                        ) === 1
+                    ) {
                         $indexes[$provider][$externalPlanId] = $code;
                     }
                 }
@@ -441,8 +453,10 @@ final readonly class PlanCatalog
                 $plan['providers'][$provider->value]
                 ?? null;
 
-            if ($provider === BillingProvider::Stripe
-                && ! is_array($configured)) {
+            if (
+                $provider === BillingProvider::Stripe
+                && ! is_array($configured)
+            ) {
                 $configured = $plan['prices'] ?? [];
             }
 
@@ -459,8 +473,8 @@ final readonly class PlanCatalog
                         $externalPlanId,
                         $provider,
                     )
-                        ? $externalPlanId
-                        : null;
+                    ? $externalPlanId
+                    : null;
             }
         }
 
@@ -501,8 +515,8 @@ final readonly class PlanCatalog
         return is_string($amount)
             && ctype_digit($amount)
             && (int) $amount > 0
-                ? (int) $amount
-                : null;
+            ? (int) $amount
+            : null;
     }
 
     private static function provider(
@@ -517,11 +531,13 @@ final readonly class PlanCatalog
         string $externalPlanId,
         BillingProvider $provider,
     ): bool {
-        if (trim($externalPlanId) === ''
+        if (
+            trim($externalPlanId) === ''
             || preg_match(
                 '/^\S+$/',
                 $externalPlanId,
-            ) !== 1) {
+            ) !== 1
+        ) {
             return false;
         }
 

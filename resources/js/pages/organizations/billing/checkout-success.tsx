@@ -1,5 +1,11 @@
 import { Head, Link, router, usePoll } from '@inertiajs/react';
-import { CheckCircle2, CreditCard, Loader2, RefreshCw } from 'lucide-react';
+import {
+    CheckCircle2,
+    CircleAlert,
+    CreditCard,
+    Loader2,
+    RefreshCw,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -30,8 +36,12 @@ type Props = {
     } | null;
 };
 
+type CheckoutState =
+    'payment-required' | 'processing' | 'confirmed' | 'attention' | 'failed';
+
 const POLL_INTERVAL_MS = 4000;
-/** Stop automatic polling after this many attempts (~1 minute) and fall back to manual refresh. */
+
+/** Stop automatic polling after this many attempts and fall back to manual refresh. */
 const MAX_POLL_ATTEMPTS = 15;
 
 /** Format a plan or status code as a readable label. */
@@ -46,12 +56,70 @@ function formatLabel(value: string | null): string {
         .join(' ');
 }
 
+/** Resolve the server-owned billing state into a truthful checkout presentation. */
+function resolveCheckoutState(
+    subscription: OrganizationSubscriptionContext,
+    synchronized: boolean,
+    hasPaymentHandoff: boolean,
+): CheckoutState {
+    if (!synchronized) {
+        return hasPaymentHandoff ? 'payment-required' : 'processing';
+    }
+
+    if (subscription.status === 'incomplete') {
+        return 'processing';
+    }
+
+    if (subscription.billingWarning) {
+        return 'attention';
+    }
+
+    if (
+        subscription.accessMode === 'writable' &&
+        ['active', 'trial', 'trialing'].includes(subscription.status ?? '')
+    ) {
+        return 'confirmed';
+    }
+
+    return 'failed';
+}
+
+function checkoutTitle(state: CheckoutState): string {
+    switch (state) {
+        case 'payment-required':
+            return 'Complete your first payment';
+        case 'processing':
+            return 'Confirming your subscription';
+        case 'confirmed':
+            return 'Subscription confirmed';
+        case 'attention':
+            return 'Subscription needs attention';
+        case 'failed':
+            return 'Subscription not activated';
+    }
+}
+
+function checkoutDescription(
+    state: CheckoutState,
+    organizationName: string,
+): string {
+    switch (state) {
+        case 'payment-required':
+            return `Complete the first payment for ${organizationName}. Paid access remains unchanged until server-side billing synchronization confirms activation.`;
+        case 'processing':
+            return `We're waiting for an authoritative billing update for ${organizationName}.`;
+        case 'confirmed':
+            return `Subscription activation was confirmed for ${organizationName}.`;
+        case 'attention':
+            return `Billing state has synchronized for ${organizationName}, but it needs your attention.`;
+        case 'failed':
+            return `The synchronized billing state for ${organizationName} does not currently grant paid access.`;
+    }
+}
+
 /**
- * Show the post-Checkout outcome using only the locally synchronized
- * subscription state re-read on every visit. The Stripe redirect itself is
- * never treated as proof of activation: while webhook synchronization is
- * still pending, a processing state is shown with safe refresh and bounded
- * polling instead of fabricating access.
+ * Show the post-checkout outcome exclusively from local synchronized billing
+ * state. Browser payment completion never becomes proof of paid access.
  */
 export default function OrganizationCheckoutSuccess({
     organization,
@@ -60,9 +128,23 @@ export default function OrganizationCheckoutSuccess({
     payment,
 }: Props) {
     const [pollAttempts, setPollAttempts] = useState(0);
-    const pollExhausted = pollAttempts >= MAX_POLL_ATTEMPTS;
     const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+    const [paymentSubmitted, setPaymentSubmitted] = useState(false);
     const [paymentError, setPaymentError] = useState<string | null>(null);
+
+    const pollExhausted = pollAttempts >= MAX_POLL_ATTEMPTS;
+    const hasPaymentHandoff = payment !== null && !paymentSubmitted;
+
+    const checkoutState = resolveCheckoutState(
+        subscription,
+        isSynchronized,
+        hasPaymentHandoff,
+    );
+
+    const waitingForLifecycle =
+        checkoutState === 'payment-required' || checkoutState === 'processing';
+
+    const shouldPoll = waitingForLifecycle && !pollExhausted;
 
     const poll = usePoll(
         POLL_INTERVAL_MS,
@@ -70,21 +152,21 @@ export default function OrganizationCheckoutSuccess({
             only: ['subscription', 'synchronized'],
             onFinish: () => setPollAttempts((attempts) => attempts + 1),
         },
-        { autoStart: !isSynchronized },
+        { autoStart: shouldPoll },
     );
 
     useEffect(() => {
-        if (isSynchronized || pollExhausted) {
+        if (!shouldPoll) {
             poll.stop();
         }
-    }, [isSynchronized, pollExhausted, poll]);
+    }, [poll, shouldPoll]);
 
     async function submitPayMongoCardPayment(
         event: FormEvent<HTMLFormElement>,
     ) {
         event.preventDefault();
 
-        if (payment === null || paymentSubmitting) {
+        if (payment === null || paymentSubmitting || paymentSubmitted) {
             return;
         }
 
@@ -163,13 +245,17 @@ export default function OrganizationCheckoutSuccess({
                 throw new Error('Unable to start the payment.');
             }
 
+            setPaymentSubmitted(true);
+
             if (typeof redirectUrl === 'string') {
                 window.location.assign(redirectUrl);
 
                 return;
             }
 
-            router.reload({ only: ['subscription', 'synchronized'] });
+            router.reload({
+                only: ['subscription', 'synchronized'],
+            });
         } catch {
             setPaymentError(
                 'We could not start this payment. Check your card details and try again.',
@@ -179,18 +265,33 @@ export default function OrganizationCheckoutSuccess({
         }
     }
 
+    const showSubscriptionSummary =
+        checkoutState === 'confirmed' ||
+        checkoutState === 'attention' ||
+        checkoutState === 'failed';
+
     return (
         <>
-            <Head title="Checkout complete" />
+            <Head title="Checkout status" />
 
             <div className="flex flex-1 items-center justify-center p-4 md:p-6">
                 <Card className="w-full max-w-md">
                     <CardHeader>
                         <div className="flex items-start gap-3">
                             <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                                {isSynchronized ? (
+                                {checkoutState === 'confirmed' ? (
                                     <CheckCircle2
                                         className="size-5 text-emerald-600"
+                                        aria-hidden="true"
+                                    />
+                                ) : checkoutState === 'attention' ||
+                                  checkoutState === 'failed' ? (
+                                    <CircleAlert
+                                        className={
+                                            checkoutState === 'failed'
+                                                ? 'size-5 text-destructive'
+                                                : 'size-5 text-muted-foreground'
+                                        }
                                         aria-hidden="true"
                                     />
                                 ) : (
@@ -203,21 +304,20 @@ export default function OrganizationCheckoutSuccess({
 
                             <div className="grid gap-1">
                                 <CardTitle>
-                                    {isSynchronized
-                                        ? 'Subscription confirmed'
-                                        : 'Confirming your subscription'}
+                                    {checkoutTitle(checkoutState)}
                                 </CardTitle>
                                 <CardDescription>
-                                    {isSynchronized
-                                        ? `Subscription payment was confirmed for ${organization.name}.`
-                                        : `We're still waiting for an authoritative subscription update for ${organization.name}.`}
+                                    {checkoutDescription(
+                                        checkoutState,
+                                        organization.name,
+                                    )}
                                 </CardDescription>
                             </div>
                         </div>
                     </CardHeader>
 
                     <CardContent className="space-y-4">
-                        {isSynchronized ? (
+                        {showSubscriptionSummary && (
                             <dl className="grid grid-cols-2 gap-4 text-sm">
                                 <div>
                                     <dt className="text-xs font-medium text-muted-foreground">
@@ -239,96 +339,111 @@ export default function OrganizationCheckoutSuccess({
                                     </dd>
                                 </div>
                             </dl>
-                        ) : (
-                            <div className="grid gap-4">
-                                {payment !== null && (
-                                    <form
-                                        className="grid gap-3"
-                                        onSubmit={(event) => {
-                                            void submitPayMongoCardPayment(
-                                                event,
-                                            );
-                                        }}
-                                    >
-                                        <p className="text-sm text-muted-foreground">
-                                            Enter your card details to complete
-                                            the first payment. Card details are
-                                            sent directly to PayMongo.
-                                        </p>
-                                        <label className="grid gap-2 text-sm font-medium">
-                                            Card number
-                                            <input
-                                                className="h-9 rounded-md border bg-background px-3"
-                                                inputMode="numeric"
-                                                name="cardNumber"
-                                                required
-                                            />
-                                        </label>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <label className="grid gap-2 text-sm font-medium">
-                                                Expiry month
-                                                <input
-                                                    className="h-9 rounded-md border bg-background px-3"
-                                                    inputMode="numeric"
-                                                    max="12"
-                                                    min="1"
-                                                    name="expiryMonth"
-                                                    required
-                                                />
-                                            </label>
-                                            <label className="grid gap-2 text-sm font-medium">
-                                                Expiry year
-                                                <input
-                                                    className="h-9 rounded-md border bg-background px-3"
-                                                    inputMode="numeric"
-                                                    name="expiryYear"
-                                                    required
-                                                />
-                                            </label>
-                                        </div>
-                                        <label className="grid gap-2 text-sm font-medium">
-                                            Security code
-                                            <input
-                                                className="h-9 rounded-md border bg-background px-3"
-                                                inputMode="numeric"
-                                                name="cvc"
-                                                required
-                                                type="password"
-                                            />
-                                        </label>
-                                        {paymentError !== null && (
-                                            <p
-                                                role="alert"
-                                                className="text-sm text-destructive"
-                                            >
-                                                {paymentError}
-                                            </p>
-                                        )}
-                                        <Button
-                                            type="submit"
-                                            disabled={paymentSubmitting}
-                                        >
-                                            <CreditCard aria-hidden="true" />
-                                            {paymentSubmitting
-                                                ? 'Processing…'
-                                                : 'Continue to payment'}
-                                        </Button>
-                                    </form>
-                                )}
-                                <p
-                                    className="text-sm text-muted-foreground"
-                                    aria-live="polite"
+                        )}
+
+                        {checkoutState === 'payment-required' &&
+                            payment !== null && (
+                                <form
+                                    className="grid gap-3"
+                                    onSubmit={(event) => {
+                                        void submitPayMongoCardPayment(event);
+                                    }}
                                 >
-                                    {pollExhausted
-                                        ? "We're still waiting for the provider to synchronize billing. Automatic checking has stopped; use the refresh button below when you're ready to check again."
-                                        : 'This page checks server-owned billing state automatically. A completed browser payment does not activate access until lifecycle synchronization confirms it.'}
-                                </p>
-                            </div>
+                                    <p className="text-sm text-muted-foreground">
+                                        Enter your card details to complete the
+                                        first payment. Card details are sent
+                                        directly to PayMongo.
+                                    </p>
+
+                                    <label className="grid gap-2 text-sm font-medium">
+                                        Card number
+                                        <input
+                                            autoComplete="cc-number"
+                                            className="h-9 rounded-md border bg-background px-3"
+                                            inputMode="numeric"
+                                            name="cardNumber"
+                                            required
+                                        />
+                                    </label>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <label className="grid gap-2 text-sm font-medium">
+                                            Expiry month
+                                            <input
+                                                autoComplete="cc-exp-month"
+                                                className="h-9 rounded-md border bg-background px-3"
+                                                inputMode="numeric"
+                                                max="12"
+                                                min="1"
+                                                name="expiryMonth"
+                                                required
+                                            />
+                                        </label>
+
+                                        <label className="grid gap-2 text-sm font-medium">
+                                            Expiry year
+                                            <input
+                                                autoComplete="cc-exp-year"
+                                                className="h-9 rounded-md border bg-background px-3"
+                                                inputMode="numeric"
+                                                name="expiryYear"
+                                                required
+                                            />
+                                        </label>
+                                    </div>
+
+                                    <label className="grid gap-2 text-sm font-medium">
+                                        Security code
+                                        <input
+                                            autoComplete="cc-csc"
+                                            className="h-9 rounded-md border bg-background px-3"
+                                            inputMode="numeric"
+                                            name="cvc"
+                                            required
+                                            type="password"
+                                        />
+                                    </label>
+
+                                    {paymentError !== null && (
+                                        <p
+                                            role="alert"
+                                            className="text-sm text-destructive"
+                                        >
+                                            {paymentError}
+                                        </p>
+                                    )}
+
+                                    <Button
+                                        type="submit"
+                                        disabled={
+                                            paymentSubmitting ||
+                                            paymentSubmitted
+                                        }
+                                    >
+                                        <CreditCard aria-hidden="true" />
+                                        {paymentSubmitting
+                                            ? 'Processing…'
+                                            : paymentSubmitted
+                                              ? 'Payment submitted'
+                                              : 'Continue to payment'}
+                                    </Button>
+                                </form>
+                            )}
+
+                        {waitingForLifecycle && (
+                            <p
+                                className="text-sm text-muted-foreground"
+                                aria-live="polite"
+                            >
+                                {pollExhausted
+                                    ? "We're still waiting for the provider to synchronize billing. Automatic checking has stopped; use the refresh button below when you're ready to check again."
+                                    : 'This page checks server-owned billing state automatically. A completed browser payment does not activate access until lifecycle synchronization confirms it.'}
+                            </p>
                         )}
                     </CardContent>
 
                     <CardFooter className="flex-wrap justify-end gap-2 border-t pt-6">
-                        {!isSynchronized && (
+                        {checkoutState !== 'confirmed' && (
                             <Button
                                 type="button"
                                 variant="outline"
