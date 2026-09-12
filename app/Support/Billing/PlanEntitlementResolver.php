@@ -6,29 +6,42 @@ use App\Enums\PlanCode;
 use OutOfBoundsException;
 
 /**
- * Single authority for whether a resolved plan grants a feature and what
- * quantitative limit applies to a dimension, built entirely from
- * `PlanCatalog` (P2-001/P2-002). Deliberately narrow: no role
- * authorization, Stripe mutation, inventory mutation, or quota
- * enforcement happens here, only a read-only answer derived from
- * configuration.
- *
- * Missing, unknown, or invalid plan configuration fails closed: a null
- * plan, a plan absent from the catalog, an undeclared feature, or an
- * undeclared limit key never grants paid-only capability.
+ * Single plan feature and quantitative-limit authority.
  */
 final class PlanEntitlementResolver
 {
-    public static function hasFeature(?PlanCode $plan, string $feature, ?PlanCatalog $catalog = null): bool
-    {
-        $definition = self::definition($plan, $catalog);
+    /**
+     * Resolve a feature against either the current or exact pinned version.
+     */
+    public static function hasFeature(
+        ?PlanCode $plan,
+        string $feature,
+        ?PlanCatalog $catalog = null,
+        ?int $planVersionId = null,
+    ): bool {
+        $definition = self::definition(
+            $plan,
+            $catalog,
+            $planVersionId,
+        );
 
         return $definition?->hasFeature($feature) ?? false;
     }
 
-    public static function limit(?PlanCode $plan, string $key, ?PlanCatalog $catalog = null): PlanEntitlementLimit
-    {
-        $definition = self::definition($plan, $catalog);
+    /**
+     * Resolve a quantitative limit against the exact commercial version.
+     */
+    public static function limit(
+        ?PlanCode $plan,
+        string $key,
+        ?PlanCatalog $catalog = null,
+        ?int $planVersionId = null,
+    ): PlanEntitlementLimit {
+        $definition = self::definition(
+            $plan,
+            $catalog,
+            $planVersionId,
+        );
 
         if ($definition === null) {
             return PlanEntitlementLimit::unavailable();
@@ -40,15 +53,34 @@ final class PlanEntitlementResolver
             return PlanEntitlementLimit::unavailable();
         }
 
-        return $value === null ? PlanEntitlementLimit::unlimited() : PlanEntitlementLimit::finite($value);
+        return $value === null
+            ? PlanEntitlementLimit::unlimited()
+            : PlanEntitlementLimit::finite($value);
     }
 
-    private static function definition(?PlanCode $plan, ?PlanCatalog $catalog): ?PlanDefinition
-    {
+    /**
+     * Resolve the exact immutable definition when a version pin exists.
+     */
+    private static function definition(
+        ?PlanCode $plan,
+        ?PlanCatalog $catalog,
+        ?int $planVersionId,
+    ): ?PlanDefinition {
         if ($plan === null) {
             return null;
         }
 
-        return ($catalog ?? new PlanCatalog)->get($plan);
+        $catalog ??= new PlanCatalog;
+
+        $definition = $planVersionId !== null
+            ? $catalog->definitionForVersion(
+                $planVersionId,
+            )
+            : $catalog->get($plan);
+
+        return $definition !== null
+            && $definition->code->equals($plan)
+                ? $definition
+                : null;
     }
 }

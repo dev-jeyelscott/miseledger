@@ -3,10 +3,7 @@
 namespace App\Support\Billing;
 
 /**
- * Stable `config('billing.plans.*.limits')` keys enforced by
- * `OrganizationUsageLimitEnforcer`. These are the only quantitative-limit
- * keys referenced outside plan configuration, so enforcement call sites
- * never drift out of sync with the catalog.
+ * Stable quantitative limit identifiers enforced by MiseLedger.
  */
 final class UsageLimitKey
 {
@@ -15,4 +12,18 @@ final class UsageLimitKey
     public const string Locations = 'locations';
 
     public const string InventoryItems = 'inventory_items';
+
+    /**
+     * Return every enforceable quantitative-limit identifier.
+     *
+     * @return list<string>
+     */
+    public static function all(): array
+    {
+        return [
+            self::Seats,
+            self::Locations,
+            self::InventoryItems,
+        ];
+    }
 }

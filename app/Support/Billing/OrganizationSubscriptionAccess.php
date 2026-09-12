@@ -7,10 +7,7 @@ use App\Enums\PlanCode;
 use Carbon\CarbonInterface;
 
 /**
- * The resolved commercial access state for an organization at the moment
- * of resolution. Not persisted anywhere: it is always derived fresh from
- * the organization's generic trial fields and its locally synchronized
- * Cashier subscription/grace-period state.
+ * Fresh server-derived commercial access state for one organization.
  */
 final readonly class OrganizationSubscriptionAccess
 {
@@ -23,15 +20,24 @@ final readonly class OrganizationSubscriptionAccess
         public bool $billingWarning,
         public ?CarbonInterface $trialEndsAt = null,
         public ?CarbonInterface $endsAt = null,
+        public ?int $planVersionId = null,
     ) {}
 
+    /**
+     * Determine whether normal business writes are blocked.
+     */
     public function isReadOnly(): bool
     {
-        return $this->accessMode === OrganizationAccessMode::ReadOnly;
+        return $this->accessMode
+            === OrganizationAccessMode::ReadOnly;
     }
 
+    /**
+     * Determine whether normal business writes are permitted.
+     */
     public function isWritable(): bool
     {
-        return $this->accessMode === OrganizationAccessMode::Writable;
+        return $this->accessMode
+            === OrganizationAccessMode::Writable;
     }
 }

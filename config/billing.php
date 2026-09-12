@@ -5,13 +5,8 @@
 | Billing Configuration Contract
 |--------------------------------------------------------------------------
 |
-| This is the single config('billing.*') contract application code must use
-| for billing configuration. Provider-specific credentials remain server-side
-| and are never exposed through Inertia props or browser configuration.
-|
 | The selected provider controls new subscription acquisition only. Existing
-| provider-owned subscriptions retain their provider ownership independently
-| from this selection.
+| provider-owned subscriptions retain their provider ownership.
 |
 */
 
@@ -40,65 +35,28 @@ $providers = [
 
     'paymongo' => [
         'enabled' => (bool) env('BILLING_PAYMONGO_ENABLED', false),
-        'manual_qrph' => (bool) env('BILLING_PAYMONGO_MANUAL_QRPH_ENABLED', false),
+        'manual_qrph' => (bool) env(
+            'BILLING_PAYMONGO_MANUAL_QRPH_ENABLED',
+            false,
+        ),
         'mode' => env('PAYMONGO_MODE'),
         'public_key' => env('PAYMONGO_PUBLIC_KEY'),
         'secret_key' => env('PAYMONGO_SECRET_KEY'),
         'webhook_secret' => env('PAYMONGO_WEBHOOK_SECRET'),
         'customer_phone' => env('PAYMONGO_CUSTOMER_PHONE'),
-        'api_base_url' => env('PAYMONGO_API_BASE_URL', 'https://api.paymongo.com/v1'),
+        'api_base_url' => env(
+            'PAYMONGO_API_BASE_URL',
+            'https://api.paymongo.com/v1',
+        ),
     ],
 ];
 
 return [
-
-    /*
-    |--------------------------------------------------------------------------
-    | Acquisition Provider
-    |--------------------------------------------------------------------------
-    |
-    | No default is intentional. Production must explicitly select one of the
-    | supported providers, and BillingConfigurationValidator will fail closed
-    | when this value is missing, malformed, unsupported, or disabled.
-    |
-    */
-
     'provider' => env('BILLING_PROVIDER'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Provider Configuration
-    |--------------------------------------------------------------------------
-    |
-    | Provider credentials are environment-backed server configuration only.
-    | Enabling a provider does not select it.
-    |
-    */
 
     'providers' => $providers,
 
-    /*
-    |--------------------------------------------------------------------------
-    | Transitional Stripe Compatibility
-    |--------------------------------------------------------------------------
-    |
-    | Preserve the existing billing.stripe.* contract during migration. New
-    | provider-aware infrastructure should use billing.providers.stripe.*.
-    |
-    */
-
     'stripe' => $providers['stripe'],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Subscription Identity, Currency, Trial, and Plan Catalog
-    |--------------------------------------------------------------------------
-    |
-    | config/subscription.php remains authoritative for application-owned
-    | subscription identity, billing currency, trial duration, plans,
-    | entitlements, and limits.
-    |
-    */
 
     'subscription_type' => $subscription['type'],
 
@@ -106,46 +64,44 @@ return [
 
     'trial_days' => $subscription['trial_days'],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Legacy Bootstrap Catalog
+    |--------------------------------------------------------------------------
+    |
+    | Provider IDs remain infrastructure configuration. Commercial names,
+    | tiers, feature grants, limits, and numeric prices move to PostgreSQL
+    | after the Phase 5 cutover.
+    |
+    */
+
     'plans' => $subscription['plans'],
 
     /*
     |--------------------------------------------------------------------------
-    | Manual Upgrade Minimum Charge
+    | Versioned Catalog Cutover
     |--------------------------------------------------------------------------
     |
-    | Floor (in minor currency units) applied to a prorated manual QR Ph
-    | upgrade invoice, so a plan change requested very close to the paid
-    | period boundary never produces a negligible or zero-amount charge.
-    |
-    | UNRESOLVED BUSINESS DECISION: no default is set. Leaving this unset
-    | applies no floor (a zero-value proration is allowed) until approved.
+    | Keep false while schema, Version 1 drafts, publication, and subscriber
+    | pin backfill are incomplete. When true, paid commercial resolution fails
+    | closed unless a valid published/pinned PostgreSQL version exists.
     |
     */
 
-    'upgrade_minimum_manual_amount' => env('BILLING_UPGRADE_MINIMUM_MANUAL_AMOUNT'),
+    'versioned_catalog_enabled' => (bool) env(
+        'BILLING_VERSIONED_CATALOG_ENABLED',
+        false,
+    ),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Billing Logger
-    |--------------------------------------------------------------------------
-    */
+    'upgrade_minimum_manual_amount' => env(
+        'BILLING_UPGRADE_MINIMUM_MANUAL_AMOUNT',
+    ),
 
     'logger' => env('BILLING_LOG_CHANNEL', 'stack'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Common Production Requirements
-    |--------------------------------------------------------------------------
-    |
-    | Provider-specific requirements are validated separately according to
-    | provider selection and enablement.
-    |
-    */
 
     'required_in_production' => [
         'currency',
         'trial_days',
         'subscription_type',
     ],
-
 ];
