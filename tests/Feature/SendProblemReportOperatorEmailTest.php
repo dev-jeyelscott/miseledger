@@ -5,14 +5,39 @@ use App\Jobs\SendProblemReportOperatorEmail;
 use App\Models\ProblemReport;
 use App\Models\ProblemReportAttachment;
 use App\Models\User;
-use Illuminate\Mail\Mailable;
-use Illuminate\Support\Facades\Mail;
+use App\Notifications\ProblemReportOperatorNotification;
+use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
+use Symfony\Component\Mime\Email;
+
+/**
+ * Build the mail representation for a captured problem-report operator notification.
+ */
+function problemReportOperatorMailMessage(
+    ProblemReportOperatorNotification $notification,
+    object $notifiable,
+): MailMessage {
+    return $notification->toMail($notifiable);
+}
+
+/**
+ * Apply the notification's Symfony mail callbacks to a test email instance.
+ */
+function problemReportOperatorSymfonyEmail(MailMessage $mailMessage): Email
+{
+    $email = new Email;
+
+    foreach ($mailMessage->callbacks as $callback) {
+        $callback($email);
+    }
+
+    return $email;
+}
 
 describe('Send Problem Report Operator Email', function () {
     beforeEach(function () {
         Queue::fake();
-        Mail::fake();
     });
 
     it('does not dispatch email job when config is disabled', function () {
@@ -40,7 +65,7 @@ describe('Send Problem Report Operator Email', function () {
     it('marks the job for after-commit execution', function () {
         config(['problem-reports.email.enabled' => true]);
 
-        $report = ProblemReport::factory()->create();
+        ProblemReport::factory()->create();
 
         Queue::assertPushed(
             SendProblemReportOperatorEmail::class,
@@ -51,6 +76,8 @@ describe('Send Problem Report Operator Email', function () {
     });
 
     it('skips email when recipient is not configured', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => null,
@@ -64,9 +91,12 @@ describe('Send Problem Report Operator Email', function () {
         $report->refresh();
         expect($report->email_notified_at)->toBeNull();
         expect($report->email_notification_claimed_at)->toBeNull();
+        Notification::assertNothingSent();
     });
 
     it('skips email when recipient is empty string', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => '',
@@ -80,9 +110,12 @@ describe('Send Problem Report Operator Email', function () {
         $report->refresh();
         expect($report->email_notified_at)->toBeNull();
         expect($report->email_notification_claimed_at)->toBeNull();
+        Notification::assertNothingSent();
     });
 
     it('skips email when recipient is invalid email address', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'not-an-email',
@@ -96,9 +129,12 @@ describe('Send Problem Report Operator Email', function () {
         $report->refresh();
         expect($report->email_notified_at)->toBeNull();
         expect($report->email_notification_claimed_at)->toBeNull();
+        Notification::assertNothingSent();
     });
 
     it('marks email_notified_at after successful send', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -111,9 +147,14 @@ describe('Send Problem Report Operator Email', function () {
 
         $report->refresh();
         expect($report->email_notified_at)->not()->toBeNull();
+        Notification::assertSentOnDemandOnce(
+            ProblemReportOperatorNotification::class,
+        );
     });
 
     it('marks both email_notification_claimed_at and email_notified_at after successful send', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -130,6 +171,8 @@ describe('Send Problem Report Operator Email', function () {
     });
 
     it('skips already notified reports', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -143,6 +186,7 @@ describe('Send Problem Report Operator Email', function () {
         $job->handle();
 
         expect($report->email_notified_at)->not()->toBeNull();
+        Notification::assertNothingSent();
     });
 
     it('retries mail send on transient provider failure', function () {
@@ -152,29 +196,30 @@ describe('Send Problem Report Operator Email', function () {
         ]);
 
         $report = ProblemReport::factory()->create();
-
         $job = new SendProblemReportOperatorEmail($report->id);
 
-        // First attempt: mock mail to fail
-        Mail::shouldReceive('send')->once()->andThrow(new Exception('Mail service temporarily down'));
+        Notification::shouldReceive('send')
+            ->once()
+            ->andThrow(
+                new Exception('Mail service temporarily down'),
+            );
 
         expect(function () use ($job) {
             $job->handle();
         })->toThrow(Exception::class);
 
-        // Report should show claimed but not notified yet
         $report->refresh();
         expect($report->email_notified_at)->toBeNull();
         expect($report->email_notification_claimed_at)->not()->toBeNull();
 
-        // Retry should attempt send again and succeed
-        Mail::shouldReceive('send')->once();
-
+        Notification::fake();
         $job->handle();
 
-        // Verify second attempt succeeded
         $report->refresh();
         expect($report->email_notified_at)->not()->toBeNull();
+        Notification::assertSentOnDemandOnce(
+            ProblemReportOperatorNotification::class,
+        );
     });
 
     it('uses unique job ID for deduplication', function () {
@@ -203,7 +248,9 @@ describe('Send Problem Report Operator Email', function () {
 
         $report = ProblemReport::factory()->create();
 
-        Mail::shouldReceive('send')->andThrow(new Exception('Mail service down'));
+        Notification::shouldReceive('send')
+            ->once()
+            ->andThrow(new Exception('Mail service down'));
 
         $job = new SendProblemReportOperatorEmail($report->id);
 
@@ -217,6 +264,8 @@ describe('Send Problem Report Operator Email', function () {
     });
 
     it('skips email when report not found', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -225,10 +274,12 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail(9999);
         $job->handle();
 
-        expect(true)->toBeTrue();
+        Notification::assertNothingSent();
     });
 
     it('sends email to configured recipient', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -248,16 +299,23 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function (Mailable $mailable): bool {
-            return in_array(
-                'operator@example.com',
-                array_column((array) $mailable->to, 'address'),
-                true
-            );
-        });
+        Notification::assertSentOnDemand(
+            ProblemReportOperatorNotification::class,
+            static function (
+                ProblemReportOperatorNotification $notification,
+                array $channels,
+                object $notifiable,
+            ): bool {
+                return $channels === ['mail']
+                    && ($notifiable->routes['mail'] ?? null)
+                        === 'operator@example.com';
+            },
+        );
     });
 
     it('includes report reference in subject line', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -268,12 +326,27 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function (Mailable $mailable) use ($report): bool {
-            return str_contains($mailable->subject, "MiseLedger Problem Report {$report->reference}");
-        });
+        Notification::assertSentOnDemand(
+            ProblemReportOperatorNotification::class,
+            static function (
+                ProblemReportOperatorNotification $notification,
+                array $channels,
+                object $notifiable,
+            ) use ($report): bool {
+                $mailMessage = problemReportOperatorMailMessage(
+                    $notification,
+                    $notifiable,
+                );
+
+                return $mailMessage->subject
+                    === "MiseLedger Problem Report {$report->reference}";
+            },
+        );
     });
 
     it('includes report metadata in email body', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -296,20 +369,38 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function (Mailable $mailable) use ($report): bool {
-            $html = $mailable->render();
+        Notification::assertSentOnDemand(
+            ProblemReportOperatorNotification::class,
+            static function (
+                ProblemReportOperatorNotification $notification,
+                array $channels,
+                object $notifiable,
+            ) use ($report): bool {
+                $html = (string) problemReportOperatorMailMessage(
+                    $notification,
+                    $notifiable,
+                )->render();
 
-            return str_contains($html, $report->reference)
-                && str_contains($html, 'Test Title')
-                && str_contains($html, 'Test Description')
-                && str_contains($html, 'Test User')
-                && str_contains($html, 'test@example.com')
-                && str_contains($html, 'Test Org')
-                && str_contains($html, 'Screenshot Count: 3');
-        });
+                $text = preg_replace(
+                    '/\s+/',
+                    ' ',
+                    html_entity_decode(strip_tags($html)),
+                ) ?? '';
+
+                return str_contains($text, $report->reference)
+                    && str_contains($text, 'Test Title')
+                    && str_contains($text, 'Test Description')
+                    && str_contains($text, 'Test User')
+                    && str_contains($text, 'test@example.com')
+                    && str_contains($text, 'Test Org')
+                    && str_contains($text, 'Screenshot Count: 3');
+            },
+        );
     });
 
     it('includes authenticated URL with report reference', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -320,15 +411,30 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function (Mailable $mailable) use ($report): bool {
-            $html = $mailable->render();
-            $expectedUrl = route('problem-reports.show-operator', $report->reference);
+        Notification::assertSentOnDemand(
+            ProblemReportOperatorNotification::class,
+            static function (
+                ProblemReportOperatorNotification $notification,
+                array $channels,
+                object $notifiable,
+            ) use ($report): bool {
+                $mailMessage = problemReportOperatorMailMessage(
+                    $notification,
+                    $notifiable,
+                );
 
-            return str_contains($html, $expectedUrl);
-        });
+                return $mailMessage->actionUrl
+                    === route(
+                        'problem-reports.show-operator',
+                        $report->reference,
+                    );
+            },
+        );
     });
 
     it('sets deterministic Message-ID header', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -339,28 +445,43 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function (Mailable $mailable) use ($report): bool {
-            $expectedMessageId = sprintf(
-                'problem-report.%s@%s',
-                $report->reference,
-                parse_url(config('app.url'), PHP_URL_HOST) ?: 'miseledger.app',
-            );
+        Notification::assertSentOnDemand(
+            ProblemReportOperatorNotification::class,
+            static function (
+                ProblemReportOperatorNotification $notification,
+                array $channels,
+                object $notifiable,
+            ) use ($report): bool {
+                $expectedMessageId = sprintf(
+                    'problem-report.%s@%s',
+                    $report->reference,
+                    parse_url(
+                        config('app.url'),
+                        PHP_URL_HOST,
+                    ) ?: 'miseledger.app',
+                );
 
-            // Access the built Symfony message to check the Message-Id header
-            $message = $mailable->build();
-            if (method_exists($message, 'getSymfonyMessage')) {
-                $symfonyMessage = $message->getSymfonyMessage();
-                $messageId = $symfonyMessage->getHeaders()->get('Message-Id')?->getBodyAsString();
+                $email = problemReportOperatorSymfonyEmail(
+                    problemReportOperatorMailMessage(
+                        $notification,
+                        $notifiable,
+                    ),
+                );
 
-                return $messageId === sprintf('<%s>', $expectedMessageId);
-            }
+                $messageId = $email
+                    ->getHeaders()
+                    ->get('Message-Id')
+                    ?->getBodyAsString();
 
-            // Fallback for accessing headers if getSymfonyMessage is not available
-            return false;
-        });
+                return $messageId
+                    === sprintf('<%s>', $expectedMessageId);
+            },
+        );
     });
 
     it('does not include screenshot attachments in email', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -373,12 +494,27 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function (Mailable $mailable): bool {
-            return empty($mailable->attachments);
-        });
+        Notification::assertSentOnDemand(
+            ProblemReportOperatorNotification::class,
+            static function (
+                ProblemReportOperatorNotification $notification,
+                array $channels,
+                object $notifiable,
+            ): bool {
+                $mailMessage = problemReportOperatorMailMessage(
+                    $notification,
+                    $notifiable,
+                );
+
+                return $mailMessage->attachments === []
+                    && $mailMessage->rawAttachments === [];
+            },
+        );
     });
 
     it('does not expose private storage paths in email', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -391,16 +527,28 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function (Mailable $mailable): bool {
-            $html = $mailable->render();
+        Notification::assertSentOnDemand(
+            ProblemReportOperatorNotification::class,
+            static function (
+                ProblemReportOperatorNotification $notification,
+                array $channels,
+                object $notifiable,
+            ): bool {
+                $html = (string) problemReportOperatorMailMessage(
+                    $notification,
+                    $notifiable,
+                )->render();
 
-            return ! str_contains($html, '/storage/')
-                && ! str_contains($html, 'app/problem-reports/')
-                && ! str_contains($html, '.env');
-        });
+                return ! str_contains($html, '/storage/')
+                    && ! str_contains($html, 'app/problem-reports/')
+                    && ! str_contains($html, '.env');
+            },
+        );
     });
 
     it('does not include Notion credentials or metadata', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -411,16 +559,30 @@ describe('Send Problem Report Operator Email', function () {
         $job = new SendProblemReportOperatorEmail($report->id);
         $job->handle();
 
-        Mail::assertSent(function (Mailable $mailable): bool {
-            $html = $mailable->render();
+        Notification::assertSentOnDemand(
+            ProblemReportOperatorNotification::class,
+            static function (
+                ProblemReportOperatorNotification $notification,
+                array $channels,
+                object $notifiable,
+            ): bool {
+                $html = strtolower(
+                    (string) problemReportOperatorMailMessage(
+                        $notification,
+                        $notifiable,
+                    )->render(),
+                );
 
-            return ! str_contains($html, 'notion')
-                && ! str_contains($html, 'notion_page_id')
-                && ! str_contains($html, 'notion_sync');
-        });
+                return ! str_contains($html, 'notion')
+                    && ! str_contains($html, 'notion_page_id')
+                    && ! str_contains($html, 'notion_sync');
+            },
+        );
     });
 
     it('prevents duplicate sends after successful delivery', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -434,14 +596,18 @@ describe('Send Problem Report Operator Email', function () {
         $report->refresh();
         $firstNotifiedAt = $report->email_notified_at;
 
-        Mail::fake();
+        Notification::fake();
         $job->handle();
 
         $report->refresh();
-        expect($report->email_notified_at->toDateTimeString())->toBe($firstNotifiedAt->toDateTimeString());
-        Mail::assertNotSent(function (Mailable $mailable): bool {
-            return true;
-        });
+
+        expect(
+            $report->email_notified_at->toDateTimeString(),
+        )->toBe(
+            $firstNotifiedAt->toDateTimeString(),
+        );
+
+        Notification::assertNothingSent();
     });
 
     it('does not mutate report lifecycle on email failure', function () {
@@ -452,7 +618,9 @@ describe('Send Problem Report Operator Email', function () {
 
         $report = ProblemReport::factory()->create();
 
-        Mail::shouldReceive('send')->andThrow(new Exception('Mail service down'));
+        Notification::shouldReceive('send')
+            ->once()
+            ->andThrow(new Exception('Mail service down'));
 
         $job = new SendProblemReportOperatorEmail($report->id);
 
@@ -466,6 +634,8 @@ describe('Send Problem Report Operator Email', function () {
     });
 
     it('refuses to redeliver when ambiguous claim exists', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -479,17 +649,18 @@ describe('Send Problem Report Operator Email', function () {
 
         expect(function () use ($job) {
             $job->handle();
-        })->toThrow(AmbiguousProblemReportEmailDeliveryException::class);
+        })->toThrow(
+            AmbiguousProblemReportEmailDeliveryException::class,
+        );
 
         $report->refresh();
         expect($report->email_notified_at)->toBeNull();
-
-        Mail::assertNotSent(function (): bool {
-            return true;
-        });
+        Notification::assertNothingSent();
     });
 
     it('prevents concurrent execution from sending multiple emails', function () {
+        Notification::fake();
+
         config([
             'problem-reports.email.enabled' => true,
             'problem-reports.email.to' => 'operator@example.com',
@@ -503,15 +674,18 @@ describe('Send Problem Report Operator Email', function () {
         $report->refresh();
         $firstNotifiedAt = $report->email_notified_at;
 
-        Mail::fake();
+        Notification::fake();
         $job->handle();
 
         $report->refresh();
-        expect($report->email_notified_at->toDateTimeString())->toBe($firstNotifiedAt->toDateTimeString());
 
-        Mail::assertNotSent(function (): bool {
-            return true;
-        });
+        expect(
+            $report->email_notified_at->toDateTimeString(),
+        )->toBe(
+            $firstNotifiedAt->toDateTimeString(),
+        );
+
+        Notification::assertNothingSent();
     });
 });
 
@@ -525,7 +699,12 @@ describe('Problem Report Operator Authorization', function () {
         ]);
 
         $this->actingAs($nonAdmin)
-            ->get(route('problem-reports.show-operator', $report->reference))
+            ->get(
+                route(
+                    'problem-reports.show-operator',
+                    $report->reference,
+                ),
+            )
             ->assertForbidden();
     });
 
@@ -539,7 +718,12 @@ describe('Problem Report Operator Authorization', function () {
         ]);
 
         $this->actingAs($admin)
-            ->get(route('problem-reports.show-operator', $report->reference))
+            ->get(
+                route(
+                    'problem-reports.show-operator',
+                    $report->reference,
+                ),
+            )
             ->assertSuccessful();
     });
 
@@ -552,15 +736,24 @@ describe('Problem Report Operator Authorization', function () {
         ]);
 
         $this->actingAs($reporter)
-            ->get(route('problem-reports.show-operator', $report->reference))
+            ->get(
+                route(
+                    'problem-reports.show-operator',
+                    $report->reference,
+                ),
+            )
             ->assertSuccessful();
     });
 
     it('prevents unauthenticated access to operator route', function () {
         $report = ProblemReport::factory()->create();
 
-        $this->get(route('problem-reports.show-operator', $report->reference))
-            ->assertRedirectToRoute('login');
+        $this->get(
+            route(
+                'problem-reports.show-operator',
+                $report->reference,
+            ),
+        )->assertRedirectToRoute('login');
     });
 
     it('prevents unverified user from accessing operator route', function () {
@@ -568,7 +761,12 @@ describe('Problem Report Operator Authorization', function () {
         $report = ProblemReport::factory()->create();
 
         $this->actingAs($user)
-            ->get(route('problem-reports.show-operator', $report->reference))
+            ->get(
+                route(
+                    'problem-reports.show-operator',
+                    $report->reference,
+                ),
+            )
             ->assertRedirectToRoute('verification.notice');
     });
 });

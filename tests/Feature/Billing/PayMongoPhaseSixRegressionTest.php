@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
+    Config::set('inertia.ssr.enabled', false);
     Http::preventStrayRequests();
     Cache::flush();
 
@@ -73,6 +74,8 @@ beforeEach(function (): void {
 });
 
 /**
+ * Create an organization owner fixture for PayMongo phase-six regression coverage.
+ *
  * @return array{0: User, 1: Organization}
  */
 function phaseSixBillingOwner(): array
