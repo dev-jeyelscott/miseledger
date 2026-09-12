@@ -147,8 +147,10 @@ describe('Send Problem Report Operator Email', function () {
 
         $report->refresh();
         expect($report->email_notified_at)->not()->toBeNull();
-        Notification::assertSentOnDemandOnce(
+
+        Notification::assertSentOnDemandTimes(
             ProblemReportOperatorNotification::class,
+            1,
         );
     });
 
@@ -217,8 +219,10 @@ describe('Send Problem Report Operator Email', function () {
 
         $report->refresh();
         expect($report->email_notified_at)->not()->toBeNull();
-        Notification::assertSentOnDemandOnce(
+
+        Notification::assertSentOnDemandTimes(
             ProblemReportOperatorNotification::class,
+            1,
         );
     });
 
