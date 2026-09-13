@@ -2,6 +2,7 @@
 
 use App\Actions\Billing\SynchronizeStripeBillingProjection;
 use App\Enums\BillingProvider;
+use App\Models\BillingCustomer;
 use App\Models\BillingSubscription;
 use App\Models\Organization;
 use Illuminate\Support\Carbon;
@@ -131,4 +132,40 @@ test('billing:sync-projection backfills a pre-existing Cashier subscription with
     $this->artisan('billing:sync-projection')->assertExitCode(0);
 
     expect(BillingSubscription::query()->where('external_subscription_id', $subscription->stripe_id)->count())->toBe(1);
+});
+
+test('billing:sync-projection preserves previously webhook-derived provider-only fields', function () {
+    projectionSyncPlans();
+
+    $organization = Organization::factory()->create(['stripe_id' => 'cus_projection_preserve']);
+    $subscription = projectionSyncSubscription($organization, ['stripe_status' => 'active']);
+    $periodEnd = Carbon::now()->addDays(30);
+    $canceledAt = Carbon::now()->subDay();
+
+    app(SynchronizeStripeBillingProjection::class)->handle($organization, $subscription, [
+        'livemode' => true,
+        'current_period_end' => $periodEnd->timestamp,
+        'cancel_at_period_end' => false,
+        'canceled_at' => $canceledAt->timestamp,
+    ]);
+
+    $before = BillingSubscription::query()->where('external_subscription_id', $subscription->stripe_id)->sole();
+
+    expect($before->livemode)->toBeTrue()
+        ->and($before->current_period_ends_at?->timestamp)->toBe($periodEnd->timestamp)
+        ->and($before->next_billing_at?->timestamp)->toBe($periodEnd->timestamp)
+        ->and($before->cancelled_at?->timestamp)->toBe($canceledAt->timestamp);
+
+    $this->artisan('billing:sync-projection')->assertExitCode(0);
+
+    $after = BillingSubscription::query()->where('external_subscription_id', $subscription->stripe_id)->sole();
+
+    expect($after->livemode)->toBeTrue()
+        ->and($after->current_period_ends_at?->timestamp)->toBe($periodEnd->timestamp)
+        ->and($after->next_billing_at?->timestamp)->toBe($periodEnd->timestamp)
+        ->and($after->cancelled_at?->timestamp)->toBe($canceledAt->timestamp)
+        ->and($after->provider_status)->toBe('active')
+        ->and($after->plan_code)->toBe('starter');
+
+    expect(BillingCustomer::query()->where('organization_id', $organization->getKey())->sole()->livemode)->toBeTrue();
 });

@@ -27,9 +27,11 @@ use Laravel\Cashier\Subscription;
  * is the raw webhook payload, the only source for fields Cashier's
  * `subscriptions` table does not persist at all (`current_period_end`,
  * `cancel_at`, `canceled_at`, `livemode`); pass an empty array when no
- * webhook payload is available (e.g. a local-only bootstrap), and those
- * fields are left null/false rather than fabricated or fetched via a
- * Stripe API call.
+ * webhook payload is available (e.g. a local-only bootstrap). Each
+ * provider-only field is only written when its raw key is actually present
+ * in `$subscriptionObject`, so an omitted payload leaves schema defaults on
+ * first-time creation and leaves previously webhook-derived values
+ * untouched on an existing row, rather than fabricating or erasing them.
  */
 final class SynchronizeStripeBillingProjection
 {
@@ -44,36 +46,52 @@ final class SynchronizeStripeBillingProjection
             return;
         }
 
-        $livemode = (bool) ($subscriptionObject['livemode'] ?? false);
+        $customerAttributes = ['external_customer_id' => $organization->stripe_id];
+
+        if (array_key_exists('livemode', $subscriptionObject)) {
+            $customerAttributes['livemode'] = (bool) $subscriptionObject['livemode'];
+        }
 
         $billingCustomer = BillingCustomer::query()->updateOrCreate(
             ['organization_id' => $organization->getKey(), 'provider' => BillingProvider::Stripe],
-            ['external_customer_id' => $organization->stripe_id, 'livemode' => $livemode],
+            $customerAttributes,
         );
 
         $priceId = $subscription->stripe_price;
         $plan = $priceId !== null ? $this->planCatalog->resolveByPriceId($priceId) : null;
         $interval = $priceId !== null ? $this->planCatalog->resolveIntervalByPriceId($priceId) : null;
 
+        $subscriptionAttributes = [
+            'organization_id' => $organization->getKey(),
+            'billing_customer_id' => $billingCustomer->getKey(),
+            'type' => $subscription->type,
+            'external_plan_id' => $priceId,
+            'plan_code' => $plan?->code->value,
+            'interval' => $interval,
+            'provider_status' => $subscription->stripe_status,
+            'trial_ends_at' => $subscription->trial_ends_at,
+            'ends_at' => $subscription->ends_at,
+        ];
+
+        if (array_key_exists('livemode', $subscriptionObject)) {
+            $subscriptionAttributes['livemode'] = (bool) $subscriptionObject['livemode'];
+        }
+
+        if (array_key_exists('current_period_end', $subscriptionObject)) {
+            $periodEndsAt = self::timestamp($subscriptionObject['current_period_end']);
+            $subscriptionAttributes['current_period_ends_at'] = $periodEndsAt;
+            $subscriptionAttributes['next_billing_at'] = ($subscriptionObject['cancel_at_period_end'] ?? false) === true
+                ? null
+                : $periodEndsAt;
+        }
+
+        if (array_key_exists('canceled_at', $subscriptionObject)) {
+            $subscriptionAttributes['cancelled_at'] = self::timestamp($subscriptionObject['canceled_at']);
+        }
+
         BillingSubscription::query()->updateOrCreate(
             ['provider' => BillingProvider::Stripe, 'external_subscription_id' => $subscription->stripe_id],
-            [
-                'organization_id' => $organization->getKey(),
-                'billing_customer_id' => $billingCustomer->getKey(),
-                'type' => $subscription->type,
-                'external_plan_id' => $priceId,
-                'plan_code' => $plan?->code->value,
-                'interval' => $interval,
-                'provider_status' => $subscription->stripe_status,
-                'livemode' => $livemode,
-                'trial_ends_at' => $subscription->trial_ends_at,
-                'current_period_ends_at' => self::timestamp($subscriptionObject['current_period_end'] ?? null),
-                'next_billing_at' => ($subscriptionObject['cancel_at_period_end'] ?? false) === true
-                    ? null
-                    : self::timestamp($subscriptionObject['current_period_end'] ?? null),
-                'ends_at' => $subscription->ends_at,
-                'cancelled_at' => self::timestamp($subscriptionObject['canceled_at'] ?? null),
-            ],
+            $subscriptionAttributes,
         );
     }
 

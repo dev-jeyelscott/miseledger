@@ -43,8 +43,10 @@ final class BillingSyncProjection extends Command
                     // No webhook payload is available for a local-only
                     // bootstrap, so fields Cashier does not persist
                     // (current_period_end, cancel_at, canceled_at,
-                    // livemode) are left null/false rather than fabricated
-                    // or fetched via a Stripe API call.
+                    // livemode) are left at schema defaults on first-time
+                    // creation and untouched on an already-synchronized
+                    // row, rather than fabricated, erased, or fetched via
+                    // a Stripe API call.
                     $this->synchronize->handle($organization, $subscription);
                     $synchronized++;
                 }
