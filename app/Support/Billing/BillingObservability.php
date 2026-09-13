@@ -201,6 +201,23 @@ final class BillingObservability
         );
     }
 
+    public function staleReceiptNotificationClaim(
+        Organization $organization,
+        int $billingPaymentId,
+        BillingProvider $provider,
+    ): void {
+        $this->record(
+            'warning',
+            'billing.notification.stale_receipt_claim',
+            $provider,
+            'notification',
+            $organization,
+            context: [
+                'billing_payment_id' => $billingPaymentId,
+            ],
+        );
+    }
+
     private function failure(
         string $event,
         ?Organization $organization,

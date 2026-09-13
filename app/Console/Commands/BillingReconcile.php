@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Actions\Audit\RecordAuditEntry;
 use App\Actions\Billing\SettlePayMongoPayment;
 use App\Enums\BillingCollectionMethod;
+use App\Enums\BillingPaymentStatus;
 use App\Enums\BillingProvider;
 use App\Models\BillingPayment;
 use App\Models\BillingSubscription;
@@ -167,7 +168,38 @@ final class BillingReconcile extends Command
             }
         }
 
-        return $claims->count();
+        $receiptClaims = BillingPayment::query()
+            ->with('organization')
+            ->where(
+                'status',
+                BillingPaymentStatus::Paid,
+            )
+            ->whereNotNull(
+                'receipt_notification_claimed_at',
+            )
+            ->whereNull(
+                'receipt_notification_dispatched_at',
+            )
+            ->where(
+                'receipt_notification_claimed_at',
+                '<',
+                now()->subMinutes(30),
+            )
+            ->get();
+
+        foreach ($receiptClaims as $payment) {
+            if ($payment->organization !== null) {
+                $this->observability
+                    ->staleReceiptNotificationClaim(
+                        $payment->organization,
+                        $payment->id,
+                        $payment->provider,
+                    );
+            }
+        }
+
+        return $claims->count()
+            + $receiptClaims->count();
     }
 
     /** @return array{0: int, 1: int} */

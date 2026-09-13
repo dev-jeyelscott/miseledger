@@ -3,10 +3,13 @@
 use App\Actions\Billing\NotifyOrganizationBillingLifecycle;
 use App\Actions\Billing\ProcessOrganizationBillingWebhookEffect;
 use App\Enums\BillingLifecycleEvent;
+use App\Enums\BillingPaymentStatus;
 use App\Enums\BillingProvider;
 use App\Enums\OrganizationRole;
 use App\Exceptions\AmbiguousBillingNotificationDeliveryException;
 use App\Jobs\SendOrganizationBillingLifecycleNotification;
+use App\Models\BillingInvoice;
+use App\Models\BillingPayment;
 use App\Models\BillingWebhookEffect;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
@@ -226,6 +229,47 @@ test('billing reconciliation surfaces a stale notification claim left by a defun
             && $context['event'] === 'billing.notification.stale_claim'
             && $context['organization_id'] === $organization->getKey()
             && $context['external_event_id'] === 'evt_queue_stale_claim',
+    );
+    Log::shouldReceive('info');
+
+    $this->artisan('billing:reconcile')->assertExitCode(1);
+});
+
+test('billing reconciliation surfaces a stale manual receipt-notification claim left by a defunct job attempt', function () {
+    $organization = Organization::factory()->create();
+    $invoice = BillingInvoice::factory()->create([
+        'organization_id' => $organization->getKey(),
+        'provider' => BillingProvider::PayMongo,
+    ]);
+    $stalePayment = BillingPayment::factory()->create([
+        'organization_id' => $organization->getKey(),
+        'billing_invoice_id' => $invoice->getKey(),
+        'provider' => BillingProvider::PayMongo,
+        'status' => BillingPaymentStatus::Paid,
+        'paid_at' => now()->subMinutes(45),
+    ]);
+    $stalePayment->update(['receipt_notification_claimed_at' => now()->subMinutes(45)]);
+
+    $inFlightOrganization = Organization::factory()->create();
+    $inFlightInvoice = BillingInvoice::factory()->create([
+        'organization_id' => $inFlightOrganization->getKey(),
+        'provider' => BillingProvider::PayMongo,
+    ]);
+    $inFlightPayment = BillingPayment::factory()->create([
+        'organization_id' => $inFlightOrganization->getKey(),
+        'billing_invoice_id' => $inFlightInvoice->getKey(),
+        'provider' => BillingProvider::PayMongo,
+        'status' => BillingPaymentStatus::Paid,
+        'paid_at' => now()->subMinutes(2),
+    ]);
+    $inFlightPayment->update(['receipt_notification_claimed_at' => now()->subMinutes(2)]);
+
+    Log::shouldReceive('channel')->andReturnSelf();
+    Log::shouldReceive('warning')->once()->withArgs(
+        fn (string $message, array $context): bool => $message === 'Billing operational signal emitted.'
+            && $context['event'] === 'billing.notification.stale_receipt_claim'
+            && $context['organization_id'] === $organization->getKey()
+            && $context['billing_payment_id'] === $stalePayment->getKey(),
     );
     Log::shouldReceive('info');
 
