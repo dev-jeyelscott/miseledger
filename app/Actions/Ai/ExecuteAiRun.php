@@ -9,6 +9,7 @@ use App\Exceptions\AiProviderException;
 use App\Mcp\AiMcpExecutionIdentityIssuer;
 use App\Models\AiConversation;
 use App\Models\AiMessage;
+use App\Models\AiProviderConnection;
 use App\Models\AiRun;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
@@ -101,8 +102,35 @@ final class ExecuteAiRun
                 throw $exception;
             }
 
+            // A durable connection can outlive its backing runtime profile
+            // (e.g. the credential a login worker persisted was never
+            // materialized for the worker executing this turn). Codex only
+            // surfaces that as an authorization failure on the turn itself,
+            // so treat it as the same signal a member's own disconnect
+            // produces rather than leaving a connection falsely "active".
+            if (in_array($exception->errorCode, [
+                AiProviderErrorCode::Unauthorized,
+                AiProviderErrorCode::LoginRequired,
+            ], true)) {
+                $this->deactivateConnection($run->ai_provider_connection_id);
+            }
+
             $this->fail($run->id, $exception->errorCode->value);
         }
+    }
+
+    private function deactivateConnection(int $connectionId): void
+    {
+        DB::transaction(function () use ($connectionId): void {
+            AiProviderConnection::query()
+                ->whereKey($connectionId)
+                ->active()
+                ->lockForUpdate()
+                ->update([
+                    'is_active' => false,
+                    'deactivated_at' => now(),
+                ]);
+        });
     }
 
     public function fail(int $runId, string $errorCode): void

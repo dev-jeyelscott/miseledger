@@ -35,13 +35,16 @@ The worker timeout must remain lower than the Redis queue `retry_after` configur
 
 Do not combine web, worker, and scheduler under Supervisor. Coolify owns process restart and lifecycle behavior independently.
 
-The separate AI worker consumes only the `ai` Redis queue:
+Two separate AI worker processes exist so a 15-minute device-code login poll can never block a chat turn: one consumes `ai`, the other consumes `ai-login`.
 
-| Process   | Docker target | Command                                                       | Public HTTP |
-| --------- | ------------- | ------------------------------------------------------------- | ----------- |
-| AI worker | `ai-worker`   | `php artisan queue:work ai --sleep=1 --tries=3 --timeout=190` | No          |
+| Process         | Docker target | Command                                                                        | Public HTTP |
+| --------------- | ------------- | ------------------------------------------------------------------------------- | ----------- |
+| AI worker       | `ai-worker`   | `php artisan queue:work ai --sleep=1 --tries=3 --timeout=190`                    | No          |
+| AI login worker | `ai-worker`   | `php artisan queue:work ai --queue=ai-login --sleep=1 --tries=1 --timeout=930`   | No          |
 
 The `ai` connection uses a 960-second `retry_after`, which remains greater than the 190-second normal-turn timeout and the 930-second device-login timeout. Normal workers retain `php artisan queue:work redis --sleep=1 --tries=3 --timeout=90` and therefore continue consuming the existing default queue unchanged.
+
+Both AI worker processes must be deployed and must mount the same dedicated Codex profile volume (see [Coolify AI Worker Resource](#coolify-ai-worker-resource)). Codex only persists an authenticated device-login credential into the profile directory of the process that performed the login; if the two processes had independent profile storage, a login completed on the login worker would be invisible to the chat worker, and the durable `AiProviderConnection` row would read as active while every subsequent turn fails authentication. A deployment that omits the AI login worker resource entirely leaves every dispatched `AwaitCodexDeviceCodeLogin` job permanently queued on `ai-login`, since nothing else in this process model consumes it.
 
 ## Local Development
 
@@ -78,7 +81,10 @@ docker compose up -d --force-recreate ai-worker
 
 Do not add a bind mount for `/var/www/html`, a repository checkout, SSH
 material, a Docker socket, or a user home directory to the `ai-worker` service.
-Its workspace and per-user profiles remain disposable `tmpfs` mounts.
+Its workspace remains a disposable `tmpfs` mount. Per-user Codex profiles live
+on the dedicated `codex-profiles` volume shared only between `ai-worker` and
+`ai-login-worker`, so a device-code login completed on one is visible to the
+other; never attach it to any other service.
 
 Inspect the stack:
 
@@ -442,7 +448,8 @@ Configure it as follows:
 - set a 190-second process timeout and allow the worker to receive `SIGTERM` for a graceful shutdown;
 - set limits of 2 vCPU, 2 GB memory, and 64 processes (PID limit), or the closest stricter limits available in the installed Coolify and Docker runtime;
 - use a read-only root filesystem, drop Linux capabilities, and enable `no-new-privileges` where the deployment runtime exposes those controls;
-- attach only the private MiseLedger network paths required for PostgreSQL, Redis, DNS, and the approved provider endpoints. Do not attach the public web ingress network.
+- attach only the private MiseLedger network paths required for PostgreSQL, Redis, DNS, and the approved provider endpoints. Do not attach the public web ingress network;
+- attach the dedicated `codex-profiles` persistent volume (see below) at `/var/lib/miseledger/codex/profiles`.
 
 Set these AI-worker-only environment values in Coolify:
 
@@ -457,15 +464,29 @@ AI_QUEUE_RETRY_AFTER=960
 
 The production Docker context excludes `.git`, and Codex is started with `--cd /tmp/codex-workspace`, `--sandbox read-only`, and `--ask-for-approval never`. `/tmp/codex-workspace` is created empty with mode `0700`; do not mount a repository, application source, SSH material, Docker socket, host filesystem, or user home directory there. Codex receives no repository checkout or writable application workspace.
 
-Each provider profile lives under an HMAC-derived, non-reversible user reference with mode `0700`. The AI resource keeps `/var/lib/miseledger/codex` on its disposable container filesystem, not a persistent Coolify volume. Profiles therefore survive only while that container instance runs and are discarded on replacement or restart. This avoids cross-user profile reuse and leaves the database as the authoritative record of connection state. If a future requirement needs login persistence across replacement, it must introduce an encrypted, per-user persistence design and explicit retention, revocation, backup, and cleanup approval. Do not add a shared profile volume.
+### Coolify AI Login Worker Resource
+
+Create a fifth Git-based Coolify application from the same repository commit and the same `ai-worker` Docker target. It exists only so a 15-minute device-code login poll can never occupy the process that runs chat turns; it is otherwise configured identically to the AI worker resource above, with these differences:
+
+- use the target command `php artisan queue:work ai --queue=ai-login --sleep=1 --tries=1 --timeout=930`;
+- set a 930-second process timeout instead of 190 seconds;
+- attach the **same** `codex-profiles` persistent volume as the AI worker resource, at the same `/var/lib/miseledger/codex/profiles` path, and the same `AI_CODEX_PROFILE_ROOT` value.
+
+Deploying the AI worker resource without also deploying this one leaves every job dispatched to `ai-login` permanently queued, since no other process in this deployment consumes it, and a member's device-code login can never complete.
+
+### Codex profile storage
+
+Each provider profile lives under an HMAC-derived, non-reversible user reference with mode `0700`. Codex only persists an authenticated device-login credential into the profile directory of the process instance that performed the login, so the AI worker and AI login worker must read and write the same profile storage — provision one small persistent volume (`codex-profiles`) and attach it to both of those two resources only, never to web, the normal worker, the scheduler, or any other service. This avoids cross-user profile reuse (each user's directory is still HMAC-derived and mode `0700`) and keeps the database the authoritative record of *connection* state, while the volume is the authoritative record of the *runtime credential* backing it. Do not bind-mount it from the host or a repository checkout.
+
+Because the store is now durable, a worker restart or replacement no longer discards a profile by itself; explicit revocation goes through the provider logout flow described in [Provider disconnect and profile cleanup](#provider-disconnect-and-profile-cleanup) instead. If the application detects a run failing with an unauthorized/login-required provider error, it deactivates that user's `AiProviderConnection` automatically, so a profile that is missing, corrupted, or was cleared out-of-band cannot leave the database reporting a connection that no longer authenticates.
 
 Operational checks:
 
-1. Confirm the resource has no domain, published port, or HTTP health check.
-2. Confirm Coolify reports the queue process running and inspect its stderr logs for startup, job failure, and restart events.
-3. Dispatch a controlled AI-queue job only after the corresponding application slice exists, then verify it appears on the `ai` queue and is not consumed by the normal worker.
+1. Confirm both resources have no domain, published port, or HTTP health check.
+2. Confirm Coolify reports both queue processes running and inspect their stderr logs for startup, job failure, and restart events.
+3. Dispatch a controlled AI-queue job only after the corresponding application slice exists, then verify it appears on the `ai` queue and is not consumed by the normal worker; verify a device-code login job appears on `ai-login` and is not consumed by the AI worker.
 4. On failed jobs, use Laravel's failed-job record and Coolify logs. Do not expose an App Server for diagnosis.
-5. Redeploy to clear disposable workspaces and profiles. For urgent provider revocation, execute the existing provider logout flow before redeploying.
+5. Recreating either AI resource no longer clears profiles, since they live on the shared persistent volume. For urgent provider revocation, execute the existing provider logout flow for the affected user; only remove the volume itself for a full incident-driven wipe, which logs out every connected user.
 
 ### AI operator runbook
 
@@ -489,8 +510,8 @@ history, or existing provider-account records.
 
 #### Staged rollout
 
-1. Deploy with both flags `false`. Verify web, normal worker, scheduler, and
-   AI worker health independently.
+1. Deploy with both flags `false`. Verify web, normal worker, scheduler, AI
+   worker, and AI login worker health independently.
 2. Set `AI_ENABLED=true` and keep `AI_OPENAI_ENABLED=false`. Verify the AI
    routes deny provider use, no provider process starts, and normal business
    writes remain unaffected.
@@ -505,19 +526,21 @@ history, or existing provider-account records.
 
 Rollback is immediate: set `AI_OPENAI_ENABLED=false` for a provider incident,
 or `AI_ENABLED=false` for a full AI incident, then redeploy/restart the
-private AI worker so any in-flight Codex process is terminated. Do not stop or
-restart the web, normal worker, or scheduler merely to disable AI.
+private AI worker and AI login worker so any in-flight Codex process is
+terminated. Do not stop or restart the web, normal worker, or scheduler merely
+to disable AI.
 
 #### Provider disconnect and profile cleanup
 
 Use the authenticated **Disconnect** control first. It asks the provider to
 logout and always deactivates the local connection even if that provider call
 fails. For an urgent revocation, disable the provider flag, perform the
-disconnect as the affected user where possible, then redeploy the AI worker.
-The worker profile directory is an HMAC-derived per-user path on disposable
-container storage. Recreating the AI worker removes all profiles and its
-temporary workspace. Never inspect, archive, bind-mount, or copy profile
-directories, and never put them on a persistent volume.
+disconnect as the affected user where possible, then redeploy the AI worker
+and AI login worker. Profile directories live on the persistent `codex-profiles`
+volume shared by those two resources (see [Codex profile storage](#codex-profile-storage)),
+so recreating either resource no longer clears them — only the disconnect flow
+(or removing the volume for a full incident wipe) does. Never inspect,
+archive, bind-mount, or copy profile directories.
 
 #### Stuck runs and queue health
 

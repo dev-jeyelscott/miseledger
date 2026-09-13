@@ -106,10 +106,16 @@ services:
             - /tmp:mode=1777
             - /var/www/html/storage:mode=0770,uid=10001,gid=10001
             - /var/www/html/bootstrap/cache:mode=0770,uid=10001,gid=10001
-            # Provider authentication profiles are deliberately per-worker and
-            # disposable. They must never survive worker replacement or be shared
-            # with another service.
-            - /var/lib/miseledger/codex/profiles:mode=0700,uid=10001,gid=10001
+        # Login (this queue's `ai-login` sibling) and conversation turns run
+        # in separate worker processes, but Codex only persists device-code
+        # credentials into the CODEX_HOME it authenticated. Both AI workers
+        # must therefore share this one profile store, or a login completed
+        # on one worker is invisible to the other. It stays a dedicated
+        # volume attached only to these two AI services (mode/uid/ownership
+        # come from the image at first mount) and is never bind-mounted from
+        # the host or shared with any other service.
+        volumes:
+            - 'codex-profiles:/var/lib/miseledger/codex/profiles'
         read_only: true
         cap_drop:
             - ALL
@@ -170,7 +176,10 @@ services:
             - /tmp:mode=1777
             - /var/www/html/storage:mode=0770,uid=10001,gid=10001
             - /var/www/html/bootstrap/cache:mode=0770,uid=10001,gid=10001
-            - /var/lib/miseledger/codex/profiles:mode=0700,uid=10001,gid=10001
+        # Shared with ai-worker; see the comment on that service's identical
+        # mount for why this must be one store rather than a per-worker one.
+        volumes:
+            - 'codex-profiles:/var/lib/miseledger/codex/profiles'
         read_only: true
         cap_drop:
             - ALL
@@ -280,4 +289,6 @@ volumes:
     sail-pgsql:
         driver: local
     sail-redis:
+        driver: local
+    codex-profiles:
         driver: local

@@ -4,8 +4,10 @@ use App\Actions\Ai\ExecuteAiRun;
 use App\Actions\Ai\QueueAiMessage;
 use App\Enums\AiMessageRole;
 use App\Enums\AiProvider;
+use App\Enums\AiProviderErrorCode;
 use App\Enums\AiRunStatus;
 use App\Enums\OrganizationRole;
+use App\Exceptions\AiProviderException;
 use App\Jobs\ProcessAiRun;
 use App\Models\AiConversation;
 use App\Models\AiProviderConnection;
@@ -89,6 +91,108 @@ test('a queued run rechecks access before provider execution', function () {
     app(ExecuteAiRun::class)->handle($run->id);
 
     expect($this->provider->turns)->toBe(0)->and($run->refresh()->status)->toBe(AiRunStatus::Failed)->and($run->error_code)->toBe('access_revoked');
+});
+
+test('a run failing with an unauthorized or login-required provider error deactivates the durable connection', function (AiProviderErrorCode $errorCode) {
+    [$organization, $user] = aiConversationOwner();
+    $conversation = AiConversation::factory()->create(['organization_id' => $organization->id, 'user_id' => $user->id]);
+    app()->instance(AiProviderAdapter::class, new class($errorCode) implements AiProviderAdapter
+    {
+        public function __construct(private readonly AiProviderErrorCode $errorCode) {}
+
+        public function account(User $user): array
+        {
+            return [];
+        }
+
+        public function runDeviceCodeLogin(User $user, callable $onStarted): bool
+        {
+            return false;
+        }
+
+        public function logout(User $user): void {}
+
+        public function rateLimits(User $user): array
+        {
+            return [];
+        }
+
+        // The runtime profile a login worker persisted can be missing or
+        // stale for the worker executing this turn (e.g. separate,
+        // non-shared profile storage). Codex only ever surfaces that as an
+        // authorization failure on the turn itself, never as a distinct
+        // "no profile" signal.
+        public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn
+        {
+            throw new AiProviderException($this->errorCode);
+        }
+    });
+
+    $run = app(QueueAiMessage::class)->handle($organization, $user, $conversation, 'Check stock.')['run'];
+
+    app(ExecuteAiRun::class)->handle($run->id);
+
+    expect($run->refresh()->status)->toBe(AiRunStatus::Failed)
+        ->and($run->error_code)->toBe($errorCode->value)
+        ->and(AiProviderConnection::query()->forUser($user)->active()->exists())->toBeFalse();
+})->with([
+    'unauthorized' => [AiProviderErrorCode::Unauthorized],
+    'login required' => [AiProviderErrorCode::LoginRequired],
+]);
+
+test('a failed run only deactivates the connection it was bound to, not a newer connection the user reconnected with mid-turn', function () {
+    [$organization, $user] = aiConversationOwner();
+    $conversation = AiConversation::factory()->create(['organization_id' => $organization->id, 'user_id' => $user->id]);
+    $staleConnection = AiProviderConnection::query()->forUser($user)->active()->sole();
+
+    app()->instance(AiProviderAdapter::class, new class($user) implements AiProviderAdapter
+    {
+        public ?AiProviderConnection $reconnected = null;
+
+        public function __construct(private readonly User $user) {}
+
+        public function account(User $user): array
+        {
+            return [];
+        }
+
+        public function runDeviceCodeLogin(User $user, callable $onStarted): bool
+        {
+            return false;
+        }
+
+        public function logout(User $user): void {}
+
+        public function rateLimits(User $user): array
+        {
+            return [];
+        }
+
+        // Simulates a fresh device-code login completing on another worker
+        // while this turn is still in flight against the stale connection,
+        // ending up with a distinct connection row for the same user.
+        public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn
+        {
+            AiProviderConnection::query()->forUser($this->user)->active()->update([
+                'is_active' => false,
+                'deactivated_at' => now(),
+            ]);
+            $this->reconnected = AiProviderConnection::factory()->create(['user_id' => $this->user->id]);
+
+            throw new AiProviderException(AiProviderErrorCode::Unauthorized);
+        }
+    });
+
+    $run = app(QueueAiMessage::class)->handle($organization, $user, $conversation, 'Check stock.')['run'];
+
+    app(ExecuteAiRun::class)->handle($run->id);
+
+    $newConnection = app(AiProviderAdapter::class)->reconnected;
+
+    expect($run->refresh()->status)->toBe(AiRunStatus::Failed)
+        ->and($run->error_code)->toBe(AiProviderErrorCode::Unauthorized->value)
+        ->and($staleConnection->refresh()->is_active)->toBeFalse()
+        ->and($newConnection->refresh()->is_active)->toBeTrue();
 });
 
 test('the first turn of a new thread carries organization context, but a resumed thread does not', function () {
