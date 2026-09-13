@@ -18,6 +18,7 @@ use App\Models\StockMovement;
 use App\Models\StorageLocation;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -1225,5 +1226,87 @@ test(
                         '50.0000',
                     ),
             );
+    },
+);
+
+test(
+    'finalizing a 200-line stock count reconciles every variance using a bounded number of queries',
+    function () {
+        $lineCount = 200;
+        $items = collect(range(1, $lineCount))
+            ->map(function (int $index) {
+                $item = InventoryItem::factory()->create([
+                    'organization_id' => $this->organization->id,
+                    'base_unit_of_measure_id' => $this->gram->id,
+                    'name' => "Bulk Count Item {$index}",
+                    'sku' => "BULK-COUNT-{$index}",
+                    'active' => true,
+                ]);
+
+                recordStockCountOpeningBalanceForTest(
+                    $this->organization,
+                    $this->location,
+                    $this->storageLocation,
+                    $item,
+                    $this->gram,
+                );
+
+                return $item;
+            });
+
+        $count = app(SaveStockCount::class)->handle(
+            $this->organization,
+            $this->actor,
+            [
+                'number' => 'COUNT-BULK-200',
+                'location_id' => $this->location->id,
+                'storage_location_id' => $this->storageLocation->id,
+                'lines' => $items
+                    ->map(fn (InventoryItem $item): array => [
+                        'inventory_item_id' => $item->id,
+                        'counted_quantity' => '1.2',
+                        'count_unit_id' => $this->kilogram->id,
+                        'notes' => null,
+                    ])
+                    ->all(),
+            ],
+        );
+
+        $count = app(SubmitStockCount::class)->handle(
+            $this->organization,
+            $this->actor,
+            $count,
+        );
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+
+        $finalized = app(FinalizeStockCount::class)->handle(
+            $this->organization,
+            $this->actor,
+            $count,
+        );
+
+        $queryCount = count(DB::getQueryLog());
+
+        DB::disableQueryLog();
+
+        expect($finalized->status)
+            ->toBe(StockCountStatus::Finalized)
+            ->and(
+                StockMovement::query()
+                    ->where(
+                        'type',
+                        StockMovementType::CountAdjustment->value,
+                    )
+                    ->count(),
+            )
+            ->toBe($lineCount)
+            ->and(
+                StockBalance::query()->count(),
+            )
+            ->toBe($lineCount)
+            ->and($queryCount)
+            ->toBeLessThan((int) ($lineCount * 4.5));
     },
 );

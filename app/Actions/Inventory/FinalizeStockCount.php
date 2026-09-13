@@ -17,6 +17,7 @@ use App\Models\UnitOfMeasure;
 use App\Models\User;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -106,54 +107,83 @@ final class FinalizeStockCount
                 ]);
             }
 
+            if (! Organization::query()
+                ->whereKey($organization->id)
+                ->where('active', true)
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'organization' => __(
+                        'The active organization is disabled.',
+                    ),
+                ]);
+            }
+
+            $inventoryItemIds = $lines
+                ->pluck('inventory_item_id')
+                ->unique()
+                ->values();
+
+            $inventoryItems = InventoryItem::query()
+                ->where('organization_id', $organization->id)
+                ->whereIn('id', $inventoryItemIds)
+                ->where('active', true)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            if ($inventoryItems->count() !== $inventoryItemIds->count()) {
+                throw ValidationException::withMessages([
+                    'stock_count' => __(
+                        'One or more counted inventory items are no longer active.',
+                    ),
+                ]);
+            }
+
+            $baseUnitIds = $inventoryItems
+                ->pluck('base_unit_of_measure_id')
+                ->unique()
+                ->values();
+
+            $baseUnits = UnitOfMeasure::query()
+                ->where('organization_id', $organization->id)
+                ->whereIn('id', $baseUnitIds)
+                ->where('active', true)
+                ->orderBy('id')
+                ->get()
+                ->keyBy('id');
+
+            if ($baseUnits->count() !== $baseUnitIds->count()) {
+                throw ValidationException::withMessages([
+                    'stock_count' => __(
+                        'One or more counted inventory items do not have an active base unit.',
+                    ),
+                ]);
+            }
+
+            $balances = StockBalance::query()
+                ->where('organization_id', $organization->id)
+                ->where('location_id', $location->id)
+                ->where('storage_location_id', $storageLocation->id)
+                ->whereIn('inventory_item_id', $inventoryItemIds)
+                ->orderBy('inventory_item_id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('inventory_item_id');
+
             $finalizedAt = now();
-            $movementCount = 0;
+            $movementEntries = [];
 
             foreach ($lines as $line) {
-                $inventoryItem = InventoryItem::query()
-                    ->where('organization_id', $organization->id)
-                    ->whereKey($line->inventory_item_id)
-                    ->where('active', true)
-                    ->lockForUpdate()
-                    ->first();
+                $inventoryItem = $inventoryItems->get(
+                    $line->inventory_item_id,
+                );
 
-                if ($inventoryItem === null) {
-                    throw ValidationException::withMessages([
-                        'stock_count' => __(
-                            'One or more counted inventory items are no longer active.',
-                        ),
-                    ]);
-                }
+                $baseUnit = $baseUnits->get(
+                    $inventoryItem->base_unit_of_measure_id,
+                );
 
-                $baseUnit = UnitOfMeasure::query()
-                    ->where('organization_id', $organization->id)
-                    ->whereKey(
-                        $inventoryItem->base_unit_of_measure_id,
-                    )
-                    ->where('active', true)
-                    ->first();
-
-                if ($baseUnit === null) {
-                    throw ValidationException::withMessages([
-                        'stock_count' => __(
-                            'One or more counted inventory items do not have an active base unit.',
-                        ),
-                    ]);
-                }
-
-                $balance = StockBalance::query()
-                    ->where('organization_id', $organization->id)
-                    ->where('location_id', $location->id)
-                    ->where(
-                        'storage_location_id',
-                        $storageLocation->id,
-                    )
-                    ->where(
-                        'inventory_item_id',
-                        $inventoryItem->id,
-                    )
-                    ->lockForUpdate()
-                    ->first();
+                $balance = $balances->get($inventoryItem->id);
 
                 $expectedBaseQuantity = BigDecimal::of(
                     $balance->quantity_on_hand
@@ -201,26 +231,22 @@ final class FinalizeStockCount
                         BigDecimal::zero(),
                     ) !== 0
                 ) {
-                    $this->recordStockMovement->handle(
-                        organization: $organization,
-                        location: $location,
-                        storageLocation: $storageLocation,
-                        inventoryItem: $inventoryItem,
-                        type: StockMovementType::CountAdjustment,
-                        baseQuantity: (string) $varianceBaseQuantity,
-                        baseUnitOfMeasure: $baseUnit,
-                        referenceType: 'stock_count_line',
-                        referenceId: $line->id,
-                        occurredAt: $finalizedAt,
-                        actor: $actor,
-                        idempotencyKey: "stock_count:{$count->id}:line:{$line->id}",
-                        notes: __(
+                    $movementEntries[] = [
+                        'storageLocation' => $storageLocation,
+                        'inventoryItem' => $inventoryItem,
+                        'type' => StockMovementType::CountAdjustment,
+                        'baseQuantity' => (string) $varianceBaseQuantity,
+                        'baseUnitOfMeasure' => $baseUnit,
+                        'referenceType' => 'stock_count_line',
+                        'referenceId' => $line->id,
+                        'occurredAt' => $finalizedAt,
+                        'actor' => $actor,
+                        'idempotencyKey' => "stock_count:{$count->id}:line:{$line->id}",
+                        'notes' => __(
                             'Physical stock count :number',
                             ['number' => $count->number],
                         ),
-                    );
-
-                    $movementCount++;
+                    ];
                 }
 
                 $line->forceFill([
@@ -229,6 +255,27 @@ final class FinalizeStockCount
                     'variance_unit_cost' => (string) $varianceUnitCost,
                     'variance_total_cost' => (string) $varianceTotalCost,
                 ])->save();
+            }
+
+            $movementCount = count($movementEntries);
+
+            if ($movementCount > 0) {
+                $lockedDependencies = new LockedDependencies(
+                    location: $location,
+                    purchaseOrderLines: new Collection,
+                    inventoryItems: $inventoryItems,
+                    baseUnits: $baseUnits,
+                    storageLocations: (new Collection([$storageLocation]))
+                        ->keyBy('id'),
+                    actorMembershipValidated: true,
+                );
+
+                $this->recordStockMovement->handleBatch(
+                    organization: $organization,
+                    location: $location,
+                    movements: $movementEntries,
+                    lockedDependencies: $lockedDependencies,
+                );
             }
 
             $count->forceFill([
