@@ -518,7 +518,11 @@ final class PlatformBillingController extends Controller
         ]);
     }
 
-    /** Build display labels keyed only by stable internal plan code. */
+    /**
+     * Build display labels keyed only by stable internal plan code.
+     *
+     * @return array<string, string>
+     */
     private function planLabels(PlanCatalog $catalog): array
     {
         $labels = [];
@@ -530,7 +534,11 @@ final class PlatformBillingController extends Controller
         return $labels;
     }
 
-    /** Return a label without consulting a provider-owned plan identifier. */
+    /**
+     * Return a label without consulting a provider-owned plan identifier.
+     *
+     * @param  array<string, string>  $planLabels
+     */
     private function planLabel(?string $planCode, array $planLabels): string
     {
         if ($planCode === null || $planCode === '') {
@@ -556,7 +564,12 @@ final class PlatformBillingController extends Controller
         }
     }
 
-    /** Return valid persisted plan codes available to the filter. */
+    /**
+     * Return valid persisted plan codes available to the filter.
+     *
+     * @param  array<string, string>  $planLabels
+     * @return list<array{value: string, label: string}>
+     */
     private function subscriptionPlanOptions(array $planLabels): array
     {
         return array_values(
@@ -578,7 +591,11 @@ final class PlatformBillingController extends Controller
         );
     }
 
-    /** Return provider filter options from the supported provider enum. */
+    /**
+     * Return provider filter options from the supported provider enum.
+     *
+     * @return list<array{value: string, label: string}>
+     */
     private function providerOptions(): array
     {
         return array_map(
@@ -590,7 +607,11 @@ final class PlatformBillingController extends Controller
         );
     }
 
-    /** Return supported billing intervals for projection filtering. */
+    /**
+     * Return supported billing intervals for projection filtering.
+     *
+     * @return list<array{value: string, label: string}>
+     */
     private function intervalOptions(): array
     {
         return array_map(
@@ -602,7 +623,11 @@ final class PlatformBillingController extends Controller
         );
     }
 
-    /** Return collection-method filter options from the durable enum. */
+    /**
+     * Return collection-method filter options from the durable enum.
+     *
+     * @return list<array{value: string, label: string}>
+     */
     private function collectionMethodOptions(): array
     {
         return array_map(
@@ -614,7 +639,11 @@ final class PlatformBillingController extends Controller
         );
     }
 
-    /** Return the bounded provider-status vocabulary accepted by the filter. */
+    /**
+     * Return the bounded provider-status vocabulary accepted by the filter.
+     *
+     * @return list<array{value: string, label: string}>
+     */
     private function providerStatusOptions(): array
     {
         return array_map(
@@ -626,7 +655,11 @@ final class PlatformBillingController extends Controller
         );
     }
 
-    /** Return payment-status filter options from the durable enum. */
+    /**
+     * Return payment-status filter options from the durable enum.
+     *
+     * @return list<array{value: string, label: string}>
+     */
     private function paymentStatusOptions(): array
     {
         return array_map(
@@ -638,12 +671,18 @@ final class PlatformBillingController extends Controller
         );
     }
 
-    /** Apply deterministic subscription sorting with nullable dates last. */
+    /**
+     * Apply deterministic subscription sorting with nullable dates last.
+     *
+     * @param  Builder<BillingSubscription>  $query
+     */
     private function applySubscriptionSort(
         Builder $query,
         string $sort,
         string $direction,
     ): void {
+        $orderDirection = $direction === 'asc' ? 'asc' : 'desc';
+
         $nullableColumn = match ($sort) {
             'next_billing_at' => 'next_billing_at',
             'current_period_ends_at' => 'current_period_ends_at',
@@ -652,24 +691,30 @@ final class PlatformBillingController extends Controller
         };
 
         if ($nullableColumn !== null) {
-            $sqlDirection = $direction === 'asc' ? 'ASC' : 'DESC';
+            $sqlDirection = $orderDirection === 'asc' ? 'ASC' : 'DESC';
 
             $query->orderByRaw(
                 "{$nullableColumn} {$sqlDirection} NULLS LAST",
             );
         } else {
-            $query->orderBy($sort, $direction);
+            $query->orderBy($sort, $orderDirection);
         }
 
-        $query->orderBy('id', $direction);
+        $query->orderBy('id', $orderDirection);
     }
 
-    /** Apply deterministic payment sorting with nullable evidence dates last. */
+    /**
+     * Apply deterministic payment sorting with nullable evidence dates last.
+     *
+     * @param  Builder<BillingPayment>  $query
+     */
     private function applyPaymentSort(
         Builder $query,
         string $sort,
         string $direction,
     ): void {
+        $orderDirection = $direction === 'asc' ? 'asc' : 'desc';
+
         $nullableColumn = match ($sort) {
             'paid_at' => 'paid_at',
             'failed_at' => 'failed_at',
@@ -677,16 +722,16 @@ final class PlatformBillingController extends Controller
         };
 
         if ($nullableColumn !== null) {
-            $sqlDirection = $direction === 'asc' ? 'ASC' : 'DESC';
+            $sqlDirection = $orderDirection === 'asc' ? 'ASC' : 'DESC';
 
             $query->orderByRaw(
                 "{$nullableColumn} {$sqlDirection} NULLS LAST",
             );
         } else {
-            $query->orderBy($sort, $direction);
+            $query->orderBy($sort, $orderDirection);
         }
 
-        $query->orderBy('id', $direction);
+        $query->orderBy('id', $orderDirection);
     }
 
     /** Convert one validated UTC calendar date to its inclusive start. */
@@ -720,6 +765,7 @@ final class PlatformBillingController extends Controller
         };
     }
 
+    /** Convert the persisted collection method into platform-facing copy. */
     private function collectionMethodLabel(
         BillingCollectionMethod $method,
     ): string {
@@ -729,6 +775,7 @@ final class PlatformBillingController extends Controller
         };
     }
 
+    /** Convert the persisted payment method into platform-facing copy. */
     private function paymentMethodLabel(BillingPaymentMethod $method): string
     {
         return match ($method) {
@@ -738,6 +785,7 @@ final class PlatformBillingController extends Controller
         };
     }
 
+    /** Convert the durable payment status into platform-facing copy. */
     private function paymentStatusLabel(BillingPaymentStatus $status): string
     {
         return match ($status) {

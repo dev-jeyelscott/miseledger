@@ -43,6 +43,11 @@ final class PlatformDashboardController extends Controller
         ]);
     }
 
+    /**
+     * Compute total, active, and inactive organization counts.
+     *
+     * @return array{total: int, active: int, inactive: int}
+     */
     private function organizationStats(): array
     {
         $stats = Organization::query()
@@ -60,6 +65,11 @@ final class PlatformDashboardController extends Controller
         ];
     }
 
+    /**
+     * Compute total, verified, and unverified user counts.
+     *
+     * @return array{total: int, verified: int, unverified: int}
+     */
     private function userStats(): array
     {
         $stats = User::query()
@@ -77,6 +87,7 @@ final class PlatformDashboardController extends Controller
         ];
     }
 
+    /** Count exactly the problem-report states treated as open. */
     private function openProblemReportCount(): int
     {
         $stats = ProblemReport::query()
@@ -89,9 +100,20 @@ final class PlatformDashboardController extends Controller
         return (int) ($stats?->getAttribute('open_count') ?? 0);
     }
 
+    /**
+     * Return at most five newest open problem reports with minimized props.
+     *
+     * @return list<array{
+     *     reference: string,
+     *     title: string|null,
+     *     status: string,
+     *     organizationName: string|null,
+     *     timestamp: string|null
+     * }>
+     */
     private function openProblemReports(): array
     {
-        return ProblemReport::query()
+        $reports = ProblemReport::query()
             ->select([
                 'id',
                 'reference',
@@ -112,14 +134,26 @@ final class PlatformDashboardController extends Controller
                 'organizationName' => $report->organization_name_snapshot,
                 'timestamp' => $report->created_at?->toIso8601String(),
             ])
-            ->values()
             ->all();
+
+        return array_values($reports);
     }
 
-    /** Return at most five newest confirmed failed payment attempts. */
+    /**
+     * Return at most five newest confirmed failed payment attempts.
+     *
+     * @return list<array{
+     *     organizationName: string,
+     *     provider: string,
+     *     currency: string,
+     *     amountMinor: string,
+     *     failureTimestamp: string|null,
+     *     providerErrorCode: string|null
+     * }>
+     */
     private function failedBillingPayments(): array
     {
-        return BillingPayment::query()
+        $payments = BillingPayment::query()
             ->select([
                 'id',
                 'organization_id',
@@ -144,10 +178,16 @@ final class PlatformDashboardController extends Controller
                 'failureTimestamp' => $payment->failed_at?->toIso8601String(),
                 'providerErrorCode' => $payment->provider_error_code,
             ])
-            ->values()
             ->all();
+
+        return array_values($payments);
     }
 
+    /**
+     * Return the exact problem-report states treated as open.
+     *
+     * @return list<string>
+     */
     private function openProblemReportStatuses(): array
     {
         return [
@@ -157,6 +197,7 @@ final class PlatformDashboardController extends Controller
         ];
     }
 
+    /** Convert a problem-report status into platform-facing copy. */
     private function problemReportStatusLabel(
         ProblemReportStatus $status,
     ): string {
@@ -169,6 +210,7 @@ final class PlatformDashboardController extends Controller
         };
     }
 
+    /** Preserve official payment-provider branding. */
     private function billingProviderLabel(BillingProvider $provider): string
     {
         return match ($provider) {

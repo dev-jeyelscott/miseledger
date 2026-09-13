@@ -4,7 +4,7 @@ namespace App\Support\Billing;
 
 use App\Enums\BillingPaymentStatus;
 use App\Models\BillingPayment;
-use Illuminate\Support\Carbon;
+use Carbon\CarbonInterface;
 use InvalidArgumentException;
 use LogicException;
 use stdClass;
@@ -73,7 +73,7 @@ final class PlatformBillingPaymentSignals
     }
 
     /**
-     * Aggregate only paid rows with confirmed paid timestamps, grouped by currency.
+     * Aggregate confirmed paid rows by currency inside the selected period.
      *
      * @return list<array{
      *     currency: string,
@@ -83,10 +83,10 @@ final class PlatformBillingPaymentSignals
      */
     private function capturedPayments(
         bool $livemode,
-        Carbon $from,
-        Carbon $toExclusive,
+        CarbonInterface $from,
+        CarbonInterface $toExclusive,
     ): array {
-        return BillingPayment::query()
+        $payments = BillingPayment::query()
             ->where('status', BillingPaymentStatus::Paid->value)
             ->whereNotNull('paid_at')
             ->where('livemode', $livemode)
@@ -110,15 +110,16 @@ final class PlatformBillingPaymentSignals
                     ),
                 ],
             )
-            ->values()
             ->all();
+
+        return array_values($payments);
     }
 
-    /** Count only failed rows with confirmed failure timestamps in the selected scope. */
+    /** Count confirmed failed attempts inside the selected billing scope. */
     private function failedPaymentAttempts(
         bool $livemode,
-        Carbon $from,
-        Carbon $toExclusive,
+        CarbonInterface $from,
+        CarbonInterface $toExclusive,
     ): int {
         return BillingPayment::query()
             ->where('status', BillingPaymentStatus::Failed->value)
