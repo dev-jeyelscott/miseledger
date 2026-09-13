@@ -196,7 +196,7 @@ test('failed billing payments are filtered bounded ordered and preserve minor-un
                     'organizationName' => 'Organization 6',
                     'provider' => 'Stripe',
                     'currency' => 'PHP',
-                    'amountMinor' => 49_906,
+                    'amountMinor' => '49906',
                     'failureTimestamp' => $failedAt->toIso8601String(),
                     'providerErrorCode' => 'processor_error_6',
                 ])

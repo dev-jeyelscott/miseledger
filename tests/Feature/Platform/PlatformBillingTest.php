@@ -58,7 +58,7 @@ test('platform billing pages preserve the existing administrator boundary and ex
         ->and(Route::has('admin.billing.payments.store'))->toBeFalse();
 });
 
-test('billing overview counts captures only from paid rows with paid timestamps and keeps currency and mode separate', function () {
+test('billing overview scopes current-month captures to the selected mode and keeps currencies separate', function () {
     $platformUser = User::factory()->create();
 
     PlatformAdmin::query()->create([
@@ -145,29 +145,46 @@ test('billing overview counts captures only from paid rows with paid timestamps 
         ->assertInertia(
             fn (Assert $page) => $page
                 ->component('admin/billing/index')
-                ->where('metrics.failedPaymentAttempts.live', 1)
-                ->where('metrics.failedPaymentAttempts.test', 0)
-                ->has('paymentSignals', 3)
+                ->where('scope.mode', 'live')
+                ->where('metrics.capturedPayments', 2)
+                ->where('metrics.failedPaymentAttempts', 1)
+                ->has('paymentSignals', 2)
                 ->where('paymentSignals.0.currency', 'PHP')
-                ->where('paymentSignals.0.livemode', true)
                 ->where('paymentSignals.0.capturedCount', 1)
                 ->where(
                     'paymentSignals.0.capturedAmountMinor',
                     (string) $largeAmount,
                 )
-                ->where('paymentSignals.0.failedCount', 1)
-                ->where('paymentSignals.1.currency', 'PHP')
-                ->where('paymentSignals.1.livemode', false)
+                ->missing('paymentSignals.0.livemode')
+                ->missing('paymentSignals.0.failedCount')
+                ->where('paymentSignals.1.currency', 'USD')
                 ->where('paymentSignals.1.capturedCount', 1)
-                ->where('paymentSignals.1.capturedAmountMinor', '20000')
-                ->where('paymentSignals.2.currency', 'USD')
-                ->where('paymentSignals.2.livemode', true)
-                ->where('paymentSignals.2.capturedCount', 1)
-                ->where('paymentSignals.2.capturedAmountMinor', '1250'),
+                ->where('paymentSignals.1.capturedAmountMinor', '1250')
+                ->missing('paymentSignals.1.livemode')
+                ->missing('paymentSignals.1.failedCount'),
+        );
+
+    $this->actingAs($platformUser)
+        ->get(route('admin.billing.index', [
+            'mode' => 'test',
+        ]))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page) => $page
+                ->component('admin/billing/index')
+                ->where('scope.mode', 'test')
+                ->where('metrics.capturedPayments', 1)
+                ->where('metrics.failedPaymentAttempts', 0)
+                ->has('paymentSignals', 1)
+                ->where('paymentSignals.0.currency', 'PHP')
+                ->where('paymentSignals.0.capturedCount', 1)
+                ->where('paymentSignals.0.capturedAmountMinor', '20000')
+                ->missing('paymentSignals.0.livemode')
+                ->missing('paymentSignals.0.failedCount'),
         );
 });
 
-test('billing overview groups plan projections by stable internal plan code without exposing external plan identifiers', function () {
+test('billing overview groups plan projections by stable internal plan code within the selected mode', function () {
     $platformUser = User::factory()->create();
 
     PlatformAdmin::query()->create([
@@ -213,16 +230,15 @@ test('billing overview groups plan projections by stable internal plan code with
         ->assertOk()
         ->assertInertia(
             fn (Assert $page) => $page
-                ->where('metrics.subscriptionProjections.live', 3)
-                ->has('planMix', 2)
+                ->where('scope.mode', 'live')
+                ->where('metrics.subscriptionProjections', 3)
+                ->has('planMix', 1)
                 ->where('planMix.0.planCode', 'starter')
-                ->where('planMix.0.provider', 'paymongo')
-                ->where('planMix.0.subscriptionCount', 1)
-                ->missing('planMix.0.externalPlanId')
-                ->where('planMix.1.planCode', 'starter')
-                ->where('planMix.1.provider', 'stripe')
-                ->where('planMix.1.subscriptionCount', 2)
-                ->missing('planMix.1.externalPlanId'),
+                ->where('planMix.0.subscriptionCount', 3)
+                ->missing('planMix.0.provider')
+                ->missing('planMix.0.providerLabel')
+                ->missing('planMix.0.livemode')
+                ->missing('planMix.0.externalPlanId'),
         );
 });
 

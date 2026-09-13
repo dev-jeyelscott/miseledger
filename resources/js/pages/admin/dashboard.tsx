@@ -34,7 +34,7 @@ type FailedBillingPayment = {
     organizationName: string;
     provider: string;
     currency: string;
-    amountMinor: number;
+    amountMinor: string;
     failureTimestamp: string | null;
     providerErrorCode: string | null;
 };
@@ -45,9 +45,9 @@ type PlatformDashboardProps = {
     failedBillingPayments: FailedBillingPayment[];
 };
 
-/** Format an integer minor-unit amount without converting it to a major-unit float. */
-function formatMinorUnits(value: number): string {
-    return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+/** Format an exact integer minor-unit string without converting it to a JavaScript number. */
+function formatMinorUnits(value: string): string {
+    return value.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 /** Format an absolute server timestamp in the platform operator's local timezone. */
