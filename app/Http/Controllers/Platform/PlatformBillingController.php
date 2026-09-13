@@ -6,151 +6,169 @@ use App\Enums\BillingCollectionMethod;
 use App\Enums\BillingPaymentMethod;
 use App\Enums\BillingPaymentStatus;
 use App\Enums\BillingProvider;
+use App\Enums\PlanCode;
 use App\Http\Controllers\Controller;
 use App\Models\BillingPayment;
 use App\Models\BillingSubscription;
+use App\Models\Organization;
 use App\Support\Billing\PlanCatalog;
+use App\Support\Billing\PlatformBillingPaymentSignals;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 use LogicException;
+use stdClass;
 
 final class PlatformBillingController extends Controller
 {
-    /**
-     * Render the read-only billing and captured-payment overview from local projections only.
-     */
-    public function index(): Response
-    {
+    /** @var list<string> */
+    private const MODES = ['live', 'test'];
+
+    /** @var list<string> */
+    private const SUBSCRIPTION_INTERVALS = ['monthly', 'yearly'];
+
+    /** @var list<string> */
+    private const PROVIDER_STATUSES = [
+        'pending',
+        'incomplete',
+        'incomplete_expired',
+        'trialing',
+        'active',
+        'past_due',
+        'unpaid',
+        'paused',
+        'canceled',
+        'cancelled',
+    ];
+
+    /** @var list<string> */
+    private const SUBSCRIPTION_SORTS = [
+        'updated_at',
+        'created_at',
+        'next_billing_at',
+        'current_period_ends_at',
+        'ends_at',
+    ];
+
+    /** @var list<string> */
+    private const PAYMENT_SORTS = [
+        'created_at',
+        'paid_at',
+        'failed_at',
+        'amount',
+    ];
+
+    /** @var list<string> */
+    private const SORT_DIRECTIONS = ['asc', 'desc'];
+
+    /** @var list<int> */
+    private const PER_PAGE_OPTIONS = [15, 25, 50];
+
+    /** Render the current UTC-month billing overview from local projections only. */
+    public function index(
+        Request $request,
+        PlatformBillingPaymentSignals $paymentSignals,
+    ): Response {
+        $validated = $request->validate([
+            'mode' => ['nullable', Rule::in(self::MODES)],
+        ]);
+
+        $mode = (string) ($validated['mode'] ?? 'live');
+        $livemode = $mode === 'live';
+        $signals = $paymentSignals->currentMonth($mode);
         $planLabels = $this->planLabels(new PlanCatalog);
 
-        $subscriptionStats = BillingSubscription::query()
-            ->selectRaw(
-                'SUM(CASE WHEN livemode THEN 1 ELSE 0 END) AS live_count, '
-                .'SUM(CASE WHEN NOT livemode THEN 1 ELSE 0 END) AS test_count',
-            )
-            ->first();
-
-        $paymentSignals = BillingPayment::query()
-            ->selectRaw(
-                'currency, livemode, '
-                .'SUM(CASE WHEN status = ? AND paid_at IS NOT NULL THEN 1 ELSE 0 END) AS captured_count, '
-                .'SUM(CASE WHEN status = ? AND paid_at IS NOT NULL THEN amount ELSE 0 END) AS captured_amount_minor, '
-                .'SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS failed_count',
-                [
-                    BillingPaymentStatus::Paid->value,
-                    BillingPaymentStatus::Paid->value,
-                    BillingPaymentStatus::Failed->value,
-                ],
-            )
-            ->groupBy('currency', 'livemode')
-            ->orderBy('currency')
-            ->orderByDesc('livemode')
-            ->get();
-
-        $failedLiveCount = 0;
-        $failedTestCount = 0;
-
-        foreach ($paymentSignals as $signal) {
-            $failedCount = (int) $signal->getAttribute('failed_count');
-
-            if ($signal->livemode) {
-                $failedLiveCount += $failedCount;
-            } else {
-                $failedTestCount += $failedCount;
-            }
-        }
-
         $planMix = BillingSubscription::query()
-            ->selectRaw(
-                'plan_code, provider, livemode, COUNT(*) AS subscription_count',
-            )
-            ->groupBy('plan_code', 'provider', 'livemode')
+            ->where('livemode', $livemode)
+            ->whereNotNull('plan_code')
+            ->toBase()
+            ->select('plan_code')
+            ->selectRaw('COUNT(*) AS subscription_count')
+            ->groupBy('plan_code')
             ->orderBy('plan_code')
-            ->orderBy('provider')
-            ->orderByDesc('livemode')
             ->get()
-            ->map(fn (BillingSubscription $subscription): array => [
-                'planCode' => $subscription->plan_code,
-                'planLabel' => $this->planLabel(
-                    $subscription->plan_code,
-                    $planLabels,
-                ),
-                'provider' => $subscription->provider->value,
-                'providerLabel' => $this->providerLabel(
-                    $subscription->provider,
-                ),
-                'livemode' => $subscription->livemode,
-                'subscriptionCount' => (int) $subscription->getAttribute(
-                    'subscription_count',
-                ),
-            ])
+            ->map(function (stdClass $row) use ($planLabels): ?array {
+                $planCode = is_string($row->plan_code)
+                    ? $row->plan_code
+                    : null;
+
+                if ($planCode === null || ! $this->isValidPlanCode($planCode)) {
+                    return null;
+                }
+
+                return [
+                    'planCode' => $planCode,
+                    'planLabel' => $this->planLabel(
+                        $planCode,
+                        $planLabels,
+                    ),
+                    'subscriptionCount' => (int) $row->subscription_count,
+                ];
+            })
+            ->filter()
             ->values()
             ->all();
 
         return Inertia::render('admin/billing/index', [
-            'metrics' => [
-                'subscriptionProjections' => [
-                    'live' => (int) ($subscriptionStats?->getAttribute(
-                        'live_count',
-                    ) ?? 0),
-                    'test' => (int) ($subscriptionStats?->getAttribute(
-                        'test_count',
-                    ) ?? 0),
-                ],
-                'failedPaymentAttempts' => [
-                    'live' => $failedLiveCount,
-                    'test' => $failedTestCount,
-                ],
+            'scope' => [
+                'mode' => $signals['mode'],
+                'period' => $signals['period'],
             ],
-            'paymentSignals' => $paymentSignals
-                ->map(fn (BillingPayment $signal): array => [
-                    'currency' => $signal->currency,
-                    'livemode' => $signal->livemode,
-                    'capturedCount' => (int) $signal->getAttribute(
-                        'captured_count',
-                    ),
-                    'capturedAmountMinor' => $this->minorUnitString(
-                        $signal->getAttribute('captured_amount_minor'),
-                    ),
-                    'failedCount' => (int) $signal->getAttribute(
-                        'failed_count',
-                    ),
-                ])
-                ->values()
-                ->all(),
+            'metrics' => [
+                'subscriptionProjections' => BillingSubscription::query()
+                    ->where('livemode', $livemode)
+                    ->count(),
+                'capturedPayments' => $signals['capturedPaymentCount'],
+                'failedPaymentAttempts' => $signals['failedPaymentAttempts'],
+            ],
+            'paymentSignals' => $signals['capturedPayments'],
             'planMix' => $planMix,
         ]);
     }
 
-    /**
-     * Render the bounded local subscription-projection index without provider lookups.
-     */
+    /** Render the bounded local subscription projection index. */
     public function subscriptions(Request $request): Response
     {
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:120'],
-            'provider' => [
-                'nullable',
-                Rule::enum(BillingProvider::class),
-            ],
+            'provider' => ['nullable', Rule::enum(BillingProvider::class)],
             'plan' => [
                 'nullable',
                 'string',
                 'max:80',
                 'regex:/^[a-z][a-z0-9_]*$/',
             ],
-            'mode' => [
+            'mode' => ['nullable', Rule::in(self::MODES)],
+            'interval' => [
                 'nullable',
-                Rule::in(['live', 'test']),
+                Rule::in(self::SUBSCRIPTION_INTERVALS),
+            ],
+            'collection_method' => [
+                'nullable',
+                Rule::enum(BillingCollectionMethod::class),
+            ],
+            'provider_status' => [
+                'nullable',
+                Rule::in(self::PROVIDER_STATUSES),
+            ],
+            'sort' => [
+                'nullable',
+                Rule::in(self::SUBSCRIPTION_SORTS),
+            ],
+            'direction' => [
+                'nullable',
+                Rule::in(self::SORT_DIRECTIONS),
             ],
             'per_page' => [
                 'nullable',
                 'integer',
-                Rule::in([15, 25, 50]),
+                Rule::in(self::PER_PAGE_OPTIONS),
             ],
         ]);
 
@@ -164,6 +182,17 @@ final class PlatformBillingController extends Controller
         $mode = isset($validated['mode'])
             ? (string) $validated['mode']
             : null;
+        $interval = isset($validated['interval'])
+            ? (string) $validated['interval']
+            : null;
+        $collectionMethod = isset($validated['collection_method'])
+            ? (string) $validated['collection_method']
+            : null;
+        $providerStatus = isset($validated['provider_status'])
+            ? (string) $validated['provider_status']
+            : null;
+        $sort = (string) ($validated['sort'] ?? 'updated_at');
+        $direction = (string) ($validated['direction'] ?? 'desc');
         $perPage = (int) ($validated['per_page'] ?? 25);
         $planLabels = $this->planLabels(new PlanCatalog);
 
@@ -178,21 +207,22 @@ final class PlatformBillingController extends Controller
                 'collection_method',
                 'provider_status',
                 'livemode',
+                'trial_ends_at',
                 'current_period_ends_at',
+                'next_billing_at',
                 'ends_at',
+                'cancelled_at',
+                'created_at',
                 'updated_at',
             ])
             ->with('organization:id,name');
 
         if ($search !== '') {
-            $searchPattern = '%'.$search.'%';
-
-            $query->whereHas(
-                'organization',
-                static fn (Builder $organizationQuery): Builder => $organizationQuery->whereLike(
-                    'name',
-                    $searchPattern,
-                ),
+            $query->whereIn(
+                'organization_id',
+                Organization::query()
+                    ->select('id')
+                    ->whereLike('name', '%'.$search.'%'),
             );
         }
 
@@ -208,9 +238,21 @@ final class PlatformBillingController extends Controller
             $query->where('livemode', $mode === 'live');
         }
 
+        if ($interval !== null) {
+            $query->where('interval', $interval);
+        }
+
+        if ($collectionMethod !== null) {
+            $query->where('collection_method', $collectionMethod);
+        }
+
+        if ($providerStatus !== null) {
+            $query->where('provider_status', $providerStatus);
+        }
+
+        $this->applySubscriptionSort($query, $sort, $direction);
+
         $subscriptions = $query
-            ->orderByDesc('updated_at')
-            ->orderByDesc('id')
             ->paginate($perPage)
             ->withQueryString()
             ->through(fn (BillingSubscription $subscription): array => [
@@ -236,10 +278,17 @@ final class PlatformBillingController extends Controller
                 ),
                 'providerStatus' => $subscription->provider_status,
                 'livemode' => $subscription->livemode,
+                'trialEndsAt' => $subscription->trial_ends_at
+                    ?->toIso8601String(),
                 'currentPeriodEndsAt' => $subscription
                     ->current_period_ends_at
                     ?->toIso8601String(),
+                'nextBillingAt' => $subscription->next_billing_at
+                    ?->toIso8601String(),
+                'cancelledAt' => $subscription->cancelled_at
+                    ?->toIso8601String(),
                 'endsAt' => $subscription->ends_at?->toIso8601String(),
+                'createdAt' => $subscription->created_at?->toIso8601String(),
                 'updatedAt' => $subscription->updated_at?->toIso8601String(),
             ]);
 
@@ -260,18 +309,24 @@ final class PlatformBillingController extends Controller
                 'provider' => $provider,
                 'plan' => $plan,
                 'mode' => $mode,
+                'interval' => $interval,
+                'collectionMethod' => $collectionMethod,
+                'providerStatus' => $providerStatus,
+                'sort' => $sort,
+                'direction' => $direction,
                 'perPage' => $perPage,
             ],
             'filterOptions' => [
                 'providers' => $this->providerOptions(),
                 'plans' => $this->subscriptionPlanOptions($planLabels),
+                'intervals' => $this->intervalOptions(),
+                'collectionMethods' => $this->collectionMethodOptions(),
+                'providerStatuses' => $this->providerStatusOptions(),
             ],
         ]);
     }
 
-    /**
-     * Render the bounded local payment-attempt index while retaining failed history.
-     */
+    /** Render the bounded payment-attempt index while retaining failed history. */
     public function payments(Request $request): Response
     {
         $validated = $request->validate([
@@ -280,23 +335,24 @@ final class PlatformBillingController extends Controller
                 'nullable',
                 Rule::enum(BillingPaymentStatus::class),
             ],
-            'provider' => [
-                'nullable',
-                Rule::enum(BillingProvider::class),
-            ],
+            'provider' => ['nullable', Rule::enum(BillingProvider::class)],
             'currency' => [
                 'nullable',
                 'string',
                 'regex:/^[A-Z]{3}$/',
             ],
-            'mode' => [
+            'mode' => ['nullable', Rule::in(self::MODES)],
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d'],
+            'sort' => ['nullable', Rule::in(self::PAYMENT_SORTS)],
+            'direction' => [
                 'nullable',
-                Rule::in(['live', 'test']),
+                Rule::in(self::SORT_DIRECTIONS),
             ],
             'per_page' => [
                 'nullable',
                 'integer',
-                Rule::in([15, 25, 50]),
+                Rule::in(self::PER_PAGE_OPTIONS),
             ],
         ]);
 
@@ -313,7 +369,21 @@ final class PlatformBillingController extends Controller
         $mode = isset($validated['mode'])
             ? (string) $validated['mode']
             : null;
+        $from = isset($validated['from'])
+            ? (string) $validated['from']
+            : null;
+        $to = isset($validated['to'])
+            ? (string) $validated['to']
+            : null;
+        $sort = (string) ($validated['sort'] ?? 'created_at');
+        $direction = (string) ($validated['direction'] ?? 'desc');
         $perPage = (int) ($validated['per_page'] ?? 25);
+
+        if ($from !== null && $to !== null && $from > $to) {
+            throw ValidationException::withMessages([
+                'to' => 'The to date must be on or after the from date.',
+            ]);
+        }
 
         $query = BillingPayment::query()
             ->select([
@@ -325,6 +395,7 @@ final class PlatformBillingController extends Controller
                 'amount',
                 'status',
                 'livemode',
+                'expires_at',
                 'paid_at',
                 'failed_at',
                 'provider_error_code',
@@ -333,14 +404,11 @@ final class PlatformBillingController extends Controller
             ->with('organization:id,name');
 
         if ($search !== '') {
-            $searchPattern = '%'.$search.'%';
-
-            $query->whereHas(
-                'organization',
-                static fn (Builder $organizationQuery): Builder => $organizationQuery->whereLike(
-                    'name',
-                    $searchPattern,
-                ),
+            $query->whereIn(
+                'organization_id',
+                Organization::query()
+                    ->select('id')
+                    ->whereLike('name', '%'.$search.'%'),
             );
         }
 
@@ -360,9 +428,25 @@ final class PlatformBillingController extends Controller
             $query->where('livemode', $mode === 'live');
         }
 
+        if ($from !== null) {
+            $query->where(
+                'created_at',
+                '>=',
+                $this->utcDateStart($from),
+            );
+        }
+
+        if ($to !== null) {
+            $query->where(
+                'created_at',
+                '<',
+                $this->utcDateStart($to)->addDay(),
+            );
+        }
+
+        $this->applyPaymentSort($query, $sort, $direction);
+
         $payments = $query
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
             ->paginate($perPage)
             ->withQueryString()
             ->through(fn (BillingPayment $payment): array => [
@@ -380,16 +464,13 @@ final class PlatformBillingController extends Controller
                     $payment->payment_method,
                 ),
                 'currency' => $payment->currency,
-                'amountMinor' => $this->minorUnitString(
-                    $payment->amount,
-                ),
+                'amountMinor' => $this->minorUnitString($payment->amount),
                 'status' => $payment->status->value,
-                'statusLabel' => $this->paymentStatusLabel(
-                    $payment->status,
-                ),
+                'statusLabel' => $this->paymentStatusLabel($payment->status),
                 'captured' => $payment->status === BillingPaymentStatus::Paid
                     && $payment->paid_at !== null,
                 'livemode' => $payment->livemode,
+                'expiresAt' => $payment->expires_at?->toIso8601String(),
                 'paidAt' => $payment->paid_at?->toIso8601String(),
                 'failedAt' => $payment->failed_at?->toIso8601String(),
                 'providerErrorCode' => $payment->provider_error_code,
@@ -423,6 +504,10 @@ final class PlatformBillingController extends Controller
                 'provider' => $provider,
                 'currency' => $currency,
                 'mode' => $mode,
+                'from' => $from,
+                'to' => $to,
+                'sort' => $sort,
+                'direction' => $direction,
                 'perPage' => $perPage,
             ],
             'filterOptions' => [
@@ -433,11 +518,7 @@ final class PlatformBillingController extends Controller
         ]);
     }
 
-    /**
-     * Build display labels keyed only by stable internal plan code.
-     *
-     * @return array<string, string>
-     */
+    /** Build display labels keyed only by stable internal plan code. */
     private function planLabels(PlanCatalog $catalog): array
     {
         $labels = [];
@@ -449,28 +530,33 @@ final class PlatformBillingController extends Controller
         return $labels;
     }
 
-    /**
-     * Return a display label without consulting any provider-owned plan identifier.
-     *
-     * @param  array<string, string>  $planLabels
-     */
-    private function planLabel(
-        ?string $planCode,
-        array $planLabels,
-    ): string {
+    /** Return a label without consulting a provider-owned plan identifier. */
+    private function planLabel(?string $planCode, array $planLabels): string
+    {
         if ($planCode === null || $planCode === '') {
             return 'Unmapped';
+        }
+
+        if (! $this->isValidPlanCode($planCode)) {
+            return 'Invalid plan code';
         }
 
         return $planLabels[$planCode] ?? Str::headline($planCode);
     }
 
-    /**
-     * Return the distinct persisted plan codes available to the subscription filter.
-     *
-     * @param  array<string, string>  $planLabels
-     * @return list<array{value: string, label: string}>
-     */
+    /** Validate persisted plan identity through the stable PlanCode boundary. */
+    private function isValidPlanCode(string $planCode): bool
+    {
+        try {
+            PlanCode::from($planCode);
+
+            return true;
+        } catch (InvalidArgumentException) {
+            return false;
+        }
+    }
+
+    /** Return valid persisted plan codes available to the filter. */
     private function subscriptionPlanOptions(array $planLabels): array
     {
         return array_values(
@@ -480,7 +566,10 @@ final class PlatformBillingController extends Controller
                 ->distinct()
                 ->orderBy('plan_code')
                 ->pluck('plan_code')
-                ->filter(static fn (mixed $value): bool => is_string($value))
+                ->filter(
+                    fn (mixed $value): bool => is_string($value)
+                        && $this->isValidPlanCode($value),
+                )
                 ->map(fn (string $planCode): array => [
                     'value' => $planCode,
                     'label' => $this->planLabel($planCode, $planLabels),
@@ -489,11 +578,7 @@ final class PlatformBillingController extends Controller
         );
     }
 
-    /**
-     * Return provider filter options from the supported provider enum.
-     *
-     * @return list<array{value: string, label: string}>
-     */
+    /** Return provider filter options from the supported provider enum. */
     private function providerOptions(): array
     {
         return array_map(
@@ -505,11 +590,43 @@ final class PlatformBillingController extends Controller
         );
     }
 
-    /**
-     * Return payment-status filter options from the durable application enum.
-     *
-     * @return list<array{value: string, label: string}>
-     */
+    /** Return supported billing intervals for projection filtering. */
+    private function intervalOptions(): array
+    {
+        return array_map(
+            static fn (string $interval): array => [
+                'value' => $interval,
+                'label' => Str::headline($interval),
+            ],
+            self::SUBSCRIPTION_INTERVALS,
+        );
+    }
+
+    /** Return collection-method filter options from the durable enum. */
+    private function collectionMethodOptions(): array
+    {
+        return array_map(
+            fn (BillingCollectionMethod $method): array => [
+                'value' => $method->value,
+                'label' => $this->collectionMethodLabel($method),
+            ],
+            BillingCollectionMethod::cases(),
+        );
+    }
+
+    /** Return the bounded provider-status vocabulary accepted by the filter. */
+    private function providerStatusOptions(): array
+    {
+        return array_map(
+            static fn (string $status): array => [
+                'value' => $status,
+                'label' => Str::headline($status),
+            ],
+            self::PROVIDER_STATUSES,
+        );
+    }
+
+    /** Return payment-status filter options from the durable enum. */
     private function paymentStatusOptions(): array
     {
         return array_map(
@@ -521,16 +638,71 @@ final class PlatformBillingController extends Controller
         );
     }
 
-    /**
-     * Preserve exact integer minor units as a decimal string for JSON/JavaScript safety.
-     */
+    /** Apply deterministic subscription sorting with nullable dates last. */
+    private function applySubscriptionSort(
+        Builder $query,
+        string $sort,
+        string $direction,
+    ): void {
+        $nullableColumn = match ($sort) {
+            'next_billing_at' => 'next_billing_at',
+            'current_period_ends_at' => 'current_period_ends_at',
+            'ends_at' => 'ends_at',
+            default => null,
+        };
+
+        if ($nullableColumn !== null) {
+            $sqlDirection = $direction === 'asc' ? 'ASC' : 'DESC';
+
+            $query->orderByRaw(
+                "{$nullableColumn} {$sqlDirection} NULLS LAST",
+            );
+        } else {
+            $query->orderBy($sort, $direction);
+        }
+
+        $query->orderBy('id', $direction);
+    }
+
+    /** Apply deterministic payment sorting with nullable evidence dates last. */
+    private function applyPaymentSort(
+        Builder $query,
+        string $sort,
+        string $direction,
+    ): void {
+        $nullableColumn = match ($sort) {
+            'paid_at' => 'paid_at',
+            'failed_at' => 'failed_at',
+            default => null,
+        };
+
+        if ($nullableColumn !== null) {
+            $sqlDirection = $direction === 'asc' ? 'ASC' : 'DESC';
+
+            $query->orderByRaw(
+                "{$nullableColumn} {$sqlDirection} NULLS LAST",
+            );
+        } else {
+            $query->orderBy($sort, $direction);
+        }
+
+        $query->orderBy('id', $direction);
+    }
+
+    /** Convert one validated UTC calendar date to its inclusive start. */
+    private function utcDateStart(string $date): Carbon
+    {
+        return Carbon::parse($date, 'UTC')->startOfDay();
+    }
+
+    /** Preserve exact integer minor units as a decimal string. */
     private function minorUnitString(mixed $value): string
     {
         if (is_int($value)) {
             return (string) $value;
         }
 
-        if (is_string($value) && preg_match('/^-?\d+$/', $value) === 1) {
+        if (is_string($value) && preg_match('/^\d+$/', $value) === 1) {
             return $value;
         }
 
@@ -539,9 +711,7 @@ final class PlatformBillingController extends Controller
         );
     }
 
-    /**
-     * Preserve official provider branding without exposing provider configuration.
-     */
+    /** Preserve official provider branding. */
     private function providerLabel(BillingProvider $provider): string
     {
         return match ($provider) {
@@ -550,9 +720,6 @@ final class PlatformBillingController extends Controller
         };
     }
 
-    /**
-     * Convert the persisted collection method into platform-facing copy.
-     */
     private function collectionMethodLabel(
         BillingCollectionMethod $method,
     ): string {
@@ -562,9 +729,6 @@ final class PlatformBillingController extends Controller
         };
     }
 
-    /**
-     * Convert the persisted payment method into platform-facing copy.
-     */
     private function paymentMethodLabel(BillingPaymentMethod $method): string
     {
         return match ($method) {
@@ -574,9 +738,6 @@ final class PlatformBillingController extends Controller
         };
     }
 
-    /**
-     * Convert the durable payment status into platform-facing copy.
-     */
     private function paymentStatusLabel(BillingPaymentStatus $status): string
     {
         return match ($status) {

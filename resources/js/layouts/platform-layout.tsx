@@ -43,7 +43,7 @@ const platformNavigation: NavGroup[] = [
                 icon: Building2,
             },
             {
-                title: 'Billing',
+                title: 'Billing & Revenue',
                 href: PlatformBillingController.index(),
                 icon: CreditCard,
             },
