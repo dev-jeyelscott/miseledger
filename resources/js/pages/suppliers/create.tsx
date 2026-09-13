@@ -142,6 +142,9 @@ export default function CreateSupplier() {
                                         fallback={
                                             SupplierController.index().url
                                         }
+                                        onNavigate={
+                                            dirtyNavigation.confirmNavigation
+                                        }
                                     >
                                         Cancel
                                     </PreviousPageButton>

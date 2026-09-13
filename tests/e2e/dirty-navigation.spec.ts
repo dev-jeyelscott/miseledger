@@ -31,3 +31,23 @@ test('leaving a dirty organization location edit form prompts for confirmation',
     expect(nativeConfirmSeen).toBe(true);
     await expect(page.locator('#name')).toHaveValue('Renamed via E2E');
 });
+
+test('cancelling a dirty create supplier form prompts for confirmation', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+    await page.goto('/suppliers/create');
+
+    await page.fill('#name', 'Metro Food Supply');
+
+    let nativeConfirmSeen = false;
+    page.once('dialog', (dialog) => {
+        nativeConfirmSeen = true;
+        void dialog.dismiss();
+    });
+
+    await page.getByRole('button', { name: /^cancel$/i }).click();
+
+    expect(nativeConfirmSeen).toBe(true);
+    await expect(page.locator('#name')).toHaveValue('Metro Food Supply');
+});
