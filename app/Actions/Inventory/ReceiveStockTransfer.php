@@ -186,6 +186,18 @@ final class ReceiveStockTransfer
                         RoundingMode::HalfUp,
                     );
 
+                if (
+                    $receivedBaseQuantity->compareTo(
+                        $shippedBaseQuantity,
+                    ) > 0
+                ) {
+                    throw ValidationException::withMessages([
+                        'lines' => __(
+                            'Received quantity cannot exceed the shipped quantity.',
+                        ),
+                    ]);
+                }
+
                 $inventoryItem = InventoryItem::query()
                     ->where(
                         'organization_id',

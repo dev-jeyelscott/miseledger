@@ -11,10 +11,12 @@ use App\Support\Billing\OrganizationSubscriptionAccessResolver;
 use App\Support\Billing\Providers\PayMongoBillingProvider;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 
 beforeEach(function (): void {
     Http::preventStrayRequests();
@@ -442,6 +444,113 @@ test(
             ->assertInvalid(['organization']);
 
         Http::assertNothingSent();
+    },
+);
+
+test(
+    'rejects a concurrent PayMongo checkout attempt while the lock lease outlives the old short lease',
+    function (): void {
+        [$user, $organization] = payMongoBillingOwner();
+
+        Sleep::fake(true, true);
+
+        $nestedAttempted = false;
+
+        Http::fake(
+            function (Request $request) use ($organization, $user, &$nestedAttempted): mixed {
+                if ($request->method() === 'POST'
+                    && str_ends_with($request->url(), '/customers')) {
+                    if (! $nestedAttempted) {
+                        $nestedAttempted = true;
+
+                        // Simulate the first checkout's provider work taking
+                        // longer than the old 10s lock lease, but well within
+                        // the new lease, while the durable subscription and
+                        // pending-checkout cache entry are not yet written.
+                        Carbon::setTestNow(Carbon::now()->addSeconds(15));
+
+                        $concurrentResponse = $this->actingAs($user)->post(
+                            route('organizations.billing.checkout', $organization),
+                            [
+                                'plan' => 'starter',
+                                'interval' => 'monthly',
+                            ],
+                        );
+
+                        $concurrentResponse->assertInvalid(['organization']);
+                    }
+
+                    return Http::response([
+                        'data' => [
+                            'id' => 'cus_paymongo_123',
+                            'type' => 'customer',
+                            'attributes' => [
+                                'livemode' => false,
+                            ],
+                        ],
+                    ]);
+                }
+
+                if ($request->method() === 'POST'
+                    && str_ends_with($request->url(), '/subscriptions')) {
+                    return Http::response([
+                        'data' => [
+                            'id' => 'subs_paymongo_123',
+                            'type' => 'subscription',
+                            'attributes' => [
+                                'customer_id' => 'cus_paymongo_123',
+                                'status' => 'incomplete',
+                                'livemode' => false,
+                                'plan' => [
+                                    'id' => 'plan_starter_monthly',
+                                ],
+                                'latest_invoice' => [
+                                    'payment_intent' => [
+                                        'id' => 'pi_paymongo_123',
+                                    ],
+                                ],
+                                'next_billing_schedule' => '2026-09-01',
+                                'cancelled_at' => null,
+                            ],
+                        ],
+                    ]);
+                }
+
+                if ($request->method() === 'GET'
+                    && str_ends_with($request->url(), '/payment_intents/pi_paymongo_123')) {
+                    return Http::response([
+                        'data' => [
+                            'id' => 'pi_paymongo_123',
+                            'type' => 'payment_intent',
+                            'attributes' => [
+                                'client_key' => 'pi_paymongo_123_client_safe',
+                            ],
+                        ],
+                    ]);
+                }
+
+                return Http::response([], 404);
+            },
+        );
+
+        $this->actingAs($user)
+            ->post(
+                route('organizations.billing.checkout', $organization),
+                [
+                    'plan' => 'starter',
+                    'interval' => 'monthly',
+                ],
+            )
+            ->assertRedirect(
+                route('organizations.billing.checkout.success', $organization),
+            );
+
+        Carbon::setTestNow();
+        Sleep::fake(false);
+
+        expect($nestedAttempted)->toBeTrue()
+            ->and(BillingCustomer::query()->count())->toBe(1)
+            ->and(BillingSubscription::query()->count())->toBe(1);
     },
 );
 

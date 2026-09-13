@@ -13,6 +13,7 @@ use App\Support\Billing\BillingObservability;
 use App\Support\Billing\PlanCatalog;
 use App\Support\Billing\Providers\BillingCheckoutOutcome;
 use App\Support\Billing\Providers\BillingProviderManager;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
@@ -32,6 +33,20 @@ use Illuminate\Validation\ValidationException;
 final class CreateOrganizationCheckoutSession
 {
     private const PENDING_CHECKOUT_TTL_MINUTES = 30;
+
+    /**
+     * The organization checkout lock lease must safely outlive the entire
+     * protected provider workflow (customer + subscription + payment-intent
+     * calls for PayMongo, or a single Checkout Session call for Stripe),
+     * otherwise the lease can expire mid-flight and let a second request
+     * acquire the lock before the durable subscription or pending-checkout
+     * cache entry is written, producing a duplicate provider checkout.
+     * Stripe's SDK alone allows up to 110s (30s connect + 80s read) per
+     * call, so the lease is set well above that worst case.
+     */
+    private const LOCK_LEASE_SECONDS = 180;
+
+    private const LOCK_WAIT_SECONDS = 5;
 
     public function __construct(
         private readonly PlanCatalog $planCatalog,
@@ -61,79 +76,109 @@ final class CreateOrganizationCheckoutSession
             $interval,
         );
 
-        return Cache::lock('billing:checkout:lock:'.$organizationId, 10)->block(
-            5,
-            function () use ($organization, $actor, $plan, $interval, $provider, $externalPlanId, $organizationId, $pendingCacheKey, $pendingFingerprint, $type): BillingCheckoutOutcome {
-                $pendingOutcome = Cache::get($pendingCacheKey);
-
-                if (is_array($pendingOutcome)) {
-                    if (($pendingOutcome['fingerprint'] ?? null) !== $pendingFingerprint) {
-                        throw ValidationException::withMessages([
-                            'plan' => __('A checkout is already pending for different billing terms. Complete or cancel it before starting another checkout.'),
-                        ]);
-                    }
-
-                    $cachedOutcome = $pendingOutcome['outcome'] ?? null;
-
-                    if (! is_array($cachedOutcome)) {
-                        throw new \InvalidArgumentException(
-                            'The cached billing checkout outcome is malformed.',
-                        );
-                    }
-
-                    return BillingCheckoutOutcome::fromCacheValue($cachedOutcome);
-                }
-
-                if ($this->hasActiveSubscription($organization, $type)) {
-                    throw ValidationException::withMessages([
-                        'organization' => __('This organization already has an active subscription.'),
-                    ]);
-                }
-
-                try {
-                    $billingProvider = $this->providerManager->provider($provider);
-
-                    $outcome = $billingProvider->startCheckout(
-                        $organization,
-                        $externalPlanId,
-                        route('organizations.billing.checkout.success', $organization),
-                        route('organizations.billing.checkout.cancel', $organization),
-                        ['organization_id' => $organizationId],
-                        $actor,
-                    );
-                } catch (\Throwable $exception) {
-                    $this->observability->checkoutFailure($organization, $provider, $exception);
-
-                    throw $exception;
-                }
-
-                $this->persistStripeCustomerAfterCheckout($organization, $provider);
-
-                $this->recordAuditEntry->handle(
+        try {
+            return Cache::lock('billing:checkout:lock:'.$organizationId, self::LOCK_LEASE_SECONDS)->block(
+                self::LOCK_WAIT_SECONDS,
+                fn (): BillingCheckoutOutcome => $this->startCheckoutWithinLock(
                     $organization,
                     $actor,
-                    'billing.checkout.started',
-                    Organization::class,
-                    $organization->getKey(),
-                    null,
-                    [
-                        'plan' => $plan->value,
-                        'interval' => $interval,
-                    ],
-                );
-
-                Cache::put(
+                    $plan,
+                    $interval,
+                    $provider,
+                    $externalPlanId,
+                    $organizationId,
                     $pendingCacheKey,
-                    [
-                        'fingerprint' => $pendingFingerprint,
-                        'outcome' => $outcome->toCacheValue(),
-                    ],
-                    now()->addMinutes(self::PENDING_CHECKOUT_TTL_MINUTES),
-                );
+                    $pendingFingerprint,
+                    $type,
+                ),
+            );
+        } catch (LockTimeoutException) {
+            throw ValidationException::withMessages([
+                'organization' => __('A checkout is already being started for this organization. Please try again in a moment.'),
+            ]);
+        }
+    }
 
-                return $outcome;
-            },
+    private function startCheckoutWithinLock(
+        Organization $organization,
+        User $actor,
+        PlanCode $plan,
+        string $interval,
+        BillingProvider $provider,
+        string $externalPlanId,
+        string $organizationId,
+        string $pendingCacheKey,
+        string $pendingFingerprint,
+        string $type,
+    ): BillingCheckoutOutcome {
+        $pendingOutcome = Cache::get($pendingCacheKey);
+
+        if (is_array($pendingOutcome)) {
+            if (($pendingOutcome['fingerprint'] ?? null) !== $pendingFingerprint) {
+                throw ValidationException::withMessages([
+                    'plan' => __('A checkout is already pending for different billing terms. Complete or cancel it before starting another checkout.'),
+                ]);
+            }
+
+            $cachedOutcome = $pendingOutcome['outcome'] ?? null;
+
+            if (! is_array($cachedOutcome)) {
+                throw new \InvalidArgumentException(
+                    'The cached billing checkout outcome is malformed.',
+                );
+            }
+
+            return BillingCheckoutOutcome::fromCacheValue($cachedOutcome);
+        }
+
+        if ($this->hasActiveSubscription($organization, $type)) {
+            throw ValidationException::withMessages([
+                'organization' => __('This organization already has an active subscription.'),
+            ]);
+        }
+
+        try {
+            $billingProvider = $this->providerManager->provider($provider);
+
+            $outcome = $billingProvider->startCheckout(
+                $organization,
+                $externalPlanId,
+                route('organizations.billing.checkout.success', $organization),
+                route('organizations.billing.checkout.cancel', $organization),
+                ['organization_id' => $organizationId],
+                $actor,
+            );
+        } catch (\Throwable $exception) {
+            $this->observability->checkoutFailure($organization, $provider, $exception);
+
+            throw $exception;
+        }
+
+        $this->persistStripeCustomerAfterCheckout($organization, $provider);
+
+        $this->recordAuditEntry->handle(
+            $organization,
+            $actor,
+            'billing.checkout.started',
+            Organization::class,
+            $organization->getKey(),
+            null,
+            [
+                'plan' => $plan->value,
+                'interval' => $interval,
+            ],
         );
+
+        Cache::put(
+            $pendingCacheKey,
+            [
+                'fingerprint' => $pendingFingerprint,
+                'outcome' => $outcome->toCacheValue(),
+            ],
+            now()->addMinutes(self::PENDING_CHECKOUT_TTL_MINUTES),
+        );
+
+        return $outcome;
     }
 
     private static function pendingCheckoutCacheKey(string $organizationId, string $type): string

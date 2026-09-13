@@ -690,6 +690,81 @@ test(
 );
 
 test(
+    'over receipt above shipped quantity is rejected and conserves stock',
+    function () {
+        recordTransferOpeningBalanceForTest(
+            $this->organization,
+            $this->fromLocation,
+            $this->fromStorage,
+            $this->inventoryItem,
+            $this->gram,
+            '1000',
+            '0.2500',
+            'transfer-test:over-receive',
+        );
+
+        $transfer = createTransferDraftForTest(
+            $this->organization,
+            $this->actor,
+            $this->fromLocation,
+            $this->fromStorage,
+            $this->toLocation,
+            $this->toStorage,
+            $this->inventoryItem,
+            $this->kilogram,
+            'TR-OVER-RECEIVE',
+        );
+
+        $shipped = app(
+            ShipStockTransfer::class,
+        )->handle(
+            $this->organization,
+            $this->actor,
+            $transfer,
+        );
+
+        $line = $shipped->lines()->sole();
+
+        expect(
+            fn () => app(ReceiveStockTransfer::class)->handle(
+                $this->organization,
+                $this->actor,
+                $shipped,
+                [
+                    'lines' => [
+                        [
+                            'id' => $line->id,
+                            'received_base_quantity' => '600',
+                        ],
+                    ],
+                ],
+            ),
+        )->toThrow(ValidationException::class);
+
+        $shipped->refresh();
+
+        expect($shipped->status)
+            ->toBe(StockTransferStatus::Shipped)
+            ->and($line->refresh()->received_base_quantity)
+            ->toBeNull()
+            ->and(
+                StockMovement::query()
+                    ->where(
+                        'type',
+                        StockMovementType::TransferIn->value,
+                    )
+                    ->count(),
+            )
+            ->toBe(0)
+            ->and(
+                StockBalance::query()
+                    ->sum('quantity_on_hand'),
+            )
+            ->toBe('500.000000');
+    },
+);
+
+test(
     'duplicate receipt does not duplicate destination stock or audit',
     function () {
         recordTransferOpeningBalanceForTest(
