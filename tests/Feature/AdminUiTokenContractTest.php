@@ -239,6 +239,13 @@ test('dashboard follows the canonical operational UI contract', function () {
         ->not->toContain('dark:text-amber-400');
 });
 
+test('passkey removal trigger exposes a target-specific accessible name', function () {
+    $passkeyItem = File::get(resource_path('js/components/passkey-item.tsx'));
+
+    expect($passkeyItem)
+        ->toContain('aria-label={`Remove ${passkey.name} passkey`}');
+});
+
 test('supplier directory follows the canonical operational UI contract', function () {
     $suppliers = File::get(resource_path('js/pages/suppliers/index.tsx'));
 
@@ -257,4 +264,12 @@ test('supplier directory follows the canonical operational UI contract', functio
         ->not->toContain('<Badge')
         ->not->toContain('bg-emerald-')
         ->not->toContain('text-emerald-');
+});
+
+test('global Inertia progress indicator follows the semantic primary token', function () {
+    $app = File::get(resource_path('js/app.tsx'));
+
+    expect($app)
+        ->toContain("color: 'var(--primary)'")
+        ->not->toContain('#4B5563');
 });
