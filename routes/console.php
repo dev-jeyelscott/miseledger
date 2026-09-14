@@ -31,3 +31,10 @@ Schedule::command('problem-report:sync-from-notion')
     ->withoutOverlapping(30)
     ->onOneServer()
     ->runInBackground();
+
+Schedule::command('problem-report:sync-to-notion')
+    ->hourly()
+    ->when(fn (): bool => (bool) config('services.notion.enabled'))
+    ->withoutOverlapping(30)
+    ->onOneServer()
+    ->runInBackground();
