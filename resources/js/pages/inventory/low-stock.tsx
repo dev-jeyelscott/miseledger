@@ -173,7 +173,7 @@ export default function LowStockReport({
                         value={summary.negativeCount.toLocaleString()}
                         description="Balances requiring investigation below zero"
                         icon={TriangleAlert}
-                        tone="amber"
+                        tone="danger"
                     />
 
                     <DashboardMetricCard

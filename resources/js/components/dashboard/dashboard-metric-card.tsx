@@ -12,7 +12,7 @@ type DashboardMetricCardProps = {
     description: string;
     icon: LucideIcon;
     href?: InertiaLinkHref;
-    tone?: 'emerald' | 'amber' | 'blue' | 'teal' | 'violet';
+    tone?: 'emerald' | 'amber' | 'blue' | 'teal' | 'violet' | 'danger';
 };
 
 const toneClasses = {
@@ -22,6 +22,7 @@ const toneClasses = {
     blue: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
     teal: 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300',
     violet: 'bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300',
+    danger: 'bg-destructive/10 text-destructive dark:bg-destructive/20',
 } satisfies Record<NonNullable<DashboardMetricCardProps['tone']>, string>;
 
 /** Render one aligned operational metric with an optional permission-safe drill-down route. */
