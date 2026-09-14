@@ -142,6 +142,25 @@ test('unit references never create a unit of measure and report a row error when
         ->and(InventoryItem::query()->count())->toBe(0);
 });
 
+test('a quoted field containing embedded newlines is parsed as a single record', function () {
+    $organization = Organization::factory()->create();
+
+    $csv = "code,name,payment_terms,active\r\n"
+        ."ACME,Acme Foods,\"Net 30\nPay by check\",true\r\n"
+        ."GLOBEX,Globex Supply,\"Net 15\r\nPay by wire\",true\r\n";
+
+    $result = app(ImportSuppliers::class)->handle($organization, $csv);
+
+    expect($result->created)->toBe(2)
+        ->and($result->errors)->toHaveCount(0);
+
+    $acme = Supplier::query()->where('code', 'ACME')->sole();
+    $globex = Supplier::query()->where('code', 'GLOBEX')->sole();
+
+    expect($acme->payment_terms)->toBe("Net 30\nPay by check")
+        ->and($globex->payment_terms)->toBe("Net 15\r\nPay by wire");
+});
+
 test('imports never resolve records belonging to another organization', function () {
     $organization = Organization::factory()->create();
     $otherOrganization = Organization::factory()->create();

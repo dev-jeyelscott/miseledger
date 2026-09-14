@@ -2,6 +2,8 @@
 
 namespace App\Support\Csv;
 
+use RuntimeException;
+
 final class CsvTable
 {
     /**
@@ -14,17 +16,40 @@ final class CsvTable
      */
     public static function parse(string $contents): array
     {
-        $lines = preg_split("/\r\n|\r|\n/", $contents) ?: [];
+        $stream = fopen('php://memory', 'r+');
+
+        if ($stream === false) {
+            throw new RuntimeException('Unable to open an in-memory stream for CSV parsing.');
+        }
+
+        fwrite($stream, $contents);
+        rewind($stream);
 
         $header = null;
         $rows = [];
+        $lineNumber = 0;
+        $consumedBytes = 0;
 
-        foreach ($lines as $index => $line) {
-            if (trim($line) === '') {
-                continue;
+        while (($fields = fgetcsv($stream)) !== false) {
+            $streamPosition = ftell($stream);
+
+            if ($streamPosition === false) {
+                throw new RuntimeException('Unable to read the current position of the CSV stream.');
             }
 
-            $fields = str_getcsv($line);
+            $consumed = substr($contents, $consumedBytes, $streamPosition - $consumedBytes);
+            $consumedBytes = $streamPosition;
+
+            $linesInRecord = max(preg_match_all("/\r\n|\r|\n/", $consumed), 1);
+            $recordStartLine = $lineNumber + 1;
+            $lineNumber += $linesInRecord;
+
+            $isBlank = count($fields) === 1
+                && ($fields[0] === null || trim((string) $fields[0]) === '');
+
+            if ($isBlank) {
+                continue;
+            }
 
             if ($header === null) {
                 $header = array_map(
@@ -44,10 +69,12 @@ final class CsvTable
             }
 
             $rows[] = [
-                'number' => $index + 1,
+                'number' => $recordStartLine,
                 'data' => $data,
             ];
         }
+
+        fclose($stream);
 
         return $rows;
     }
