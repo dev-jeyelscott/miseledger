@@ -14,7 +14,7 @@ import CodexConnectionController from '@/actions/App/Http/Controllers/Ai/CodexCo
 import { AiMessageContent } from '@/components/ai-message-content';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { index as aiIndex } from '@/routes/ai';
 import type { AiAssistantData, OrganizationAIAccessContext } from '@/types';
@@ -46,6 +46,8 @@ const runErrorCopy: Record<string, string> = {
     provider_unauthorized:
         'Codex authorization failed. Reconnect your account and try again.',
     access_revoked: 'AI access changed before this response could complete.',
+    provider_turn_ambiguous:
+        "We couldn't confirm whether this message finished processing. Check your conversation before sending it again.",
 };
 
 type CodexLoginStatus = {
@@ -186,6 +188,15 @@ export function AiAssistant({
                 },
             },
         );
+    }
+
+    function handleMessageKeyDown(
+        event: React.KeyboardEvent<HTMLTextAreaElement>,
+    ): void {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            event.currentTarget.form?.requestSubmit();
+        }
     }
 
     function deleteConversation(id: number): void {
@@ -475,13 +486,14 @@ export function AiAssistant({
                         <label htmlFor="ai-message" className="sr-only">
                             Message the AI Assistant
                         </label>
-                        <div className="flex gap-2">
-                            <Input
+                        <div className="flex items-end gap-2">
+                            <Textarea
                                 id="ai-message"
                                 value={content}
                                 onChange={(event) =>
                                     setContent(event.target.value)
                                 }
+                                onKeyDown={handleMessageKeyDown}
                                 disabled={
                                     !access?.canUse ||
                                     !data.codex.connected ||
@@ -490,6 +502,7 @@ export function AiAssistant({
                                 }
                                 placeholder="Ask about your inventory..."
                                 maxLength={12000}
+                                className="max-h-48 min-h-20 resize-none overflow-y-auto"
                             />
                             <Button
                                 type="submit"

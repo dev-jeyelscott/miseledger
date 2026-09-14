@@ -75,3 +75,29 @@ test('AI Assistant launcher and drawer remain accessible on mobile and in dark m
         640,
     );
 });
+
+/** Verifies the message composer is a height-bounded, scrollable multiline textarea rather than a single-line input. */
+test('AI Assistant message composer renders as a bounded multiline textarea', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    const launcher = page.getByRole('button', {
+        name: 'Open AI Assistant',
+    });
+
+    await launcher.click();
+
+    const composer = page.locator('#ai-message');
+
+    await expect(composer).toBeVisible();
+    await expect(composer).toHaveJSProperty('tagName', 'TEXTAREA');
+    await expect(composer).toHaveAttribute('maxlength', '12000');
+
+    const composerClasses = (await composer.getAttribute('class')) ?? '';
+
+    expect(composerClasses).toContain('min-h-20');
+    expect(composerClasses).toContain('max-h-48');
+    expect(composerClasses).toContain('resize-none');
+    expect(composerClasses).toContain('overflow-y-auto');
+});
