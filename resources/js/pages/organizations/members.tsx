@@ -398,63 +398,70 @@ export default function OrganizationMembers({
                                 {filteredMembers.map((member) => (
                                     <article
                                         key={member.id}
-                                        className="flex items-center gap-3 p-4"
+                                        className="space-y-3 p-4"
                                     >
-                                        <div
-                                            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground"
-                                            aria-hidden="true"
-                                        >
-                                            {getMemberInitials(member.name)}
+                                        <div className="flex items-center gap-3">
+                                            <div
+                                                className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground"
+                                                aria-hidden="true"
+                                            >
+                                                {getMemberInitials(member.name)}
+                                            </div>
+
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate font-medium">
+                                                    {member.name}
+                                                </p>
+                                                <p className="truncate text-xs text-muted-foreground">
+                                                    {member.email}
+                                                </p>
+                                            </div>
                                         </div>
 
-                                        <div className="min-w-0 flex-1">
-                                            <p className="truncate font-medium">
-                                                {member.name}
-                                            </p>
-                                            <p className="truncate text-xs text-muted-foreground">
-                                                {member.email}
-                                            </p>
-                                        </div>
+                                        <div className="flex items-center justify-between gap-3">
+                                            <Badge variant="secondary">
+                                                {roleLabels.get(member.role) ??
+                                                    member.role}
+                                            </Badge>
 
-                                        <Badge variant="secondary">
-                                            {roleLabels.get(member.role) ??
-                                                member.role}
-                                        </Badge>
-
-                                        {canManageAiAccess ? (
-                                            <label className="flex items-center gap-2 text-xs">
-                                                <Checkbox
-                                                    checked={member.ai_enabled}
-                                                    disabled={
-                                                        member.role === 'owner'
-                                                    }
-                                                    aria-label={`AI access for ${member.name}`}
-                                                    onCheckedChange={(
-                                                        checked,
-                                                    ) =>
-                                                        router.put(
-                                                            OrganizationMemberController.updateAIAccess.url(
+                                            {canManageAiAccess ? (
+                                                <label className="flex items-center gap-2 text-xs">
+                                                    <Checkbox
+                                                        checked={
+                                                            member.ai_enabled
+                                                        }
+                                                        disabled={
+                                                            member.role ===
+                                                            'owner'
+                                                        }
+                                                        aria-label={`AI access for ${member.name}`}
+                                                        onCheckedChange={(
+                                                            checked,
+                                                        ) =>
+                                                            router.put(
+                                                                OrganizationMemberController.updateAIAccess.url(
+                                                                    {
+                                                                        organization:
+                                                                            organization.id,
+                                                                        membership:
+                                                                            member.id,
+                                                                    },
+                                                                ),
                                                                 {
-                                                                    organization:
-                                                                        organization.id,
-                                                                    membership:
-                                                                        member.id,
+                                                                    ai_enabled:
+                                                                        checked ===
+                                                                        true,
                                                                 },
-                                                            ),
-                                                            {
-                                                                ai_enabled:
-                                                                    checked ===
-                                                                    true,
-                                                            },
-                                                            {
-                                                                preserveScroll: true,
-                                                            },
-                                                        )
-                                                    }
-                                                />
-                                                <span>AI</span>
-                                            </label>
-                                        ) : null}
+                                                                {
+                                                                    preserveScroll: true,
+                                                                },
+                                                            )
+                                                        }
+                                                    />
+                                                    <span>AI</span>
+                                                </label>
+                                            ) : null}
+                                        </div>
                                     </article>
                                 ))}
                             </div>

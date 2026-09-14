@@ -46,3 +46,33 @@ for (const { url, mobileTestId } of pages) {
         await expect(mobileRegion).toBeHidden();
     });
 }
+
+test('organization members mobile record gives identity its own full-width row above role and AI metadata at 320px', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    await page.setViewportSize({ width: 320, height: 812 });
+    await page.goto('/organizations/1/members');
+
+    const firstMember = page
+        .getByTestId('mobile-organization-members')
+        .locator('article')
+        .first();
+    const identityRow = firstMember.locator('p.truncate.font-medium').first();
+
+    await expect(identityRow).toBeVisible();
+
+    const identityBox = await identityRow.boundingBox();
+    const badgeBox = await firstMember
+        .locator('[class*="justify-between"]')
+        .boundingBox();
+
+    expect(identityBox).not.toBeNull();
+    expect(badgeBox).not.toBeNull();
+
+    if (identityBox && badgeBox) {
+        expect(badgeBox.y).toBeGreaterThan(identityBox.y);
+        expect(identityBox.width).toBeGreaterThan(150);
+    }
+});
