@@ -3,9 +3,11 @@ import { AlertCircle, Loader2, Upload, X } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
+import InputError from '@/components/input-error';
 import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -88,10 +90,8 @@ export default function CreateProblemReport() {
             )}
 
             <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
-                <div className="space-y-2">
-                    <Label htmlFor="title">Title (Optional)</Label>
+                <Field id="title" label="Title (Optional)" error={errors.title}>
                     <Input
-                        id="title"
                         type="text"
                         maxLength={160}
                         placeholder="Brief summary of the problem"
@@ -99,17 +99,19 @@ export default function CreateProblemReport() {
                         onChange={(e) => setData('title', e.target.value)}
                         disabled={processing}
                     />
-                    {errors.title && (
-                        <p className="text-sm text-red-500">{errors.title}</p>
-                    )}
-                </div>
+                </Field>
 
-                <div className="space-y-2">
-                    <Label htmlFor="description">
-                        Description <span className="text-red-500">*</span>
-                    </Label>
+                <Field
+                    id="description"
+                    label={
+                        <>
+                            Description <span className="text-red-500">*</span>
+                        </>
+                    }
+                    helper={`${data.description.length} / 10,000 characters`}
+                    error={errors.description}
+                >
                     <Textarea
-                        id="description"
                         maxLength={10000}
                         placeholder="Please describe the problem in detail..."
                         rows={6}
@@ -118,17 +120,7 @@ export default function CreateProblemReport() {
                         disabled={processing}
                         className="resize-none"
                     />
-                    <div className="flex justify-between text-sm text-gray-500">
-                        <span>
-                            {data.description.length} / 10,000 characters
-                        </span>
-                    </div>
-                    {errors.description && (
-                        <p className="text-sm text-red-500">
-                            {errors.description}
-                        </p>
-                    )}
-                </div>
+                </Field>
 
                 <div className="space-y-2">
                     <Label htmlFor="screenshots">
@@ -177,6 +169,12 @@ export default function CreateProblemReport() {
                             disabled={
                                 processing || data.screenshots.length >= 5
                             }
+                            aria-invalid={errors.screenshots ? true : undefined}
+                            aria-describedby={
+                                errors.screenshots
+                                    ? 'screenshots-error'
+                                    : undefined
+                            }
                             className="sr-only"
                         />
                         <Label
@@ -196,11 +194,10 @@ export default function CreateProblemReport() {
                         </Label>
                     </div>
 
-                    {errors.screenshots && (
-                        <p className="text-sm text-red-500">
-                            {errors.screenshots}
-                        </p>
-                    )}
+                    <InputError
+                        id="screenshots-error"
+                        message={errors.screenshots}
+                    />
                 </div>
 
                 <div className="flex gap-4">
