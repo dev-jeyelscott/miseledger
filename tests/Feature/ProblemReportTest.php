@@ -288,6 +288,28 @@ describe('Problem Report', function () {
             $response->assertStatus(429);
         });
 
+        it('enforces the rate limit for a full hour, not just 60 seconds', function () {
+            $user = User::factory()->create();
+
+            for ($i = 0; $i < 10; $i++) {
+                $this->actingAs($user)->post('/problem-reports', [
+                    'description' => "Report {$i}",
+                ])->assertRedirect();
+            }
+
+            $this->travel(61)->seconds();
+
+            $this->actingAs($user)->post('/problem-reports', [
+                'description' => 'Still within the hour',
+            ])->assertStatus(429);
+
+            $this->travel(3600)->seconds();
+
+            $this->actingAs($user)->post('/problem-reports', [
+                'description' => 'After the hour has elapsed',
+            ])->assertRedirect();
+        });
+
         it('requires authentication', function () {
             $response = $this->post('/problem-reports', [
                 'description' => 'Unauthorized report',

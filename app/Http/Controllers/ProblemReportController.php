@@ -55,7 +55,7 @@ class ProblemReportController extends Controller
         $user = $request->user();
         $rateLimitKey = "problem-report:{$user->id}";
 
-        if (! RateLimiter::attempt($rateLimitKey, 10, fn () => 3600)) {
+        if (! RateLimiter::attempt($rateLimitKey, 10, fn (): bool => true, decaySeconds: 3600)) {
             abort(429, 'You can submit a maximum of 10 reports per hour.');
         }
 
