@@ -14,6 +14,13 @@ use Illuminate\Validation\ValidationException;
 
 final class AddOrganizationMember
 {
+    /**
+     * Generic rejection message shared across unresolvable, duplicate, and
+     * seat-limited outcomes so the response cannot be used to infer whether
+     * an email belongs to a registered account outside the organization.
+     */
+    public const string GENERIC_REJECTION_MESSAGE = 'This email address cannot be added to the organization.';
+
     public function __construct(
         private readonly RecordAuditEntry $recordAuditEntry,
     ) {}
@@ -44,7 +51,7 @@ final class AddOrganizationMember
 
             if ($alreadyExists) {
                 throw ValidationException::withMessages([
-                    'email' => __('This user already belongs to the organization.'),
+                    'email' => __(self::GENERIC_REJECTION_MESSAGE),
                 ]);
             }
 
@@ -53,7 +60,7 @@ final class AddOrganizationMember
                 limitKey: UsageLimitKey::Seats,
                 currentUsage: $lockedOrganization->memberships()->count(),
                 errorField: 'email',
-                errorMessage: __('This organization has reached its member limit for the current plan.'),
+                errorMessage: __(self::GENERIC_REJECTION_MESSAGE),
             );
 
             $membership = $lockedOrganization->memberships()->create([

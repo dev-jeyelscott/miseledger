@@ -15,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -77,7 +78,13 @@ class OrganizationMemberController extends Controller
     ): RedirectResponse {
         $user = User::query()
             ->where('email', (string) $request->validated('email'))
-            ->firstOrFail();
+            ->first();
+
+        if (! $user instanceof User) {
+            throw ValidationException::withMessages([
+                'email' => __(AddOrganizationMember::GENERIC_REJECTION_MESSAGE),
+            ]);
+        }
 
         $role = OrganizationRole::from(
             (string) $request->validated('role'),

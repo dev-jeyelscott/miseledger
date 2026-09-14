@@ -41,7 +41,6 @@ class StoreOrganizationMemberRequest extends FormRequest
                 'required',
                 'email',
                 'max:255',
-                'exists:users,email',
             ],
             'role' => [
                 'required',

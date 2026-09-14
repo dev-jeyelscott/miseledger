@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Organizations\AddOrganizationMember;
 use App\Enums\OrganizationPermission;
 use App\Enums\OrganizationRole;
 use App\Models\Organization;
@@ -333,6 +334,67 @@ test('a manager cannot add an organization member', function () {
         'organization_id' => $organization->id,
         'user_id' => $member->id,
     ]);
+});
+
+test('an unregistered email is rejected with the same generic message as a duplicate membership', function () {
+    $owner = User::factory()->create();
+    $existingMember = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($owner)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($existingMember)
+        ->create([
+            'role' => OrganizationRole::KitchenStaff,
+        ]);
+
+    $unknownEmailResponse = $this->actingAs($owner)
+        ->from(route('organizations.members.index', $organization))
+        ->post(
+            route(
+                'organizations.members.store',
+                $organization,
+            ),
+            [
+                'email' => 'unregistered@example.com',
+                'role' => OrganizationRole::Manager->value,
+            ],
+        );
+
+    $unknownEmailResponse->assertSessionHasErrors('email');
+    $unknownEmailMessage = session('errors')->get('email');
+
+    $duplicateEmailResponse = $this->actingAs($owner)
+        ->from(route('organizations.members.index', $organization))
+        ->post(
+            route(
+                'organizations.members.store',
+                $organization,
+            ),
+            [
+                'email' => $existingMember->email,
+                'role' => OrganizationRole::Manager->value,
+            ],
+        );
+
+    $duplicateEmailResponse->assertSessionHasErrors('email');
+    $duplicateEmailMessage = session('errors')->get('email');
+
+    $genericMessage = [__(AddOrganizationMember::GENERIC_REJECTION_MESSAGE)];
+
+    expect($unknownEmailMessage)
+        ->toBe($genericMessage)
+        ->and($duplicateEmailMessage)
+        ->toBe($genericMessage);
+
+    $this->assertDatabaseCount('organization_memberships', 2);
 });
 
 test('duplicate organization membership is rejected', function () {
