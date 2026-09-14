@@ -11,6 +11,7 @@ use App\Models\Organization;
 use App\Models\PlatformAdmin;
 use App\Models\User;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -199,6 +200,7 @@ test('billing overview groups plan projections by stable internal plan code with
 
     BillingSubscription::factory()->create([
         'billing_customer_id' => $stripeCustomer->id,
+        'type' => config('billing.subscription_type'),
         'plan_code' => 'starter',
         'external_plan_id' => 'price_private_a',
         'livemode' => true,
@@ -206,6 +208,7 @@ test('billing overview groups plan projections by stable internal plan code with
 
     BillingSubscription::factory()->create([
         'billing_customer_id' => $stripeCustomer->id,
+        'type' => config('billing.subscription_type'),
         'plan_code' => 'starter',
         'external_plan_id' => 'price_private_b',
         'livemode' => true,
@@ -220,8 +223,23 @@ test('billing overview groups plan projections by stable internal plan code with
 
     BillingSubscription::factory()->create([
         'billing_customer_id' => $payMongoCustomer->id,
+        'type' => config('billing.subscription_type'),
         'plan_code' => 'starter',
         'external_plan_id' => 'plan_private_a',
+        'livemode' => true,
+    ]);
+
+    $unrelatedOrganization = Organization::factory()->create();
+    $unrelatedCustomer = BillingCustomer::factory()->create([
+        'organization_id' => $unrelatedOrganization->id,
+        'provider' => BillingProvider::Stripe,
+    ]);
+
+    BillingSubscription::factory()->create([
+        'billing_customer_id' => $unrelatedCustomer->id,
+        'type' => 'unrelated',
+        'plan_code' => 'growth',
+        'external_plan_id' => 'price_unrelated',
         'livemode' => true,
     ]);
 
@@ -250,6 +268,7 @@ test('subscription index is paginated filterable and exposes only minimized loca
     ]);
 
     BillingSubscription::factory()->count(26)->create([
+        'type' => config('billing.subscription_type'),
         'plan_code' => 'starter',
         'livemode' => false,
     ]);
@@ -264,12 +283,24 @@ test('subscription index is paginated filterable and exposes only minimized loca
     ]);
     $target = BillingSubscription::factory()->create([
         'billing_customer_id' => $targetCustomer->id,
+        'type' => config('billing.subscription_type'),
         'plan_code' => 'growth',
         'external_subscription_id' => 'sub_private_target',
         'external_plan_id' => 'plan_private_target',
         'collection_method' => BillingCollectionMethod::Manual,
         'provider_status' => 'active',
         'livemode' => true,
+    ]);
+
+    $unrelatedOrganization = Organization::factory()->create();
+    $unrelatedCustomer = BillingCustomer::factory()->create([
+        'organization_id' => $unrelatedOrganization->id,
+    ]);
+    BillingSubscription::factory()->create([
+        'billing_customer_id' => $unrelatedCustomer->id,
+        'type' => 'unrelated',
+        'plan_code' => 'business',
+        'livemode' => false,
     ]);
 
     $this->actingAs($platformUser)
@@ -279,7 +310,13 @@ test('subscription index is paginated filterable and exposes only minimized loca
             fn (Assert $page) => $page
                 ->has('subscriptions', 25)
                 ->where('pagination.per_page', 25)
-                ->where('pagination.total', 27),
+                ->where('pagination.total', 27)
+                ->where(
+                    'filterOptions.plans',
+                    fn (Collection $plans) => $plans
+                        ->pluck('value')
+                        ->all() === ['growth', 'starter'],
+                ),
         );
 
     $this->actingAs($platformUser)
@@ -415,6 +452,7 @@ test('billing indexes keep query counts bounded as page size grows', function ()
     ]);
 
     BillingSubscription::factory()->count(30)->create([
+        'type' => config('billing.subscription_type'),
         'plan_code' => 'starter',
     ]);
     BillingPayment::factory()->count(30)->create();

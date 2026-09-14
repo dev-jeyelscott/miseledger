@@ -83,8 +83,10 @@ final class PlatformBillingController extends Controller
         $livemode = $mode === 'live';
         $signals = $paymentSignals->currentMonth($mode);
         $planLabels = $this->planLabels(new PlanCatalog);
+        $subscriptionType = (string) config('billing.subscription_type');
 
         $planMix = BillingSubscription::query()
+            ->where('type', $subscriptionType)
             ->where('livemode', $livemode)
             ->whereNotNull('plan_code')
             ->toBase()
@@ -122,6 +124,7 @@ final class PlatformBillingController extends Controller
             ],
             'metrics' => [
                 'subscriptionProjections' => BillingSubscription::query()
+                    ->where('type', $subscriptionType)
                     ->where('livemode', $livemode)
                     ->count(),
                 'capturedPayments' => $signals['capturedPaymentCount'],
@@ -195,8 +198,10 @@ final class PlatformBillingController extends Controller
         $direction = (string) ($validated['direction'] ?? 'desc');
         $perPage = (int) ($validated['per_page'] ?? 25);
         $planLabels = $this->planLabels(new PlanCatalog);
+        $subscriptionType = (string) config('billing.subscription_type');
 
         $query = BillingSubscription::query()
+            ->where('type', $subscriptionType)
             ->select([
                 'id',
                 'organization_id',
@@ -318,7 +323,10 @@ final class PlatformBillingController extends Controller
             ],
             'filterOptions' => [
                 'providers' => $this->providerOptions(),
-                'plans' => $this->subscriptionPlanOptions($planLabels),
+                'plans' => $this->subscriptionPlanOptions(
+                    $planLabels,
+                    $subscriptionType,
+                ),
                 'intervals' => $this->intervalOptions(),
                 'collectionMethods' => $this->collectionMethodOptions(),
                 'providerStatuses' => $this->providerStatusOptions(),
@@ -570,10 +578,13 @@ final class PlatformBillingController extends Controller
      * @param  array<string, string>  $planLabels
      * @return list<array{value: string, label: string}>
      */
-    private function subscriptionPlanOptions(array $planLabels): array
-    {
+    private function subscriptionPlanOptions(
+        array $planLabels,
+        string $subscriptionType,
+    ): array {
         return array_values(
             BillingSubscription::query()
+                ->where('type', $subscriptionType)
                 ->select('plan_code')
                 ->whereNotNull('plan_code')
                 ->distinct()
