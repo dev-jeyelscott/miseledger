@@ -348,6 +348,8 @@ test(
 
         $action = app(RecordOpeningBalance::class);
 
+        $occurredAt = now();
+
         $first = $action->handle(
             organization: $this->organization,
             location: $this->location,
@@ -358,7 +360,7 @@ test(
             baseUnitCost: '0.0400',
             referenceType: 'opening_balance_batch',
             referenceId: 7,
-            occurredAt: now(),
+            occurredAt: $occurredAt,
             idempotencyKey: 'opening_balance:batch:7:item:1:storage:1',
             actor: $this->inventoryUser,
         );
@@ -373,7 +375,7 @@ test(
             baseUnitCost: '0.0400',
             referenceType: 'opening_balance_batch',
             referenceId: 7,
-            occurredAt: now()->addMinute(),
+            occurredAt: $occurredAt,
             idempotencyKey: 'opening_balance:batch:7:item:1:storage:1',
             actor: $this->inventoryUser,
         );

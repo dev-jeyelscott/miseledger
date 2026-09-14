@@ -135,6 +135,7 @@ final class RecordStockMovement
                         $quantity,
                         $referenceType,
                         $referenceId,
+                        $occurredAt,
                         $explicitInboundCost,
                         $notes,
                     );
@@ -295,6 +296,7 @@ final class RecordStockMovement
                         $quantity,
                         $referenceType,
                         $referenceId,
+                        $occurredAt,
                         $explicitInboundCost,
                         $notes,
                     );
@@ -452,6 +454,7 @@ final class RecordStockMovement
                 $quantity,
                 $referenceType,
                 $referenceId,
+                $occurredAt,
                 $explicitInboundCost,
                 $notes,
             );
@@ -669,6 +672,7 @@ final class RecordStockMovement
         BigDecimal $quantity,
         string $referenceType,
         int $referenceId,
+        CarbonInterface $occurredAt,
         ?BigDecimal $explicitInboundCost,
         ?string $notes,
     ): void {
@@ -684,6 +688,8 @@ final class RecordStockMovement
             && $existing->quantity === (string) $quantity
             && $existing->reference_type === $referenceType
             && $existing->reference_id === $referenceId
+            && $this->normalizeOccurredAt($existing->occurred_at)
+                === $this->normalizeOccurredAt($occurredAt)
             && $existing->notes === $notes;
 
         if (
@@ -705,6 +711,17 @@ final class RecordStockMovement
                 ),
             ]);
         }
+    }
+
+    /**
+     * Normalize an occurrence timestamp to the database's stored UTC second precision.
+     */
+    private function normalizeOccurredAt(
+        CarbonInterface $occurredAt,
+    ): string {
+        return $occurredAt->clone()
+            ->utc()
+            ->format('Y-m-d H:i:s');
     }
 
     /**
