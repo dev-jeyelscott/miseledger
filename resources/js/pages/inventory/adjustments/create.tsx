@@ -1,5 +1,5 @@
 import { Form, Head } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import InventoryAdjustmentController from '@/actions/App/Http/Controllers/Inventory/InventoryAdjustmentController';
 import InventoryItemController from '@/actions/App/Http/Controllers/Inventory/InventoryItemController';
 import InputError from '@/components/input-error';
@@ -20,6 +20,7 @@ import {
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
+import { useDirtyFormNavigation } from '@/hooks/use-dirty-form-navigation';
 import { dashboard } from '@/routes';
 
 type Option = {
@@ -122,6 +123,25 @@ export default function InventoryAdjustmentCreate({
     const [reason, setReason] = useState('');
     const [confirmOpen, setConfirmOpen] = useState(false);
 
+    const dirtyFormNavigation = useDirtyFormNavigation(
+        'You have unsaved inventory adjustment changes. Leave without saving them?',
+    );
+
+    const isDirty =
+        locationId !== '' ||
+        storageLocationId !== '' ||
+        inventoryItemId !== '' ||
+        unitId !== '' ||
+        quantity !== '' ||
+        occurredAt !== defaultOccurredAt ||
+        reason !== '';
+
+    const { setIsDirty } = dirtyFormNavigation;
+
+    useEffect(() => {
+        setIsDirty(isDirty);
+    }, [isDirty, setIsDirty]);
+
     const availableStorageLocations = storageLocationOptions.filter(
         (storageLocation) =>
             storageLocation.locationId.toString() === locationId,
@@ -183,7 +203,10 @@ export default function InventoryAdjustmentCreate({
                         id="inventory-adjustment-form"
                         action={InventoryAdjustmentController.store().url}
                         method="post"
-                        onSuccess={() => setConfirmOpen(false)}
+                        onSuccess={() => {
+                            setConfirmOpen(false);
+                            dirtyFormNavigation.setIsDirty(false);
+                        }}
                     >
                         {({ errors, processing }) => (
                             <div className="grid gap-6">
@@ -536,6 +559,9 @@ export default function InventoryAdjustmentCreate({
                                             InventoryItemController.index().url
                                         }
                                         disabled={processing}
+                                        onNavigate={
+                                            dirtyFormNavigation.confirmNavigation
+                                        }
                                     >
                                         Cancel
                                     </PreviousPageButton>

@@ -1,5 +1,6 @@
 import { Form, Head, usePage } from '@inertiajs/react';
 import { Link } from '@inertiajs/react';
+import { useEffect } from 'react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import DeleteUser from '@/components/delete-user';
 import Heading from '@/components/heading';
@@ -7,6 +8,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { useDirtyFormNavigation } from '@/hooks/use-dirty-form-navigation';
 import { edit } from '@/routes/profile';
 import { send } from '@/routes/verification';
 import type { Auth } from '@/types';
@@ -14,6 +16,22 @@ import type { Auth } from '@/types';
 type PageProps = {
     auth: Auth;
 };
+
+function DirtyStateTracker({
+    dirty,
+    successful,
+    onChange,
+}: {
+    dirty: boolean;
+    successful: boolean;
+    onChange: (dirty: boolean) => void;
+}) {
+    useEffect(() => {
+        onChange(dirty && !successful);
+    }, [dirty, onChange, successful]);
+
+    return null;
+}
 
 export default function Profile({
     mustVerifyEmail,
@@ -23,6 +41,9 @@ export default function Profile({
     status?: string;
 }) {
     const { auth } = usePage<PageProps>().props;
+    const dirtyNavigation = useDirtyFormNavigation(
+        'You have unsaved profile changes. Leave without saving them?',
+    );
 
     return (
         <>
@@ -44,8 +65,20 @@ export default function Profile({
                     }}
                     className="space-y-6"
                 >
-                    {({ processing, errors, recentlySuccessful }) => (
+                    {({
+                        processing,
+                        errors,
+                        recentlySuccessful,
+                        isDirty,
+                        wasSuccessful,
+                    }) => (
                         <>
+                            <DirtyStateTracker
+                                dirty={isDirty}
+                                successful={wasSuccessful}
+                                onChange={dirtyNavigation.setIsDirty}
+                            />
+
                             <Field id="name" label="Name" error={errors.name}>
                                 <Input
                                     className="mt-1 block w-full"
