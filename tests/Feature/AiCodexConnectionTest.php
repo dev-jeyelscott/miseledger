@@ -6,6 +6,7 @@ use App\Exceptions\AiProviderException;
 use App\Jobs\AwaitCodexDeviceCodeLogin;
 use App\Models\AiConversation;
 use App\Models\AiProviderConnection;
+use App\Models\AiRun;
 use App\Models\User;
 use App\Support\Ai\Providers\AiProviderAdapter;
 use App\Support\Ai\Providers\AiProviderTurn;
@@ -70,7 +71,7 @@ beforeEach(function (): void {
             return ['rateLimits' => ['primary' => ['usedPercent' => 20]], 'accessToken' => 'never-expose'];
         }
 
-        public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn
+        public function converse(User $user, AiConversation $conversation, AiRun $run, string $mcpExecutionIdentity, string $input): AiProviderTurn
         {
             return new AiProviderTurn('turn_123', 'Inventory is stable.');
         }
@@ -159,7 +160,7 @@ test('provider failures are stable browser-safe codes', function () {
             throw new AiProviderException(AiProviderErrorCode::Unavailable);
         }
 
-        public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn
+        public function converse(User $user, AiConversation $conversation, AiRun $run, string $mcpExecutionIdentity, string $input): AiProviderTurn
         {
             throw new AiProviderException(AiProviderErrorCode::Unavailable);
         }

@@ -72,6 +72,25 @@ final class ExecuteAiRun
                 return null;
             }
 
+            // A prior attempt of this same durable run already had a turn
+            // accepted by the provider but never learned whether it
+            // completed (the completion wait timed out or the worker
+            // crashed after acceptance). Codex gives no way to reconcile a
+            // specific turn's outcome outside the process that started it,
+            // so resubmitting here would risk running the same request
+            // twice; surface this as an explicit ambiguous failure instead.
+            if ($run->accepted_provider_turn_id !== null) {
+                $run->update([
+                    'status' => AiRunStatus::Failed,
+                    'error_code' => 'provider_turn_ambiguous',
+                    'finished_at' => now(),
+                ]);
+
+                $this->observability->denied($run, 'provider_turn_ambiguous');
+
+                return null;
+            }
+
             $run->update([
                 'status' => AiRunStatus::Running,
                 'started_at' => $run->started_at ?? now(),
@@ -90,7 +109,7 @@ final class ExecuteAiRun
         try {
             $conversation = $run->conversation;
             $identity = $this->identityIssuer->issue($run);
-            $turn = $this->provider->converse($run->user, $conversation, $identity, $this->userMessage($conversation, $run));
+            $turn = $this->provider->converse($run->user, $conversation, $run, $identity, $this->userMessage($conversation, $run));
 
             $this->observability->completed($this->complete($run->id, $turn));
         } catch (AiProviderException $exception) {
@@ -98,6 +117,18 @@ final class ExecuteAiRun
                 AiProviderErrorCode::Unavailable,
                 AiProviderErrorCode::Timeout,
             ], true)) {
+                // The provider may have accepted this turn (turn/start
+                // acknowledged) before the failure occurred while awaiting
+                // its completion. converse() persists that acceptance onto
+                // $run as soon as it happens, so retrying here would risk
+                // submitting the same request a second time; only failures
+                // proven to occur before acceptance are safe to retry.
+                if ($run->refresh()->accepted_provider_turn_id !== null) {
+                    $this->fail($run->id, 'provider_turn_ambiguous');
+
+                    return;
+                }
+
                 throw $exception;
             }
 

@@ -21,6 +21,8 @@ use Illuminate\Support\Carbon;
  * @property int|null $ai_provider_connection_user_id
  * @property AiProvider $provider
  * @property string|null $provider_run_id
+ * @property string|null $accepted_provider_turn_id
+ * @property Carbon|null $accepted_provider_turn_at
  * @property string|null $model
  * @property AiRunStatus $status
  * @property string|null $error_code
@@ -39,6 +41,8 @@ use Illuminate\Support\Carbon;
     'ai_provider_connection_user_id',
     'provider',
     'provider_run_id',
+    'accepted_provider_turn_id',
+    'accepted_provider_turn_at',
     'model',
     'status',
     'error_code',
@@ -99,6 +103,7 @@ class AiRun extends Model
             'metadata' => 'array',
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
+            'accepted_provider_turn_at' => 'datetime',
         ];
     }
 }

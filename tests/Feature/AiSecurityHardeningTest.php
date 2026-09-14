@@ -8,6 +8,7 @@ use App\Enums\OrganizationRole;
 use App\Jobs\ProcessAiRun;
 use App\Models\AiConversation;
 use App\Models\AiProviderConnection;
+use App\Models\AiRun;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\StockBalance;
@@ -42,7 +43,7 @@ beforeEach(function (): void {
             return [];
         }
 
-        public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn
+        public function converse(User $user, AiConversation $conversation, AiRun $run, string $mcpExecutionIdentity, string $input): AiProviderTurn
         {
             $this->turns++;
 

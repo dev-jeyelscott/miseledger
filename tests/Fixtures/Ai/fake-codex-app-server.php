@@ -118,6 +118,19 @@ while (($line = fgets(STDIN)) !== false) {
 
     if ($method === 'turn/start') {
         $threadId = $message['params']['threadId'] ?? null;
+        $texts = array_column($message['params']['input'] ?? [], 'text');
+
+        // Lets a test simulate the turn being accepted by the provider but
+        // never reaching `turn/completed` before the client's wait times
+        // out, without needing to actually stall this process.
+        $simulateAcceptanceTimeout = array_any(
+            $texts,
+            static fn (mixed $text): bool => is_string($text) && str_contains($text, 'SIMULATE_ACCEPTANCE_TIMEOUT'),
+        );
+
+        if ($simulateAcceptanceTimeout) {
+            continue;
+        }
 
         echo json_encode([
             'method' => 'item/completed',

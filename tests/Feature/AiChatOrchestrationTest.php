@@ -11,6 +11,7 @@ use App\Exceptions\AiProviderException;
 use App\Jobs\ProcessAiRun;
 use App\Models\AiConversation;
 use App\Models\AiProviderConnection;
+use App\Models\AiRun;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
@@ -43,7 +44,7 @@ beforeEach(function (): void {
         /** @var list<string> */
         public array $inputs = [];
 
-        public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn
+        public function converse(User $user, AiConversation $conversation, AiRun $run, string $mcpExecutionIdentity, string $input): AiProviderTurn
         {
             $this->turns++;
             $this->inputs[] = $input;
@@ -122,7 +123,7 @@ test('a run failing with an unauthorized or login-required provider error deacti
         // non-shared profile storage). Codex only ever surfaces that as an
         // authorization failure on the turn itself, never as a distinct
         // "no profile" signal.
-        public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn
+        public function converse(User $user, AiConversation $conversation, AiRun $run, string $mcpExecutionIdentity, string $input): AiProviderTurn
         {
             throw new AiProviderException($this->errorCode);
         }
@@ -171,7 +172,7 @@ test('a failed run only deactivates the connection it was bound to, not a newer 
         // Simulates a fresh device-code login completing on another worker
         // while this turn is still in flight against the stale connection,
         // ending up with a distinct connection row for the same user.
-        public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn
+        public function converse(User $user, AiConversation $conversation, AiRun $run, string $mcpExecutionIdentity, string $input): AiProviderTurn
         {
             AiProviderConnection::query()->forUser($this->user)->active()->update([
                 'is_active' => false,

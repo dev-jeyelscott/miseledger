@@ -45,7 +45,13 @@ final class CodexJsonRpcClient
      * name such a notification method; when it does, that notification's
      * `params` become the step's result instead of the ack's `result`.
      *
-     * @param  list<callable(list<array<string, mixed>> $priorResults): array{0: string, 1: array<string, mixed>, 2?: string}>  $steps
+     * A step may also supply an `onAccepted` callback, invoked with the
+     * ack's own `result` as soon as it arrives — before this method waits
+     * on that step's completion notification. This is the only way a
+     * caller can observe (and durably persist) that the provider accepted
+     * a request whose completion wait later times out.
+     *
+     * @param  list<callable(list<array<string, mixed>> $priorResults): array{0: string, 1: array<string, mixed>, 2?: string, 3?: callable(array<string, mixed>): void}>  $steps
      * @param  array<string, int|list<string>|string>  $configOverrides
      * @return list<array<string, mixed>>
      */
@@ -66,6 +72,7 @@ final class CodexJsonRpcClient
                 $step = $step($results);
                 [$method, $params] = $step;
                 $completionNotification = $step[2] ?? null;
+                $onAccepted = $step[3] ?? null;
                 $id = $index + 2;
 
                 $this->sendCall($input, $id, $method, $params);
@@ -81,8 +88,14 @@ final class CodexJsonRpcClient
                     throw new AiProviderException($this->errorCode((array) $response['error']));
                 }
 
+                $ackResult = is_array($response['result'] ?? null) ? $response['result'] : [];
+
+                if ($onAccepted !== null) {
+                    $onAccepted($ackResult);
+                }
+
                 if ($completionNotification === null) {
-                    $results[] = is_array($response['result'] ?? null) ? $response['result'] : [];
+                    $results[] = $ackResult;
 
                     continue;
                 }

@@ -3,6 +3,7 @@
 namespace App\Support\Ai\Providers;
 
 use App\Models\AiConversation;
+use App\Models\AiRun;
 use App\Models\User;
 
 /**
@@ -40,6 +41,13 @@ interface AiProviderAdapter
      * for the lifetime of the process that created them, so starting (or
      * resuming) the thread and starting the turn must not be split across
      * independent provider calls.
+     *
+     * $run is the durable attempt this turn belongs to. Implementations
+     * must persist the provider thread id and an accepted turn id onto
+     * $run as soon as the provider acknowledges them (before waiting on
+     * the turn's completion), so a retry after a completion-wait timeout
+     * can detect that the turn was already accepted instead of blindly
+     * resubmitting it.
      */
-    public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn;
+    public function converse(User $user, AiConversation $conversation, AiRun $run, string $mcpExecutionIdentity, string $input): AiProviderTurn;
 }

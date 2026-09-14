@@ -5,6 +5,7 @@ namespace App\Support\Ai\Providers;
 use App\Enums\AiProviderErrorCode;
 use App\Exceptions\AiProviderException;
 use App\Models\AiConversation;
+use App\Models\AiRun;
 use App\Models\User;
 
 final class CodexAppServerProvider implements AiProviderAdapter
@@ -59,7 +60,7 @@ final class CodexAppServerProvider implements AiProviderAdapter
         return $this->client->call($user, 'account/rateLimits/read');
     }
 
-    public function converse(User $user, AiConversation $conversation, string $mcpExecutionIdentity, string $input): AiProviderTurn
+    public function converse(User $user, AiConversation $conversation, AiRun $run, string $mcpExecutionIdentity, string $input): AiProviderTurn
     {
         $this->assertConversationOwner($user, $conversation);
 
@@ -71,22 +72,39 @@ final class CodexAppServerProvider implements AiProviderAdapter
                 : ['thread/start', ['cwd' => (string) config('ai.codex.workspace_path')]],
             // turn/start only acknowledges that the turn was accepted
             // (status "inProgress", no output yet); the actual result
-            // arrives later as a `turn/completed` notification.
-            fn (array $priorResults): array => ['turn/start', [
-                'threadId' => $this->threadId($priorResults[0]),
-                'input' => [['type' => 'text', 'text' => $input]],
-                'sandboxPolicy' => [
-                    'type' => 'readOnly',
-                    'networkAccess' => true,
-                ],
-            ], 'turn/completed'],
+            // arrives later as a `turn/completed` notification. The
+            // completion wait can still time out after this acceptance, so
+            // the thread id and the accepted turn id are both persisted as
+            // soon as each is known, rather than only once the whole turn
+            // finishes — otherwise a retry after such a timeout has no way
+            // to tell an already-accepted turn apart from one that never
+            // reached the provider, and would resubmit it.
+            function (array $priorResults) use ($conversation, $existingThreadId, $run, $input): array {
+                $threadId = $this->threadId($priorResults[0]);
+
+                if ($threadId !== $existingThreadId) {
+                    $conversation->forceFill(['provider_thread_id' => $threadId])->save();
+                }
+
+                return ['turn/start', [
+                    'threadId' => $threadId,
+                    'input' => [['type' => 'text', 'text' => $input]],
+                    'sandboxPolicy' => [
+                        'type' => 'readOnly',
+                        'networkAccess' => true,
+                    ],
+                ], 'turn/completed', static function (array $ackResult) use ($run): void {
+                    $turnId = $ackResult['turn']['id'] ?? null;
+
+                    if (is_string($turnId) && $run->accepted_provider_turn_id !== $turnId) {
+                        $run->update([
+                            'accepted_provider_turn_id' => $turnId,
+                            'accepted_provider_turn_at' => now(),
+                        ]);
+                    }
+                }];
+            },
         ], $this->miseLedgerMcpConfig($mcpExecutionIdentity));
-
-        $threadId = $this->threadId($results[0]);
-
-        if ($threadId !== $existingThreadId) {
-            $conversation->forceFill(['provider_thread_id' => $threadId])->save();
-        }
 
         $turn = $results[1]['turn'] ?? [];
         $turnId = $turn['id'] ?? null;

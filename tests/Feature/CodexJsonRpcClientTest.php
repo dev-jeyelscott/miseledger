@@ -1,8 +1,16 @@
 <?php
 
+use App\Actions\Ai\ExecuteAiRun;
+use App\Actions\Ai\QueueAiMessage;
 use App\Enums\AiProviderErrorCode;
+use App\Enums\AiRunStatus;
+use App\Enums\OrganizationRole;
 use App\Exceptions\AiProviderException;
 use App\Models\AiConversation;
+use App\Models\AiProviderConnection;
+use App\Models\AiRun;
+use App\Models\Organization;
+use App\Models\OrganizationMembership;
 use App\Models\User;
 use App\Support\Ai\Providers\CodexAppServerProvider;
 use App\Support\Ai\Providers\CodexJsonRpcClient;
@@ -73,12 +81,15 @@ test('the Codex provider uses documented direct stdio JSON-RPC for connection an
 
     expect($provider->rateLimits($user)['rateLimits']['primary']['usedPercent'])->toBe(20);
 
-    $firstTurn = $provider->converse($user, $conversation, 'signed-identity', 'Summarize today.');
+    $firstRun = AiRun::factory()->for($conversation, 'conversation')->create();
+    $firstTurn = $provider->converse($user, $conversation, $firstRun, 'signed-identity', 'Summarize today.');
 
     expect($conversation->refresh()->provider_thread_id)->toBe('thr_123')
-        ->and($firstTurn->id)->toBe('turn_123');
+        ->and($firstTurn->id)->toBe('turn_123')
+        ->and($firstRun->refresh()->accepted_provider_turn_id)->toBe('turn_123');
 
-    $secondTurn = $provider->converse($user, $conversation, 'signed-identity', 'And tomorrow?');
+    $secondRun = AiRun::factory()->for($conversation, 'conversation')->create();
+    $secondTurn = $provider->converse($user, $conversation, $secondRun, 'signed-identity', 'And tomorrow?');
 
     expect($conversation->refresh()->provider_thread_id)->toBe('thr_123')
         ->and($secondTurn->id)->toBe('turn_123');
@@ -141,8 +152,9 @@ test('the Codex client uses a distinct provider-owned profile for each user', fu
 test('a user cannot bind another users conversation to their Codex profile', function () {
     $conversation = AiConversation::factory()->create();
     $otherUser = User::factory()->create();
+    $run = AiRun::factory()->for($conversation, 'conversation')->create();
 
-    expect(fn () => app(CodexAppServerProvider::class)->converse($otherUser, $conversation, 'signed-identity', 'hi'))
+    expect(fn () => app(CodexAppServerProvider::class)->converse($otherUser, $conversation, $run, 'signed-identity', 'hi'))
         ->toThrow(AiProviderException::class);
 });
 
@@ -157,4 +169,46 @@ test('the Codex JSON-RPC client maps provider errors without exposing provider d
     } catch (AiProviderException $exception) {
         expect($exception->errorCode)->toBe(AiProviderErrorCode::RateLimited);
     }
+});
+
+test('a timeout awaiting turn completion after Codex already accepted the turn does not resubmit the same run on retry', function () {
+    config()->set('ai.codex.timeout_seconds', 1);
+
+    $organization = Organization::factory()->create();
+    $user = User::factory()->create(['email_verified_at' => now()]);
+    OrganizationMembership::factory()->create([
+        'organization_id' => $organization->id,
+        'user_id' => $user->id,
+        'role' => OrganizationRole::Owner,
+    ]);
+    AiProviderConnection::factory()->create(['user_id' => $user->id]);
+    $conversation = AiConversation::factory()->create([
+        'organization_id' => $organization->id,
+        'user_id' => $user->id,
+    ]);
+
+    $run = app(QueueAiMessage::class)->handle(
+        $organization,
+        $user,
+        $conversation,
+        'SIMULATE_ACCEPTANCE_TIMEOUT',
+    )['run'];
+
+    app(ExecuteAiRun::class)->handle($run->id);
+
+    expect($run->refresh())
+        ->status->toBe(AiRunStatus::Failed)
+        ->error_code->toBe('provider_turn_ambiguous')
+        ->accepted_provider_turn_id->toBe('turn_123');
+
+    // A queue retry of the same durable run must not resubmit the turn: the
+    // run is already terminal, so a second handle() call (standing in for
+    // the job's next attempt) must not talk to the provider again at all.
+    app(ExecuteAiRun::class)->handle($run->id);
+
+    $profilePath = app(CodexProfileLocator::class)->path($user);
+    $transcripts = readCodexProtocolTranscripts($profilePath);
+
+    expect($transcripts)->toHaveCount(1)
+        ->and(array_column(array_slice($transcripts[0], 2), 'method'))->toBe(['thread/start', 'turn/start']);
 });
