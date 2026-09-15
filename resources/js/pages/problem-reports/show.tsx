@@ -213,8 +213,7 @@ export default function ShowProblemReport({ report, viewingContext }: Props) {
 
             <Alert>
                 <AlertDescription>
-                    Remote status changes can take up to one hour to appear
-                    after synchronization is implemented.
+                    Status updates may take up to one hour to appear.
                 </AlertDescription>
             </Alert>
 

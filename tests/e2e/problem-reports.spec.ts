@@ -139,6 +139,24 @@ test('copy reference button confirms a successful copy', async ({
     ).resolves.toBe(reference);
 });
 
+test('synchronization alert states verified behavior without implementation status', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    await page.goto('/problem-reports/create');
+    await page.fill('#description', 'The oven timer resets unexpectedly.');
+    await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/problem-reports\/[^/]+$/);
+
+    await expect(
+        page.getByText('Status updates may take up to one hour to appear.'),
+    ).toBeVisible();
+    await expect(page.getByText(/synchronization is implemented/i)).toHaveCount(
+        0,
+    );
+});
+
 test('navigation controls render as single links and support keyboard activation', async ({
     page,
 }) => {
