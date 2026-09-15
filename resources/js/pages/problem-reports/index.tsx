@@ -1,9 +1,9 @@
 import { Link } from '@inertiajs/react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { EmptyState } from '@/components/empty-state';
 import { PageHeader } from '@/components/page-header';
+import { PaginationControls } from '@/components/pagination-controls';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -26,21 +26,16 @@ interface Report {
     organization_name_snapshot: string | null;
 }
 
-interface PaginationLink {
-    url: string | null;
-    label: string;
-    active: boolean;
-}
-
 interface PaginationData {
     data: Report[];
-    links: PaginationLink[];
-    meta: {
-        current_page: number;
-        last_page: number;
-        per_page: number;
-        total: number;
-    };
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    from: number | null;
+    to: number | null;
+    prev_page_url: string | null;
+    next_page_url: string | null;
 }
 
 interface Props {
@@ -190,63 +185,18 @@ export default function ProblemReportsIndex({ reports }: Props) {
                 ))}
             </div>
 
-            {reports.meta.last_page > 1 && (
-                <div className="flex items-center justify-between border-t pt-4">
-                    <div className="text-sm text-muted-foreground">
-                        Showing{' '}
-                        {(reports.meta.current_page - 1) *
-                            reports.meta.per_page +
-                            1}{' '}
-                        to{' '}
-                        {Math.min(
-                            reports.meta.current_page * reports.meta.per_page,
-                            reports.meta.total,
-                        )}{' '}
-                        of {reports.meta.total} reports
-                    </div>
-                    <div className="flex gap-2">
-                        {reports.links.map((link, index) => {
-                            if (!link.url) {
-                                return (
-                                    <span
-                                        key={index}
-                                        className="px-3 py-1 text-sm text-muted-foreground"
-                                    >
-                                        {link.label.includes('Previous') ? (
-                                            <ChevronLeft className="h-4 w-4" />
-                                        ) : link.label.includes('Next') ? (
-                                            <ChevronRight className="h-4 w-4" />
-                                        ) : (
-                                            link.label
-                                        )}
-                                    </span>
-                                );
-                            }
-
-                            return (
-                                <Button
-                                    key={index}
-                                    asChild
-                                    variant={
-                                        link.active ? 'default' : 'outline'
-                                    }
-                                    size="sm"
-                                >
-                                    <Link href={link.url}>
-                                        {link.label.includes('Previous') ? (
-                                            <ChevronLeft className="h-4 w-4" />
-                                        ) : link.label.includes('Next') ? (
-                                            <ChevronRight className="h-4 w-4" />
-                                        ) : (
-                                            link.label
-                                        )}
-                                    </Link>
-                                </Button>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
+            <PaginationControls
+                currentPage={reports.current_page}
+                lastPage={reports.last_page}
+                from={reports.from}
+                to={reports.to}
+                total={reports.total}
+                previousPageUrl={reports.prev_page_url}
+                nextPageUrl={reports.next_page_url}
+                preserveScroll
+                preserveState
+                itemLabel="reports"
+            />
         </div>
     );
 }
