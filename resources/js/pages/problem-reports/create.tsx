@@ -16,14 +16,31 @@ import type { BreadcrumbItem } from '@/types';
 
 /** Renders the problem report submission form and manages its Inertia form state. */
 export default function CreateProblemReport() {
-    const { data, setData, post, processing, errors, setError, clearErrors } =
-        useForm({
-            title: '',
-            description: '',
-            screenshots: [] as File[],
-        });
+    const {
+        data,
+        setData,
+        post,
+        processing,
+        progress,
+        errors,
+        setError,
+        clearErrors,
+    } = useForm({
+        title: '',
+        description: '',
+        screenshots: [] as File[],
+    });
 
     const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+
+    const indexedErrors = errors as Record<string, string | undefined>;
+    const submissionError = indexedErrors.submission;
+    const screenshotsError =
+        errors.screenshots ??
+        Object.keys(indexedErrors)
+            .filter((key) => /^screenshots\.\d+$/.test(key))
+            .sort()
+            .map((key) => indexedErrors[key])[0];
 
     /** Adds selected screenshots while enforcing the client-side five-file limit. */
     const handleScreenshotsChange = (
@@ -75,12 +92,19 @@ export default function CreateProblemReport() {
                     title="Report a Problem"
                     description="Help us improve by reporting any issues you encounter"
                 />
-                <Link href="/problem-reports">
-                    <Button variant="outline">My Reports</Button>
-                </Link>
+                <Button asChild variant="outline">
+                    <Link href="/problem-reports">My Reports</Link>
+                </Button>
             </div>
 
-            {Object.keys(errors).length > 0 && (
+            {submissionError && (
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{submissionError}</AlertDescription>
+                </Alert>
+            )}
+
+            {!submissionError && Object.keys(errors).length > 0 && (
                 <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
@@ -105,7 +129,8 @@ export default function CreateProblemReport() {
                     id="description"
                     label={
                         <>
-                            Description <span className="text-red-500">*</span>
+                            Description{' '}
+                            <span className="text-destructive">*</span>
                         </>
                     }
                     helper={`${data.description.length} / 10,000 characters`}
@@ -125,7 +150,7 @@ export default function CreateProblemReport() {
                 <div className="space-y-2">
                     <Label htmlFor="screenshots">
                         Screenshots{' '}
-                        <span className="text-sm text-gray-500">
+                        <span className="text-sm text-muted-foreground">
                             (Optional, max 5 images)
                         </span>
                     </Label>
@@ -135,25 +160,27 @@ export default function CreateProblemReport() {
                             {previewUrls.map((url, index) => (
                                 <div
                                     key={url}
-                                    className="relative aspect-video overflow-hidden rounded-lg border border-gray-200 bg-gray-100"
+                                    className="relative aspect-video overflow-hidden rounded-lg border border-border bg-muted"
                                 >
                                     <img
                                         src={url}
                                         alt={`Screenshot ${index + 1}`}
                                         className="h-full w-full object-cover"
                                     />
-                                    <button
+                                    <Button
                                         type="button"
+                                        variant="destructive"
+                                        size="icon"
                                         onClick={() => removeScreenshot(index)}
                                         disabled={processing}
                                         aria-label={`Remove screenshot ${index + 1}`}
-                                        className="absolute top-1 right-1 rounded bg-red-500 p-1 text-white hover:bg-red-600"
+                                        className="absolute top-1 right-1 size-11"
                                     >
                                         <X
                                             className="h-4 w-4"
                                             aria-hidden="true"
                                         />
-                                    </button>
+                                    </Button>
                                 </div>
                             ))}
                         </div>
@@ -169,9 +196,9 @@ export default function CreateProblemReport() {
                             disabled={
                                 processing || data.screenshots.length >= 5
                             }
-                            aria-invalid={errors.screenshots ? true : undefined}
+                            aria-invalid={screenshotsError ? true : undefined}
                             aria-describedby={
-                                errors.screenshots
+                                screenshotsError
                                     ? 'screenshots-error'
                                     : undefined
                             }
@@ -179,16 +206,16 @@ export default function CreateProblemReport() {
                         />
                         <Label
                             htmlFor="screenshots"
-                            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 px-6 py-8 transition-colors hover:border-gray-400"
+                            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-6 py-8 transition-colors hover:border-muted-foreground"
                         >
                             <Upload
-                                className="h-6 w-6 text-gray-400"
+                                className="h-6 w-6 text-muted-foreground"
                                 aria-hidden="true"
                             />
-                            <span className="text-sm font-medium text-gray-700">
+                            <span className="text-sm font-medium text-foreground">
                                 Click to upload screenshots
                             </span>
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-muted-foreground">
                                 JPEG, PNG, WebP up to 5 MB each
                             </span>
                         </Label>
@@ -196,27 +223,46 @@ export default function CreateProblemReport() {
 
                     <InputError
                         id="screenshots-error"
-                        message={errors.screenshots}
+                        message={screenshotsError}
                     />
                 </div>
 
-                <div className="flex gap-4">
-                    <Button
-                        type="submit"
-                        disabled={processing || !data.description.trim()}
-                    >
-                        {processing ? (
-                            <>
-                                <Loader2
-                                    className="mr-2 h-4 w-4 animate-spin"
-                                    aria-hidden="true"
-                                />
-                                Submitting...
-                            </>
-                        ) : (
-                            'Submit Report'
-                        )}
-                    </Button>
+                <div className="space-y-2">
+                    <div className="flex gap-4">
+                        <Button
+                            type="submit"
+                            disabled={processing || !data.description.trim()}
+                        >
+                            {processing ? (
+                                <>
+                                    <Loader2
+                                        className="mr-2 h-4 w-4 animate-spin"
+                                        aria-hidden="true"
+                                    />
+                                    Submitting...
+                                </>
+                            ) : (
+                                'Submit Report'
+                            )}
+                        </Button>
+                    </div>
+
+                    {progress && (
+                        <div className="max-w-xs space-y-1">
+                            <progress
+                                value={progress.percentage ?? 0}
+                                max={100}
+                                className="h-2 w-full"
+                            />
+                            <p
+                                role="status"
+                                aria-live="polite"
+                                className="text-xs text-muted-foreground"
+                            >
+                                Uploading… {progress.percentage ?? 0}%
+                            </p>
+                        </div>
+                    )}
                 </div>
             </form>
         </div>

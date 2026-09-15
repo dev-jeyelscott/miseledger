@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
@@ -56,7 +57,11 @@ class ProblemReportController extends Controller
         $rateLimitKey = "problem-report:{$user->id}";
 
         if (! RateLimiter::attempt($rateLimitKey, 10, fn (): bool => true, decaySeconds: 3600)) {
-            abort(429, 'You can submit a maximum of 10 reports per hour.');
+            $retryAfterMinutes = (int) ceil(RateLimiter::availableIn($rateLimitKey) / 60);
+
+            throw ValidationException::withMessages([
+                'submission' => "You can submit a maximum of 10 reports per hour. No report was submitted — please try again in {$retryAfterMinutes} minute(s).",
+            ]);
         }
 
         $activeOrganization = $request->attributes->get('activeOrganization');
@@ -126,6 +131,7 @@ class ProblemReportController extends Controller
 
         return Inertia::render('problem-reports/show', [
             'report' => $problemReport,
+            'viewingContext' => 'owner',
         ]);
     }
 
@@ -142,6 +148,7 @@ class ProblemReportController extends Controller
 
         return Inertia::render('problem-reports/show', [
             'report' => $problemReport,
+            'viewingContext' => 'operator',
         ]);
     }
 

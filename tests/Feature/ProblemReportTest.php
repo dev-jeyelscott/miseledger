@@ -3,6 +3,7 @@
 use App\Enums\OrganizationRole;
 use App\Enums\ProblemReportStatus;
 use App\Models\Organization;
+use App\Models\PlatformAdmin;
 use App\Models\ProblemReport;
 use App\Models\ProblemReportAttachment;
 use App\Models\User;
@@ -285,7 +286,9 @@ describe('Problem Report', function () {
                 'description' => 'Eleventh report',
             ]);
 
-            $response->assertStatus(429);
+            $response->assertRedirect();
+            $response->assertSessionHasErrors('submission');
+            $this->assertSame(10, ProblemReport::whereUserId($user->id)->count());
         });
 
         it('enforces the rate limit for a full hour, not just 60 seconds', function () {
@@ -301,7 +304,7 @@ describe('Problem Report', function () {
 
             $this->actingAs($user)->post('/problem-reports', [
                 'description' => 'Still within the hour',
-            ])->assertStatus(429);
+            ])->assertRedirect()->assertSessionHasErrors('submission');
 
             $this->travel(3600)->seconds();
 
@@ -406,6 +409,9 @@ describe('Problem Report', function () {
 
             $response = $this->actingAs($user)->get("/problem-reports/{$report->reference}");
             $response->assertOk();
+            $response->assertInertia(fn ($page) => $page
+                ->where('viewingContext', 'owner')
+            );
         });
 
         it('denies access to other users report', function () {
@@ -441,6 +447,30 @@ describe('Problem Report', function () {
             $report = ProblemReport::factory()->create();
             $response = $this->get("/problem-reports/{$report->reference}");
             $response->assertRedirect('/login');
+        });
+    });
+
+    describe('Show report as operator', function () {
+        it('displays report to a platform admin with operator viewing context', function () {
+            $admin = User::factory()->create();
+            PlatformAdmin::query()->create(['user_id' => $admin->getKey()]);
+            $owner = User::factory()->create();
+            $report = ProblemReport::factory()->create(['user_id' => $owner->id]);
+
+            $response = $this->actingAs($admin)->get("/problem-reports/{$report->reference}/operator");
+            $response->assertOk();
+            $response->assertInertia(fn ($page) => $page
+                ->where('viewingContext', 'operator')
+            );
+        });
+
+        it('denies access to non platform admins', function () {
+            $user = User::factory()->create();
+            $owner = User::factory()->create();
+            $report = ProblemReport::factory()->create(['user_id' => $owner->id]);
+
+            $response = $this->actingAs($user)->get("/problem-reports/{$report->reference}/operator");
+            $response->assertForbidden();
         });
     });
 

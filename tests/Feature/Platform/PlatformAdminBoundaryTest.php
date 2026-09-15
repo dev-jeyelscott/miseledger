@@ -1,9 +1,11 @@
 <?php
 
 use App\Enums\OrganizationRole;
+use App\Enums\PlatformAdminAuditAction;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\PlatformAdmin;
+use App\Models\PlatformAdminAuditEvent;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Database\QueryException;
@@ -169,16 +171,30 @@ test('database enforces one platform administrator grant per user without organi
 test('grant and revoke commands reject unknown users without creating identities', function () {
     $email = 'missing-platform-admin@example.com';
 
-    $this->artisan('platform-admin:grant', ['email' => $email])
+    $this->artisan('platform-admin:grant', ['email' => $email, '--reason' => 'Onboarding'])
         ->assertExitCode(Command::FAILURE);
 
-    $this->artisan('platform-admin:revoke', ['email' => $email])
+    $this->artisan('platform-admin:revoke', ['email' => $email, '--reason' => 'Offboarding'])
         ->assertExitCode(Command::FAILURE);
 
     expect(
         User::query()->where('email', $email)->exists(),
     )->toBeFalse()
-        ->and(PlatformAdmin::query()->count())->toBe(0);
+        ->and(PlatformAdmin::query()->count())->toBe(0)
+        ->and(PlatformAdminAuditEvent::query()->count())->toBe(0);
+});
+
+test('grant and revoke commands reject a blank reason', function () {
+    $user = User::factory()->create();
+
+    $this->artisan('platform-admin:grant', ['email' => $user->email, '--reason' => '   '])
+        ->assertExitCode(Command::FAILURE);
+
+    $this->artisan('platform-admin:revoke', ['email' => $user->email, '--reason' => ''])
+        ->assertExitCode(Command::FAILURE);
+
+    expect(PlatformAdmin::query()->count())->toBe(0)
+        ->and(PlatformAdminAuditEvent::query()->count())->toBe(0);
 });
 
 test('grant and revoke commands are idempotent and preserve identity and membership data', function () {
@@ -203,22 +219,27 @@ test('grant and revoke commands are idempotent and preserve identity and members
         'updated_at' => $user->getRawOriginal('updated_at'),
     ];
 
-    $this->artisan('platform-admin:grant', ['email' => $user->email])
+    $this->artisan('platform-admin:grant', ['email' => $user->email, '--reason' => 'Incident response lead'])
         ->assertExitCode(Command::SUCCESS);
 
-    $this->artisan('platform-admin:grant', ['email' => $user->email])
+    $this->artisan('platform-admin:grant', ['email' => $user->email, '--reason' => 'Incident response lead'])
         ->assertExitCode(Command::SUCCESS);
 
     expect(
         PlatformAdmin::query()
             ->where('user_id', $user->getKey())
             ->count(),
-    )->toBe(1);
+    )->toBe(1)
+        ->and(
+            PlatformAdminAuditEvent::query()
+                ->where('user_id', $user->getKey())
+                ->count(),
+        )->toBe(1);
 
-    $this->artisan('platform-admin:revoke', ['email' => $user->email])
+    $this->artisan('platform-admin:revoke', ['email' => $user->email, '--reason' => 'Incident resolved'])
         ->assertExitCode(Command::SUCCESS);
 
-    $this->artisan('platform-admin:revoke', ['email' => $user->email])
+    $this->artisan('platform-admin:revoke', ['email' => $user->email, '--reason' => 'Incident resolved'])
         ->assertExitCode(Command::SUCCESS);
 
     expect(
@@ -226,6 +247,20 @@ test('grant and revoke commands are idempotent and preserve identity and members
             ->where('user_id', $user->getKey())
             ->count(),
     )->toBe(0);
+
+    $history = PlatformAdminAuditEvent::query()
+        ->where('user_id', $user->getKey())
+        ->orderBy('created_at')
+        ->get();
+
+    expect($history)->toHaveCount(2)
+        ->and($history->first()->action)->toBe(PlatformAdminAuditAction::Grant)
+        ->and($history->first()->reason)->toBe('Incident response lead')
+        ->and($history->first()->source)->toBe('platform-admin:grant')
+        ->and($history->last()->action)->toBe(PlatformAdminAuditAction::Revoke)
+        ->and($history->last()->reason)->toBe('Incident resolved')
+        ->and($history->last()->source)->toBe('platform-admin:revoke')
+        ->and($history->last()->target_email)->toBe($user->email);
 
     $user->refresh();
 

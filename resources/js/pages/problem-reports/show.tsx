@@ -1,10 +1,12 @@
 import { Link } from '@inertiajs/react';
 import { Copy } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { toast } from 'sonner';
 import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useClipboard } from '@/hooks/use-clipboard';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 
@@ -25,8 +27,46 @@ interface Report {
     organization_name_snapshot: string | null;
 }
 
+type ViewingContext = 'owner' | 'operator';
+
 interface Props {
     report: Report;
+    viewingContext: ViewingContext;
+}
+
+/** Resolves the breadcrumb trail and back destination for the current viewing context. */
+function resolveNavigation(viewingContext: ViewingContext, report: Report) {
+    if (viewingContext === 'operator') {
+        return {
+            breadcrumbs: [
+                {
+                    title: 'Platform Console',
+                    href: '/admin',
+                } satisfies BreadcrumbItem,
+                {
+                    title: report.reference,
+                    href: `/problem-reports/${report.reference}/operator`,
+                } satisfies BreadcrumbItem,
+            ],
+            backLabel: 'Back to Platform Console',
+            backHref: '/admin',
+        };
+    }
+
+    return {
+        breadcrumbs: [
+            {
+                title: 'My Reports',
+                href: '/problem-reports',
+            } satisfies BreadcrumbItem,
+            {
+                title: report.reference,
+                href: `/problem-reports/${report.reference}`,
+            } satisfies BreadcrumbItem,
+        ],
+        backLabel: 'Back to My Reports',
+        backHref: '/problem-reports',
+    };
 }
 
 /** Maps a problem report status to the existing Badge visual variant. */
@@ -68,10 +108,19 @@ function getStatusLabel(status: string): string {
 }
 
 /** Renders the details and attachments for one problem report. */
-export default function ShowProblemReport({ report }: Props) {
-    /** Copies the report reference to the user's clipboard. */
-    const handleCopyReference = () => {
-        void navigator.clipboard.writeText(report.reference);
+export default function ShowProblemReport({ report, viewingContext }: Props) {
+    const [, copy] = useClipboard();
+    const navigation = resolveNavigation(viewingContext, report);
+
+    /** Copies the report reference to the user's clipboard and reports the outcome. */
+    const handleCopyReference = async () => {
+        const copied = await copy(report.reference);
+
+        if (copied) {
+            toast.success('Reference copied to clipboard');
+        } else {
+            toast.error('Could not copy reference to clipboard');
+        }
     };
 
     /** Builds the authenticated attachment download URL for the report. */
@@ -86,15 +135,19 @@ export default function ShowProblemReport({ report }: Props) {
                     title={report.title || 'Problem Report'}
                     description={report.reference}
                 />
-                <Link href="/problem-reports">
-                    <Button variant="outline">My Reports</Button>
-                </Link>
+                <Button asChild variant="outline">
+                    <Link href={navigation.backHref}>
+                        {viewingContext === 'operator'
+                            ? 'Platform Console'
+                            : 'My Reports'}
+                    </Link>
+                </Button>
             </div>
 
-            <div className="space-y-4 rounded-lg bg-gray-50 p-6">
+            <div className="space-y-4 rounded-lg bg-muted p-6">
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase">
                             Reference
                         </p>
                         <div className="mt-2 flex items-center gap-2">
@@ -103,15 +156,16 @@ export default function ShowProblemReport({ report }: Props) {
                             </code>
                             <button
                                 onClick={handleCopyReference}
-                                className="rounded p-1 hover:bg-gray-200"
+                                className="rounded p-1 hover:bg-accent"
                                 title="Copy reference"
+                                aria-label="Copy reference"
                             >
-                                <Copy className="h-3 w-3 text-gray-600" />
+                                <Copy className="h-3 w-3 text-muted-foreground" />
                             </button>
                         </div>
                     </div>
                     <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase">
                             Status
                         </p>
                         <div className="mt-2">
@@ -123,10 +177,10 @@ export default function ShowProblemReport({ report }: Props) {
                         </div>
                     </div>
                     <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase">
                             Submitted
                         </p>
-                        <p className="mt-2 text-sm text-gray-900">
+                        <p className="mt-2 text-sm text-foreground">
                             {new Date(report.created_at).toLocaleDateString(
                                 'en-US',
                                 {
@@ -139,10 +193,10 @@ export default function ShowProblemReport({ report }: Props) {
                     </div>
                     {report.created_at !== report.updated_at && (
                         <div>
-                            <p className="text-xs font-semibold text-gray-500 uppercase">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase">
                                 Updated
                             </p>
-                            <p className="mt-2 text-sm text-gray-900">
+                            <p className="mt-2 text-sm text-foreground">
                                 {new Date(report.updated_at).toLocaleDateString(
                                     'en-US',
                                     {
@@ -166,10 +220,10 @@ export default function ShowProblemReport({ report }: Props) {
 
             {report.organization_name_snapshot && (
                 <div className="space-y-2">
-                    <h3 className="font-semibold text-gray-900">
+                    <h3 className="font-semibold text-foreground">
                         Organization
                     </h3>
-                    <p className="text-gray-700">
+                    <p className="text-muted-foreground">
                         {report.organization_name_snapshot}
                     </p>
                 </div>
@@ -177,21 +231,21 @@ export default function ShowProblemReport({ report }: Props) {
 
             {report.title && (
                 <div className="space-y-2">
-                    <h3 className="font-semibold text-gray-900">Title</h3>
-                    <p className="text-gray-700">{report.title}</p>
+                    <h3 className="font-semibold text-foreground">Title</h3>
+                    <p className="text-muted-foreground">{report.title}</p>
                 </div>
             )}
 
             <div className="space-y-2">
-                <h3 className="font-semibold text-gray-900">Description</h3>
-                <p className="whitespace-pre-wrap text-gray-700">
+                <h3 className="font-semibold text-foreground">Description</h3>
+                <p className="whitespace-pre-wrap text-muted-foreground">
                     {report.description}
                 </p>
             </div>
 
             {report.attachments.length > 0 && (
                 <div className="space-y-4">
-                    <h3 className="font-semibold text-gray-900">
+                    <h3 className="font-semibold text-foreground">
                         Screenshots ({report.attachments.length})
                     </h3>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -199,7 +253,7 @@ export default function ShowProblemReport({ report }: Props) {
                             <a
                                 key={attachment.id}
                                 href={getAttachmentUrl(attachment)}
-                                className="block overflow-hidden rounded-lg border border-gray-200 transition-colors hover:border-gray-300"
+                                className="block overflow-hidden rounded-lg border border-border transition-colors hover:border-muted-foreground"
                                 download={attachment.original_name}
                             >
                                 <img
@@ -207,8 +261,8 @@ export default function ShowProblemReport({ report }: Props) {
                                     alt={attachment.original_name}
                                     className="h-auto w-full"
                                 />
-                                <div className="bg-white p-2">
-                                    <p className="truncate text-xs text-gray-600">
+                                <div className="bg-card p-2">
+                                    <p className="truncate text-xs text-muted-foreground">
                                         {attachment.original_name}
                                     </p>
                                 </div>
@@ -219,9 +273,11 @@ export default function ShowProblemReport({ report }: Props) {
             )}
 
             <div className="flex gap-4 border-t pt-4">
-                <Link href="/problem-reports">
-                    <Button variant="outline">Back to My Reports</Button>
-                </Link>
+                <Button asChild variant="outline">
+                    <Link href={navigation.backHref}>
+                        {navigation.backLabel}
+                    </Link>
+                </Button>
             </div>
         </div>
     );
@@ -230,19 +286,10 @@ export default function ShowProblemReport({ report }: Props) {
 /** Wraps the report detail page in the application layout and breadcrumbs. */
 ShowProblemReport.layout = (
     page: ReactNode,
-    { report }: { report: Report },
+    { report, viewingContext }: Props,
 ) => (
     <AppLayout
-        breadcrumbs={[
-            {
-                title: 'My Reports',
-                href: '/problem-reports',
-            } satisfies BreadcrumbItem,
-            {
-                title: report.reference,
-                href: `/problem-reports/${report.reference}`,
-            } satisfies BreadcrumbItem,
-        ]}
+        breadcrumbs={resolveNavigation(viewingContext, report).breadcrumbs}
     >
         {page}
     </AppLayout>

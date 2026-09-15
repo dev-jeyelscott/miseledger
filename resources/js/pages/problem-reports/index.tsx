@@ -116,9 +116,9 @@ export default function ProblemReportsIndex({ reports }: Props) {
                     title="My Reports"
                     description="Track your submitted problem reports"
                 />
-                <Link href="/problem-reports/create">
-                    <Button>Submit Report</Button>
-                </Link>
+                <Button asChild>
+                    <Link href="/problem-reports/create">Submit Report</Link>
+                </Button>
             </div>
 
             <div className="space-y-4">
@@ -128,11 +128,11 @@ export default function ProblemReportsIndex({ reports }: Props) {
                         href={`/problem-reports/${report.reference}`}
                         className="block"
                     >
-                        <div className="rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50">
+                        <div className="rounded-lg border border-border p-4 transition-colors hover:bg-muted/30">
                             <div className="flex items-start justify-between gap-4">
                                 <div className="min-w-0 flex-1">
                                     <div className="mb-2 flex items-center gap-3">
-                                        <code className="font-mono text-sm font-medium text-gray-600">
+                                        <code className="font-mono text-sm font-medium text-muted-foreground">
                                             {report.reference}
                                         </code>
                                         <Badge
@@ -143,13 +143,13 @@ export default function ProblemReportsIndex({ reports }: Props) {
                                             {getStatusLabel(report.status)}
                                         </Badge>
                                     </div>
-                                    <h3 className="truncate text-base font-medium text-gray-900">
+                                    <h3 className="truncate text-base font-medium text-foreground">
                                         {report.title || 'No title'}
                                     </h3>
-                                    <p className="mt-1 line-clamp-2 text-sm text-gray-600">
+                                    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
                                         {report.description}
                                     </p>
-                                    <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
+                                    <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
                                         {report.attachments.length > 0 && (
                                             <span>
                                                 {report.attachments.length}{' '}
@@ -192,7 +192,7 @@ export default function ProblemReportsIndex({ reports }: Props) {
 
             {reports.meta.last_page > 1 && (
                 <div className="flex items-center justify-between border-t pt-4">
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-muted-foreground">
                         Showing{' '}
                         {(reports.meta.current_page - 1) *
                             reports.meta.per_page +
@@ -210,7 +210,7 @@ export default function ProblemReportsIndex({ reports }: Props) {
                                 return (
                                     <span
                                         key={index}
-                                        className="px-3 py-1 text-sm text-gray-400"
+                                        className="px-3 py-1 text-sm text-muted-foreground"
                                     >
                                         {link.label.includes('Previous') ? (
                                             <ChevronLeft className="h-4 w-4" />
@@ -224,13 +224,15 @@ export default function ProblemReportsIndex({ reports }: Props) {
                             }
 
                             return (
-                                <Link key={index} href={link.url}>
-                                    <Button
-                                        variant={
-                                            link.active ? 'default' : 'outline'
-                                        }
-                                        size="sm"
-                                    >
+                                <Button
+                                    key={index}
+                                    asChild
+                                    variant={
+                                        link.active ? 'default' : 'outline'
+                                    }
+                                    size="sm"
+                                >
+                                    <Link href={link.url}>
                                         {link.label.includes('Previous') ? (
                                             <ChevronLeft className="h-4 w-4" />
                                         ) : link.label.includes('Next') ? (
@@ -238,8 +240,8 @@ export default function ProblemReportsIndex({ reports }: Props) {
                                         ) : (
                                             link.label
                                         )}
-                                    </Button>
-                                </Link>
+                                    </Link>
+                                </Button>
                             );
                         })}
                     </div>

@@ -78,6 +78,10 @@ test(
             ->toContain(
                 "import { NativeSelect } from '@/components/ui/native-select';",
             )
+            ->toContain(
+                "import { Textarea } from '@/components/ui/textarea';",
+            )
+            ->toContain('<Textarea')
             ->toContain('RecordWasteForm')
             ->toContain('WasteReasonsPanel')
             ->toContain('Report overview')
@@ -110,7 +114,8 @@ test(
             ->not->toContain('bg-emerald-50')
             ->not->toContain('bg-blue-50')
             ->not->toContain('router.visit(')
-            ->not->toContain('router.push(');
+            ->not->toContain('router.push(')
+            ->not->toContain('<textarea');
     },
 );
 

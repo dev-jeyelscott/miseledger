@@ -38,6 +38,7 @@ import {
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
 import { useGuardedDialog } from '@/hooks/use-guarded-dialog';
 import { dashboard } from '@/routes';
 import type { OrganizationContext } from '@/types';
@@ -188,9 +189,6 @@ type ActiveFilter = {
     label: string;
     value: string;
 };
-
-const textareaClassName =
-    'border-input bg-background min-h-24 w-full resize-y rounded-md border px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50';
 
 /** Format persisted decimals without introducing binary floating-point conversion. */
 function formatDecimal(value: string): string {
@@ -774,12 +772,12 @@ function RecordWasteForm({
                             error={errors.notes}
                             helper="Optional. Up to 2,000 characters."
                         >
-                            <textarea
+                            <Textarea
                                 name="notes"
                                 rows={3}
                                 maxLength={2000}
                                 placeholder="Add any additional details"
-                                className={textareaClassName}
+                                className="min-h-24 resize-y"
                             />
                         </Field>
 
