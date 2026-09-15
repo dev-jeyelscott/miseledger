@@ -424,6 +424,12 @@ When deciding whether to add a Release Note entry, follow these rules. User Guid
 - Preserve backward compatibility unless the task explicitly approves a breaking change.
 - If a durable non-obvious rule is discovered, record it through the repository's established `.ai/rules` mechanism when available rather than relying on personal memory.
 
+### Commit Discipline and Session Continuity
+
+- A session can end unexpectedly (closed terminal, crash, disconnect) before reaching a natural stopping point. Do not save every change for one final commit at the end of a task: commit each verified, working increment as it passes its own checks (`vendor/bin/pint --test`, `phpstan analyse`, relevant `php artisan test`, `npm run lint:check`/`types:check` as applicable), so an interrupted session never leaves more than a small amount of uncommitted work behind.
+- A project-level `Stop` hook (`.claude/settings.json`) auto-commits any dirty working tree after every turn as a `wip: checkpoint ...` safety net. This is a backstop against total loss, not a substitute for deliberate, verified commits, and it never pushes. A `wip:` checkpoint commit must be amended, rebased, or replaced with a proper conventional commit message before it is pushed.
+- When a task is genuinely complete and verified against this file's mandatory testing workflow (Section 19), its final step is `git push` (to the branch already in use) unless the user says otherwise. Do not leave finished, verified work sitting only in local commits.
+
 ## 22. Security Review Checklist
 
 Before completing a change, verify as applicable:
