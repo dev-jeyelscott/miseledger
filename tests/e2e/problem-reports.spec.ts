@@ -131,7 +131,15 @@ test('copy reference button confirms a successful copy', async ({
         .first()
         .innerText();
 
-    await page.getByRole('button', { name: 'Copy reference' }).click();
+    const copyButton = page.getByRole('button', { name: 'Copy reference' });
+
+    const box = await copyButton.boundingBox();
+    expect(box?.width).toBeGreaterThanOrEqual(44);
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+
+    await copyButton.focus();
+    await expect(copyButton).toBeFocused();
+    await page.keyboard.press('Enter');
 
     await expect(page.getByText('Reference copied to clipboard')).toBeVisible();
     await expect(

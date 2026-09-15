@@ -154,14 +154,19 @@ export default function ShowProblemReport({ report, viewingContext }: Props) {
                             <code className="font-mono text-sm font-medium">
                                 {report.reference}
                             </code>
-                            <button
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-11"
                                 onClick={handleCopyReference}
-                                className="rounded p-1 hover:bg-accent"
-                                title="Copy reference"
                                 aria-label="Copy reference"
                             >
-                                <Copy className="h-3 w-3 text-muted-foreground" />
-                            </button>
+                                <Copy
+                                    className="h-3 w-3 text-muted-foreground"
+                                    aria-hidden="true"
+                                />
+                            </Button>
                         </div>
                     </div>
                     <div>

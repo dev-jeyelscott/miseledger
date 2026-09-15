@@ -52,4 +52,12 @@ export const entries: ReleaseNoteEntry[] = [
         summary:
             'Hitting the hourly report limit now shows a clear message on the form with retry guidance instead of a raw error page.',
     },
+    {
+        id: 'problem-report-copy-reference-touch-target-fix',
+        publishedOn: '2026-09-16',
+        type: 'fixed',
+        title: 'Problem Report Copy Reference Touch Target',
+        summary:
+            'The copy reference button is now easier to tap and has a visible focus state.',
+    },
 ];
