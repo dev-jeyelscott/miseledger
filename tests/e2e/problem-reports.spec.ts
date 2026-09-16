@@ -218,6 +218,31 @@ test('navigation controls render as single links and support keyboard activation
     await expect(page).toHaveURL(/\/problem-reports\/create$/);
 });
 
+test('screenshot preview exposes an explicit download action', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    await page.goto('/problem-reports/create');
+    await page.fill('#description', 'The oven timer resets unexpectedly.');
+    await page.setInputFiles('#screenshots', {
+        name: 'screenshot.png',
+        mimeType: 'image/png',
+        buffer: Buffer.alloc(1024 * 1024, 1),
+    });
+    await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/problem-reports\/[^/]+$/);
+
+    const downloadLink = page.getByRole('link', {
+        name: 'Download screenshot.png',
+    });
+    await expect(downloadLink).toBeVisible();
+    await expect(downloadLink).toHaveAttribute('download', 'screenshot.png');
+
+    const preview = page.getByRole('img', { name: 'screenshot.png' });
+    await expect(preview.locator('xpath=ancestor::a')).toHaveCount(0);
+});
+
 test('copy reference button reports a failed copy', async ({ page }) => {
     await loginAsOwner(page);
 

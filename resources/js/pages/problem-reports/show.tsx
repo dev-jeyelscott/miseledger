@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { Copy, ShieldCheck } from 'lucide-react';
+import { Copy, Download, ShieldCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/page-header';
@@ -267,23 +267,39 @@ export default function ShowProblemReport({ report, viewingContext }: Props) {
                     </h3>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         {report.attachments.map((attachment) => (
-                            <a
+                            <div
                                 key={attachment.id}
-                                href={getAttachmentUrl(attachment)}
-                                className="block overflow-hidden rounded-lg border border-border transition-colors hover:border-muted-foreground"
-                                download={attachment.original_name}
+                                className="overflow-hidden rounded-lg border border-border"
                             >
                                 <img
                                     src={getAttachmentUrl(attachment)}
                                     alt={attachment.original_name}
                                     className="h-auto w-full"
                                 />
-                                <div className="bg-card p-2">
+                                <div className="flex items-center justify-between gap-2 bg-card p-2">
                                     <p className="truncate text-xs text-muted-foreground">
                                         {attachment.original_name}
                                     </p>
+                                    <Button
+                                        asChild
+                                        variant="ghost"
+                                        size="sm"
+                                        className="shrink-0 gap-1.5"
+                                    >
+                                        <a
+                                            href={getAttachmentUrl(attachment)}
+                                            download={attachment.original_name}
+                                            aria-label={`Download ${attachment.original_name}`}
+                                        >
+                                            <Download
+                                                className="h-3.5 w-3.5"
+                                                aria-hidden="true"
+                                            />
+                                            Download
+                                        </a>
+                                    </Button>
                                 </div>
-                            </a>
+                            </div>
                         ))}
                     </div>
                 </div>
