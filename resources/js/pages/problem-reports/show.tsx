@@ -27,6 +27,18 @@ interface Report {
 
 type ViewingContext = 'owner' | 'operator';
 
+/** Format an absolute server timestamp in the viewer's local timezone. */
+function formatDateTime(value: string): string {
+    return new Intl.DateTimeFormat(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZoneName: 'short',
+    }).format(new Date(value));
+}
+
 interface Props {
     report: Report;
     viewingContext: ViewingContext;
@@ -192,13 +204,7 @@ export default function ShowProblemReport({ report, viewingContext }: Props) {
                                     Submitted
                                 </p>
                                 <p className="mt-2 text-sm text-foreground">
-                                    {new Date(
-                                        report.created_at,
-                                    ).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric',
-                                    })}
+                                    {formatDateTime(report.created_at)}
                                 </p>
                             </div>
                             {report.created_at !== report.updated_at && (
@@ -207,13 +213,7 @@ export default function ShowProblemReport({ report, viewingContext }: Props) {
                                         Updated
                                     </p>
                                     <p className="mt-2 text-sm text-foreground">
-                                        {new Date(
-                                            report.updated_at,
-                                        ).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            year: 'numeric',
-                                        })}
+                                        {formatDateTime(report.updated_at)}
                                     </p>
                                 </div>
                             )}

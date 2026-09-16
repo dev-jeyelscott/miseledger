@@ -329,6 +329,27 @@ test('page header actions wrap below the title at mobile widths and stay usable'
     await expect(page).toHaveURL(/\/problem-reports$/);
 });
 
+test('report detail Submitted timestamp includes a time and timezone', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    await page.goto('/problem-reports/create');
+    await page.fill('#description', 'The oven timer resets unexpectedly.');
+    await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/problem-reports\/[^/]+$/);
+
+    const submittedLabel = page.getByText('Submitted', { exact: true });
+    await expect(submittedLabel).toBeVisible();
+
+    const submittedValue = submittedLabel.locator(
+        'xpath=following-sibling::p[1]',
+    );
+    await expect(submittedValue).toHaveText(
+        /\d{1,2}:\d{2}\s?(AM|PM).*[A-Za-z]{2,5}$/,
+    );
+});
+
 test('copy reference button reports a failed copy', async ({ page }) => {
     await loginAsOwner(page);
 
