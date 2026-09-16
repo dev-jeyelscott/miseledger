@@ -202,11 +202,11 @@ export default function CreateProblemReport() {
                                     ? 'screenshots-error'
                                     : undefined
                             }
-                            className="sr-only"
+                            className="peer sr-only"
                         />
                         <Label
                             htmlFor="screenshots"
-                            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-6 py-8 transition-colors hover:border-muted-foreground"
+                            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-6 py-8 transition-colors peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50 hover:border-muted-foreground"
                         >
                             <Upload
                                 className="h-6 w-6 text-muted-foreground"

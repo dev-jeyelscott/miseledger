@@ -60,4 +60,12 @@ export const entries: ReleaseNoteEntry[] = [
         summary:
             'The copy reference button is now easier to tap and has a visible focus state.',
     },
+    {
+        id: 'problem-report-screenshot-upload-focus-visible-fix',
+        publishedOn: '2026-09-16',
+        type: 'fixed',
+        title: 'Problem Report Screenshot Upload Focus Indicator',
+        summary:
+            'Tabbing to the screenshot upload now shows a clear focus ring on the visible upload area.',
+    },
 ];

@@ -36,6 +36,19 @@ test('screenshot upload shows accessible progress feedback', async ({
     await expect(page.locator('progress')).toBeVisible();
 });
 
+test('screenshot upload surface shows a visible focus ring when the hidden file input is focused', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    await page.goto('/problem-reports/create');
+
+    await page.locator('#screenshots').focus();
+
+    const uploadLabel = page.locator('label[for="screenshots"]');
+    await expect(uploadLabel).not.toHaveCSS('box-shadow', 'none');
+});
+
 test('indexed screenshot validation errors are shown beside the upload field', async ({
     page,
 }) => {
