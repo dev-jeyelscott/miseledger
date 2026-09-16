@@ -21,4 +21,9 @@ class ProblemReportPolicy
     {
         return $user->isPlatformAdmin();
     }
+
+    public function viewAttachmentAsOperator(User $user, ProblemReport $report): bool
+    {
+        return $user->isPlatformAdmin();
+    }
 }

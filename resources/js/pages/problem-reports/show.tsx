@@ -125,7 +125,9 @@ export default function ShowProblemReport({ report, viewingContext }: Props) {
 
     /** Builds the authenticated attachment download URL for the report. */
     const getAttachmentUrl = (attachment: Attachment) => {
-        return `/problem-reports/${report.reference}/attachments/${attachment.id}`;
+        return viewingContext === 'operator'
+            ? `/problem-reports/${report.reference}/operator/attachments/${attachment.id}`
+            : `/problem-reports/${report.reference}/attachments/${attachment.id}`;
     };
 
     return (

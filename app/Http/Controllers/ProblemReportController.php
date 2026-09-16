@@ -157,13 +157,32 @@ class ProblemReportController extends Controller
      */
     public function attachment(Request $request, string $reference, int $attachmentId): SymfonyResponse
     {
-        $user = $request->user();
-
         $problemReport = ProblemReport::where('reference', $reference)
             ->firstOrFail();
 
         Gate::authorize('viewAttachment', $problemReport);
 
+        return $this->serveAttachment($problemReport, $attachmentId);
+    }
+
+    /**
+     * Return an authorized problem report attachment for operator viewing.
+     */
+    public function operatorAttachment(Request $request, string $reference, int $attachmentId): SymfonyResponse
+    {
+        $problemReport = ProblemReport::where('reference', $reference)
+            ->firstOrFail();
+
+        Gate::authorize('viewAttachmentAsOperator', $problemReport);
+
+        return $this->serveAttachment($problemReport, $attachmentId);
+    }
+
+    /**
+     * Stream the requested attachment's file contents.
+     */
+    private function serveAttachment(ProblemReport $problemReport, int $attachmentId): SymfonyResponse
+    {
         $attachment = ProblemReportAttachment::where('id', $attachmentId)
             ->where('problem_report_id', $problemReport->id)
             ->firstOrFail();

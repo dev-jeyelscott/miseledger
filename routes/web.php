@@ -118,6 +118,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     )->name('problem-reports.attachment');
 
     Route::get(
+        'problem-reports/{reference}/operator/attachments/{attachmentId}',
+        [ProblemReportController::class, 'operatorAttachment'],
+    )->name('problem-reports.operator-attachment');
+
+    Route::get(
         'organizations/create',
         [OrganizationController::class, 'create'],
     )->name('organizations.create');

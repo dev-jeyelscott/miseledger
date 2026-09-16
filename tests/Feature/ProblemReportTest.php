@@ -525,6 +525,47 @@ describe('Problem Report', function () {
         });
     });
 
+    describe('Operator attachment access', function () {
+        it('allows platform admin to view another user\'s attachment', function () {
+            $admin = User::factory()->create();
+            PlatformAdmin::query()->create(['user_id' => $admin->getKey()]);
+            $owner = User::factory()->create();
+            $report = ProblemReport::factory()->create(['user_id' => $owner->id]);
+
+            $path = "problem-reports/{$report->id}/test-image.jpg";
+            Storage::disk('local')->put($path, 'fake image content');
+
+            $attachment = ProblemReportAttachment::factory()
+                ->create(['problem_report_id' => $report->id, 'path' => $path]);
+
+            $response = $this->actingAs($admin)
+                ->get("/problem-reports/{$report->reference}/operator/attachments/{$attachment->id}");
+            $response->assertOk();
+        });
+
+        it('denies non platform admins', function () {
+            $user = User::factory()->create();
+            $owner = User::factory()->create();
+            $report = ProblemReport::factory()->create(['user_id' => $owner->id]);
+
+            $attachment = ProblemReportAttachment::factory()
+                ->create(['problem_report_id' => $report->id]);
+
+            $response = $this->actingAs($user)
+                ->get("/problem-reports/{$report->reference}/operator/attachments/{$attachment->id}");
+            $response->assertForbidden();
+        });
+
+        it('requires authentication', function () {
+            $report = ProblemReport::factory()->create();
+            $attachment = ProblemReportAttachment::factory()
+                ->create(['problem_report_id' => $report->id]);
+
+            $response = $this->get("/problem-reports/{$report->reference}/operator/attachments/{$attachment->id}");
+            $response->assertRedirect('/login');
+        });
+    });
+
     describe('Transaction rollback', function () {
         it('rolls back database changes when file storage fails', function () {
             if (! extension_loaded('gd')) {
