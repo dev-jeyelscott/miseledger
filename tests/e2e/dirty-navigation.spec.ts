@@ -101,6 +101,61 @@ test('navigating away from a dirty profile form prompts for confirmation', async
     await expect(page.locator('#name')).toHaveValue('Renamed via E2E');
 });
 
+test('navigating away from a dirty problem report form prompts for confirmation', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+    await page.goto('/problem-reports/create');
+
+    await page.fill('#description', 'The oven timer resets unexpectedly.');
+
+    let nativeConfirmSeen = false;
+    page.once('dialog', (dialog) => {
+        nativeConfirmSeen = true;
+        void dialog.dismiss();
+    });
+
+    await page.getByRole('link', { name: 'My Reports' }).click();
+
+    expect(nativeConfirmSeen).toBe(true);
+    await expect(page.locator('#description')).toHaveValue(
+        'The oven timer resets unexpectedly.',
+    );
+});
+
+test('submitting the problem report form clears the dirty navigation guard', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    await page.route('**/problem-reports', async (route) => {
+        if (route.request().method() !== 'POST') {
+            return route.fallback();
+        }
+
+        return route.fulfill({
+            status: 303,
+            headers: { Location: '/problem-reports' },
+        });
+    });
+
+    await page.goto('/problem-reports/create');
+
+    await page.fill('#description', 'The oven timer resets unexpectedly.');
+
+    let nativeConfirmSeen = false;
+    page.on('dialog', (dialog) => {
+        nativeConfirmSeen = true;
+        void dialog.dismiss();
+    });
+
+    await page.click('button[type="submit"]');
+
+    await expect(page).toHaveURL(/\/problem-reports$/);
+
+    expect(nativeConfirmSeen).toBe(false);
+});
+
 test('saving the profile form clears the dirty navigation guard', async ({
     page,
 }) => {

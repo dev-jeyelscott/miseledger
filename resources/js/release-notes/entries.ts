@@ -68,4 +68,12 @@ export const entries: ReleaseNoteEntry[] = [
         summary:
             'Tabbing to the screenshot upload now shows a clear focus ring on the visible upload area.',
     },
+    {
+        id: 'problem-report-unsaved-changes-navigation-guard',
+        publishedOn: '2026-09-16',
+        type: 'fixed',
+        title: 'Problem Report Unsaved Changes Protection',
+        summary:
+            'Navigating away from a report with unsaved text or screenshots now prompts for confirmation.',
+    },
 ];

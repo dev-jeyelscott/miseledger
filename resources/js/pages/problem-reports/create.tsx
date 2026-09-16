@@ -1,6 +1,6 @@
 import { Link, useForm } from '@inertiajs/react';
 import { AlertCircle, Loader2, Upload, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import InputError from '@/components/input-error';
@@ -11,6 +11,7 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { useDirtyFormNavigation } from '@/hooks/use-dirty-form-navigation';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 
@@ -25,6 +26,7 @@ export default function CreateProblemReport() {
         errors,
         setError,
         clearErrors,
+        isDirty,
     } = useForm({
         title: '',
         description: '',
@@ -32,6 +34,15 @@ export default function CreateProblemReport() {
     });
 
     const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+
+    const dirtyNavigation = useDirtyFormNavigation(
+        'You have unsaved problem report changes. Leave without saving them?',
+    );
+    const { setIsDirty } = dirtyNavigation;
+
+    useEffect(() => {
+        setIsDirty(isDirty);
+    }, [isDirty, setIsDirty]);
 
     const indexedErrors = errors as Record<string, string | undefined>;
     const submissionError = indexedErrors.submission;
@@ -82,7 +93,9 @@ export default function CreateProblemReport() {
     const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
 
-        post('/problem-reports');
+        post('/problem-reports', {
+            onSuccess: () => setIsDirty(false),
+        });
     };
 
     return (
