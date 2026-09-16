@@ -243,6 +243,92 @@ test('screenshot preview exposes an explicit download action', async ({
     await expect(preview.locator('xpath=ancestor::a')).toHaveCount(0);
 });
 
+test('page titles reflect the current problem report page', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    await page.goto('/problem-reports');
+    await expect(page).toHaveTitle(/My Reports/);
+
+    await page.goto('/problem-reports/create');
+    await expect(page).toHaveTitle(/Report a Problem/);
+
+    await page.fill('#description', 'The oven timer resets unexpectedly.');
+    await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/problem-reports\/[^/]+$/);
+    await expect(page).toHaveTitle(/Problem Report/);
+});
+
+test('page header actions wrap below the title at mobile widths and stay usable', async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await loginAsOwner(page);
+
+    await page.goto('/problem-reports');
+
+    const indexPageHeader = page.locator('header[data-slot="page-header"]');
+    const heading = indexPageHeader.getByRole('heading', {
+        name: 'My Reports',
+    });
+    const submitReportLink = indexPageHeader.getByRole('link', {
+        name: 'Submit Report',
+    });
+    await expect(heading).toBeVisible();
+    await expect(submitReportLink).toBeVisible();
+
+    const headingBox = await heading.boundingBox();
+    const actionBox = await submitReportLink.boundingBox();
+    expect(headingBox).not.toBeNull();
+    expect(actionBox).not.toBeNull();
+    expect(actionBox!.y).toBeGreaterThan(headingBox!.y + headingBox!.height);
+
+    await submitReportLink.click();
+    await expect(page).toHaveURL(/\/problem-reports\/create$/);
+
+    const createPageHeader = page.locator('header[data-slot="page-header"]');
+    const createHeading = createPageHeader.getByRole('heading', {
+        name: 'Report a Problem',
+    });
+    const myReportsLink = createPageHeader.getByRole('link', {
+        name: 'My Reports',
+    });
+    await expect(createHeading).toBeVisible();
+    await expect(myReportsLink).toBeVisible();
+
+    const createHeadingBox = await createHeading.boundingBox();
+    const myReportsBox = await myReportsLink.boundingBox();
+    expect(createHeadingBox).not.toBeNull();
+    expect(myReportsBox).not.toBeNull();
+    expect(myReportsBox!.y).toBeGreaterThan(
+        createHeadingBox!.y + createHeadingBox!.height,
+    );
+
+    await page.fill('#description', 'The oven timer resets unexpectedly.');
+    await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/problem-reports\/[^/]+$/);
+
+    const showPageHeader = page.locator('header[data-slot="page-header"]');
+    const detailHeading = showPageHeader.getByRole('heading', {
+        name: 'Problem Report',
+    });
+    const backLink = showPageHeader.getByRole('link', { name: 'My Reports' });
+    await expect(detailHeading).toBeVisible();
+    await expect(backLink).toBeVisible();
+
+    const detailHeadingBox = await detailHeading.boundingBox();
+    const backLinkBox = await backLink.boundingBox();
+    expect(detailHeadingBox).not.toBeNull();
+    expect(backLinkBox).not.toBeNull();
+    expect(backLinkBox!.y).toBeGreaterThan(
+        detailHeadingBox!.y + detailHeadingBox!.height,
+    );
+
+    await backLink.click();
+    await expect(page).toHaveURL(/\/problem-reports$/);
+});
+
 test('copy reference button reports a failed copy', async ({ page }) => {
     await loginAsOwner(page);
 
