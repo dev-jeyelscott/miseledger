@@ -155,14 +155,6 @@ class OrganizationLocationController extends Controller
             $attributes,
             $ensureStockTransferDependencyCanBeDeactivated,
         ): void {
-            if (! $attributes['active']) {
-                $ensureStockTransferDependencyCanBeDeactivated
-                    ->assertLocationCanBeDeactivated(
-                        $organization,
-                        $location,
-                    );
-            }
-
             $lockedLocation = Location::query()
                 ->where(
                     'organization_id',
@@ -171,6 +163,14 @@ class OrganizationLocationController extends Controller
                 ->whereKey($location->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if (! $attributes['active']) {
+                $ensureStockTransferDependencyCanBeDeactivated
+                    ->assertLocationCanBeDeactivated(
+                        $organization,
+                        $lockedLocation,
+                    );
+            }
 
             $lockedLocation->update($attributes);
         });

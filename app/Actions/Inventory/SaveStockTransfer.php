@@ -69,11 +69,29 @@ final class SaveStockTransfer
                 ]);
             }
 
+            $this->lockLocations($organization, [
+                $attributes['from_location_id'] ?? null,
+                $attributes['to_location_id'] ?? null,
+            ]);
+
             $fromLocation = $this->activeLocation(
                 $organization,
                 $attributes['from_location_id'] ?? null,
                 'from_location_id',
             );
+
+            $toLocation = $this->activeLocation(
+                $organization,
+                $attributes['to_location_id'] ?? null,
+                'to_location_id',
+            );
+
+            $this->lockStorageLocations($organization, [
+                $attributes['from_storage_location_id']
+                    ?? null,
+                $attributes['to_storage_location_id']
+                    ?? null,
+            ]);
 
             $fromStorage = $this->activeStorageLocation(
                 $organization,
@@ -81,12 +99,6 @@ final class SaveStockTransfer
                 $attributes['from_storage_location_id']
                     ?? null,
                 'from_storage_location_id',
-            );
-
-            $toLocation = $this->activeLocation(
-                $organization,
-                $attributes['to_location_id'] ?? null,
-                'to_location_id',
             );
 
             $toStorage = $this->activeStorageLocation(
@@ -282,6 +294,78 @@ final class SaveStockTransfer
         ) {
             abort(403);
         }
+    }
+
+    /**
+     * Lock source and destination location rows before validating their
+     * active state, so a concurrent deactivation is serialized against this
+     * draft save instead of racing it.
+     *
+     * @param  array<int, mixed>  $locationIds
+     */
+    private function lockLocations(
+        Organization $organization,
+        array $locationIds,
+    ): void {
+        $ids = $this->normalizedLockIds($locationIds);
+
+        if ($ids === []) {
+            return;
+        }
+
+        Location::query()
+            ->where('organization_id', $organization->id)
+            ->whereIn('id', $ids)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get(['id']);
+    }
+
+    /**
+     * Lock source and destination storage-location rows before validating
+     * their active state. Always locked after locations, in ascending id
+     * order, to keep a deterministic lock order and avoid deadlocks.
+     *
+     * @param  array<int, mixed>  $storageLocationIds
+     */
+    private function lockStorageLocations(
+        Organization $organization,
+        array $storageLocationIds,
+    ): void {
+        $ids = $this->normalizedLockIds($storageLocationIds);
+
+        if ($ids === []) {
+            return;
+        }
+
+        StorageLocation::query()
+            ->where('organization_id', $organization->id)
+            ->whereIn('id', $ids)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get(['id']);
+    }
+
+    /**
+     * Deduplicate and sort candidate ids so lock acquisition order is
+     * deterministic regardless of request payload ordering.
+     *
+     * @param  array<int, mixed>  $ids
+     * @return array<int, int>
+     */
+    private function normalizedLockIds(array $ids): array
+    {
+        $normalized = array_values(array_unique(array_map(
+            static fn (mixed $id): int => (int) $id,
+            array_filter(
+                $ids,
+                static fn (mixed $id): bool => $id !== null,
+            ),
+        )));
+
+        sort($normalized);
+
+        return $normalized;
     }
 
     /**
