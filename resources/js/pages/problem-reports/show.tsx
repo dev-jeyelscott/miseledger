@@ -1,9 +1,9 @@
 import { Link } from '@inertiajs/react';
-import { Copy } from 'lucide-react';
+import { Copy, ShieldCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/page-header';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useClipboard } from '@/hooks/use-clipboard';
@@ -217,6 +217,17 @@ export default function ShowProblemReport({ report, viewingContext }: Props) {
                     )}
                 </div>
             </div>
+
+            {viewingContext === 'operator' && (
+                <Alert>
+                    <ShieldCheck aria-hidden="true" />
+                    <AlertTitle>Operator view</AlertTitle>
+                    <AlertDescription>
+                        You are viewing this report with platform-administrator
+                        access.
+                    </AlertDescription>
+                </Alert>
+            )}
 
             <Alert>
                 <AlertDescription>

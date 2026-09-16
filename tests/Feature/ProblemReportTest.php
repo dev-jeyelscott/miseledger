@@ -460,6 +460,7 @@ describe('Problem Report', function () {
             $response = $this->actingAs($admin)->get("/problem-reports/{$report->reference}/operator");
             $response->assertOk();
             $response->assertInertia(fn ($page) => $page
+                ->component('problem-reports/show')
                 ->where('viewingContext', 'operator')
             );
         });
