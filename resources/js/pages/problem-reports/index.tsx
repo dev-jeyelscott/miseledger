@@ -1,13 +1,16 @@
 import { Head, Link } from '@inertiajs/react';
+import { ChevronRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { EmptyState } from '@/components/empty-state';
 import { PageHeader } from '@/components/page-header';
 import { PaginationControls } from '@/components/pagination-controls';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
+
+import { getProblemReportStatusPresentation } from './status';
 
 interface Attachment {
     id: number;
@@ -40,44 +43,6 @@ interface PaginationData {
 
 interface Props {
     reports: PaginationData;
-}
-
-/** Maps a problem report status to its canonical badge variant. */
-function getStatusBadgeVariant(
-    status: string,
-): 'default' | 'secondary' | 'destructive' | 'outline' {
-    switch (status.toLowerCase()) {
-        case 'submitted':
-            return 'default';
-        case 'in-review':
-            return 'secondary';
-        case 'in-progress':
-            return 'secondary';
-        case 'resolved':
-            return 'outline';
-        case 'closed':
-            return 'outline';
-        default:
-            return 'default';
-    }
-}
-
-/** Converts the stored problem report status into a readable label. */
-function getStatusLabel(status: string): string {
-    switch (status.toLowerCase()) {
-        case 'submitted':
-            return 'Submitted';
-        case 'in-review':
-            return 'In Review';
-        case 'in-progress':
-            return 'In Progress';
-        case 'resolved':
-            return 'Resolved';
-        case 'closed':
-            return 'Closed';
-        default:
-            return status;
-    }
 }
 
 /** Renders the authenticated user's submitted problem reports. */
@@ -126,60 +91,54 @@ export default function ProblemReportsIndex({ reports }: Props) {
                 />
 
                 <div className="space-y-4">
-                    {reports.data.map((report) => (
-                        <Link
-                            key={report.id}
-                            href={`/problem-reports/${report.reference}`}
-                            className="block"
-                        >
-                            <div className="rounded-lg border border-border p-4 transition-colors hover:bg-muted/30">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div className="min-w-0 flex-1">
-                                        <div className="mb-2 flex items-center gap-3">
-                                            <code className="font-mono text-sm font-medium text-muted-foreground">
-                                                {report.reference}
-                                            </code>
-                                            <Badge
-                                                variant={getStatusBadgeVariant(
-                                                    report.status,
+                    {reports.data.map((report) => {
+                        const status = getProblemReportStatusPresentation(
+                            report.status,
+                        );
+
+                        return (
+                            <Link
+                                key={report.id}
+                                href={`/problem-reports/${report.reference}`}
+                                className="block cursor-pointer rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+                            >
+                                <div className="rounded-lg border border-border p-4 transition-colors hover:bg-muted/30">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="mb-2 flex items-center gap-3">
+                                                <code className="font-mono text-sm font-medium text-muted-foreground">
+                                                    {report.reference}
+                                                </code>
+                                                <StatusBadge
+                                                    label={status.label}
+                                                    variant={status.variant}
+                                                />
+                                            </div>
+                                            <h3 className="truncate text-base font-medium text-foreground">
+                                                {report.title || 'No title'}
+                                            </h3>
+                                            <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                                                {report.description}
+                                            </p>
+                                            <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                                                {report.attachments.length >
+                                                    0 && (
+                                                    <span>
+                                                        {
+                                                            report.attachments
+                                                                .length
+                                                        }{' '}
+                                                        screenshot
+                                                        {report.attachments
+                                                            .length !== 1
+                                                            ? 's'
+                                                            : ''}
+                                                    </span>
                                                 )}
-                                            >
-                                                {getStatusLabel(report.status)}
-                                            </Badge>
-                                        </div>
-                                        <h3 className="truncate text-base font-medium text-foreground">
-                                            {report.title || 'No title'}
-                                        </h3>
-                                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                                            {report.description}
-                                        </p>
-                                        <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                                            {report.attachments.length > 0 && (
                                                 <span>
-                                                    {report.attachments.length}{' '}
-                                                    screenshot
-                                                    {report.attachments
-                                                        .length !== 1
-                                                        ? 's'
-                                                        : ''}
-                                                </span>
-                                            )}
-                                            <span>
-                                                Submitted{' '}
-                                                {new Date(
-                                                    report.created_at,
-                                                ).toLocaleDateString('en-US', {
-                                                    month: 'short',
-                                                    day: 'numeric',
-                                                    year: 'numeric',
-                                                })}
-                                            </span>
-                                            {report.created_at !==
-                                                report.updated_at && (
-                                                <span>
-                                                    Updated{' '}
+                                                    Submitted{' '}
                                                     {new Date(
-                                                        report.updated_at,
+                                                        report.created_at,
                                                     ).toLocaleDateString(
                                                         'en-US',
                                                         {
@@ -189,13 +148,34 @@ export default function ProblemReportsIndex({ reports }: Props) {
                                                         },
                                                     )}
                                                 </span>
-                                            )}
+                                                {report.created_at !==
+                                                    report.updated_at && (
+                                                    <span>
+                                                        Updated{' '}
+                                                        {new Date(
+                                                            report.updated_at,
+                                                        ).toLocaleDateString(
+                                                            'en-US',
+                                                            {
+                                                                month: 'short',
+                                                                day: 'numeric',
+                                                                year: 'numeric',
+                                                            },
+                                                        )}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
+
+                                        <ChevronRight
+                                            className="mt-1 size-4 shrink-0 text-muted-foreground"
+                                            aria-hidden="true"
+                                        />
                                     </div>
                                 </div>
-                            </div>
-                        </Link>
-                    ))}
+                            </Link>
+                        );
+                    })}
                 </div>
 
                 <PaginationControls
