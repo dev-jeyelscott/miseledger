@@ -2,7 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import { BookOpen } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { guideModulesBySlug } from '@/pages/user-guide/content';
@@ -15,15 +15,6 @@ const typeLabels: Record<ReleaseNoteType, string> = {
     new: 'New',
     improved: 'Improved',
     fixed: 'Fixed',
-};
-
-const typeVariants: Record<
-    ReleaseNoteType,
-    'default' | 'secondary' | 'outline'
-> = {
-    new: 'default',
-    improved: 'secondary',
-    fixed: 'outline',
 };
 
 export default function ReleaseNotesIndex() {
@@ -58,13 +49,9 @@ export default function ReleaseNotesIndex() {
                                             <h2 className="text-lg font-semibold tracking-tight">
                                                 {entry.title}
                                             </h2>
-                                            <Badge
-                                                variant={
-                                                    typeVariants[entry.type]
-                                                }
-                                            >
-                                                {typeLabels[entry.type]}
-                                            </Badge>
+                                            <StatusBadge
+                                                label={typeLabels[entry.type]}
+                                            />
                                         </div>
                                         <time
                                             dateTime={entry.publishedOn}

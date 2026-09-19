@@ -58,9 +58,7 @@ test('Release Notes renders related guide links when present', async ({
         // Click and verify navigation works
         await firstGuideLink.click();
         await expect(page).toHaveURL(/\/user-guide\/\w+(-\w+)*/);
-        await expect(
-            page.getByRole('heading', { level: 1 }),
-        ).toBeVisible();
+        await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     }
 });
 
@@ -119,10 +117,7 @@ test('User Guide home exposes Release Notes navigation', async ({ page }) => {
     });
 
     await expect(releaseNotesLink).toBeVisible();
-    await expect(releaseNotesLink).toHaveAttribute(
-        'href',
-        /\/release-notes/,
-    );
+    await expect(releaseNotesLink).toHaveAttribute('href', /\/release-notes/);
 
     // Click and verify navigation works
     await releaseNotesLink.click();
@@ -217,6 +212,40 @@ test('Release Notes renders correctly in dark mode', async ({ page }) => {
     });
 
     await expect(openGuideLink).toBeVisible();
+});
+
+/** Verify New, Improved, and Fixed category badges share equal neutral treatment. */
+test('Release Notes category badges share equal visual treatment', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+    await page.goto('/release-notes');
+
+    const newBadge = page
+        .locator('article')
+        .getByText('New', { exact: true })
+        .first();
+    const improvedBadge = page
+        .locator('article')
+        .getByText('Improved', { exact: true })
+        .first();
+    const fixedBadge = page
+        .locator('article')
+        .getByText('Fixed', { exact: true })
+        .first();
+
+    await expect(newBadge).toBeVisible();
+    await expect(improvedBadge).toBeVisible();
+    await expect(fixedBadge).toBeVisible();
+
+    const [newClass, improvedClass, fixedClass] = await Promise.all([
+        newBadge.getAttribute('class'),
+        improvedBadge.getAttribute('class'),
+        fixedBadge.getAttribute('class'),
+    ]);
+
+    expect(newClass).toBe(improvedClass);
+    expect(improvedClass).toBe(fixedClass);
 });
 
 /** Verify Release Notes at 200% zoom. */

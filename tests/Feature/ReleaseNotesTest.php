@@ -95,3 +95,14 @@ test('release notes page safely handles missing guide modules', function (): voi
         ->toContain('if (!module)')
         ->toContain('return null');
 });
+
+test('release notes page uses StatusBadge with equal neutral treatment for category labels', function (): void {
+    $page = File::get(resource_path('js/pages/release-notes/index.tsx'));
+
+    expect($page)
+        ->toContain("import { StatusBadge } from '@/components/status-badge';")
+        ->toContain('<StatusBadge')
+        ->toContain('label={typeLabels[entry.type]}')
+        ->not->toContain("import { Badge } from '@/components/ui/badge';")
+        ->not->toContain('typeVariants');
+});
