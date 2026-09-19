@@ -227,12 +227,23 @@ export default function StockCountVariance({
     ].filter((filter): filter is string => filter !== null);
 
     useEffect(() => {
-        const removeStartListener = router.on('start', () =>
-            setIsNavigating(true),
-        );
-        const removeFinishListener = router.on('finish', () =>
-            setIsNavigating(false),
-        );
+        const variancePathname = new URL(
+            StockCountController.variance().url,
+            window.location.origin,
+        ).pathname;
+        const isVarianceVisit = (visit: { url: URL }) =>
+            visit.url.pathname === variancePathname;
+
+        const removeStartListener = router.on('start', (event) => {
+            if (isVarianceVisit(event.detail.visit)) {
+                setIsNavigating(true);
+            }
+        });
+        const removeFinishListener = router.on('finish', (event) => {
+            if (isVarianceVisit(event.detail.visit)) {
+                setIsNavigating(false);
+            }
+        });
 
         return () => {
             removeStartListener();
