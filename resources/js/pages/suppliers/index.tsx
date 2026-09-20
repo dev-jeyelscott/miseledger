@@ -734,6 +734,16 @@ export default function SuppliersIndex({
                                             <dd className="mt-1">
                                                 {supplier.contactName ?? '—'}
                                             </dd>
+                                            {supplier.email !== null && (
+                                                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                    {supplier.email}
+                                                </p>
+                                            )}
+                                            {supplier.phone !== null && (
+                                                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                    {supplier.phone}
+                                                </p>
+                                            )}
                                         </div>
                                         <div>
                                             <dt className="text-xs text-muted-foreground">

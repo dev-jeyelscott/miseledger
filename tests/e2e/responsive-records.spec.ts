@@ -47,6 +47,26 @@ for (const { url, mobileTestId } of pages) {
     });
 }
 
+test('suppliers mobile record shows the primary contact email and phone alongside the contact name at 375px', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/suppliers');
+
+    const supplierArticle = page
+        .getByTestId('mobile-suppliers')
+        .locator('article')
+        .filter({ hasText: 'E2E Test Supplier' });
+
+    await expect(supplierArticle).toContainText('E2E Supplier Contact');
+    await expect(supplierArticle).toContainText(
+        'e2e-supplier-contact@example.com',
+    );
+    await expect(supplierArticle).toContainText('+1 555-010-0100');
+});
+
 test('organization members mobile record gives identity its own full-width row above role and AI metadata at 320px', async ({
     page,
 }) => {

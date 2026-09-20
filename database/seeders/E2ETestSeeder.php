@@ -154,6 +154,9 @@ class E2ETestSeeder extends Seeder
             'organization_id' => $organization->id,
             'name' => 'E2E Test Supplier',
             'code' => 'E2ESUP',
+            'contact_name' => 'E2E Supplier Contact',
+            'email' => 'e2e-supplier-contact@example.com',
+            'phone' => '+1 555-010-0100',
         ]);
 
         $supplierItem = SupplierItem::factory()->create([
