@@ -182,6 +182,7 @@ final class RecordWaste
                         (int) $data['unit_id'],
                     )
                     ->where('active', true)
+                    ->lockForUpdate()
                     ->first();
 
                 if ($unit === null) {
@@ -201,6 +202,7 @@ final class RecordWaste
                         $inventoryItem->base_unit_of_measure_id,
                     )
                     ->where('active', true)
+                    ->lockForUpdate()
                     ->first();
 
                 if ($baseUnit === null) {
