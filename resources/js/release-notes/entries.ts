@@ -92,4 +92,13 @@ export const entries: ReleaseNoteEntry[] = [
         summary:
             'The description field on the problem report form now correctly signals to browsers and assistive technology that it is required.',
     },
+    {
+        id: 'stock-count-line-removal-confirmation-fix',
+        publishedOn: '2026-09-20',
+        type: 'fixed',
+        title: 'Stock Count Line Removal Confirmation',
+        summary:
+            'Removing a stock count line with an item, quantity, unit, or notes already entered now asks for confirmation before discarding it. Blank extra lines are still removed instantly.',
+        relatedGuideSlugs: ['stock-counts'],
+    },
 ];

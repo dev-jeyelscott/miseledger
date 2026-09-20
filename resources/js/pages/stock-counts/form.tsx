@@ -11,6 +11,7 @@ import type { StatusBadgeProps } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
+    DialogClose,
     DialogContent,
     DialogDescription,
     DialogFooter,
@@ -85,6 +86,7 @@ type StockCount = {
 };
 
 type LineState = {
+    key: string;
     inventoryItemId: string;
     countedQuantity: string;
     countUnitId: string;
@@ -113,14 +115,30 @@ type ErrorTarget = {
     message: string;
 };
 
+/** Generate a stable client-side identity for a dynamic physical-count row. */
+function generateClientLineKey(): string {
+    return `draft:${crypto.getRandomValues(new Uint8Array(8)).reduce((hex, byte) => hex + byte.toString(16).padStart(2, '0'), '')}`;
+}
+
 /** Create the initial editable line state for a new physical-count row. */
 function emptyLine(): LineState {
     return {
+        key: generateClientLineKey(),
         inventoryItemId: '',
         countedQuantity: '0',
         countUnitId: '',
         notes: '',
     };
+}
+
+/** A line is populated once it holds any evidence worth confirming before discard. */
+function isLinePopulated(line: LineState): boolean {
+    return (
+        line.inventoryItemId !== '' ||
+        line.countUnitId !== '' ||
+        (line.countedQuantity !== '' && line.countedQuantity !== '0') ||
+        line.notes.trim() !== ''
+    );
 }
 
 /** Format persisted decimal strings without introducing floating-point arithmetic. */
@@ -632,9 +650,14 @@ export default function StockCountForm({
     const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
     const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
     const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+    const [lineToRemove, setLineToRemove] = useState<{
+        key: string;
+        itemName: string;
+    } | null>(null);
 
     const [lines, setLines] = useState<LineState[]>(
         stockCount?.lines.map((line) => ({
+            key: generateClientLineKey(),
             inventoryItemId: line.inventoryItemId.toString(),
             countedQuantity: line.countedQuantity,
             countUnitId: line.countUnitId.toString(),
@@ -674,6 +697,39 @@ export default function StockCountForm({
         setLines((current) =>
             current.filter((_, currentIndex) => currentIndex !== index),
         );
+    };
+
+    /** Remove a blank line immediately; confirm before discarding entered evidence. */
+    const requestRemoveLine = (index: number) => {
+        const line = lines[index];
+
+        if (!isLinePopulated(line)) {
+            removeLine(index);
+
+            return;
+        }
+
+        const selectedItem = inventoryItemOptions.find(
+            (item) => item.id.toString() === line.inventoryItemId,
+        );
+
+        setLineToRemove({
+            key: line.key,
+            itemName: selectedItem?.name ?? `Line ${index + 1}`,
+        });
+    };
+
+    /** Discard the pending line and mark the form dirty for navigation protection. */
+    const confirmRemoveLine = () => {
+        if (lineToRemove === null) {
+            return;
+        }
+
+        setIsDirty(true);
+        setLines((current) =>
+            current.filter((line) => line.key !== lineToRemove.key),
+        );
+        setLineToRemove(null);
     };
 
     /** Keep storage selection inside the newly selected parent location. */
@@ -1054,7 +1110,7 @@ export default function StockCountForm({
 
                                                 return (
                                                     <fieldset
-                                                        key={index}
+                                                        key={line.key}
                                                         className="space-y-4 p-4 sm:p-5"
                                                     >
                                                         <legend className="mb-3 flex w-full items-center justify-between gap-3">
@@ -1067,7 +1123,7 @@ export default function StockCountForm({
                                                                 variant="ghost"
                                                                 size="sm"
                                                                 onClick={() =>
-                                                                    removeLine(
+                                                                    requestRemoveLine(
                                                                         index,
                                                                     )
                                                                 }
@@ -1448,6 +1504,44 @@ export default function StockCountForm({
                     </section>
                 )}
             </div>
+
+            <Dialog
+                open={lineToRemove !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setLineToRemove(null);
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            Remove {lineToRemove?.itemName}?
+                        </DialogTitle>
+                        <DialogDescription>
+                            This line&apos;s entered inventory item, physical
+                            quantity, count unit, and notes will be discarded
+                            and cannot be recovered.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button type="button" variant="outline">
+                                Keep line
+                            </Button>
+                        </DialogClose>
+
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={confirmRemoveLine}
+                        >
+                            Remove line
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {stockCount?.status === 'draft' && canCreate && (
                 <Dialog

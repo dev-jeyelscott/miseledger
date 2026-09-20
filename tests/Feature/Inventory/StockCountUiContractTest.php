@@ -150,6 +150,18 @@ test('stock count drafts guard navigation and make finalized adjustment evidence
         ->toContain('This will finalize');
 });
 
+test('stock count form confirms removal of a populated evidence line', function () {
+    $source = File::get(resource_path('js/pages/stock-counts/form.tsx'));
+
+    expect($source)
+        ->toContain('function isLinePopulated(')
+        ->toContain('requestRemoveLine')
+        ->toContain('confirmRemoveLine')
+        ->toContain('Keep line')
+        ->toContain('Remove line')
+        ->toContain('cannot be recovered');
+});
+
 test('stock count form receives the organization timezone from its server options', function () {
     $controller = File::get(
         app_path('Http/Controllers/Inventory/StockCountController.php'),
