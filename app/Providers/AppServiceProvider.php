@@ -11,6 +11,8 @@ use App\Models\User;
 use App\Observers\ProblemReportObserver;
 use App\Support\Ai\Providers\AiProviderAdapter;
 use App\Support\Ai\Providers\CodexAppServerProvider;
+use App\Support\Backup\DnsBackupHostResolver;
+use App\Support\Backup\ResolvesBackupHosts;
 use App\Support\Billing\BillingConfigurationValidator;
 use App\Support\Billing\OrganizationCommercialWriteGate;
 use Carbon\CarbonImmutable;
@@ -35,6 +37,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(AiMcpExecutionContext::class);
         $this->app->bind(AiProviderAdapter::class, CodexAppServerProvider::class);
+        $this->app->bind(ResolvesBackupHosts::class, DnsBackupHostResolver::class);
     }
 
     /**

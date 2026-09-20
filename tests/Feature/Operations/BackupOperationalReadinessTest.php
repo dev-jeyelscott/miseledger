@@ -1,6 +1,25 @@
 <?php
 
+use App\Support\Backup\ResolvesBackupHosts;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
+
+/**
+ * Bind a deterministic fake DNS resolver so host-validation tests never
+ * depend on real network access or real DNS answers.
+ */
+function fakeBackupHostResolver(array $map): void
+{
+    app()->bind(ResolvesBackupHosts::class, fn () => new class($map) implements ResolvesBackupHosts
+    {
+        public function __construct(private readonly array $map) {}
+
+        public function resolve(string $host): array
+        {
+            return $this->map[$host] ?? [];
+        }
+    });
+}
 
 test('the deployment guide documents PostgreSQL as the sole authoritative backup source and enumerates the covered business domains', function () {
     $docs = file_get_contents(base_path('docs/deployment.md'));
@@ -319,6 +338,8 @@ test('the backup command fails safely when an approved-scheme repository host re
 
 test('the backup command passes host validation and proceeds to the pg_dump stage for a genuinely off-host repository', function () {
     Process::fake();
+    Http::fake();
+    fakeBackupHostResolver(['hooks.example.com' => ['203.0.113.50']]);
 
     config()->set('backup.restic_repository', 's3:http://198.51.100.10:9000/miseledger-backups');
     config()->set('backup.restic_password', 'a-repository-password');
@@ -333,6 +354,8 @@ test('the backup command passes host validation and proceeds to the pg_dump stag
 });
 
 test('the backup command fails safely when the alert webhook resolves to the application host or localhost', function (string $webhookUrl) {
+    fakeBackupHostResolver(['s3.example.com' => ['203.0.113.60']]);
+
     config()->set('backup.restic_repository', 's3:https://s3.example.com/miseledger-backups');
     config()->set('backup.restic_password', 'a-repository-password');
     config()->set('backup.alert_webhook_url', $webhookUrl);
@@ -340,10 +363,112 @@ test('the backup command fails safely when the alert webhook resolves to the app
     $this->artisan('backup:database')
         ->assertFailed();
 })->with([
-    'localhost' => ['http://localhost:8080/alerts'],
-    'the app service name' => ['http://app/alerts'],
-    'loopback address' => ['http://127.0.0.1/alerts'],
+    'localhost' => ['https://localhost:8080/alerts'],
+    'the app service name' => ['https://app/alerts'],
+    'loopback address' => ['https://127.0.0.1/alerts'],
 ]);
+
+test('the backup command fails safely when the alert webhook is not https', function () {
+    fakeBackupHostResolver(['s3.example.com' => ['203.0.113.60']]);
+
+    config()->set('backup.restic_repository', 's3:https://s3.example.com/miseledger-backups');
+    config()->set('backup.restic_password', 'a-repository-password');
+    config()->set('backup.alert_webhook_url', 'http://hooks.example.com/backup-alerts');
+
+    $this->artisan('backup:database')
+        ->expectsOutputToContain('BACKUP_ALERT_WEBHOOK_URL must use https://.')
+        ->assertFailed();
+});
+
+test('the backup command fails safely when a repository or alert webhook hostname resolves to a private, loopback, or link-local address', function (string $repository, string $webhookUrl, array $resolverMap) {
+    fakeBackupHostResolver($resolverMap);
+
+    config()->set('backup.restic_repository', $repository);
+    config()->set('backup.restic_password', 'a-repository-password');
+    config()->set('backup.alert_webhook_url', $webhookUrl);
+
+    $this->artisan('backup:database')
+        ->assertFailed();
+})->with([
+    'repository hostname resolves to an RFC1918 address' => [
+        's3:https://backups.example.com/miseledger-backups',
+        'https://hooks.example.com/backup-alerts',
+        ['backups.example.com' => ['10.0.0.5'], 'hooks.example.com' => ['203.0.113.50']],
+    ],
+    'repository hostname resolves to a link-local metadata address' => [
+        's3:https://backups.example.com/miseledger-backups',
+        'https://hooks.example.com/backup-alerts',
+        ['backups.example.com' => ['169.254.169.254'], 'hooks.example.com' => ['203.0.113.50']],
+    ],
+    'alert webhook hostname resolves to an RFC1918 address' => [
+        's3:https://backups.example.com/miseledger-backups',
+        'https://hooks.example.com/backup-alerts',
+        ['backups.example.com' => ['203.0.113.61'], 'hooks.example.com' => ['192.168.1.5']],
+    ],
+    'alert webhook hostname resolves to a loopback IPv6 address' => [
+        's3:https://backups.example.com/miseledger-backups',
+        'https://hooks.example.com/backup-alerts',
+        ['backups.example.com' => ['203.0.113.61'], 'hooks.example.com' => ['::1']],
+    ],
+    'alert webhook hostname has one public and one private resolved address' => [
+        's3:https://backups.example.com/miseledger-backups',
+        'https://hooks.example.com/backup-alerts',
+        ['backups.example.com' => ['203.0.113.61'], 'hooks.example.com' => ['203.0.113.50', '10.1.2.3']],
+    ],
+]);
+
+test('the backup command fails safely when a repository or alert webhook hostname cannot be resolved', function () {
+    fakeBackupHostResolver([]);
+
+    config()->set('backup.restic_repository', 's3:https://backups.example.com/miseledger-backups');
+    config()->set('backup.restic_password', 'a-repository-password');
+    config()->set('backup.alert_webhook_url', 'https://hooks.example.com/backup-alerts');
+
+    $this->artisan('backup:database')
+        ->assertFailed();
+});
+
+test('the backup command extracts the host from host:port and bracketed IPv6 repository forms before validating it', function (string $repository, array $resolverMap) {
+    Process::fake();
+    Http::fake();
+    fakeBackupHostResolver(array_merge($resolverMap, ['hooks.example.com' => ['203.0.113.50']]));
+
+    config()->set('backup.restic_repository', $repository);
+    config()->set('backup.restic_password', 'a-repository-password');
+    config()->set('backup.alert_webhook_url', 'https://hooks.example.com/backup-alerts');
+
+    $this->artisan('backup:database')
+        ->expectsOutputToContain('pg_dump failed to produce a non-empty archive.')
+        ->assertFailed();
+})->with([
+    's3 bare endpoint with a port' => [
+        's3:backups.example.com:9000/miseledger-backups',
+        ['backups.example.com' => ['203.0.113.61']],
+    ],
+    's3 bracketed IPv6 endpoint with a port' => [
+        's3:[2001:db8::1]:9000/miseledger-backups',
+        [],
+    ],
+    'sftp host with userinfo' => [
+        'sftp:backup@backups.example.com:/miseledger-backups',
+        ['backups.example.com' => ['203.0.113.61']],
+    ],
+    'sftp bracketed IPv6 with userinfo' => [
+        'sftp:backup@[2001:db8::1]:/miseledger-backups',
+        [],
+    ],
+]);
+
+test('the backup command rejects a repository host:port form that still resolves to a private address', function () {
+    fakeBackupHostResolver(['backups.example.com' => ['172.16.0.9']]);
+
+    config()->set('backup.restic_repository', 's3:backups.example.com:9000/miseledger-backups');
+    config()->set('backup.restic_password', 'a-repository-password');
+    config()->set('backup.alert_webhook_url', 'https://hooks.example.com/backup-alerts');
+
+    $this->artisan('backup:database')
+        ->assertFailed();
+});
 
 test('the backup command source enforces an approved off-host encrypted destination, required alerting, and never hardcodes credentials', function () {
     $command = file_get_contents(app_path('Console/Commands/BackupDatabase.php'));

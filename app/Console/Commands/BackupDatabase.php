@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Support\Backup\ResolvesBackupHosts;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
@@ -13,6 +14,22 @@ final class BackupDatabase extends Command
     protected $signature = 'backup:database';
 
     protected $description = 'Create an encrypted, off-host PostgreSQL archive and apply the configured retention policy.';
+
+    /**
+     * The validated alert webhook URL and the single public IP address its
+     * host was confirmed to resolve to, captured once in handle() and
+     * reused by reportFailure() so the alert request is pinned to the
+     * address that was actually validated instead of re-resolving DNS at
+     * delivery time (which would reopen a rebinding window).
+     */
+    private ?string $alertWebhookUrl = null;
+
+    private ?string $alertPinnedAddress = null;
+
+    public function __construct(private readonly ResolvesBackupHosts $hostResolver)
+    {
+        parent::__construct();
+    }
 
     /**
      * Restic repository URL prefixes for the approved off-host, restic-supported
@@ -55,8 +72,10 @@ final class BackupDatabase extends Command
             return self::FAILURE;
         }
 
-        if ($this->isDisallowedHost($this->extractRepositoryHost($repository))) {
-            $this->error('RESTIC_REPOSITORY resolves to a local or application-host address, which is not permitted. The repository must be a genuinely off-host destination.');
+        $repositoryHost = $this->extractRepositoryHost($repository);
+
+        if ($repositoryHost !== null && $this->resolvePublicAddress($repositoryHost) === null) {
+            $this->error('RESTIC_REPOSITORY resolves to a local, application-host, or unresolvable address, which is not permitted. The repository must be a genuinely off-host destination.');
 
             return self::FAILURE;
         }
@@ -69,11 +88,22 @@ final class BackupDatabase extends Command
             return self::FAILURE;
         }
 
-        if ($this->isDisallowedHost(parse_url($alertWebhookUrl, PHP_URL_HOST) ?: null)) {
-            $this->error('BACKUP_ALERT_WEBHOOK_URL resolves to a local or application-host address, which is not permitted. The alert destination must be off-host.');
+        if (Str::lower((string) parse_url($alertWebhookUrl, PHP_URL_SCHEME)) !== 'https') {
+            $this->error('BACKUP_ALERT_WEBHOOK_URL must use https://. Plaintext HTTP alert delivery is not permitted.');
 
             return self::FAILURE;
         }
+
+        $alertPinnedAddress = $this->resolvePublicAddress(parse_url($alertWebhookUrl, PHP_URL_HOST) ?: null);
+
+        if ($alertPinnedAddress === null) {
+            $this->error('BACKUP_ALERT_WEBHOOK_URL resolves to a local, application-host, or unresolvable address, which is not permitted. The alert destination must be off-host.');
+
+            return self::FAILURE;
+        }
+
+        $this->alertWebhookUrl = $alertWebhookUrl;
+        $this->alertPinnedAddress = $alertPinnedAddress;
 
         $env = [
             'RESTIC_REPOSITORY' => $repository,
@@ -163,10 +193,37 @@ final class BackupDatabase extends Command
             'rest:' => parse_url($rest, PHP_URL_HOST) ?: null,
             's3:' => Str::startsWith(Str::lower($rest), ['http://', 'https://'])
                 ? (parse_url($rest, PHP_URL_HOST) ?: null)
-                : (Str::before($rest, '/') ?: null),
-            'sftp:' => Str::of($rest)->after('@')->before(':')->toString() ?: null,
+                : $this->extractAuthorityHost(Str::before($rest, '/')),
+            'sftp:' => Str::startsWith($rest, '//')
+                ? (parse_url('sftp:'.$rest, PHP_URL_HOST) ?: null)
+                : $this->extractAuthorityHost(
+                    Str::contains($rest, '@') ? Str::after($rest, '@') : $rest,
+                ),
             default => null,
         };
+    }
+
+    /**
+     * Extract a bare host from a "host", "host:port", "[ipv6]", or
+     * "[ipv6]:port" authority string, stopping at the first unbracketed
+     * ':' (port) or '/' (path). A bracketed IPv6 literal is unwrapped, and
+     * anything following its closing bracket (port or path) is discarded.
+     */
+    private function extractAuthorityHost(string $authority): ?string
+    {
+        if ($authority === '') {
+            return null;
+        }
+
+        if ($authority[0] === '[') {
+            $end = strpos($authority, ']');
+
+            return $end === false || $end === 1 ? null : substr($authority, 1, $end - 1);
+        }
+
+        $end = strcspn($authority, ':/');
+
+        return $end === 0 ? null : substr($authority, 0, $end);
     }
 
     /**
@@ -183,43 +240,101 @@ final class BackupDatabase extends Command
         return rtrim(trim(Str::lower($host), '[]'), '.') ?: null;
     }
 
-    private function isDisallowedHost(?string $host): bool
+    /**
+     * Resolve a repository or alert-webhook host to a single verified
+     * public IP address, or null if the host is disallowed, unresolvable,
+     * or resolves to any non-public address. A literal IP is validated
+     * directly, without DNS. A hostname is resolved via the injected
+     * resolver, and every A/AAAA address it returns is checked: if even
+     * one resolved address is non-public, the whole host is rejected,
+     * since an attacker (or a rebinding DNS record) only needs one
+     * internal-pointing record to defeat the off-host guarantee. A
+     * resolution failure yields no addresses, which fails closed rather
+     * than being treated as an implicitly safe host.
+     */
+    private function resolvePublicAddress(?string $host): ?string
     {
         $host = $this->normalizeHost($host);
 
-        if ($host === null) {
-            return false;
+        if ($host === null || in_array($host, self::DISALLOWED_HOSTS, true)) {
+            return null;
         }
 
-        if (in_array($host, self::DISALLOWED_HOSTS, true)) {
-            return true;
-        }
-
-        // Reject loopback and other reserved/non-routable IP ranges
-        // (127.0.0.0/8, ::1, 0.0.0.0/8, link-local, etc.): any literal IP
-        // that fails FILTER_FLAG_NO_RES_RANGE is not a genuine off-host
-        // network address.
         if (filter_var($host, FILTER_VALIDATE_IP)) {
-            return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_RES_RANGE) === false;
+            return $this->isPublicAddress($host) ? $host : null;
         }
 
-        return false;
+        $addresses = $this->hostResolver->resolve($host);
+
+        if ($addresses === []) {
+            return null;
+        }
+
+        foreach ($addresses as $address) {
+            if (! $this->isPublicAddress($address)) {
+                return null;
+            }
+        }
+
+        return $addresses[0];
+    }
+
+    /**
+     * Reject loopback, link-local/metadata, and other non-routable IP
+     * ranges (127.0.0.0/8, ::1, 0.0.0.0/8, fe80::/10, 169.254.0.0/16,
+     * etc.) as well as RFC1918/IPv6-ULA private ranges (10.0.0.0/8,
+     * 172.16.0.0/12, 192.168.0.0/16, fc00::/7). FILTER_FLAG_NO_RES_RANGE
+     * alone does not reject private ranges despite its documentation
+     * implying otherwise, so it must be combined with
+     * FILTER_FLAG_NO_PRIV_RANGE: any address that fails either is not a
+     * genuine off-host network address.
+     */
+    private function isPublicAddress(string $address): bool
+    {
+        return filter_var(
+            $address,
+            FILTER_VALIDATE_IP,
+            FILTER_FLAG_NO_RES_RANGE | FILTER_FLAG_NO_PRIV_RANGE,
+        ) !== false;
     }
 
     private function reportFailure(string $message): void
     {
         $this->error($message);
 
-        $webhookUrl = config('backup.alert_webhook_url');
-
-        if (! is_string($webhookUrl) || $webhookUrl === '') {
+        if ($this->alertWebhookUrl === null || $this->alertPinnedAddress === null) {
             return;
         }
 
+        $host = parse_url($this->alertWebhookUrl, PHP_URL_HOST);
+        $port = parse_url($this->alertWebhookUrl, PHP_URL_PORT) ?? 443;
+
+        if ($host === null || $host === false) {
+            return;
+        }
+
+        // CURLOPT_RESOLVE expects a bare host, but parse_url() keeps IPv6
+        // brackets (e.g. "[::1]"); strip them so the pinned entry matches.
+        $host = trim($host, '[]');
+
         try {
-            Http::timeout(10)->post($webhookUrl, [
-                'text' => 'MiseLedger PostgreSQL backup failure: '.$message,
-            ]);
+            // Pin the connection to the IP address already verified as
+            // public, instead of letting curl re-resolve the host at
+            // connect time: without this, a DNS record that changes
+            // between validation and delivery (rebinding) could still
+            // route this privileged, scheduled request to an internal
+            // address even though the earlier check passed.
+            Http::withOptions([
+                'curl' => [
+                    CURLOPT_RESOLVE => [sprintf('%s:%d:%s', $host, $port, $this->alertPinnedAddress)],
+                ],
+            ])
+                ->withoutRedirecting()
+                ->connectTimeout(5)
+                ->timeout(10)
+                ->post($this->alertWebhookUrl, [
+                    'text' => 'MiseLedger PostgreSQL backup failure: '.$message,
+                ]);
         } catch (Throwable) {
             // Alerting is best-effort; the command's own non-zero exit code
             // and Coolify's process/log observability remain authoritative.
