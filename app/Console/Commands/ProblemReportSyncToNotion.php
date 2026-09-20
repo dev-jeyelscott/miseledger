@@ -31,6 +31,7 @@ final class ProblemReportSyncToNotion extends Command
 
         ProblemReport::query()
             ->whereNull('notion_id')
+            ->whereNull('notion_sync_failed_at')
             ->chunkById(
                 $this->chunkSize(),
                 function (Collection $batch) use (&$dispatched): void {

@@ -187,6 +187,18 @@ final class FinalizeGoodsReceipt
                     'notes' => "Goods receipt {$receipt->number}",
                     'inboundUnitCost' => $receiptLine->unit_cost,
                 ];
+                if (
+                    $newReceivedQuantity->compareTo(
+                        BigDecimal::of($poLine->base_quantity),
+                    ) > 0
+                ) {
+                    throw ValidationException::withMessages([
+                        'lines' => __(
+                            'Accepted quantity exceeds the ordered quantity for this purchase-order line.',
+                        ),
+                    ]);
+                }
+
                 $receivedQuantities[$poLine->id] = $newReceivedQuantity;
             }
 

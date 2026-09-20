@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Enums\ProblemReportStatus;
 use App\Http\Requests\CreateProblemReportRequest;
+use App\Jobs\SyncProblemReportToNotion;
 use App\Models\ProblemReport;
 use App\Models\ProblemReportAttachment;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -146,10 +148,39 @@ class ProblemReportController extends Controller
 
         Gate::authorize('viewAsOperator', $problemReport);
 
+        $reporter = User::where('id', $problemReport->user_id)
+            ->select(['name', 'email'])
+            ->first();
+
         return Inertia::render('problem-reports/show', [
             'report' => $problemReport,
             'viewingContext' => 'operator',
+            'reporter' => $reporter,
         ]);
+    }
+
+    /**
+     * Reset a terminally failed outbound Notion sync and redispatch it.
+     */
+    public function retryNotionSync(string $reference, Request $request): RedirectResponse
+    {
+        $problemReport = ProblemReport::where('reference', $reference)
+            ->firstOrFail();
+
+        Gate::authorize('retryNotionSync', $problemReport);
+
+        if ($problemReport->notion_id === null && $problemReport->notion_sync_failed_at !== null) {
+            $problemReport->forceFill([
+                'notion_sync_failed_at' => null,
+                'notion_sync_failure_reason' => null,
+            ])->save();
+
+            SyncProblemReportToNotion::dispatch($problemReport->id)
+                ->onConnection('redis');
+        }
+
+        return redirect()
+            ->route('problem-reports.show-operator', $problemReport->reference);
     }
 
     /**

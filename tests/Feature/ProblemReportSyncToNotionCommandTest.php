@@ -35,6 +35,30 @@ describe('Problem Report Sync To Notion Command', function () {
         Queue::assertPushedTimes(SyncProblemReportToNotion::class, 3);
     });
 
+    it('does not redispatch a report with a terminal Notion sync failure', function () {
+        configureProblemReportSyncToNotionCommand();
+
+        $quarantined = ProblemReport::factory()->create([
+            'notion_id' => null,
+            'notion_sync_failed_at' => now(),
+            'notion_sync_failure_reason' => 'duplicate_report_id',
+        ]);
+        $unsynced = ProblemReport::factory()->create(['notion_id' => null]);
+        Queue::fake();
+
+        $this->artisan('problem-report:sync-to-notion');
+
+        Queue::assertPushed(SyncProblemReportToNotion::class, function (SyncProblemReportToNotion $job) use ($unsynced): bool {
+            return $job->reportId === $unsynced->id;
+        });
+
+        Queue::assertNotPushed(SyncProblemReportToNotion::class, function (SyncProblemReportToNotion $job) use ($quarantined): bool {
+            return $job->reportId === $quarantined->id;
+        });
+
+        Queue::assertPushedTimes(SyncProblemReportToNotion::class, 1);
+    });
+
     it('does nothing when the integration is disabled', function () {
         configureProblemReportSyncToNotionCommand(enabled: false);
 

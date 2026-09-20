@@ -29,6 +29,25 @@ final class LocationItemCostQuery
         Location $location,
         InventoryItem $inventoryItem,
     ): LocationItemCost {
+        return self::resolveMany($organization, $location, [
+            $inventoryItem->getKey() => $inventoryItem,
+        ])[$inventoryItem->getKey()];
+    }
+
+    /**
+     * Resolve the current average cost of many inventory items at one
+     * location in a single grouped aggregate query, rather than one query
+     * per item. Each item is validated against the organization the same
+     * way the single-item lookup is.
+     *
+     * @param  array<int, InventoryItem>  $inventoryItemsById
+     * @return array<int, LocationItemCost>
+     */
+    public static function resolveMany(
+        Organization $organization,
+        Location $location,
+        array $inventoryItemsById,
+    ): array {
         if ($location->organization_id !== $organization->getKey()) {
             throw LocationItemCostQueryException::locationNotInOrganization(
                 $location->id,
@@ -36,45 +55,63 @@ final class LocationItemCostQuery
             );
         }
 
-        if ($inventoryItem->organization_id !== $organization->getKey()) {
-            throw LocationItemCostQueryException::inventoryItemNotInOrganization(
-                $inventoryItem->id,
-                $organization->id,
-            );
+        foreach ($inventoryItemsById as $inventoryItem) {
+            if ($inventoryItem->organization_id !== $organization->getKey()) {
+                throw LocationItemCostQueryException::inventoryItemNotInOrganization(
+                    $inventoryItem->id,
+                    $organization->id,
+                );
+            }
         }
 
-        $totals = StockBalance::query()
+        if ($inventoryItemsById === []) {
+            return [];
+        }
+
+        $totalsByItemId = StockBalance::query()
             ->where('organization_id', $organization->getKey())
             ->where('location_id', $location->getKey())
-            ->where('inventory_item_id', $inventoryItem->getKey())
+            ->whereIn('inventory_item_id', array_keys($inventoryItemsById))
             ->toBase()
-            ->selectRaw('coalesce(sum(quantity_on_hand), 0) as total_quantity, coalesce(sum(inventory_value), 0) as total_value')
-            ->first();
+            ->selectRaw('inventory_item_id, coalesce(sum(quantity_on_hand), 0) as total_quantity, coalesce(sum(inventory_value), 0) as total_value')
+            ->groupBy('inventory_item_id')
+            ->get()
+            ->keyBy('inventory_item_id');
 
-        $totalQuantity = BigDecimal::of((string) $totals->total_quantity)
-            ->toScale(self::QUANTITY_SCALE, RoundingMode::HalfUp);
+        $results = [];
 
-        $totalValue = BigDecimal::of((string) $totals->total_value)
-            ->toScale(self::MONEY_SCALE, RoundingMode::HalfUp);
+        foreach ($inventoryItemsById as $itemId => $inventoryItem) {
+            $totals = $totalsByItemId->get($itemId);
 
-        if ($totalQuantity->isLessThanOrEqualTo(BigDecimal::zero())) {
-            return new LocationItemCost(
+            $totalQuantity = BigDecimal::of((string) ($totals->total_quantity ?? 0))
+                ->toScale(self::QUANTITY_SCALE, RoundingMode::HalfUp);
+
+            $totalValue = BigDecimal::of((string) ($totals->total_value ?? 0))
+                ->toScale(self::MONEY_SCALE, RoundingMode::HalfUp);
+
+            if ($totalQuantity->isLessThanOrEqualTo(BigDecimal::zero())) {
+                $results[$itemId] = new LocationItemCost(
+                    quantityOnHand: (string) $totalQuantity,
+                    inventoryValue: (string) $totalValue,
+                    averageUnitCost: (string) BigDecimal::zero()->toScale(self::MONEY_SCALE),
+                );
+
+                continue;
+            }
+
+            $averageUnitCost = $totalValue->dividedBy(
+                $totalQuantity,
+                self::MONEY_SCALE,
+                RoundingMode::HalfUp,
+            );
+
+            $results[$itemId] = new LocationItemCost(
                 quantityOnHand: (string) $totalQuantity,
                 inventoryValue: (string) $totalValue,
-                averageUnitCost: (string) BigDecimal::zero()->toScale(self::MONEY_SCALE),
+                averageUnitCost: (string) $averageUnitCost,
             );
         }
 
-        $averageUnitCost = $totalValue->dividedBy(
-            $totalQuantity,
-            self::MONEY_SCALE,
-            RoundingMode::HalfUp,
-        );
-
-        return new LocationItemCost(
-            quantityOnHand: (string) $totalQuantity,
-            inventoryValue: (string) $totalValue,
-            averageUnitCost: (string) $averageUnitCost,
-        );
+        return $results;
     }
 }

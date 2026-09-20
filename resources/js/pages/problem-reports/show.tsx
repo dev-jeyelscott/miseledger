@@ -2,11 +2,13 @@ import { Head, Link } from '@inertiajs/react';
 import { Copy, Download, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/page-header';
+import { StatusBadge } from '@/components/status-badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useClipboard } from '@/hooks/use-clipboard';
 import type { BreadcrumbItem } from '@/types';
+
+import { getProblemReportStatusPresentation } from './status';
 
 interface Attachment {
     id: number;
@@ -23,6 +25,11 @@ interface Report {
     created_at: string;
     updated_at: string;
     organization_name_snapshot: string | null;
+}
+
+interface Reporter {
+    name: string;
+    email: string;
 }
 
 type ViewingContext = 'owner' | 'operator';
@@ -42,6 +49,7 @@ function formatDateTime(value: string): string {
 interface Props {
     report: Report;
     viewingContext: ViewingContext;
+    reporter?: Reporter | null;
 }
 
 /** Resolves the breadcrumb trail and back destination for the current viewing context. */
@@ -79,48 +87,15 @@ function resolveNavigation(viewingContext: ViewingContext, report: Report) {
     };
 }
 
-/** Maps a problem report status to the existing Badge visual variant. */
-function getStatusBadgeVariant(
-    status: string,
-): 'default' | 'secondary' | 'destructive' | 'outline' {
-    switch (status.toLowerCase()) {
-        case 'submitted':
-            return 'default';
-        case 'in-review':
-            return 'secondary';
-        case 'in-progress':
-            return 'secondary';
-        case 'resolved':
-            return 'outline';
-        case 'closed':
-            return 'outline';
-        default:
-            return 'default';
-    }
-}
-
-/** Converts the stored problem report status into its user-facing label. */
-function getStatusLabel(status: string): string {
-    switch (status.toLowerCase()) {
-        case 'submitted':
-            return 'Submitted';
-        case 'in-review':
-            return 'In Review';
-        case 'in-progress':
-            return 'In Progress';
-        case 'resolved':
-            return 'Resolved';
-        case 'closed':
-            return 'Closed';
-        default:
-            return status;
-    }
-}
-
 /** Renders the details and attachments for one problem report. */
-export default function ShowProblemReport({ report, viewingContext }: Props) {
+export default function ShowProblemReport({
+    report,
+    viewingContext,
+    reporter,
+}: Props) {
     const [, copy] = useClipboard();
     const navigation = resolveNavigation(viewingContext, report);
+    const status = getProblemReportStatusPresentation(report.status);
 
     /** Copies the report reference to the user's clipboard and reports the outcome. */
     const handleCopyReference = async () => {
@@ -161,7 +136,7 @@ export default function ShowProblemReport({ report, viewingContext }: Props) {
 
                 <div className="max-w-4xl space-y-6">
                     <div className="space-y-4 rounded-lg bg-muted p-6">
-                        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
                             <div>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase">
                                     Reference
@@ -190,13 +165,10 @@ export default function ShowProblemReport({ report, viewingContext }: Props) {
                                     Status
                                 </p>
                                 <div className="mt-2">
-                                    <Badge
-                                        variant={getStatusBadgeVariant(
-                                            report.status,
-                                        )}
-                                    >
-                                        {getStatusLabel(report.status)}
-                                    </Badge>
+                                    <StatusBadge
+                                        label={status.label}
+                                        variant={status.variant}
+                                    />
                                 </div>
                             </div>
                             <div>
@@ -231,6 +203,17 @@ export default function ShowProblemReport({ report, viewingContext }: Props) {
                         </Alert>
                     )}
 
+                    {viewingContext === 'operator' && reporter && (
+                        <div className="space-y-2">
+                            <h3 className="font-semibold text-foreground">
+                                Reporter
+                            </h3>
+                            <p className="text-muted-foreground">
+                                {reporter.name} &middot; {reporter.email}
+                            </p>
+                        </div>
+                    )}
+
                     <Alert>
                         <AlertDescription>
                             Status updates may take up to one hour to appear.
@@ -244,17 +227,6 @@ export default function ShowProblemReport({ report, viewingContext }: Props) {
                             </h3>
                             <p className="text-muted-foreground">
                                 {report.organization_name_snapshot}
-                            </p>
-                        </div>
-                    )}
-
-                    {report.title && (
-                        <div className="space-y-2">
-                            <h3 className="font-semibold text-foreground">
-                                Title
-                            </h3>
-                            <p className="text-muted-foreground">
-                                {report.title}
                             </p>
                         </div>
                     )}
@@ -279,11 +251,16 @@ export default function ShowProblemReport({ report, viewingContext }: Props) {
                                         key={attachment.id}
                                         className="overflow-hidden rounded-lg border border-border"
                                     >
-                                        <img
-                                            src={getAttachmentUrl(attachment)}
-                                            alt={attachment.original_name}
-                                            className="h-auto w-full"
-                                        />
+                                        <div className="relative aspect-video overflow-hidden bg-muted">
+                                            <img
+                                                src={getAttachmentUrl(
+                                                    attachment,
+                                                )}
+                                                alt={attachment.original_name}
+                                                loading="lazy"
+                                                className="h-full w-full object-cover"
+                                            />
+                                        </div>
                                         <div className="flex items-center justify-between gap-2 bg-card p-2">
                                             <p className="truncate text-xs text-muted-foreground">
                                                 {attachment.original_name}

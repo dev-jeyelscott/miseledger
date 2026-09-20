@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import InputError from '@/components/input-error';
+import { PreviousPageButton } from '@/components/navigation/previous-page-button';
 import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,8 @@ export default function CreateProblemReport() {
     useEffect(() => {
         setIsDirty(isDirty);
     }, [isDirty, setIsDirty]);
+
+    const screenshotLimitReached = data.screenshots.length >= 5;
 
     const indexedErrors = errors as Record<string, string | undefined>;
     const submissionError = indexedErrors.submission;
@@ -157,6 +160,7 @@ export default function CreateProblemReport() {
                         error={errors.description}
                     >
                         <Textarea
+                            required
                             maxLength={10000}
                             placeholder="Please describe the problem in detail..."
                             rows={6}
@@ -217,9 +221,7 @@ export default function CreateProblemReport() {
                                 multiple
                                 accept="image/jpeg,image/png,image/webp"
                                 onChange={handleScreenshotsChange}
-                                disabled={
-                                    processing || data.screenshots.length >= 5
-                                }
+                                disabled={processing || screenshotLimitReached}
                                 aria-invalid={
                                     screenshotsError ? true : undefined
                                 }
@@ -232,17 +234,26 @@ export default function CreateProblemReport() {
                             />
                             <Label
                                 htmlFor="screenshots"
-                                className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-6 py-8 transition-colors peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50 hover:border-muted-foreground"
+                                aria-disabled={screenshotLimitReached}
+                                className={
+                                    screenshotLimitReached
+                                        ? 'flex cursor-not-allowed flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/50 px-6 py-8 opacity-60 transition-colors'
+                                        : 'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-6 py-8 transition-colors peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50 hover:border-muted-foreground'
+                                }
                             >
                                 <Upload
                                     className="h-6 w-6 text-muted-foreground"
                                     aria-hidden="true"
                                 />
                                 <span className="text-sm font-medium text-foreground">
-                                    Click to upload screenshots
+                                    {screenshotLimitReached
+                                        ? 'Maximum of 5 screenshots reached'
+                                        : 'Click to upload screenshots'}
                                 </span>
                                 <span className="text-xs text-muted-foreground">
-                                    JPEG, PNG, WebP up to 5 MB each
+                                    {screenshotLimitReached
+                                        ? 'Remove a screenshot to add another'
+                                        : 'JPEG, PNG, WebP up to 5 MB each'}
                                 </span>
                             </Label>
                         </div>
@@ -273,6 +284,15 @@ export default function CreateProblemReport() {
                                     'Submit Report'
                                 )}
                             </Button>
+
+                            <PreviousPageButton
+                                variant="outline"
+                                fallback="/problem-reports"
+                                disabled={processing}
+                                onNavigate={dirtyNavigation.confirmNavigation}
+                            >
+                                Cancel
+                            </PreviousPageButton>
                         </div>
 
                         {progress && (

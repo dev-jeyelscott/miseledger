@@ -2,6 +2,7 @@
 
 namespace App\Actions\Purchasing;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\GoodsReceiptStatus;
 use App\Enums\OrganizationPermission;
 use App\Enums\PurchaseOrderStatus;
@@ -13,6 +14,10 @@ use Illuminate\Validation\ValidationException;
 
 final class CancelPurchaseOrder
 {
+    public function __construct(
+        private readonly RecordAuditEntry $recordAuditEntry,
+    ) {}
+
     /**
      * Cancel an unreceived PO without affecting inventory.
      */
@@ -79,9 +84,26 @@ final class CancelPurchaseOrder
                 ]);
             }
 
+            $previousStatus = $record->status;
+
             $record->forceFill([
                 'status' => PurchaseOrderStatus::Cancelled,
             ])->save();
+
+            $this->recordAuditEntry->handle(
+                organization: $organization,
+                actor: $actor,
+                action: 'purchase_order.cancelled',
+                entityType: 'purchase_order',
+                entityId: $record->id,
+                beforeData: [
+                    'status' => $previousStatus->value,
+                ],
+                afterData: [
+                    'status' => PurchaseOrderStatus::Cancelled->value,
+                ],
+                correlationId: "purchase_order:{$record->id}:cancel",
+            );
 
             return $record->refresh();
         }, 3);

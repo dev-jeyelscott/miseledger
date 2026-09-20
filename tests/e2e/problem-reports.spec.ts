@@ -36,6 +36,41 @@ test('screenshot upload shows accessible progress feedback', async ({
     await expect(page.locator('progress')).toBeVisible();
 });
 
+test('description field is marked as required', async ({ page }) => {
+    await loginAsOwner(page);
+
+    await page.goto('/problem-reports/create');
+
+    await expect(page.locator('#description')).toHaveAttribute('required', '');
+});
+
+test('Cancel action navigates away and warns about unsaved changes', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    await page.goto('/problem-reports/create');
+
+    const cancelButton = page.getByRole('button', { name: 'Cancel' });
+    await expect(cancelButton).toBeVisible();
+
+    await cancelButton.click();
+    await expect(page).toHaveURL(/\/problem-reports$/);
+
+    await page.goto('/problem-reports/create');
+    await page.fill('#description', 'The oven timer resets unexpectedly.');
+
+    let dialogMessage: string | null = null;
+    page.once('dialog', async (dialog) => {
+        dialogMessage = dialog.message();
+        await dialog.dismiss();
+    });
+
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect.poll(() => dialogMessage).toContain('unsaved');
+    await expect(page).toHaveURL(/\/problem-reports\/create$/);
+});
+
 test('screenshot upload surface shows a visible focus ring when the hidden file input is focused', async ({
     page,
 }) => {
@@ -65,9 +100,7 @@ test('indexed screenshot validation errors are shown beside the upload field', a
             body: JSON.stringify({
                 message: 'The given data was invalid.',
                 errors: {
-                    'screenshots.0': [
-                        'The screenshots.0 must be an image.',
-                    ],
+                    'screenshots.0': ['The screenshots.0 must be an image.'],
                 },
             }),
         });
@@ -127,6 +160,56 @@ test('screenshot remove button meets touch target size and supports keyboard rem
     await expect(removeButton).not.toBeVisible();
 });
 
+test('screenshot upload surface communicates the five-file limit and recovers after removal', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    await page.goto('/problem-reports/create');
+
+    await page.setInputFiles('#screenshots', [
+        {
+            name: 'screenshot-1.png',
+            mimeType: 'image/png',
+            buffer: Buffer.alloc(1024, 1),
+        },
+        {
+            name: 'screenshot-2.png',
+            mimeType: 'image/png',
+            buffer: Buffer.alloc(1024, 2),
+        },
+        {
+            name: 'screenshot-3.png',
+            mimeType: 'image/png',
+            buffer: Buffer.alloc(1024, 3),
+        },
+        {
+            name: 'screenshot-4.png',
+            mimeType: 'image/png',
+            buffer: Buffer.alloc(1024, 4),
+        },
+        {
+            name: 'screenshot-5.png',
+            mimeType: 'image/png',
+            buffer: Buffer.alloc(1024, 5),
+        },
+    ]);
+
+    const uploadLabel = page.locator('label[for="screenshots"]');
+    await expect(uploadLabel).toHaveText(/Maximum of 5 screenshots reached/);
+    await expect(uploadLabel).toHaveText(/Remove a screenshot to add another/);
+    await expect(uploadLabel).toHaveAttribute('aria-disabled', 'true');
+    await expect(uploadLabel).toHaveCSS('cursor', 'not-allowed');
+    await expect(page.locator('#screenshots')).toBeDisabled();
+
+    await page.getByRole('button', { name: 'Remove screenshot 1' }).click();
+
+    await expect(uploadLabel).toHaveText(/Click to upload screenshots/);
+    await expect(uploadLabel).toHaveAttribute('aria-disabled', 'false');
+    await expect(uploadLabel).toHaveCSS('cursor', 'pointer');
+    await expect(page.locator('#screenshots')).toBeEnabled();
+});
+
 test('copy reference button confirms a successful copy', async ({
     page,
     context,
@@ -139,10 +222,7 @@ test('copy reference button confirms a successful copy', async ({
     await page.click('button[type="submit"]');
     await expect(page).toHaveURL(/\/problem-reports\/[^/]+$/);
 
-    const reference = await page
-        .locator('code.font-mono')
-        .first()
-        .innerText();
+    const reference = await page.locator('code.font-mono').first().innerText();
 
     const copyButton = page.getByRole('button', { name: 'Copy reference' });
 
@@ -241,6 +321,42 @@ test('screenshot preview exposes an explicit download action', async ({
 
     const preview = page.getByRole('img', { name: 'screenshot.png' });
     await expect(preview.locator('xpath=ancestor::a')).toHaveCount(0);
+});
+
+test('multiple detail screenshots are lazy-loaded with a reserved aspect-ratio frame', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    await page.goto('/problem-reports/create');
+    await page.fill('#description', 'Several screenshots reproduce the bug.');
+    await page.setInputFiles('#screenshots', [
+        {
+            name: 'screenshot-1.png',
+            mimeType: 'image/png',
+            buffer: Buffer.alloc(1024 * 1024, 1),
+        },
+        {
+            name: 'screenshot-2.png',
+            mimeType: 'image/png',
+            buffer: Buffer.alloc(1024 * 1024, 2),
+        },
+    ]);
+    await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/problem-reports\/[^/]+$/);
+
+    const previews = page.locator('img[alt$=".png"]');
+    await expect(previews).toHaveCount(2);
+
+    for (const name of ['screenshot-1.png', 'screenshot-2.png']) {
+        const preview = page.getByRole('img', { name });
+        await expect(preview).toHaveAttribute('loading', 'lazy');
+        await expect(
+            preview.locator(
+                'xpath=ancestor::div[contains(@class, "aspect-video")]',
+            ),
+        ).toHaveCount(1);
+    }
 });
 
 test('page titles reflect the current problem report page', async ({
@@ -350,6 +466,32 @@ test('report detail Submitted timestamp includes a time and timezone', async ({
     );
 });
 
+test('report detail shows a titled report only once, as the page heading', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    await page.goto('/problem-reports/create');
+    await page.fill('#title', 'Oven timer resets unexpectedly');
+    await page.fill('#description', 'The oven timer resets unexpectedly.');
+    await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/problem-reports\/[^/]+$/);
+
+    const showPageHeader = page.locator('header[data-slot="page-header"]');
+    await expect(
+        showPageHeader.getByRole('heading', {
+            name: 'Oven timer resets unexpectedly',
+        }),
+    ).toBeVisible();
+
+    await expect(page.getByText('Oven timer resets unexpectedly')).toHaveCount(
+        1,
+    );
+    await expect(
+        page.getByRole('heading', { name: 'Title', exact: true }),
+    ).toHaveCount(0);
+});
+
 test('copy reference button reports a failed copy', async ({ page }) => {
     await loginAsOwner(page);
 
@@ -368,4 +510,35 @@ test('copy reference button reports a failed copy', async ({ page }) => {
     await expect(
         page.getByText('Could not copy reference to clipboard'),
     ).toBeVisible();
+});
+
+test('report detail summary stacks on narrow phones and pairs up at wider widths', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+
+    await page.goto('/problem-reports/create');
+    await page.fill('#description', 'The oven timer resets unexpectedly.');
+    await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/problem-reports\/[^/]+$/);
+
+    const referenceLabel = page.getByText('Reference', { exact: true });
+    const statusLabel = page.getByText('Status', { exact: true });
+    const submittedLabel = page.getByText('Submitted', { exact: true });
+
+    await page.setViewportSize({ width: 375, height: 667 });
+    const referenceBoxNarrow = await referenceLabel.boundingBox();
+    const statusBoxNarrow = await statusLabel.boundingBox();
+    const submittedBoxNarrow = await submittedLabel.boundingBox();
+    expect(statusBoxNarrow!.y).toBeGreaterThan(
+        referenceBoxNarrow!.y + referenceBoxNarrow!.height,
+    );
+    expect(submittedBoxNarrow!.y).toBeGreaterThan(
+        statusBoxNarrow!.y + statusBoxNarrow!.height,
+    );
+
+    await page.setViewportSize({ width: 768, height: 1024 });
+    const referenceBoxWide = await referenceLabel.boundingBox();
+    const statusBoxWide = await statusLabel.boundingBox();
+    expect(Math.abs(referenceBoxWide!.y - statusBoxWide!.y)).toBeLessThan(5);
 });

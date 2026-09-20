@@ -1900,7 +1900,11 @@ export default function StockTransferForm({
                                                         <DialogHeader>
                                                             <DialogTitle>
                                                                 Cancel stock
-                                                                transfer?
+                                                                transfer{' '}
+                                                                {
+                                                                    stockTransfer.number
+                                                                }
+                                                                ?
                                                             </DialogTitle>
                                                             <DialogDescription>
                                                                 Cancelling

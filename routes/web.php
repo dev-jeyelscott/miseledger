@@ -122,6 +122,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         [ProblemReportController::class, 'operatorAttachment'],
     )->name('problem-reports.operator-attachment');
 
+    Route::post(
+        'problem-reports/{reference}/operator/retry-notion-sync',
+        [ProblemReportController::class, 'retryNotionSync'],
+    )->name('problem-reports.retry-notion-sync');
+
     Route::get(
         'organizations/create',
         [OrganizationController::class, 'create'],

@@ -819,7 +819,9 @@ export default function RecipesIndex({
                                             />
                                         </Link>
                                     </th>
-                                    <th className="px-4 py-3">Versions</th>
+                                    <th className="px-4 py-3 text-right">
+                                        Versions
+                                    </th>
                                     <th className="px-4 py-3">
                                         <Link
                                             href={sortHref('activity')}
@@ -891,7 +893,7 @@ export default function RecipesIndex({
                                             <td className="px-4 py-3.5">
                                                 <TypeBadge type={row.type} />
                                             </td>
-                                            <td className="px-4 py-3.5">
+                                            <td className="px-4 py-3.5 text-right tabular-nums">
                                                 <VersionCoverage row={row} />
                                             </td>
                                             <td className="px-4 py-3.5">

@@ -2,12 +2,14 @@
 
 use App\Enums\OrganizationRole;
 use App\Enums\ProblemReportStatus;
+use App\Jobs\SyncProblemReportToNotion;
 use App\Models\Organization;
 use App\Models\PlatformAdmin;
 use App\Models\ProblemReport;
 use App\Models\ProblemReportAttachment;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
 describe('Problem Report', function () {
@@ -462,6 +464,21 @@ describe('Problem Report', function () {
             $response->assertInertia(fn ($page) => $page
                 ->component('problem-reports/show')
                 ->where('viewingContext', 'operator')
+                ->where('reporter.name', $owner->name)
+                ->where('reporter.email', $owner->email)
+            );
+        });
+
+        it('does not expose reporter identity in owner viewing context', function () {
+            $owner = User::factory()->create();
+            $report = ProblemReport::factory()->create(['user_id' => $owner->id]);
+
+            $response = $this->actingAs($owner)->get("/problem-reports/{$report->reference}");
+            $response->assertOk();
+            $response->assertInertia(fn ($page) => $page
+                ->component('problem-reports/show')
+                ->where('viewingContext', 'owner')
+                ->missing('reporter')
             );
         });
 
@@ -472,6 +489,69 @@ describe('Problem Report', function () {
 
             $response = $this->actingAs($user)->get("/problem-reports/{$report->reference}/operator");
             $response->assertForbidden();
+        });
+    });
+
+    describe('Retry Notion sync', function () {
+        it('resets a terminally failed report and redispatches the sync job', function () {
+            Queue::fake();
+
+            $admin = User::factory()->create();
+            PlatformAdmin::query()->create(['user_id' => $admin->getKey()]);
+            $report = ProblemReport::factory()->create([
+                'notion_id' => null,
+                'notion_sync_failed_at' => now(),
+                'notion_sync_failure_reason' => 'duplicate_report_id',
+            ]);
+
+            $response = $this->actingAs($admin)
+                ->post("/problem-reports/{$report->reference}/operator/retry-notion-sync");
+
+            $response->assertRedirect("/problem-reports/{$report->reference}/operator");
+
+            $report->refresh();
+
+            expect($report->notion_sync_failed_at)->toBeNull()
+                ->and($report->notion_sync_failure_reason)->toBeNull();
+
+            Queue::assertPushed(SyncProblemReportToNotion::class, fn (SyncProblemReportToNotion $job): bool => $job->reportId === $report->id);
+        });
+
+        it('denies retry to non platform admins', function () {
+            Queue::fake();
+
+            $user = User::factory()->create();
+            $report = ProblemReport::factory()->create([
+                'notion_id' => null,
+                'notion_sync_failed_at' => now(),
+                'notion_sync_failure_reason' => 'duplicate_report_id',
+            ]);
+
+            Queue::fake();
+
+            $response = $this->actingAs($user)
+                ->post("/problem-reports/{$report->reference}/operator/retry-notion-sync");
+
+            $response->assertForbidden();
+
+            Queue::assertNotPushed(SyncProblemReportToNotion::class);
+        });
+
+        it('does nothing when the report has no terminal failure', function () {
+            Queue::fake();
+
+            $admin = User::factory()->create();
+            PlatformAdmin::query()->create(['user_id' => $admin->getKey()]);
+            $report = ProblemReport::factory()->create(['notion_id' => null]);
+
+            Queue::fake();
+
+            $response = $this->actingAs($admin)
+                ->post("/problem-reports/{$report->reference}/operator/retry-notion-sync");
+
+            $response->assertRedirect("/problem-reports/{$report->reference}/operator");
+
+            Queue::assertNotPushed(SyncProblemReportToNotion::class);
         });
     });
 

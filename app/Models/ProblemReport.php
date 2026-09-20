@@ -25,6 +25,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $notion_synced_at
  * @property Carbon|null $notion_last_checked_at
  * @property string|null $notion_check_error
+ * @property Carbon|null $notion_sync_failed_at
+ * @property string|null $notion_sync_failure_reason
  * @property Carbon|null $email_notified_at
  * @property Carbon|null $email_notification_claimed_at
  * @property Carbon|null $created_at
@@ -42,6 +44,8 @@ class ProblemReport extends Model
         'notion_synced_at',
         'notion_last_checked_at',
         'notion_check_error',
+        'notion_sync_failed_at',
+        'notion_sync_failure_reason',
         'email_notified_at',
         'email_notification_claimed_at',
         'user_id',
@@ -76,6 +80,7 @@ class ProblemReport extends Model
             'status' => ProblemReportStatus::class,
             'notion_synced_at' => 'datetime',
             'notion_last_checked_at' => 'datetime',
+            'notion_sync_failed_at' => 'datetime',
             'email_notified_at' => 'datetime',
             'email_notification_claimed_at' => 'datetime',
         ];

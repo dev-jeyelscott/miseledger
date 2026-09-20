@@ -18,6 +18,8 @@ use App\Models\User;
 use App\Support\Recipes\RecipeComponentCostStatus;
 use App\Support\Recipes\RecipeCostResolver;
 use App\Support\Recipes\RecipeCostResolverException;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 
 beforeEach(function () {
     $this->organization = Organization::factory()->create();
@@ -332,6 +334,117 @@ test('resolving nested cost for a recipe version outside the organization is rej
 
     RecipeCostResolver::resolve($otherOrganization, $this->location, $baseVersion);
 })->throws(RecipeCostResolverException::class);
+
+test('costing a graph with multiple inventory leaves and a shared nested recipe batches stock balance and component queries', function () {
+    $secondItem = InventoryItem::factory()->create([
+        'organization_id' => $this->organization->id,
+        'base_unit_of_measure_id' => $this->baseUnit->id,
+    ]);
+
+    // Shared base recipe: 1000 g of item consumed, yields 10 (yieldUnit) of output.
+    $sharedBase = publishBaseRecipeForCostTest(
+        $this->organization,
+        $this->manager,
+        $this->item,
+        $this->baseUnit,
+        $this->yieldUnit,
+        yieldQuantity: '10',
+        itemQuantity: '1000',
+    );
+
+    receiveStockForNestedCostTest($this->organization, $this->location, $this->storageLocation, $this->item, $this->baseUnit, '5000', '0.0200');
+    receiveStockForNestedCostTest($this->organization, $this->location, $this->storageLocation, $secondItem, $this->baseUnit, '5000', '0.0500');
+
+    // Two branches, A and B, each nest the same shared base recipe, forming a diamond.
+    $branchA = publishNestedRecipeForCostTest(
+        $this->organization,
+        $this->manager,
+        $sharedBase,
+        $this->yieldUnit,
+        yieldQuantity: '5',
+        nestedQuantity: '4',
+    );
+
+    $branchB = publishNestedRecipeForCostTest(
+        $this->organization,
+        $this->manager,
+        $sharedBase,
+        $this->yieldUnit,
+        yieldQuantity: '8',
+        nestedQuantity: '2',
+    );
+
+    $recipe = Recipe::factory()->for($this->organization)->create();
+
+    $rootVersionDraft = app(SaveRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $recipe,
+        [
+            'yield_quantity' => '20',
+            'yield_unit_id' => $this->yieldUnit->id,
+            'notes' => null,
+            'components' => [
+                [
+                    'inventory_item_id' => $secondItem->id,
+                    'quantity' => '100',
+                    'unit_of_measure_id' => $this->baseUnit->id,
+                    'yield_percentage' => '100',
+                    'notes' => null,
+                ],
+                [
+                    'recipe_version_id' => $branchA->id,
+                    'quantity' => '3',
+                    'unit_of_measure_id' => $this->yieldUnit->id,
+                    'yield_percentage' => '100',
+                    'notes' => null,
+                ],
+                [
+                    'recipe_version_id' => $branchB->id,
+                    'quantity' => '1',
+                    'unit_of_measure_id' => $this->yieldUnit->id,
+                    'yield_percentage' => '100',
+                    'notes' => null,
+                ],
+            ],
+        ],
+    );
+
+    $rootVersion = app(PublishRecipeVersion::class)->handle(
+        $this->organization,
+        $this->manager,
+        $rootVersionDraft,
+        ['effective_start_date' => '2026-01-01', 'effective_end_date' => null],
+    );
+
+    $queries = [];
+
+    DB::listen(static function (QueryExecuted $query) use (&$queries): void {
+        $queries[] = strtolower($query->sql);
+    });
+
+    $result = RecipeCostResolver::resolve($this->organization, $this->location, $rootVersion);
+
+    $stockBalanceQueries = collect($queries)->filter(
+        static fn (string $sql): bool => str_contains($sql, 'from "stock_balances"') || str_contains($sql, 'from stock_balances'),
+    );
+
+    $componentQueries = collect($queries)->filter(
+        static fn (string $sql): bool => str_contains($sql, 'from "recipe_version_components"') || str_contains($sql, 'from recipe_version_components'),
+    );
+
+    expect($stockBalanceQueries)->toHaveCount(1)
+        ->and($componentQueries)->toHaveCount(4); // root, branch A, branch B, shared base (loaded once).
+
+    expect($result->complete)->toBeTrue();
+
+    // Shared base cost per output unit: 1000 g * 0.02/g = 20.0000 / 10 = 2.0000.
+    // Branch A: 4 * 2.0000 = 8.0000 total, / 5 yield = 1.6000 per unit.
+    // Branch B: 2 * 2.0000 = 4.0000 total, / 8 yield = 0.5000 per unit.
+    // Second item: 100 g * 0.05/g = 5.0000.
+    // Root total: 5.0000 + (3 * 1.6000) + (1 * 0.5000) = 5.0000 + 4.8000 + 0.5000 = 10.3000.
+    expect($result->totalCost)->toBe('10.3000');
+});
 
 test('resolving nested cost for a location outside the organization is rejected', function () {
     $baseVersion = publishBaseRecipeForCostTest(

@@ -12,7 +12,7 @@ test('stock transfer detail uses confirmation dialogs and history-aware navigati
         ->toContain("import { navigateToPreviousPage } from '@/lib/navigation-history';")
         ->toContain('navigateToPreviousPage(StockTransferController.index().url)')
         ->toContain('Ship stock transfer?')
-        ->toContain('Cancel stock transfer?')
+        ->toContain("Cancel stock transfer{' '} { stockTransfer.number } ?")
         ->toContain('Confirm transfer receipt?')
         ->toContain('Discard unsaved changes?')
         ->toContain('StockTransferController.ship.form(')

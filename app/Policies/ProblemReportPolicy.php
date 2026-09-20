@@ -26,4 +26,9 @@ class ProblemReportPolicy
     {
         return $user->isPlatformAdmin();
     }
+
+    public function retryNotionSync(User $user, ProblemReport $report): bool
+    {
+        return $user->isPlatformAdmin();
+    }
 }

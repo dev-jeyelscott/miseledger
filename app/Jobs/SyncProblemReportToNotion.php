@@ -91,6 +91,10 @@ final class SyncProblemReportToNotion implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        if ($report->notion_sync_failed_at !== null) {
+            return;
+        }
+
         try {
             $this->sync($report, new NotionService($config));
         } catch (NotionRequestException $exception) {
@@ -98,6 +102,7 @@ final class SyncProblemReportToNotion implements ShouldBeUnique, ShouldQueue
                 throw $exception;
             }
 
+            $this->recordPermanentFailure($report, $exception);
             $this->fail($exception);
         }
     }
@@ -123,6 +128,32 @@ final class SyncProblemReportToNotion implements ShouldBeUnique, ShouldQueue
                 ? $exception->isTransient
                 : null,
         ]);
+    }
+
+    /**
+     * Persist a safe, non-secret terminal failure marker so recovery skips this report.
+     */
+    private function recordPermanentFailure(ProblemReport $report, NotionRequestException $exception): void
+    {
+        $report->forceFill([
+            'notion_sync_failed_at' => now(),
+            'notion_sync_failure_reason' => $this->classifyFailureReason($exception),
+        ])->save();
+    }
+
+    /**
+     * Classify a permanent failure into a safe, non-secret diagnostic reason.
+     */
+    private function classifyFailureReason(NotionRequestException $exception): string
+    {
+        return match ($exception->reason) {
+            'duplicate_report_id', 'missing_page_id', 'invalid_configuration' => $exception->reason,
+            default => match ($exception->status) {
+                401, 403 => 'auth_failure',
+                404 => 'not_found',
+                default => 'request_failed',
+            },
+        };
     }
 
     /**

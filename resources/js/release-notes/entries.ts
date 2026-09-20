@@ -76,4 +76,20 @@ export const entries: ReleaseNoteEntry[] = [
         summary:
             'Navigating away from a report with unsaved text or screenshots now prompts for confirmation.',
     },
+    {
+        id: 'problem-report-screenshot-limit-state-fix',
+        publishedOn: '2026-09-17',
+        type: 'fixed',
+        title: 'Problem Report Screenshot Limit Feedback',
+        summary:
+            'The screenshot upload area now clearly shows when the 5-file limit is reached and re-enables automatically once a screenshot is removed.',
+    },
+    {
+        id: 'problem-report-description-required-fix',
+        publishedOn: '2026-09-17',
+        type: 'fixed',
+        title: 'Problem Report Description Required Field',
+        summary:
+            'The description field on the problem report form now correctly signals to browsers and assistive technology that it is required.',
+    },
 ];

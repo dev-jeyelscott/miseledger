@@ -2,6 +2,7 @@
 
 use App\Actions\Inventory\RecordStockMovement;
 use App\Actions\Purchasing\CancelGoodsReceipt;
+use App\Actions\Purchasing\CancelPurchaseOrder;
 use App\Actions\Purchasing\FinalizeGoodsReceipt;
 use App\Actions\Purchasing\SaveGoodsReceipt;
 use App\Enums\GoodsReceiptStatus;
@@ -242,34 +243,41 @@ test(
     },
 );
 
-test('an over receipt is accepted and fulfills the purchase order', function () {
-    $receipt = saveReceivingReceiptForTest(
-        $this->organization,
-        $this->actor,
-        $this->purchaseOrder,
-        $this->purchaseOrderLine,
-        $this->storageLocation,
-        $this->baseUnit,
-        'GR-OVER',
-        '12',
-    );
+test(
+    'a single over receipt is rejected during finalization',
+    function () {
+        $receipt = saveReceivingReceiptForTest(
+            $this->organization,
+            $this->actor,
+            $this->purchaseOrder,
+            $this->purchaseOrderLine,
+            $this->storageLocation,
+            $this->baseUnit,
+            'GR-OVER',
+            '12',
+        );
 
-    app(FinalizeGoodsReceipt::class)->handle(
-        $this->organization,
-        $this->actor,
-        $receipt,
-    );
+        expect(fn () => app(FinalizeGoodsReceipt::class)->handle(
+            $this->organization,
+            $this->actor,
+            $receipt,
+        ))->toThrow(ValidationException::class);
 
-    expect($this->purchaseOrderLine->refresh()->received_base_quantity)
-        ->toBe('12.000000')
-        ->and($this->purchaseOrder->refresh()->status)
-        ->toBe(PurchaseOrderStatus::Received)
-        ->and(StockBalance::query()->sole()->quantity_on_hand)
-        ->toBe('12.000000');
-});
+        expect($receipt->refresh()->status)
+            ->toBe(GoodsReceiptStatus::Draft)
+            ->and($this->purchaseOrderLine->refresh()->received_base_quantity)
+            ->toBe('0.000000')
+            ->and($this->purchaseOrder->refresh()->status)
+            ->toBe(PurchaseOrderStatus::Approved)
+            ->and(StockMovement::query()->count())
+            ->toBe(0)
+            ->and(StockBalance::query()->count())
+            ->toBe(0);
+    },
+);
 
 test(
-    'an existing draft can finish after another receipt already fulfilled the purchase order',
+    'a cumulative over receipt across multiple finalized receipts is rejected',
     function () {
         $firstReceipt = saveReceivingReceiptForTest(
             $this->organization,
@@ -314,18 +322,20 @@ test(
             $secondReceipt,
         );
 
-        app(FinalizeGoodsReceipt::class)->handle(
+        expect(fn () => app(FinalizeGoodsReceipt::class)->handle(
             $this->organization,
             $this->actor,
             $secondReceipt,
-        );
+        ))->toThrow(ValidationException::class);
 
-        expect(
-            $this->purchaseOrderLine
-                ->refresh()
-                ->received_base_quantity,
-        )
-            ->toBe('12.000000')
+        expect($secondReceipt->refresh()->status)
+            ->toBe(GoodsReceiptStatus::Draft)
+            ->and(
+                $this->purchaseOrderLine
+                    ->refresh()
+                    ->received_base_quantity,
+            )
+            ->toBe('10.000000')
             ->and($this->purchaseOrder->refresh()->status)
             ->toBe(PurchaseOrderStatus::Received)
             ->and(
@@ -336,7 +346,7 @@ test(
                     )
                     ->count(),
             )
-            ->toBe(2);
+            ->toBe(1);
     },
 );
 
@@ -468,7 +478,7 @@ test(
                         'storage_location_id' => $this
                             ->storageLocation
                             ->id,
-                        'received_quantity' => '6',
+                        'received_quantity' => '4',
                         'received_unit_of_measure_id' => $this
                             ->baseUnit
                             ->id,
@@ -481,7 +491,7 @@ test(
                         'storage_location_id' => $this
                             ->storageLocation
                             ->id,
-                        'received_quantity' => '7',
+                        'received_quantity' => '6',
                         'received_unit_of_measure_id' => $this
                             ->baseUnit
                             ->id,
@@ -526,9 +536,9 @@ test(
                     ->refresh()
                     ->received_base_quantity,
             )
-            ->toBe('13.000000')
+            ->toBe('10.000000')
             ->and(StockBalance::query()->sole()->quantity_on_hand)
-            ->toBe('13.000000');
+            ->toBe('10.000000');
     },
 );
 
@@ -634,7 +644,7 @@ test(
 );
 
 test(
-    'weighted average costing remains correct for an over receipt',
+    'weighted average costing remains correct for a purchase receipt',
     function () {
         app(RecordStockMovement::class)->handle(
             organization: $this->organization,
@@ -660,7 +670,7 @@ test(
             $this->storageLocation,
             $this->baseUnit,
             'GR-WEIGHTED-AVERAGE',
-            '12',
+            '8',
         );
 
         app(FinalizeGoodsReceipt::class)->handle(
@@ -679,15 +689,15 @@ test(
             ->sole();
 
         expect($receiptMovement->quantity)
-            ->toBe('12.000000')
+            ->toBe('8.000000')
             ->and($receiptMovement->unit_cost)
             ->toBe('10.0000')
             ->and($balance->quantity_on_hand)
-            ->toBe('20.000000')
+            ->toBe('16.000000')
             ->and($balance->average_unit_cost)
-            ->toBe('8.0000')
+            ->toBe('7.5000')
             ->and($balance->inventory_value)
-            ->toBe('160.0000');
+            ->toBe('120.0000');
     },
 );
 
@@ -895,3 +905,110 @@ test(
             );
     },
 );
+
+test('cancelling a purchase order records exactly one audit entry', function () {
+    $manager = User::factory()->create();
+
+    OrganizationMembership::factory()->create([
+        'organization_id' => $this->organization->id,
+        'user_id' => $manager->id,
+        'role' => OrganizationRole::Manager,
+    ]);
+
+    app(CancelPurchaseOrder::class)->handle(
+        $this->organization,
+        $manager,
+        $this->purchaseOrder,
+    );
+
+    expect($this->purchaseOrder->refresh()->status)
+        ->toBe(PurchaseOrderStatus::Cancelled);
+
+    $entry = AuditLog::query()
+        ->where('organization_id', $this->organization->id)
+        ->where('entity_type', 'purchase_order')
+        ->where('entity_id', $this->purchaseOrder->id)
+        ->where('action', 'purchase_order.cancelled')
+        ->sole();
+
+    expect($entry->actor_id)
+        ->toBe($manager->id)
+        ->and($entry->before_data)
+        ->toBe(['status' => PurchaseOrderStatus::Approved->value])
+        ->and($entry->after_data)
+        ->toBe(['status' => PurchaseOrderStatus::Cancelled->value])
+        ->and($entry->correlation_id)
+        ->toBe("purchase_order:{$this->purchaseOrder->id}:cancel")
+        ->and($entry->created_at)
+        ->not->toBeNull();
+
+    app(CancelPurchaseOrder::class)->handle(
+        $this->organization,
+        $manager,
+        $this->purchaseOrder,
+    );
+
+    expect(
+        AuditLog::query()
+            ->where('organization_id', $this->organization->id)
+            ->where('entity_type', 'purchase_order')
+            ->where('entity_id', $this->purchaseOrder->id)
+            ->where('action', 'purchase_order.cancelled')
+            ->count(),
+    )->toBe(1);
+});
+
+test('cancelling a goods receipt records exactly one audit entry', function () {
+    $receipt = saveReceivingReceiptForTest(
+        $this->organization,
+        $this->actor,
+        $this->purchaseOrder,
+        $this->purchaseOrderLine,
+        $this->storageLocation,
+        $this->baseUnit,
+        'GR-CANCEL-AUDIT',
+        '10',
+    );
+
+    app(CancelGoodsReceipt::class)->handle(
+        $this->organization,
+        $this->actor,
+        $receipt,
+    );
+
+    expect($receipt->refresh()->status)
+        ->toBe(GoodsReceiptStatus::Cancelled);
+
+    $entry = AuditLog::query()
+        ->where('organization_id', $this->organization->id)
+        ->where('entity_type', 'goods_receipt')
+        ->where('entity_id', $receipt->id)
+        ->where('action', 'goods_receipt.cancelled')
+        ->sole();
+
+    expect($entry->actor_id)
+        ->toBe($this->actor->id)
+        ->and($entry->before_data)
+        ->toBe(['status' => GoodsReceiptStatus::Draft->value])
+        ->and($entry->after_data['status'])
+        ->toBe(GoodsReceiptStatus::Cancelled->value)
+        ->and($entry->correlation_id)
+        ->toBe("goods_receipt:{$receipt->id}:cancel")
+        ->and($entry->created_at)
+        ->not->toBeNull();
+
+    app(CancelGoodsReceipt::class)->handle(
+        $this->organization,
+        $this->actor,
+        $receipt,
+    );
+
+    expect(
+        AuditLog::query()
+            ->where('organization_id', $this->organization->id)
+            ->where('entity_type', 'goods_receipt')
+            ->where('entity_id', $receipt->id)
+            ->where('action', 'goods_receipt.cancelled')
+            ->count(),
+    )->toBe(1);
+});

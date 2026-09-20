@@ -496,6 +496,40 @@ describe('Sync Problem Report to Notion', function () {
         Http::assertSentCount(1);
     });
 
+    it('quarantines a permanent failure with a safe reason and stops calling Notion', function () {
+        configureProblemReportNotion();
+
+        $report = ProblemReport::factory()->create([
+            'reference' => 'PR-260910-DuPe02',
+        ]);
+
+        Http::fake([
+            'https://api.notion.com/v1/databases/db-123/query' => Http::response(
+                problemReportNotionQueryResponse([
+                    problemReportNotionPage('page-1'),
+                    problemReportNotionPage('page-2'),
+                ]),
+            ),
+        ]);
+
+        $job = (new SyncProblemReportToNotion($report->id))
+            ->withFakeQueueInteractions();
+
+        $job->handle();
+
+        $job->assertFailedWith(NotionRequestException::class);
+
+        $report->refresh();
+
+        expect($report->notion_id)->toBeNull()
+            ->and($report->notion_sync_failed_at)->not->toBeNull()
+            ->and($report->notion_sync_failure_reason)->toBe('duplicate_report_id');
+
+        (new SyncProblemReportToNotion($report->id))->handle();
+
+        Http::assertSentCount(1);
+    });
+
     it('bounded-retries a 429 query before succeeding', function () {
         configureProblemReportNotion();
 
