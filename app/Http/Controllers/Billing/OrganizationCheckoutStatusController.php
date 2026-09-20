@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Billing;
 use App\Enums\OrganizationPermission;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
+use App\Support\Billing\CheckoutPaymentSession;
 use App\Support\Billing\OrganizationSubscriptionAccess;
 use App\Support\Billing\OrganizationSubscriptionAccessResolver;
 use Illuminate\Support\Facades\Gate;
@@ -34,7 +35,7 @@ class OrganizationCheckoutStatusController extends Controller
             // intentionally normalizes to null and therefore remains pending.
             'synchronized' => $access->subscriptionStatus !== null,
 
-            'payment' => $this->paymentData(),
+            'payment' => $this->paymentData($organization),
         ]);
     }
 
@@ -98,9 +99,9 @@ class OrganizationCheckoutStatusController extends Controller
      *     apiBaseUrl: string
      * }|null
      */
-    private function paymentData(): ?array
+    private function paymentData(Organization $organization): ?array
     {
-        $payment = session('billing.checkout.payment');
+        $payment = session(CheckoutPaymentSession::key($organization));
 
         if (! is_array($payment)
             || ! array_all(

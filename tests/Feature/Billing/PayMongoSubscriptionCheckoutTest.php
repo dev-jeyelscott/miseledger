@@ -345,6 +345,52 @@ test(
 );
 
 test(
+    'does not expose a PayMongo payment handoff created for another organization',
+    function (): void {
+        fakePayMongoCheckout();
+
+        [$user, $organizationA] = payMongoBillingOwner();
+        $organizationB = Organization::factory()->create([
+            'trial_ends_at' => null,
+        ]);
+
+        OrganizationMembership::factory()
+            ->for($organizationB)
+            ->for($user)
+            ->create([
+                'role' => OrganizationRole::Owner,
+            ]);
+
+        $this->actingAs($user)
+            ->post(
+                route('organizations.billing.checkout', $organizationA),
+                [
+                    'plan' => 'starter',
+                    'interval' => 'monthly',
+                ],
+            )
+            ->assertRedirect(
+                route('organizations.billing.checkout.success', $organizationA),
+            );
+
+        // Request organization B's success route first, while the payment
+        // handoff flashed for organization A is still available in the
+        // session for this immediately-following request. Without
+        // organization-scoping, the global flash key would leak it here.
+        $responseForOtherOrganization = $this->actingAs($user)->get(
+            route('organizations.billing.checkout.success', $organizationB),
+        );
+
+        $responseForOtherOrganization->assertInertia(
+            fn ($page) => $page->where('payment', null),
+        );
+
+        expect($responseForOtherOrganization->getContent())
+            ->not->toContain('pi_paymongo_123');
+    },
+);
+
+test(
     'reuses the organization customer and pending checkout outcome without duplicate PayMongo customer creation',
     function (): void {
         [$user, $organization] =

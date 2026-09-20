@@ -6,6 +6,7 @@ use App\Actions\Billing\CreateOrganizationCheckoutSession;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Billing\CreateOrganizationCheckoutSessionRequest;
 use App\Models\Organization;
+use App\Support\Billing\CheckoutPaymentSession;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -32,6 +33,6 @@ class OrganizationCheckoutController extends Controller
         }
 
         return to_route('organizations.billing.checkout.success', $organization)
-            ->with('billing.checkout.payment', $outcome->payment);
+            ->with(CheckoutPaymentSession::key($organization), $outcome->payment);
     }
 }

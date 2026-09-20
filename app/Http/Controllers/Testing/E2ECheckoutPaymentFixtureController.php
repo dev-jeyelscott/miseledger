@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Testing;
 use App\Enums\OrganizationPermission;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
+use App\Support\Billing\CheckoutPaymentSession;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 
@@ -27,7 +28,7 @@ class E2ECheckoutPaymentFixtureController extends Controller
         return to_route(
             'organizations.billing.checkout.success',
             $organization,
-        )->with('billing.checkout.payment', [
+        )->with(CheckoutPaymentSession::key($organization), [
             'payment_intent_id' => 'pi_e2e_fixture',
             'client_key' => 'ck_e2e_fixture',
             'public_key' => 'pk_e2e_fixture',
