@@ -48,15 +48,23 @@ final class SaveInventoryItem
             $attributes,
             $inventoryItem,
         ): InventoryItem {
+            $lockedItem = $inventoryItem === null
+                ? null
+                : InventoryItem::query()
+                    ->where('organization_id', $organization->getKey())
+                    ->whereKey($inventoryItem->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
             if (
-                $inventoryItem !== null
+                $lockedItem !== null
                 && ! $attributes['active']
             ) {
                 $this
                     ->ensureStockTransferDependencyCanBeDeactivated
                     ->assertInventoryItemCanBeDeactivated(
                         $organization,
-                        $inventoryItem,
+                        $lockedItem,
                     );
             }
 
@@ -75,14 +83,6 @@ final class SaveInventoryItem
             }
 
             $attributes['base_unit_of_measure_id'] = $baseUnit->id;
-
-            $lockedItem = $inventoryItem === null
-                ? null
-                : InventoryItem::query()
-                    ->where('organization_id', $organization->getKey())
-                    ->whereKey($inventoryItem->getKey())
-                    ->lockForUpdate()
-                    ->firstOrFail();
 
             if ($attributes['inventory_category_id'] !== null) {
                 $category = InventoryCategory::query()

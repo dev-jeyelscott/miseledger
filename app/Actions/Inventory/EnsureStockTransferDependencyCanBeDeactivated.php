@@ -98,8 +98,9 @@ final class EnsureStockTransferDependencyCanBeDeactivated
                         ),
                 ),
             __(
-                'This inventory item cannot be deactivated while it is included in a shipped stock transfer awaiting receipt.',
+                'This inventory item cannot be deactivated while it is included in a draft or shipped stock transfer.',
             ),
+            blockDraftReferences: true,
         );
 
         $this->assertNoNonZeroBalance(
@@ -114,13 +115,18 @@ final class EnsureStockTransferDependencyCanBeDeactivated
      * Lock potentially shippable transfers and reject any already in transit.
      *
      * Draft rows are also locked so deactivation cannot race a shipment that
-     * is about to transition the transfer to shipped.
+     * is about to transition the transfer to shipped. When
+     * $blockDraftReferences is true, any locked Draft reference also blocks
+     * deactivation outright, since deactivating a still-referenced inventory
+     * item would leave the draft transfer unable to ship without operator
+     * repair.
      *
      * @param  Builder<StockTransfer>  $query
      */
     private function assertNoShippedTransfer(
         Builder $query,
         string $message,
+        bool $blockDraftReferences = false,
     ): void {
         $transfers = $query
             ->whereIn('status', [
@@ -134,13 +140,15 @@ final class EnsureStockTransferDependencyCanBeDeactivated
                 'status',
             ]);
 
-        $hasShippedTransfer = $transfers->contains(
-            static fn (StockTransfer $transfer): bool => (
-                $transfer->status === StockTransferStatus::Shipped
-            ),
-        );
+        $isBlocked = $blockDraftReferences
+            ? $transfers->isNotEmpty()
+            : $transfers->contains(
+                static fn (StockTransfer $transfer): bool => (
+                    $transfer->status === StockTransferStatus::Shipped
+                ),
+            );
 
-        if (! $hasShippedTransfer) {
+        if (! $isBlocked) {
             return;
         }
 

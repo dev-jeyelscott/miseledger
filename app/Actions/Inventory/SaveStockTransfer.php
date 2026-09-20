@@ -127,6 +127,16 @@ final class SaveStockTransfer
                 ]);
             }
 
+            $this->lockInventoryItems(
+                $organization,
+                array_map(
+                    static fn (mixed $rawLine): mixed => is_array($rawLine)
+                        ? ($rawLine['inventory_item_id'] ?? null)
+                        : null,
+                    array_values($rawLines),
+                ),
+            );
+
             $lineSnapshots = [];
             $seenItemIds = [];
 
@@ -425,6 +435,33 @@ final class SaveStockTransfer
         }
 
         return $storageLocation;
+    }
+
+    /**
+     * Lock referenced inventory-item rows before validating their active
+     * state, so a concurrent deactivation is serialized against this draft
+     * save instead of racing it. Locked in ascending id order, after
+     * locations and storage locations, to keep a deterministic lock order
+     * across multi-line transfers and avoid deadlocks.
+     *
+     * @param  array<int, mixed>  $itemIds
+     */
+    private function lockInventoryItems(
+        Organization $organization,
+        array $itemIds,
+    ): void {
+        $ids = $this->normalizedLockIds($itemIds);
+
+        if ($ids === []) {
+            return;
+        }
+
+        InventoryItem::query()
+            ->where('organization_id', $organization->id)
+            ->whereIn('id', $ids)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get(['id']);
     }
 
     /**

@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Inventory\CancelStockTransfer;
 use App\Actions\Inventory\ReceiveStockTransfer;
 use App\Actions\Inventory\RecordStockMovement;
 use App\Actions\Inventory\SaveStockTransfer;
@@ -464,6 +465,12 @@ test('non-zero on-hand stock prevents deactivation of its master data', function
 });
 
 test('an inventory item with zero on-hand stock can be deactivated', function () {
+    app(CancelStockTransfer::class)->handle(
+        $this->organization,
+        $this->owner,
+        $this->stockTransfer,
+    );
+
     app(RecordStockMovement::class)->handle(
         organization: $this->organization,
         location: $this->sourceLocation,
@@ -500,6 +507,46 @@ test('an inventory item with zero on-hand stock can be deactivated', function ()
 
     expect($this->inventoryItem->refresh()->active)
         ->toBeFalse();
+});
+
+test('a draft transfer referencing an inventory item blocks its deactivation', function () {
+    app(RecordStockMovement::class)->handle(
+        organization: $this->organization,
+        location: $this->sourceLocation,
+        storageLocation: $this->sourceStorage,
+        inventoryItem: $this->inventoryItem,
+        type: StockMovementType::ManualAdjustment,
+        baseQuantity: '-10.000000',
+        baseUnitOfMeasure: $this->baseUnit,
+        referenceType: 'stock_transfer_deactivation_test',
+        referenceId: $this->inventoryItem->id,
+        occurredAt: now(),
+        actor: $this->owner,
+        idempotencyKey: "stock-transfer-deactivation:draft-block:{$this->inventoryItem->id}",
+    );
+
+    $this->withSession([
+        'active_organization_id' => $this->organization->id,
+    ])
+        ->actingAs($this->owner)
+        ->put(
+            route(
+                'inventory.items.update',
+                $this->inventoryItem,
+            ),
+            [
+                'name' => $this->inventoryItem->name,
+                'sku' => $this->inventoryItem->sku,
+                'base_unit_of_measure_id' => $this->baseUnit->id,
+                'type' => InventoryItemType::Ingredient->value,
+                'yield_percentage' => '100.00',
+                'active' => false,
+            ],
+        )
+        ->assertSessionHasErrors('active');
+
+    expect($this->inventoryItem->refresh()->active)
+        ->toBeTrue();
 });
 
 test('draft transfer cannot be shipped after its destination location is deactivated', function () {
