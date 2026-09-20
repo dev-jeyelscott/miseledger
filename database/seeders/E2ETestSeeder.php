@@ -12,6 +12,7 @@ use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
+use App\Models\Recipe;
 use App\Models\StorageLocation;
 use App\Models\Supplier;
 use App\Models\SupplierItem;
@@ -187,6 +188,12 @@ class E2ETestSeeder extends Seeder
             'created_by' => $user->id,
             'approved_by' => $user->id,
             'approved_at' => now(),
+        ]);
+
+        Recipe::factory()->create([
+            'organization_id' => $organization->id,
+            'code' => 'E2E-RCP-0001',
+            'name' => 'E2E Test Recipe',
         ]);
 
         PurchaseOrderLine::query()->create([

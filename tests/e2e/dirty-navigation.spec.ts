@@ -81,6 +81,61 @@ test('cancelling a dirty manual inventory adjustment form prompts for confirmati
     );
 });
 
+test('navigating away from a dirty recipe edit form via breadcrumb prompts for confirmation', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+    await page.goto('/recipes/1/edit');
+
+    if (page.url().includes('/login')) {
+        test.skip(true, 'No editable recipe is seeded for this organization.');
+    }
+
+    await page.fill('#code', 'RENAMED-VIA-E2E');
+
+    let nativeConfirmSeen = false;
+    page.once('dialog', (dialog) => {
+        nativeConfirmSeen = true;
+        void dialog.dismiss();
+    });
+
+    await page.getByRole('link', { name: 'Recipes' }).click();
+
+    expect(nativeConfirmSeen).toBe(true);
+    await expect(page.locator('#code')).toHaveValue('RENAMED-VIA-E2E');
+});
+
+test('submitting the recipe edit form clears the dirty navigation guard', async ({
+    page,
+}) => {
+    await loginAsOwner(page);
+    await page.goto('/recipes/1/edit');
+
+    if (page.url().includes('/login')) {
+        test.skip(true, 'No editable recipe is seeded for this organization.');
+    }
+
+    const currentCode = await page.locator('#code').inputValue();
+
+    await page.fill('#code', 'RENAMED-VIA-E2E');
+
+    let nativeConfirmSeen = false;
+    page.on('dialog', (dialog) => {
+        nativeConfirmSeen = true;
+        void dialog.dismiss();
+    });
+
+    await page.getByRole('button', { name: /^save recipe$/i }).click();
+    await expect(page).toHaveURL(/\/recipes\/1\/edit$/);
+    await expect(page.locator('#code')).toHaveValue('RENAMED-VIA-E2E');
+
+    expect(nativeConfirmSeen).toBe(false);
+
+    await page.fill('#code', currentCode);
+    await page.getByRole('button', { name: /^save recipe$/i }).click();
+    await expect(page.locator('#code')).toHaveValue(currentCode);
+});
+
 test('navigating away from a dirty profile form prompts for confirmation', async ({
     page,
 }) => {

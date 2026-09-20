@@ -1,4 +1,5 @@
 import { Form, Head, router, usePage } from '@inertiajs/react';
+import { useEffect } from 'react';
 
 import RecipeController from '@/actions/App/Http/Controllers/Recipes/RecipeController';
 import InputError from '@/components/input-error';
@@ -7,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
+import { useDirtyFormNavigation } from '@/hooks/use-dirty-form-navigation';
 import { dashboard } from '@/routes';
 import type { RecipeData } from '@/types';
 
@@ -60,11 +62,28 @@ function canUseBrowserBack(): boolean {
     }
 }
 
+function DirtyStateTracker({
+    dirty,
+    onChange,
+}: {
+    dirty: boolean;
+    onChange: (dirty: boolean) => void;
+}) {
+    useEffect(() => {
+        onChange(dirty);
+    }, [dirty, onChange]);
+
+    return null;
+}
+
 export default function EditRecipe({ recipe }: Props) {
     const currentUrl = usePage().url;
+    const dirtyFormNavigation = useDirtyFormNavigation(
+        'Discard unsaved recipe changes?',
+    );
 
-    const goBack = (isDirty: boolean): void => {
-        if (isDirty && !window.confirm('Discard unsaved recipe changes?')) {
+    const goBack = (): void => {
+        if (!dirtyFormNavigation.confirmNavigation()) {
             return;
         }
 
@@ -105,8 +124,13 @@ export default function EditRecipe({ recipe }: Props) {
                         errorBag="editRecipe"
                         className="grid gap-5"
                     >
-                        {({ processing, errors, isDirty }) => (
+                        {({ processing, errors, isDirty, wasSuccessful }) => (
                             <>
+                                <DirtyStateTracker
+                                    dirty={isDirty && !wasSuccessful}
+                                    onChange={dirtyFormNavigation.setIsDirty}
+                                />
+
                                 <input
                                     type="hidden"
                                     name="return_to"
@@ -185,12 +209,12 @@ export default function EditRecipe({ recipe }: Props) {
                                         type="button"
                                         variant="outline"
                                         disabled={processing}
-                                        onClick={() => goBack(isDirty)}
+                                        onClick={goBack}
                                     >
                                         Back
                                     </Button>
 
-                                    {isDirty && (
+                                    {isDirty && !wasSuccessful && (
                                         <span className="text-sm text-muted-foreground">
                                             Unsaved changes
                                         </span>
