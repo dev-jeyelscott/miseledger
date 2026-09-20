@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Inventory\CancelStockCount;
 use App\Actions\Inventory\FinalizeStockCount;
 use App\Actions\Inventory\RecordStockMovement;
 use App\Actions\Inventory\SaveStockCount;
@@ -1308,5 +1309,135 @@ test(
             ->toBe($lineCount)
             ->and($queryCount)
             ->toBeLessThan((int) ($lineCount * 4.5));
+    },
+);
+
+test(
+    'cancelling a draft stock count records exactly one audit entry with the prior status',
+    function () {
+        $count = app(SaveStockCount::class)->handle(
+            $this->organization,
+            $this->actor,
+            [
+                'number' => 'COUNT-CANCEL-DRAFT',
+                'location_id' => $this->location->id,
+                'storage_location_id' => $this->storageLocation->id,
+                'lines' => [
+                    [
+                        'inventory_item_id' => $this->inventoryItem->id,
+                        'counted_quantity' => '1.5',
+                        'count_unit_id' => $this->kilogram->id,
+                        'notes' => null,
+                    ],
+                ],
+            ],
+        );
+
+        $cancelled = app(CancelStockCount::class)->handle(
+            $this->organization,
+            $this->actor,
+            $count,
+        );
+
+        $auditLog = AuditLog::query()
+            ->where('action', 'stock_count.cancelled')
+            ->sole();
+
+        expect($cancelled->status)
+            ->toBe(StockCountStatus::Cancelled)
+            ->and(
+                AuditLog::query()
+                    ->where('action', 'stock_count.cancelled')
+                    ->count(),
+            )
+            ->toBe(1)
+            ->and($auditLog->before_data)
+            ->toBe(['status' => StockCountStatus::Draft->value])
+            ->and($auditLog->after_data)
+            ->toBe(['status' => StockCountStatus::Cancelled->value])
+            ->and($auditLog->correlation_id)
+            ->toBe("stock-count:{$count->id}:cancel")
+            ->and($auditLog->actor_id)
+            ->toBe($this->actor->id)
+            ->and(StockMovement::query()->count())
+            ->toBe(0)
+            ->and(StockBalance::query()->count())
+            ->toBe(0);
+    },
+);
+
+test(
+    'cancelling a submitted stock count records the submitted prior status and remains inventory-neutral',
+    function () {
+        $count = createSubmittedStockCountForTest(
+            $this->organization,
+            $this->actor,
+            $this->location,
+            $this->storageLocation,
+            $this->inventoryItem,
+            $this->kilogram,
+            '1.2',
+            'COUNT-CANCEL-SUBMITTED',
+        );
+
+        $cancelled = app(CancelStockCount::class)->handle(
+            $this->organization,
+            $this->actor,
+            $count,
+        );
+
+        $auditLog = AuditLog::query()
+            ->where('action', 'stock_count.cancelled')
+            ->sole();
+
+        expect($cancelled->status)
+            ->toBe(StockCountStatus::Cancelled)
+            ->and($auditLog->before_data)
+            ->toBe(['status' => StockCountStatus::Submitted->value])
+            ->and($auditLog->after_data)
+            ->toBe(['status' => StockCountStatus::Cancelled->value])
+            ->and($auditLog->correlation_id)
+            ->toBe("stock-count:{$count->id}:cancel")
+            ->and(StockMovement::query()->count())
+            ->toBe(0)
+            ->and(StockBalance::query()->count())
+            ->toBe(0);
+    },
+);
+
+test(
+    'repeated cancellation of an already cancelled stock count creates no additional audit entry',
+    function () {
+        $count = createSubmittedStockCountForTest(
+            $this->organization,
+            $this->actor,
+            $this->location,
+            $this->storageLocation,
+            $this->inventoryItem,
+            $this->kilogram,
+            '1.2',
+            'COUNT-CANCEL-IDEMPOTENT',
+        );
+
+        app(CancelStockCount::class)->handle(
+            $this->organization,
+            $this->actor,
+            $count,
+        );
+
+        $cancelledAgain = app(CancelStockCount::class)->handle(
+            $this->organization,
+            $this->actor,
+            $count,
+        );
+
+        expect($cancelledAgain->status)
+            ->toBe(StockCountStatus::Cancelled)
+            ->and(
+                AuditLog::query()
+                    ->where('action', 'stock_count.cancelled')
+                    ->count(),
+            )
+            ->toBe(1);
     },
 );

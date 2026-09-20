@@ -2,6 +2,7 @@
 
 namespace App\Actions\Inventory;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\OrganizationPermission;
 use App\Enums\StockCountStatus;
 use App\Models\Organization;
@@ -12,6 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 final class CancelStockCount
 {
+    public function __construct(
+        private readonly RecordAuditEntry $recordAuditEntry,
+    ) {}
+
     /**
      * Cancel an inventory-neutral draft or submitted stock count.
      */
@@ -45,9 +50,26 @@ final class CancelStockCount
                 ]);
             }
 
+            $previousStatus = $count->status;
+
             $count->forceFill([
                 'status' => StockCountStatus::Cancelled,
             ])->save();
+
+            $this->recordAuditEntry->handle(
+                organization: $organization,
+                actor: $actor,
+                action: 'stock_count.cancelled',
+                entityType: 'stock_count',
+                entityId: $count->id,
+                beforeData: [
+                    'status' => $previousStatus->value,
+                ],
+                afterData: [
+                    'status' => StockCountStatus::Cancelled->value,
+                ],
+                correlationId: "stock-count:{$count->id}:cancel",
+            );
 
             return $count->refresh();
         }, 3);
