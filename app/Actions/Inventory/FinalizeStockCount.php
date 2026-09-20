@@ -150,6 +150,7 @@ final class FinalizeStockCount
                 ->whereIn('id', $baseUnitIds)
                 ->where('active', true)
                 ->orderBy('id')
+                ->lockForUpdate()
                 ->get()
                 ->keyBy('id');
 
