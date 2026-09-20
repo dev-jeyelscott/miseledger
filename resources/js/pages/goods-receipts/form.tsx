@@ -369,6 +369,10 @@ export default function GoodsReceiptForm({
     const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
     const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
     const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+    const [lineToRemove, setLineToRemove] = useState<{
+        key: string;
+        itemName: string;
+    } | null>(null);
     const allowNextNavigation = useRef(false);
 
     useEffect(() => {
@@ -458,6 +462,45 @@ export default function GoodsReceiptForm({
         setLines((current) =>
             current.filter((_, currentIndex) => currentIndex !== index),
         );
+    };
+
+    const isLinePopulated = (line: LineState): boolean =>
+        line.purchaseOrderLineId !== '' ||
+        line.storageLocationId !== '' ||
+        line.receivedQuantity !== '' ||
+        line.receivedUnitId !== '' ||
+        isPositiveQuantity(line.rejectedQuantity) ||
+        isPositiveQuantity(line.damagedQuantity) ||
+        line.notes.trim() !== '';
+
+    const requestRemoveLine = (index: number) => {
+        const line = lines[index];
+
+        if (!isLinePopulated(line)) {
+            removeLine(index);
+
+            return;
+        }
+
+        const selectedPoLine = purchaseOrder.lines.find(
+            (poLine) => poLine.id.toString() === line.purchaseOrderLineId,
+        );
+
+        setLineToRemove({
+            key: line.key,
+            itemName: selectedPoLine?.itemName ?? `Line ${index + 1}`,
+        });
+    };
+
+    const confirmRemoveLine = () => {
+        if (lineToRemove === null) {
+            return;
+        }
+
+        setLines((current) =>
+            current.filter((line) => line.key !== lineToRemove.key),
+        );
+        setLineToRemove(null);
     };
 
     const formAttributes =
@@ -786,7 +829,9 @@ export default function GoodsReceiptForm({
                                                         variant="outline"
                                                         size="sm"
                                                         onClick={() =>
-                                                            removeLine(index)
+                                                            requestRemoveLine(
+                                                                index,
+                                                            )
                                                         }
                                                         disabled={
                                                             lines.length === 1
@@ -1843,6 +1888,44 @@ export default function GoodsReceiptForm({
                     </Button>
                 </div>
             </div>
+
+            <Dialog
+                open={lineToRemove !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setLineToRemove(null);
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            Remove {lineToRemove?.itemName}?
+                        </DialogTitle>
+                        <DialogDescription>
+                            This line's entered storage location, accepted,
+                            rejected, and damaged quantities, units, and notes
+                            will be discarded and cannot be recovered.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button type="button" variant="outline">
+                                Keep line
+                            </Button>
+                        </DialogClose>
+
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={confirmRemoveLine}
+                        >
+                            Remove line
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
                 <DialogContent>
