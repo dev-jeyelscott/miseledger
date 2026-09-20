@@ -10,6 +10,12 @@ use Illuminate\Console\Command;
 
 class InventoryImportOpeningBalances extends Command
 {
+    /**
+     * A deterministic upper bound on the opening-balance file size, enforced
+     * before the file is opened for parsing.
+     */
+    private const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+
     protected $signature = 'inventory:import-opening-balances
         {organization : The organization ID owning the imported records}
         {actor : The user ID recording the opening balances}
@@ -54,12 +60,35 @@ class InventoryImportOpeningBalances extends Command
             return self::FAILURE;
         }
 
-        $result = $importOpeningBalances->handle(
-            $organization,
-            $actor,
-            (string) $this->argument('batch'),
-            (string) file_get_contents($file),
-        );
+        $fileSize = filesize($file);
+
+        if ($fileSize === false || $fileSize > self::MAX_FILE_SIZE_BYTES) {
+            $this->error(sprintf(
+                'The opening balance file exceeds the maximum allowed size of %d bytes.',
+                self::MAX_FILE_SIZE_BYTES,
+            ));
+
+            return self::FAILURE;
+        }
+
+        $stream = fopen($file, 'r');
+
+        if ($stream === false) {
+            $this->error("Cannot open the opening balance file: {$file}");
+
+            return self::FAILURE;
+        }
+
+        try {
+            $result = $importOpeningBalances->handle(
+                $organization,
+                $actor,
+                (string) $this->argument('batch'),
+                $stream,
+            );
+        } finally {
+            fclose($stream);
+        }
 
         $this->info(sprintf(
             'Opening balances: %d created, %d skipped as already imported, %d row error%s.',

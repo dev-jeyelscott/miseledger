@@ -106,6 +106,32 @@ test('the import-opening-balances command fails for an unknown actor', function 
     }
 });
 
+test('the import-opening-balances command refuses a file exceeding the maximum file size', function () {
+    $organization = Organization::factory()->create();
+    $actor = User::factory()->create();
+
+    $path = tempnam(sys_get_temp_dir(), 'opening-balances-');
+    $handle = fopen($path, 'w');
+    fseek($handle, 10 * 1024 * 1024);
+    fwrite($handle, '0');
+    fclose($handle);
+
+    try {
+        $this->artisan('inventory:import-opening-balances', [
+            'organization' => $organization->id,
+            'actor' => $actor->id,
+            'batch' => 'cli-batch',
+            'file' => $path,
+        ])
+            ->assertExitCode(1)
+            ->expectsOutputToContain('exceeds the maximum allowed size');
+    } finally {
+        unlink($path);
+    }
+
+    expect(StockMovement::query()->count())->toBe(0);
+});
+
 test('the import-opening-balances command refuses to import into a commercially read-only organization', function () {
     $organization = Organization::factory()->create([
         'trial_ends_at' => now()->subDay(),

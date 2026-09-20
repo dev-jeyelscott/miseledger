@@ -2,10 +2,80 @@
 
 namespace App\Support\Csv;
 
+use Generator;
 use RuntimeException;
 
 final class CsvTable
 {
+    /**
+     * Parse a CSV stream into header-keyed rows one at a time, skipping
+     * blank lines, without buffering the whole table into memory.
+     *
+     * Row numbers are 1-based and count the header line, so the first data
+     * row is reported as row 2, matching what a spreadsheet author sees.
+     *
+     * @param  resource  $stream  A readable, seekable stream positioned at the start of the CSV.
+     * @return Generator<int, array{number: int, data: array<string, string>}>
+     */
+    public static function parseStream($stream): Generator
+    {
+        $header = null;
+        $lineNumber = 0;
+
+        while (($startPosition = ftell($stream)) !== false && ($fields = fgetcsv($stream)) !== false) {
+            $endPosition = ftell($stream);
+
+            if ($endPosition === false) {
+                throw new RuntimeException('Unable to read the current position of the CSV stream.');
+            }
+
+            $recordByteLength = $endPosition - $startPosition;
+            $consumed = '';
+
+            if ($recordByteLength > 0) {
+                fseek($stream, $startPosition);
+                $consumed = fread($stream, $recordByteLength);
+                fseek($stream, $endPosition);
+
+                if ($consumed === false) {
+                    throw new RuntimeException('Unable to read the CSV record just consumed.');
+                }
+            }
+
+            $linesInRecord = max(preg_match_all("/\r\n|\r|\n/", $consumed), 1);
+            $lineNumber += $linesInRecord;
+
+            $isBlank = count($fields) === 1
+                && ($fields[0] === null || trim((string) $fields[0]) === '');
+
+            if ($isBlank) {
+                continue;
+            }
+
+            if ($header === null) {
+                $header = array_map(
+                    static fn (mixed $column): string => strtolower(
+                        trim((string) $column),
+                    ),
+                    $fields,
+                );
+
+                continue;
+            }
+
+            $data = [];
+
+            foreach ($header as $position => $column) {
+                $data[$column] = trim((string) ($fields[$position] ?? ''));
+            }
+
+            yield [
+                'number' => $lineNumber - $linesInRecord + 1,
+                'data' => $data,
+            ];
+        }
+    }
+
     /**
      * Parse raw CSV content into header-keyed rows, skipping blank lines.
      *

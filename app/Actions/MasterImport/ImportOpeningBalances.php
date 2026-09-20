@@ -21,12 +21,24 @@ final class ImportOpeningBalances
 {
     private const LOOKUP_CHUNK_SIZE = 1000;
 
+    /**
+     * Rows are validated, resolved, and recorded in bounded chunks so peak
+     * memory stays flat regardless of how large the import file is.
+     */
+    private const PROCESSING_CHUNK_ROWS = 500;
+
+    /**
+     * A deterministic upper bound on data rows, enforced before any
+     * tenant-scoped lookup or ledger write begins.
+     */
+    private const MAX_DATA_ROWS = 50000;
+
     public function __construct(
         private readonly RecordOpeningBalance $recordOpeningBalance,
     ) {}
 
     /**
-     * Import initial stock quantities from CSV content, recording one
+     * Import initial stock quantities from a CSV stream, recording one
      * auditable OPENING_BALANCE movement per row through the same workflow
      * used by the manual opening-balance form. No balance is ever written
      * directly; every row flows through RecordOpeningBalance so conversion
@@ -42,12 +54,17 @@ final class ImportOpeningBalances
      * duplicates stock movements. Re-running the batch with a row's data
      * changed is rejected as a row error instead of silently overwriting
      * the original movement.
+     *
+     * The CSV is parsed and processed in bounded chunks rather than being
+     * fully buffered, so import memory stays flat as the file grows.
+     *
+     * @param  resource  $csvStream  A readable, seekable stream positioned at the start of the CSV.
      */
     public function handle(
         Organization $organization,
         User $actor,
         string $batchId,
-        string $csvContents,
+        $csvStream,
     ): OpeningBalanceImportResult {
         $batchId = trim($batchId);
 
@@ -68,6 +85,61 @@ final class ImportOpeningBalances
             );
         }
 
+        $dataRowCount = 0;
+
+        foreach (CsvTable::parseStream($csvStream) as $row) {
+            $dataRowCount++;
+
+            if ($dataRowCount > self::MAX_DATA_ROWS) {
+                throw ValidationException::withMessages([
+                    'file' => __(
+                        'The opening balance file exceeds the maximum of :max data rows.',
+                        ['max' => self::MAX_DATA_ROWS],
+                    ),
+                ]);
+            }
+        }
+
+        rewind($csvStream);
+
+        $created = 0;
+        $skipped = 0;
+        $errors = [];
+        $chunk = [];
+
+        foreach (CsvTable::parseStream($csvStream) as $row) {
+            $chunk[] = $row;
+
+            if (count($chunk) >= self::PROCESSING_CHUNK_ROWS) {
+                $chunkResult = $this->processChunk($organization, $actor, $batchId, $chunk);
+                $created += $chunkResult->created;
+                $skipped += $chunkResult->skipped;
+                $errors = [...$errors, ...$chunkResult->errors];
+                $chunk = [];
+            }
+        }
+
+        if ($chunk !== []) {
+            $chunkResult = $this->processChunk($organization, $actor, $batchId, $chunk);
+            $created += $chunkResult->created;
+            $skipped += $chunkResult->skipped;
+            $errors = [...$errors, ...$chunkResult->errors];
+        }
+
+        return new OpeningBalanceImportResult($created, $skipped, $errors);
+    }
+
+    /**
+     * Validate, resolve, and record a single bounded chunk of CSV rows.
+     *
+     * @param  list<array{number: int, data: array<string, string>}>  $rows
+     */
+    private function processChunk(
+        Organization $organization,
+        User $actor,
+        string $batchId,
+        array $rows,
+    ): OpeningBalanceImportResult {
         $created = 0;
         $skipped = 0;
         $errors = [];
@@ -78,7 +150,7 @@ final class ImportOpeningBalances
         $itemSkus = [];
         $unitSymbols = [];
 
-        foreach (CsvTable::parse($csvContents) as $row) {
+        foreach ($rows as $row) {
             $data = $row['data'];
             $locationCode = strtoupper(trim($data['location_code'] ?? ''));
             $storageLocationCode = strtoupper(
