@@ -17,7 +17,7 @@ use Inertia\Testing\AssertableInertia as Assert;
 
 test('platform explorer routes preserve the existing platform administrator boundary', function () {
     $normalUser = User::factory()->create();
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
     $targetUser = User::factory()->create();
     $organization = Organization::factory()->create();
 
@@ -75,7 +75,7 @@ test('platform explorer exposes only read-only HTTP routes', function () {
 });
 
 test('users index is bounded searchable filterable sortable and prop minimized', function () {
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
 
     PlatformAdmin::query()->create([
         'user_id' => $platformUser->getKey(),
@@ -145,7 +145,7 @@ test('users index is bounded searchable filterable sortable and prop minimized',
 });
 
 test('user detail exposes bounded safe memberships and organization cross-link identifiers', function () {
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
     $target = User::factory()->withTwoFactor()->create();
 
     PlatformAdmin::query()->create([
@@ -201,7 +201,7 @@ test('user detail exposes bounded safe memberships and organization cross-link i
 test('organization index keeps administrative active separate from resolver commercial access', function () {
     Carbon::setTestNow('2026-09-11 12:00:00');
 
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
 
     PlatformAdmin::query()->create([
         'user_id' => $platformUser->getKey(),
@@ -286,7 +286,7 @@ test('organization index keeps administrative active separate from resolver comm
 });
 
 test('organization detail exposes bounded safe member and location context', function () {
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
 
     PlatformAdmin::query()->create([
         'user_id' => $platformUser->getKey(),
@@ -348,7 +348,7 @@ test('organization detail exposes bounded safe member and location context', fun
 });
 
 test('organization explorer resolves commercial access with bounded billing queries', function () {
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
 
     PlatformAdmin::query()->create([
         'user_id' => $platformUser->getKey(),

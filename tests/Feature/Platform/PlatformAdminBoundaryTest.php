@@ -57,7 +57,7 @@ test('organization owners and tenant commercial state do not confer platform aut
 });
 
 test('explicitly granted platform admins can access the platform console', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withTwoFactor()->create();
 
     PlatformAdmin::query()->create([
         'user_id' => $user->getKey(),
@@ -74,7 +74,7 @@ test('explicitly granted platform admins can access the platform console', funct
 });
 
 test('platform admins with zero organization memberships can access the platform console', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withTwoFactor()->create();
 
     expect($user->organizationMemberships()->exists())->toBeFalse();
 
@@ -92,6 +92,72 @@ test('platform admins with zero organization memberships can access the platform
                 ->where('organizationContext.active', null)
                 ->where('organizationContext.memberships', []),
         );
+});
+
+test('platform admins without an approved strong factor are routed to security settings', function () {
+    $user = User::factory()->create();
+
+    PlatformAdmin::query()->create([
+        'user_id' => $user->getKey(),
+    ]);
+
+    expect($user->hasApprovedStrongFactor())->toBeFalse();
+
+    $this->actingAs($user)
+        ->get(route('admin.dashboard'))
+        ->assertRedirect(route('security.edit'));
+});
+
+test('platform admins with an unconfirmed two-factor secret are routed to security settings', function () {
+    $user = User::factory()->create([
+        'two_factor_secret' => encrypt('secret'),
+        'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-1'])),
+        'two_factor_confirmed_at' => null,
+    ]);
+
+    PlatformAdmin::query()->create([
+        'user_id' => $user->getKey(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('admin.dashboard'))
+        ->assertRedirect(route('security.edit'));
+});
+
+test('platform admins with a registered passkey can access the platform console without two-factor', function () {
+    $user = User::factory()->create();
+
+    PlatformAdmin::query()->create([
+        'user_id' => $user->getKey(),
+    ]);
+
+    $user->passkeys()->create([
+        'name' => 'Security key',
+        'credential_id' => 'test-credential-id',
+        'credential' => ['aaguid' => null],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('admin.dashboard'))
+        ->assertOk();
+});
+
+test('revoked platform grant still applies even with an approved strong factor', function () {
+    $user = User::factory()->withTwoFactor()->create();
+
+    $grant = PlatformAdmin::query()->create([
+        'user_id' => $user->getKey(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('admin.dashboard'))
+        ->assertOk();
+
+    $grant->delete();
+
+    $this->actingAs($user)
+        ->get(route('admin.dashboard'))
+        ->assertForbidden();
 });
 
 test('user platform capability is derived only from the explicit platform grant', function () {

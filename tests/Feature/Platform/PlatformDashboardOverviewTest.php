@@ -12,7 +12,7 @@ use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('platform overview aggregates organizations users and exact open problem report statuses', function () {
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
     $verifiedUser = User::factory()->create();
     User::factory()->unverified()->create();
 
@@ -88,7 +88,7 @@ test('platform overview aggregates organizations users and exact open problem re
 });
 
 test('open problem reports are bounded deterministically and expose only safe overview fields', function () {
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
     $reportUser = User::factory()->create();
 
     PlatformAdmin::query()->create([
@@ -142,7 +142,7 @@ test('open problem reports are bounded deterministically and expose only safe ov
 });
 
 test('failed billing payments are filtered bounded ordered and preserve minor-unit money integrity', function () {
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
 
     PlatformAdmin::query()->create([
         'user_id' => $platformUser->getKey(),
@@ -220,7 +220,7 @@ test('failed billing payments are filtered bounded ordered and preserve minor-un
 });
 
 test('platform overview remains available to platform admins without organization memberships', function () {
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
 
     PlatformAdmin::query()->create([
         'user_id' => $platformUser->getKey(),

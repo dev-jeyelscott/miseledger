@@ -18,7 +18,7 @@ use Inertia\Testing\AssertableInertia as Assert;
 
 test('platform billing pages preserve the existing administrator boundary and expose only read routes', function () {
     $normalUser = User::factory()->create();
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
 
     PlatformAdmin::query()->create([
         'user_id' => $platformUser->getKey(),
@@ -60,7 +60,7 @@ test('platform billing pages preserve the existing administrator boundary and ex
 });
 
 test('billing overview scopes current-month captures to the selected mode and keeps currencies separate', function () {
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
 
     PlatformAdmin::query()->create([
         'user_id' => $platformUser->getKey(),
@@ -186,7 +186,7 @@ test('billing overview scopes current-month captures to the selected mode and ke
 });
 
 test('billing overview groups plan projections by stable internal plan code within the selected mode', function () {
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
 
     PlatformAdmin::query()->create([
         'user_id' => $platformUser->getKey(),
@@ -261,7 +261,7 @@ test('billing overview groups plan projections by stable internal plan code with
 });
 
 test('subscription index is paginated filterable and exposes only minimized local projection fields', function () {
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
 
     PlatformAdmin::query()->create([
         'user_id' => $platformUser->getKey(),
@@ -360,7 +360,7 @@ test('subscription index is paginated filterable and exposes only minimized loca
 });
 
 test('payment index preserves failed attempts supports filters and keeps provider-sensitive fields server-only', function () {
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
 
     PlatformAdmin::query()->create([
         'user_id' => $platformUser->getKey(),
@@ -445,7 +445,7 @@ test('payment index preserves failed attempts supports filters and keeps provide
 });
 
 test('billing indexes keep query counts bounded as page size grows', function () {
-    $platformUser = User::factory()->create();
+    $platformUser = User::factory()->withTwoFactor()->create();
 
     PlatformAdmin::query()->create([
         'user_id' => $platformUser->getKey(),

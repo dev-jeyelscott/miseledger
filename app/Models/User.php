@@ -67,6 +67,15 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     }
 
     /**
+     * Determine whether this identity has an approved strong authentication factor
+     * (confirmed TOTP two-factor authentication or a registered passkey).
+     */
+    public function hasApprovedStrongFactor(): bool
+    {
+        return $this->hasEnabledTwoFactorAuthentication() || $this->hasPasskeysEnabled();
+    }
+
+    /**
      * Get provider connections privately owned by this user.
      *
      * @return HasMany<AiProviderConnection, $this>
