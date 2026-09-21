@@ -450,3 +450,101 @@ test('non-stock receiving evidence rejects cross-tenant units and locations', fu
         ->and(StockMovement::query()->count())
         ->toBe(0);
 });
+
+test('rejected quantity exceeding the ordered quantity is rejected at finalization', function () {
+    $receipt = saveDispositionReceiptForTest(
+        $this->organization,
+        $this->actor,
+        $this->purchaseOrder,
+        $this->purchaseOrderLine,
+        null,
+        null,
+        $this->baseUnit,
+        null,
+        'GR-OVER-LIMIT-REJECTED',
+        '0',
+        '100',
+        '0',
+    );
+
+    expect(fn () => app(FinalizeGoodsReceipt::class)->handle(
+        $this->organization,
+        $this->actor,
+        $receipt,
+    ))->toThrow(ValidationException::class);
+
+    expect($receipt->refresh()->status)
+        ->toBe(GoodsReceiptStatus::Draft)
+        ->and($this->purchaseOrderLine->refresh()->received_base_quantity)
+        ->toBe('0.000000')
+        ->and(StockMovement::query()->count())
+        ->toBe(0);
+});
+
+test('combined accepted rejected and damaged quantity exceeding the ordered quantity is rejected at finalization', function () {
+    $receipt = saveDispositionReceiptForTest(
+        $this->organization,
+        $this->actor,
+        $this->purchaseOrder,
+        $this->purchaseOrderLine,
+        $this->storageLocation,
+        $this->baseUnit,
+        $this->baseUnit,
+        $this->baseUnit,
+        'GR-OVER-LIMIT-COMBINED',
+        '6',
+        '3',
+        '3',
+    );
+
+    expect(fn () => app(FinalizeGoodsReceipt::class)->handle(
+        $this->organization,
+        $this->actor,
+        $receipt,
+    ))->toThrow(ValidationException::class);
+
+    expect($receipt->refresh()->status)
+        ->toBe(GoodsReceiptStatus::Draft)
+        ->and($this->purchaseOrderLine->refresh()->received_base_quantity)
+        ->toBe('0.000000')
+        ->and(StockMovement::query()->count())
+        ->toBe(0);
+});
+
+test('finalize rejects non-stock evidence exceeding the ordered quantity even when persisted directly', function () {
+    $receipt = GoodsReceipt::query()->create([
+        'organization_id' => $this->organization->id,
+        'location_id' => $this->location->id,
+        'purchase_order_id' => $this->purchaseOrder->id,
+        'supplier_id' => $this->supplier->id,
+        'number' => 'GR-BYPASSED-EVIDENCE',
+        'status' => GoodsReceiptStatus::Draft,
+        'received_at' => null,
+        'received_by' => null,
+    ]);
+
+    GoodsReceiptNonStockLine::query()->create([
+        'goods_receipt_id' => $receipt->id,
+        'goods_receipt_line_id' => null,
+        'purchase_order_line_id' => $this->purchaseOrderLine->id,
+        'inventory_item_id' => $this->inventoryItem->id,
+        'rejected_quantity' => '100.000000',
+        'rejected_unit_of_measure_id' => $this->baseUnit->id,
+        'rejected_base_quantity' => '100.000000',
+        'damaged_quantity' => null,
+        'damaged_unit_of_measure_id' => null,
+        'damaged_base_quantity' => null,
+        'notes' => null,
+    ]);
+
+    expect(fn () => app(FinalizeGoodsReceipt::class)->handle(
+        $this->organization,
+        $this->actor,
+        $receipt,
+    ))->toThrow(ValidationException::class);
+
+    expect($receipt->refresh()->status)
+        ->toBe(GoodsReceiptStatus::Draft)
+        ->and($this->purchaseOrderLine->refresh()->received_base_quantity)
+        ->toBe('0.000000');
+});

@@ -202,6 +202,51 @@ final class FinalizeGoodsReceipt
                 $receivedQuantities[$poLine->id] = $newReceivedQuantity;
             }
 
+            $combinedBaseQuantities = $receivedQuantities;
+
+            foreach ($nonStockLines as $nonStockLine) {
+                $poLine = $lockedDependencies->purchaseOrderLine(
+                    $nonStockLine->purchase_order_line_id,
+                );
+
+                $nonStockBaseQuantity = BigDecimal::zero();
+
+                if ($nonStockLine->rejected_base_quantity !== null) {
+                    $nonStockBaseQuantity = $nonStockBaseQuantity->plus(
+                        BigDecimal::of($nonStockLine->rejected_base_quantity),
+                    );
+                }
+
+                if ($nonStockLine->damaged_base_quantity !== null) {
+                    $nonStockBaseQuantity = $nonStockBaseQuantity->plus(
+                        BigDecimal::of($nonStockLine->damaged_base_quantity),
+                    );
+                }
+
+                $currentCombined = $combinedBaseQuantities[$poLine->id]
+                    ?? BigDecimal::of($poLine->received_base_quantity);
+
+                $combinedBaseQuantities[$poLine->id] = $currentCombined
+                    ->plus($nonStockBaseQuantity)
+                    ->toScale(6, RoundingMode::HalfUp);
+            }
+
+            foreach ($combinedBaseQuantities as $poLineId => $combinedQuantity) {
+                $poLine = $lockedDependencies->purchaseOrderLine($poLineId);
+
+                if (
+                    $combinedQuantity->compareTo(
+                        BigDecimal::of($poLine->base_quantity),
+                    ) > 0
+                ) {
+                    throw ValidationException::withMessages([
+                        'lines' => __(
+                            'Combined accepted, rejected, and damaged quantity exceeds the ordered quantity for this purchase-order line.',
+                        ),
+                    ]);
+                }
+            }
+
             $this->recordStockMovement->handleBatch(
                 organization: $organization,
                 location: $location,
