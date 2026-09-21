@@ -5,6 +5,7 @@ namespace App\Actions\Purchasing;
 use App\Actions\Audit\RecordAuditEntry;
 use App\Enums\OrganizationPermission;
 use App\Enums\PurchaseOrderStatus;
+use App\Models\InventoryItem;
 use App\Models\Organization;
 use App\Models\PurchaseOrder;
 use App\Models\User;
@@ -54,6 +55,30 @@ final class ApprovePurchaseOrder
                 throw ValidationException::withMessages([
                     'lines' => __(
                         'A purchase order requires at least one line before approval.',
+                    ),
+                ]);
+            }
+
+            $inventoryItemIds = $record->lines()
+                ->pluck('inventory_item_id')
+                ->unique()
+                ->values();
+
+            $activeInventoryItemCount = count(
+                InventoryItem::query()
+                    ->where('organization_id', $organization->id)
+                    ->whereIn('id', $inventoryItemIds)
+                    ->where('active', true)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get(['id'])
+                    ->all(),
+            );
+
+            if ($activeInventoryItemCount !== $inventoryItemIds->count()) {
+                throw ValidationException::withMessages([
+                    'lines' => __(
+                        'Every purchase-order line must reference an active inventory item before approval.',
                     ),
                 ]);
             }

@@ -186,6 +186,12 @@ final class SaveGoodsReceipt
                 $nonStockSnapshot = null;
 
                 if ($hasAccepted) {
+                    $this->lockActiveInventoryItem(
+                        $organization,
+                        $poLine->inventory_item_id,
+                        "lines.{$index}.purchase_order_line_id",
+                    );
+
                     $storageLocation = $this->storageLocation(
                         $organization,
                         $po,
@@ -417,6 +423,29 @@ final class SaveGoodsReceipt
             throw ValidationException::withMessages([
                 "lines.{$index}.purchase_order_line_id" => __(
                     'The purchase-order line unit does not belong to the active organization.',
+                ),
+            ]);
+        }
+    }
+
+    /**
+     * Lock and require an active inventory item for a line producing stock.
+     */
+    private function lockActiveInventoryItem(
+        Organization $organization,
+        int $inventoryItemId,
+        string $field,
+    ): void {
+        $inventoryItem = InventoryItem::query()
+            ->where('organization_id', $organization->id)
+            ->whereKey($inventoryItemId)
+            ->lockForUpdate()
+            ->first();
+
+        if ($inventoryItem === null || ! $inventoryItem->active) {
+            throw ValidationException::withMessages([
+                $field => __(
+                    'Select an active inventory item from the current organization.',
                 ),
             ]);
         }

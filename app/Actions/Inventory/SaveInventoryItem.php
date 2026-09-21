@@ -18,6 +18,7 @@ final class SaveInventoryItem
 {
     public function __construct(
         private readonly EnsureStockTransferDependencyCanBeDeactivated $ensureStockTransferDependencyCanBeDeactivated,
+        private readonly EnsurePurchasingDependencyCanBeDeactivated $ensurePurchasingDependencyCanBeDeactivated,
     ) {}
 
     /**
@@ -62,6 +63,13 @@ final class SaveInventoryItem
             ) {
                 $this
                     ->ensureStockTransferDependencyCanBeDeactivated
+                    ->assertInventoryItemCanBeDeactivated(
+                        $organization,
+                        $lockedItem,
+                    );
+
+                $this
+                    ->ensurePurchasingDependencyCanBeDeactivated
                     ->assertInventoryItemCanBeDeactivated(
                         $organization,
                         $lockedItem,
