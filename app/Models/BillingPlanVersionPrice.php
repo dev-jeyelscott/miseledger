@@ -4,12 +4,24 @@ namespace App\Models;
 
 use App\Enums\BillingCollectionMethod;
 use App\Enums\BillingProvider;
+use Carbon\CarbonInterface;
 use Database\Factories\BillingPlanVersionPriceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $billing_plan_version_id
+ * @property BillingProvider $provider
+ * @property BillingCollectionMethod $collection_method
+ * @property string $interval
+ * @property string $currency
+ * @property int $amount_minor
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ */
 #[Fillable([
     'billing_plan_version_id',
     'provider',

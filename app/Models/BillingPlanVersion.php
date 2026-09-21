@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\PlanCode;
+use Carbon\CarbonInterface;
 use Database\Factories\BillingPlanVersionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,6 +11,21 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property string $plan_code
+ * @property int $version
+ * @property string $name
+ * @property int $tier
+ * @property list<string> $feature_codes
+ * @property array<string, int|null> $limits
+ * @property CarbonInterface|null $published_at
+ * @property CarbonInterface|null $superseded_at
+ * @property int|null $created_by_user_id
+ * @property int|null $published_by_user_id
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ */
 #[Fillable([
     'plan_code',
     'version',

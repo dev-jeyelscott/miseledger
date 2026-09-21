@@ -1,8 +1,15 @@
 import { Link } from '@inertiajs/react';
-import { Building2, CreditCard, LayoutDashboard, Users } from 'lucide-react';
+import {
+    Building2,
+    CreditCard,
+    LayoutDashboard,
+    Package,
+    Users,
+} from 'lucide-react';
 
 import PlatformBillingController from '@/actions/App/Http/Controllers/Platform/PlatformBillingController';
 import PlatformOrganizationController from '@/actions/App/Http/Controllers/Platform/PlatformOrganizationController';
+import PlatformProductCatalogController from '@/actions/App/Http/Controllers/Platform/PlatformProductCatalogController';
 import PlatformUserController from '@/actions/App/Http/Controllers/Platform/PlatformUserController';
 import { AppContent } from '@/components/app-content';
 import AppLogo from '@/components/app-logo';
@@ -46,6 +53,11 @@ const platformNavigation: NavGroup[] = [
                 title: 'Billing & Revenue',
                 href: PlatformBillingController.index(),
                 icon: CreditCard,
+            },
+            {
+                title: 'Product Catalog',
+                href: PlatformProductCatalogController.index(),
+                icon: Package,
             },
         ],
     },
