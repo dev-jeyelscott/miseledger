@@ -511,6 +511,60 @@ test('combined accepted rejected and damaged quantity exceeding the ordered quan
         ->toBe(0);
 });
 
+test('cumulative rejected quantity across multiple finalized receipts is rejected', function () {
+    $firstReceipt = saveDispositionReceiptForTest(
+        $this->organization,
+        $this->actor,
+        $this->purchaseOrder,
+        $this->purchaseOrderLine,
+        null,
+        null,
+        $this->baseUnit,
+        null,
+        'GR-CUMULATIVE-FIRST',
+        '0',
+        '6',
+        '0',
+    );
+
+    app(FinalizeGoodsReceipt::class)->handle(
+        $this->organization,
+        $this->actor,
+        $firstReceipt,
+    );
+
+    expect($this->purchaseOrderLine->refresh()->rejected_damaged_base_quantity)
+        ->toBe('6.000000');
+
+    $secondReceipt = saveDispositionReceiptForTest(
+        $this->organization,
+        $this->actor,
+        $this->purchaseOrder,
+        $this->purchaseOrderLine,
+        null,
+        null,
+        $this->baseUnit,
+        null,
+        'GR-CUMULATIVE-SECOND',
+        '0',
+        '6',
+        '0',
+    );
+
+    expect(fn () => app(FinalizeGoodsReceipt::class)->handle(
+        $this->organization,
+        $this->actor,
+        $secondReceipt,
+    ))->toThrow(ValidationException::class);
+
+    expect($secondReceipt->refresh()->status)
+        ->toBe(GoodsReceiptStatus::Draft)
+        ->and($this->purchaseOrderLine->refresh()->rejected_damaged_base_quantity)
+        ->toBe('6.000000')
+        ->and(StockMovement::query()->count())
+        ->toBe(0);
+});
+
 test('finalize rejects non-stock evidence exceeding the ordered quantity even when persisted directly', function () {
     $receipt = GoodsReceipt::query()->create([
         'organization_id' => $this->organization->id,

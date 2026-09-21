@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property string $unit_price
  * @property string $line_total
  * @property string $received_base_quantity
+ * @property string $rejected_damaged_base_quantity
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -36,6 +37,7 @@ use Illuminate\Support\Carbon;
     'unit_price',
     'line_total',
     'received_base_quantity',
+    'rejected_damaged_base_quantity',
 ])]
 class PurchaseOrderLine extends Model
 {
@@ -105,6 +107,7 @@ class PurchaseOrderLine extends Model
             'unit_price' => 'decimal:4',
             'line_total' => 'decimal:2',
             'received_base_quantity' => 'decimal:6',
+            'rejected_damaged_base_quantity' => 'decimal:6',
         ];
     }
 }

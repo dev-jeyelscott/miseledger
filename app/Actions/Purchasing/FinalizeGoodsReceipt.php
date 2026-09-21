@@ -202,7 +202,7 @@ final class FinalizeGoodsReceipt
                 $receivedQuantities[$poLine->id] = $newReceivedQuantity;
             }
 
-            $combinedBaseQuantities = $receivedQuantities;
+            $rejectedDamagedQuantities = [];
 
             foreach ($nonStockLines as $nonStockLine) {
                 $poLine = $lockedDependencies->purchaseOrderLine(
@@ -223,16 +223,30 @@ final class FinalizeGoodsReceipt
                     );
                 }
 
-                $currentCombined = $combinedBaseQuantities[$poLine->id]
-                    ?? BigDecimal::of($poLine->received_base_quantity);
+                $currentRejectedDamaged = $rejectedDamagedQuantities[$poLine->id]
+                    ?? BigDecimal::of($poLine->rejected_damaged_base_quantity);
 
-                $combinedBaseQuantities[$poLine->id] = $currentCombined
+                $rejectedDamagedQuantities[$poLine->id] = $currentRejectedDamaged
                     ->plus($nonStockBaseQuantity)
                     ->toScale(6, RoundingMode::HalfUp);
             }
 
-            foreach ($combinedBaseQuantities as $poLineId => $combinedQuantity) {
+            $combinedPoLineIds = collect(array_keys($receivedQuantities))
+                ->merge(array_keys($rejectedDamagedQuantities))
+                ->unique();
+
+            foreach ($combinedPoLineIds as $poLineId) {
                 $poLine = $lockedDependencies->purchaseOrderLine($poLineId);
+
+                $acceptedQuantity = $receivedQuantities[$poLineId]
+                    ?? BigDecimal::of($poLine->received_base_quantity);
+
+                $rejectedDamagedQuantity = $rejectedDamagedQuantities[$poLineId]
+                    ?? BigDecimal::of($poLine->rejected_damaged_base_quantity);
+
+                $combinedQuantity = $acceptedQuantity
+                    ->plus($rejectedDamagedQuantity)
+                    ->toScale(6, RoundingMode::HalfUp);
 
                 if (
                     $combinedQuantity->compareTo(
@@ -257,6 +271,12 @@ final class FinalizeGoodsReceipt
             foreach ($receivedQuantities as $poLineId => $receivedQuantity) {
                 $lockedDependencies->purchaseOrderLine($poLineId)->forceFill([
                     'received_base_quantity' => (string) $receivedQuantity,
+                ])->save();
+            }
+
+            foreach ($rejectedDamagedQuantities as $poLineId => $rejectedDamagedQuantity) {
+                $lockedDependencies->purchaseOrderLine($poLineId)->forceFill([
+                    'rejected_damaged_base_quantity' => (string) $rejectedDamagedQuantity,
                 ])->save();
             }
 
