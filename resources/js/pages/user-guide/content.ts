@@ -660,8 +660,7 @@ export const guideModules: GuideModule[] = [
                         answer: 'Submitted, Finalized, and Cancelled counts are read-only. Open a Draft to correct it, or use the supported next workflow for the current status.',
                     },
                     {
-                        question:
-                            'Why did removing a line ask me to confirm?',
+                        question: 'Why did removing a line ask me to confirm?',
                         answer: 'A line with an item, quantity, unit, or notes already entered asks for confirmation before removal so you do not lose that evidence by accident. A truly blank extra line is removed immediately.',
                     },
                 ],
