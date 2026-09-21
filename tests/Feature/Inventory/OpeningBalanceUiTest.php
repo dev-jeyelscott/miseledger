@@ -367,6 +367,42 @@ test(
 );
 
 test(
+    'opening balance rejects a missing occurred at without recording stock',
+    function () {
+        $this
+            ->actingAs($this->actor)
+            ->withSession([
+                'active_organization_id' => $this->organization->id,
+            ])
+            ->from(
+                route('inventory.opening-balances.create'),
+            )
+            ->post(
+                route('inventory.opening-balances.store'),
+                [
+                    'operation_id' => (string) Str::uuid(),
+                    'location_id' => $this->location->id,
+                    'storage_location_id' => $this
+                        ->storageLocation
+                        ->id,
+                    'inventory_item_id' => $this->item->id,
+                    'quantity' => '1',
+                    'unit_id' => $this->kilogram->id,
+                    'base_unit_cost' => '1.0000',
+                    'occurred_at' => '',
+                    'notes' => null,
+                ],
+            )
+            ->assertSessionHasErrors(['occurred_at']);
+
+        expect(StockMovement::query()->count())
+            ->toBe(0)
+            ->and(StockBalance::query()->count())
+            ->toBe(0);
+    },
+);
+
+test(
     'users without inventory adjustment permission cannot record opening stock',
     function () {
         $kitchenUser = User::factory()->create();

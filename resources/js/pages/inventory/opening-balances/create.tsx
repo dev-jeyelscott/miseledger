@@ -140,7 +140,8 @@ export default function OpeningBalanceCreate({
         inventoryItemId !== '' &&
         unitId !== '' &&
         quantity.trim() !== '' &&
-        baseUnitCost.trim() !== '';
+        baseUnitCost.trim() !== '' &&
+        occurredAt.trim() !== '';
 
     return (
         <>
@@ -170,6 +171,7 @@ export default function OpeningBalanceCreate({
                         action={OpeningBalanceController.store().url}
                         method="post"
                         onSuccess={() => setConfirmOpen(false)}
+                        onError={() => setConfirmOpen(false)}
                     >
                         {({ errors, processing }) => (
                             <div className="grid gap-6">
