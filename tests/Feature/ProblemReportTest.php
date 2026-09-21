@@ -673,6 +673,42 @@ describe('Problem Report', function () {
                 'description' => 'Report with storage failure',
             ]);
         });
+
+        it('does not consume the hourly rate limit allowance for failed submissions', function () {
+            if (! extension_loaded('gd')) {
+                $this->markTestSkipped('GD extension is required for this test');
+            }
+
+            $user = User::factory()->create();
+
+            Storage::shouldReceive('disk->putFileAs')
+                ->andThrow(new Exception('Storage failure'));
+
+            for ($i = 0; $i < 10; $i++) {
+                $screenshot = UploadedFile::fake()->image("screenshot{$i}.png");
+
+                try {
+                    $this->actingAs($user)->post('/problem-reports', [
+                        'description' => "Failed report {$i}",
+                        'screenshots' => [$screenshot],
+                    ]);
+                } catch (Exception $e) {
+                    //
+                }
+            }
+
+            $this->assertSame(0, ProblemReport::whereUserId($user->id)->count());
+
+            Storage::fake('local');
+
+            $response = $this->actingAs($user)->post('/problem-reports', [
+                'description' => 'Valid report after storage recovers',
+            ]);
+
+            $response->assertRedirect();
+            $response->assertSessionDoesntHaveErrors('submission');
+            $this->assertSame(1, ProblemReport::whereUserId($user->id)->count());
+        });
     });
 
     describe('User menu integration', function () {

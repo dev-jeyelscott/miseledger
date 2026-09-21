@@ -57,60 +57,53 @@ class ProblemReportController extends Controller
     {
         $user = $request->user();
         $rateLimitKey = "problem-report:{$user->id}";
-
-        if (! RateLimiter::attempt($rateLimitKey, 10, fn (): bool => true, decaySeconds: 3600)) {
-            $retryAfterMinutes = (int) ceil(RateLimiter::availableIn($rateLimitKey) / 60);
-
-            throw ValidationException::withMessages([
-                'submission' => "You can submit a maximum of 10 reports per hour. No report was submitted — please try again in {$retryAfterMinutes} minute(s).",
-            ]);
-        }
-
         $activeOrganization = $request->attributes->get('activeOrganization');
         $storedPaths = [];
 
         try {
-            return DB::transaction(function () use ($request, $user, $activeOrganization, &$storedPaths): RedirectResponse {
-                $reference = $this->generateReference($user->id);
+            $result = RateLimiter::attempt($rateLimitKey, 10, function () use ($request, $user, $activeOrganization, &$storedPaths): RedirectResponse {
+                return DB::transaction(function () use ($request, $user, $activeOrganization, &$storedPaths): RedirectResponse {
+                    $reference = $this->generateReference($user->id);
 
-                $problemReport = ProblemReport::create([
-                    'reference' => $reference,
-                    'user_id' => $user->id,
-                    'organization_id' => $activeOrganization?->id,
-                    'organization_name_snapshot' => $activeOrganization?->name,
-                    'title' => $request->string('title')->trim()->value() ?: null,
-                    'description' => $request->string('description')->trim()->value(),
-                    'status' => ProblemReportStatus::Submitted,
-                ]);
+                    $problemReport = ProblemReport::create([
+                        'reference' => $reference,
+                        'user_id' => $user->id,
+                        'organization_id' => $activeOrganization?->id,
+                        'organization_name_snapshot' => $activeOrganization?->name,
+                        'title' => $request->string('title')->trim()->value() ?: null,
+                        'description' => $request->string('description')->trim()->value(),
+                        'status' => ProblemReportStatus::Submitted,
+                    ]);
 
-                $screenshots = $request->file('screenshots') ?? [];
+                    $screenshots = $request->file('screenshots') ?? [];
 
-                foreach ($screenshots as $screenshot) {
-                    $mimeType = $screenshot->getMimeType();
-                    $path = Storage::disk('local')->putFileAs(
-                        "problem-reports/{$problemReport->id}",
-                        $screenshot,
-                        Str::random(32).'.'.$screenshot->extension(),
-                    );
+                    foreach ($screenshots as $screenshot) {
+                        $mimeType = $screenshot->getMimeType();
+                        $path = Storage::disk('local')->putFileAs(
+                            "problem-reports/{$problemReport->id}",
+                            $screenshot,
+                            Str::random(32).'.'.$screenshot->extension(),
+                        );
 
-                    if ($path === false) {
-                        throw new RuntimeException('Problem report screenshot could not be stored.');
+                        if ($path === false) {
+                            throw new RuntimeException('Problem report screenshot could not be stored.');
+                        }
+
+                        $storedPaths[] = $path;
+
+                        ProblemReportAttachment::create([
+                            'problem_report_id' => $problemReport->id,
+                            'disk' => 'local',
+                            'path' => $path,
+                            'original_name' => $screenshot->getClientOriginalName(),
+                            'mime_type' => $mimeType,
+                            'size' => $screenshot->getSize(),
+                        ]);
                     }
 
-                    $storedPaths[] = $path;
-
-                    ProblemReportAttachment::create([
-                        'problem_report_id' => $problemReport->id,
-                        'disk' => 'local',
-                        'path' => $path,
-                        'original_name' => $screenshot->getClientOriginalName(),
-                        'mime_type' => $mimeType,
-                        'size' => $screenshot->getSize(),
-                    ]);
-                }
-
-                return redirect()->route('problem-reports.show', $problemReport->reference);
-            }, attempts: 1);
+                    return redirect()->route('problem-reports.show', $problemReport->reference);
+                }, attempts: 1);
+            }, decaySeconds: 3600);
         } catch (\Exception $e) {
             foreach ($storedPaths as $path) {
                 Storage::disk('local')->delete($path);
@@ -118,6 +111,16 @@ class ProblemReportController extends Controller
 
             throw $e;
         }
+
+        if ($result === false) {
+            $retryAfterMinutes = (int) ceil(RateLimiter::availableIn($rateLimitKey) / 60);
+
+            throw ValidationException::withMessages([
+                'submission' => "You can submit a maximum of 10 reports per hour. No report was submitted — please try again in {$retryAfterMinutes} minute(s).",
+            ]);
+        }
+
+        return $result;
     }
 
     /**
