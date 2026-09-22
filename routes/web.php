@@ -37,6 +37,7 @@ use App\Http\Controllers\OrganizationLocationController;
 use App\Http\Controllers\OrganizationMemberController;
 use App\Http\Controllers\OrganizationStorageLocationController;
 use App\Http\Controllers\ProblemReportController;
+use App\Http\Controllers\PublicContentController;
 use App\Http\Controllers\Purchasing\GoodsReceiptController;
 use App\Http\Controllers\Purchasing\PurchaseOrderController;
 use App\Http\Controllers\Recipes\RecipeController;
@@ -54,6 +55,16 @@ use Laravel\Cashier\Http\Controllers\PaymentController;
 require __DIR__.'/ai.php';
 
 Route::get('/', [WelcomeController::class, 'index'])->name('home');
+
+Route::get(
+    'marketing/{slug}',
+    [PublicContentController::class, 'showMarketing'],
+)->name('content.marketing.show');
+
+Route::get(
+    'legal/{slug}',
+    [PublicContentController::class, 'showLegal'],
+)->name('content.legal.show');
 
 Route::get('stripe/payment/{id}', [PaymentController::class, 'show'])
     ->name('cashier.payment');

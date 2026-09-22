@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Platform\PlatformAlertController;
 use App\Http\Controllers\Platform\PlatformBillingController;
+use App\Http\Controllers\Platform\PlatformContentController;
 use App\Http\Controllers\Platform\PlatformDashboardController;
 use App\Http\Controllers\Platform\PlatformHealthController;
 use App\Http\Controllers\Platform\PlatformObservabilityController;
@@ -90,6 +91,26 @@ Route::prefix('admin')
             [PlatformProductCatalogController::class, 'edit'],
         )->name('product-catalog.versions.edit');
 
+        Route::get(
+            '/content',
+            [PlatformContentController::class, 'index'],
+        )->name('content.index');
+
+        Route::get(
+            '/content/create',
+            [PlatformContentController::class, 'create'],
+        )->name('content.create');
+
+        Route::get(
+            '/content/{contentPage}',
+            [PlatformContentController::class, 'show'],
+        )->name('content.show');
+
+        Route::get(
+            '/content/revisions/{contentRevision}/edit',
+            [PlatformContentController::class, 'edit'],
+        )->name('content.revisions.edit');
+
         // Consequential commercial mutations require recent password
         // confirmation (POC-V10.2) and a dedicated mutation rate limit
         // (POC-V10.4) on top of the strong-factor platform gate above.
@@ -109,5 +130,25 @@ Route::prefix('admin')
                     '/product-catalog/versions/{billingPlanVersion}/publish',
                     [PlatformProductCatalogController::class, 'publish'],
                 )->name('product-catalog.versions.publish');
+
+                Route::post(
+                    '/content',
+                    [PlatformContentController::class, 'store'],
+                )->name('content.store');
+
+                Route::put(
+                    '/content/revisions/{contentRevision}',
+                    [PlatformContentController::class, 'update'],
+                )->name('content.revisions.update');
+
+                Route::post(
+                    '/content/revisions/{contentRevision}/publish',
+                    [PlatformContentController::class, 'publish'],
+                )->name('content.revisions.publish');
+
+                Route::post(
+                    '/content/revisions/{contentRevision}/restore',
+                    [PlatformContentController::class, 'restore'],
+                )->name('content.revisions.restore');
             });
     });

@@ -4,6 +4,7 @@ import {
     AlertTriangle,
     Building2,
     CreditCard,
+    FileText,
     HeartPulse,
     LayoutDashboard,
     Package,
@@ -12,6 +13,7 @@ import {
 
 import PlatformAlertController from '@/actions/App/Http/Controllers/Platform/PlatformAlertController';
 import PlatformBillingController from '@/actions/App/Http/Controllers/Platform/PlatformBillingController';
+import PlatformContentController from '@/actions/App/Http/Controllers/Platform/PlatformContentController';
 import PlatformHealthController from '@/actions/App/Http/Controllers/Platform/PlatformHealthController';
 import PlatformObservabilityController from '@/actions/App/Http/Controllers/Platform/PlatformObservabilityController';
 import PlatformOrganizationController from '@/actions/App/Http/Controllers/Platform/PlatformOrganizationController';
@@ -64,6 +66,11 @@ const platformNavigation: NavGroup[] = [
                 title: 'Product Catalog',
                 href: PlatformProductCatalogController.index(),
                 icon: Package,
+            },
+            {
+                title: 'Content',
+                href: PlatformContentController.index(),
+                icon: FileText,
             },
             {
                 title: 'Observability',
