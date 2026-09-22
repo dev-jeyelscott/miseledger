@@ -16,12 +16,14 @@ function productCatalogFixturePlans(): array
         'starter' => [
             'name' => 'Starter',
             'tier' => 1,
+            'manual_amounts' => ['monthly' => 49_900, 'yearly' => null],
             'features' => [],
             'limits' => ['seats' => 3, 'locations' => 1, 'inventory_items' => 500],
         ],
         'growth' => [
             'name' => 'Growth',
             'tier' => 2,
+            'manual_amounts' => ['monthly' => 99_900, 'yearly' => null],
             'features' => ['purchasing'],
             'limits' => ['seats' => 10, 'locations' => 5, 'inventory_items' => 5000],
         ],

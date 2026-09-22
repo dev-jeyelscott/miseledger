@@ -205,12 +205,27 @@ final class PlatformProductCatalogController extends Controller
     public function publish(
         BillingPlanVersion $billingPlanVersion,
         PublishPlatformPlanVersionRequest $request,
+        PlanCatalog $catalog,
     ): RedirectResponse {
         abort_unless($billingPlanVersion->isDraft(), 403);
 
-        if ($billingPlanVersion->prices()->count() === 0) {
+        $planCode = $billingPlanVersion->planCode();
+        $requirements = $catalog->priceRequirements($planCode);
+
+        if ($requirements === []) {
             throw ValidationException::withMessages([
-                'confirm' => 'Add at least one recurring price before publishing.',
+                'confirm' => 'This plan has no configured provider or manual pricing paths to publish.',
+            ]);
+        }
+
+        $missing = $catalog->missingPriceRequirements(
+            $planCode,
+            $billingPlanVersion->prices,
+        );
+
+        if ($missing !== []) {
+            throw ValidationException::withMessages([
+                'confirm' => 'Add authoritative prices for every configured provider, collection method, interval, and currency before publishing.',
             ]);
         }
 

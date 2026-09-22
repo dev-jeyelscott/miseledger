@@ -28,10 +28,7 @@ final class BillingBootstrapPlanVersions extends Command
         $catalog = new PlanCatalog($plans);
         $apply = (bool) $this->option('apply');
 
-        $currency = config('billing.currency');
-        $currency = is_string($currency)
-            ? mb_strtoupper(trim($currency))
-            : null;
+        $currency = PlanCatalog::billingCurrency();
 
         $this->info(
             $apply
@@ -64,15 +61,27 @@ final class BillingBootstrapPlanVersions extends Command
                 continue;
             }
 
-            if (
-                BillingPlanVersion::query()
-                    ->where('plan_code', $planCode->value)
-                    ->where('version', 1)
-                    ->exists()
-            ) {
+            $existingVersion = BillingPlanVersion::query()
+                ->where('plan_code', $planCode->value)
+                ->where('version', 1)
+                ->with('prices')
+                ->first();
+
+            if ($existingVersion !== null) {
                 $this->line(
                     "{$planCode->value} v1 already exists. No change.",
                 );
+
+                foreach (
+                    $catalog->missingPriceRequirements(
+                        $planCode,
+                        $existingVersion->prices,
+                    ) as $requirement
+                ) {
+                    $this->warn(
+                        self::missingPriceMessage($requirement),
+                    );
+                }
 
                 continue;
             }
@@ -81,31 +90,30 @@ final class BillingBootstrapPlanVersions extends Command
                 "Would create {$planCode->value} v1 draft.",
             );
 
-            foreach (['monthly', 'yearly'] as $interval) {
-                $amount = $definition->manualAmount($interval);
-
-                if ($amount !== null) {
-                    $this->line(
-                        "  PayMongo manual {$interval}: {$amount} {$currency}",
-                    );
-                }
-            }
-
-            foreach (
-                $catalog->priceRequirements($planCode) as $requirement
-            ) {
+            foreach ($catalog->priceRequirements($planCode) as $requirement) {
                 if (
                     $requirement['collectionMethod']
-                    === BillingCollectionMethod::Automatic
+                    === BillingCollectionMethod::Manual
+                    && $requirement['currency'] !== null
                 ) {
-                    $this->warn(
+                    $amount = $definition->manualAmount(
+                        $requirement['interval'],
+                    );
+
+                    $this->line(
                         sprintf(
-                            '  Missing authoritative numeric %s automatic %s price. Populate before publication.',
+                            '  Would record %s manual %s: %d %s',
                             $requirement['provider']->value,
                             $requirement['interval'],
+                            $amount,
+                            $requirement['currency'],
                         ),
                     );
+
+                    continue;
                 }
+
+                $this->warn(self::missingPriceMessage($requirement));
             }
 
             if (! $apply) {
@@ -127,13 +135,7 @@ final class BillingBootstrapPlanVersions extends Command
                         'limits' => $definition->limits,
                     ]);
 
-                    if (
-                        $currency === null
-                        || preg_match(
-                            '/^[A-Z]{3}$/',
-                            $currency,
-                        ) !== 1
-                    ) {
+                    if ($currency === null) {
                         return;
                     }
 
@@ -161,5 +163,36 @@ final class BillingBootstrapPlanVersions extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Describe one unsatisfied price requirement without exposing any
+     * provider secret or external identifier.
+     *
+     * @param  array{
+     *     provider: BillingProvider,
+     *     collectionMethod: BillingCollectionMethod,
+     *     interval: string,
+     *     currency: string|null
+     * }  $requirement
+     */
+    private static function missingPriceMessage(array $requirement): string
+    {
+        if ($requirement['currency'] === null) {
+            return sprintf(
+                '  Missing authoritative billing currency for %s %s %s price. Configure SUBSCRIPTION_BILLING_CURRENCY before publication.',
+                $requirement['provider']->value,
+                $requirement['collectionMethod']->value,
+                $requirement['interval'],
+            );
+        }
+
+        return sprintf(
+            '  Missing authoritative numeric %s %s %s price in %s. Populate before publication.',
+            $requirement['provider']->value,
+            $requirement['collectionMethod']->value,
+            $requirement['interval'],
+            $requirement['currency'],
+        );
     }
 }

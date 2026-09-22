@@ -6,6 +6,7 @@ use App\Enums\BillingCollectionMethod;
 use App\Enums\BillingProvider;
 use App\Enums\PlanCode;
 use App\Models\BillingPlanVersion;
+use App\Models\BillingPlanVersionPrice;
 use InvalidArgumentException;
 
 /**
@@ -69,11 +70,14 @@ final readonly class PlanCatalog
 
     /**
      * Return configured recurring-price tuples that require authoritative numeric pricing.
+     * A null `currency` means the platform billing currency itself is unresolved, so the
+     * requirement can never be satisfied until it is configured.
      *
      * @return list<array{
      *     provider: BillingProvider,
      *     collectionMethod: BillingCollectionMethod,
-     *     interval: string
+     *     interval: string,
+     *     currency: string|null
      * }>
      */
     public function priceRequirements(PlanCode $code): array
@@ -84,6 +88,7 @@ final readonly class PlanCatalog
             return [];
         }
 
+        $currency = self::billingCurrency();
         $requirements = [];
 
         foreach (BillingProvider::cases() as $provider) {
@@ -96,6 +101,7 @@ final readonly class PlanCatalog
                     'provider' => $provider,
                     'collectionMethod' => BillingCollectionMethod::Automatic,
                     'interval' => $interval,
+                    'currency' => $currency,
                 ];
             }
         }
@@ -109,10 +115,75 @@ final readonly class PlanCatalog
                 'provider' => BillingProvider::PayMongo,
                 'collectionMethod' => BillingCollectionMethod::Manual,
                 'interval' => $interval,
+                'currency' => $currency,
             ];
         }
 
         return $requirements;
+    }
+
+    /**
+     * Return configured price requirements not covered by the given price rows.
+     * A requirement whose currency is unresolved is always reported missing,
+     * since it can never be authoritatively satisfied.
+     *
+     * @param  iterable<BillingPlanVersionPrice>  $prices
+     * @return list<array{
+     *     provider: BillingProvider,
+     *     collectionMethod: BillingCollectionMethod,
+     *     interval: string,
+     *     currency: string|null
+     * }>
+     */
+    public function missingPriceRequirements(PlanCode $code, iterable $prices): array
+    {
+        $existing = [];
+
+        foreach ($prices as $price) {
+            $existing[] = self::priceKey(
+                $price->provider->value,
+                $price->collection_method->value,
+                $price->interval,
+                $price->currency,
+            );
+        }
+
+        return array_values(array_filter(
+            $this->priceRequirements($code),
+            static fn (array $requirement): bool => $requirement['currency'] === null
+                || ! in_array(
+                    self::priceKey(
+                        $requirement['provider']->value,
+                        $requirement['collectionMethod']->value,
+                        $requirement['interval'],
+                        $requirement['currency'],
+                    ),
+                    $existing,
+                    true,
+                ),
+        ));
+    }
+
+    /**
+     * Resolve the configured platform billing currency, or null when unresolved.
+     */
+    public static function billingCurrency(): ?string
+    {
+        $currency = config('billing.currency');
+        $currency = is_string($currency) ? mb_strtoupper(trim($currency)) : null;
+
+        return $currency !== null && preg_match('/^[A-Z]{3}$/', $currency) === 1
+            ? $currency
+            : null;
+    }
+
+    private static function priceKey(
+        string $provider,
+        string $collectionMethod,
+        string $interval,
+        string $currency,
+    ): string {
+        return implode('|', [$provider, $collectionMethod, $interval, mb_strtoupper($currency)]);
     }
 
     public function externalPlanId(

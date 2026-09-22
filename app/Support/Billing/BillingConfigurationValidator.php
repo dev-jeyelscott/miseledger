@@ -3,11 +3,57 @@
 namespace App\Support\Billing;
 
 use App\Enums\BillingProvider;
+use App\Models\BillingPlanVersion;
 use Illuminate\Support\Arr;
 use RuntimeException;
 
 final class BillingConfigurationValidator
 {
+    /**
+     * Fail closed when the versioned catalog cutover is enabled but any
+     * recognized plan lacks a published, fully-priced current version.
+     * Existing subscribers pinned to a prior version are never affected;
+     * this guards only whether new acquisition may rely on the versioned
+     * catalog instead of the legacy configuration snapshot.
+     */
+    public static function validateVersionedCatalogReadiness(
+        PlanCatalog $catalog,
+    ): void {
+        foreach ($catalog->all() as $definition) {
+            $requirements = $catalog->priceRequirements($definition->code);
+
+            if ($requirements === []) {
+                throw new RuntimeException(
+                    "Versioned catalog cutover is enabled but plan [{$definition->code}] has no configured provider or manual pricing paths.",
+                );
+            }
+
+            $current = BillingPlanVersion::query()
+                ->where('plan_code', $definition->code->value)
+                ->whereNotNull('published_at')
+                ->whereNull('superseded_at')
+                ->with('prices')
+                ->first();
+
+            if ($current === null) {
+                throw new RuntimeException(
+                    "Versioned catalog cutover is enabled but plan [{$definition->code}] has no published current version.",
+                );
+            }
+
+            $missing = $catalog->missingPriceRequirements(
+                $definition->code,
+                $current->prices,
+            );
+
+            if ($missing !== []) {
+                throw new RuntimeException(
+                    "Versioned catalog cutover is enabled but plan [{$definition->code}]'s published version is missing required prices.",
+                );
+            }
+        }
+    }
+
     /**
      * Reject incomplete, unsupported, disabled, or non-live provider
      * configuration before production requests can use billing services.

@@ -15,6 +15,7 @@ use App\Support\Backup\DnsBackupHostResolver;
 use App\Support\Backup\ResolvesBackupHosts;
 use App\Support\Billing\BillingConfigurationValidator;
 use App\Support\Billing\OrganizationCommercialWriteGate;
+use App\Support\Billing\PlanCatalog;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -22,9 +23,11 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Laravel\Cashier\Cashier;
+use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -144,6 +147,18 @@ class AppServiceProvider extends ServiceProvider
         }
 
         BillingConfigurationValidator::validateProduction((array) config('billing'));
+
+        if ((bool) config('billing.versioned_catalog_enabled')) {
+            if (! Schema::hasTable('billing_plan_versions')) {
+                throw new RuntimeException(
+                    'Versioned catalog cutover is enabled but required tables do not exist.',
+                );
+            }
+
+            BillingConfigurationValidator::validateVersionedCatalogReadiness(
+                new PlanCatalog,
+            );
+        }
     }
 
     /**
