@@ -1,6 +1,7 @@
 import { Link } from '@inertiajs/react';
 import {
     Activity,
+    AlertTriangle,
     Building2,
     CreditCard,
     HeartPulse,
@@ -9,6 +10,7 @@ import {
     Users,
 } from 'lucide-react';
 
+import PlatformAlertController from '@/actions/App/Http/Controllers/Platform/PlatformAlertController';
 import PlatformBillingController from '@/actions/App/Http/Controllers/Platform/PlatformBillingController';
 import PlatformHealthController from '@/actions/App/Http/Controllers/Platform/PlatformHealthController';
 import PlatformObservabilityController from '@/actions/App/Http/Controllers/Platform/PlatformObservabilityController';
@@ -72,6 +74,11 @@ const platformNavigation: NavGroup[] = [
                 title: 'Health',
                 href: PlatformHealthController.index(),
                 icon: HeartPulse,
+            },
+            {
+                title: 'Alerts',
+                href: PlatformAlertController.index(),
+                icon: AlertTriangle,
             },
         ],
     },

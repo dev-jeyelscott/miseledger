@@ -1,9 +1,12 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { AlertTriangle, Building2, RefreshCw, Users } from 'lucide-react';
 import { useState } from 'react';
 
+import PlatformAlertController from '@/actions/App/Http/Controllers/Platform/PlatformAlertController';
 import { DashboardMetricCard } from '@/components/dashboard/dashboard-metric-card';
 import { PageHeader } from '@/components/page-header';
+import { StatusBadge } from '@/components/status-badge';
+import type { StatusBadgeProps } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -39,11 +42,35 @@ type FailedBillingPayment = {
     providerErrorCode: string | null;
 };
 
+type AlertSeverity = 'info' | 'warning' | 'critical';
+
+type TopAlert = {
+    id: number;
+    title: string;
+    severity: AlertSeverity;
+    typeLabel: string;
+    lastSeenAt: string;
+};
+
+type AlertSummary = {
+    counts: { critical: number; warning: number; info: number };
+    topAlerts: TopAlert[];
+};
+
 type PlatformDashboardProps = {
     metrics: PlatformMetrics;
     openProblemReports: OpenProblemReport[];
     failedBillingPayments: FailedBillingPayment[];
+    alertSummary: AlertSummary;
 };
+
+function severityVariant(severity: AlertSeverity): StatusBadgeProps['variant'] {
+    return severity === 'critical'
+        ? 'danger'
+        : severity === 'warning'
+          ? 'warning'
+          : 'info';
+}
 
 /** Format an exact integer minor-unit string without converting it to a JavaScript number. */
 function formatMinorUnits(value: string): string {
@@ -67,6 +94,7 @@ export default function PlatformDashboard({
     metrics,
     openProblemReports,
     failedBillingPayments,
+    alertSummary,
 }: PlatformDashboardProps) {
     const [refreshing, setRefreshing] = useState(false);
 
@@ -77,11 +105,21 @@ export default function PlatformDashboard({
         }
 
         router.reload({
-            only: ['metrics', 'openProblemReports', 'failedBillingPayments'],
+            only: [
+                'metrics',
+                'openProblemReports',
+                'failedBillingPayments',
+                'alertSummary',
+            ],
             onStart: () => setRefreshing(true),
             onFinish: () => setRefreshing(false),
         });
     }
+
+    const hasOpenAlerts =
+        alertSummary.counts.critical > 0 ||
+        alertSummary.counts.warning > 0 ||
+        alertSummary.counts.info > 0;
 
     return (
         <>
@@ -111,6 +149,96 @@ export default function PlatformDashboard({
                         </Button>
                     }
                 />
+
+                <section
+                    aria-labelledby="platform-attention-heading"
+                    className="overflow-hidden rounded-xl border border-border bg-card"
+                >
+                    <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+                        <div>
+                            <h2
+                                id="platform-attention-heading"
+                                className="text-sm font-semibold"
+                            >
+                                Requires attention
+                            </h2>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                Open platform alerts, most severe first.
+                            </p>
+                        </div>
+
+                        <Button size="sm" variant="outline" asChild>
+                            <Link href={PlatformAlertController.index()}>
+                                View all alerts
+                            </Link>
+                        </Button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 border-b border-border px-4 py-3">
+                        <StatusBadge
+                            label={`${alertSummary.counts.critical} critical`}
+                            variant="danger"
+                        />
+                        <StatusBadge
+                            label={`${alertSummary.counts.warning} warning`}
+                            variant="warning"
+                        />
+                        <StatusBadge
+                            label={`${alertSummary.counts.info} info`}
+                            variant="info"
+                        />
+                    </div>
+
+                    {!hasOpenAlerts ? (
+                        <div className="px-4 py-8 text-center">
+                            <p className="font-medium">
+                                No open platform alerts
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                No monitored condition currently requires
+                                attention.
+                            </p>
+                        </div>
+                    ) : (
+                        <ul className="divide-y divide-border">
+                            {alertSummary.topAlerts.map((alert) => (
+                                <li
+                                    key={alert.id}
+                                    className="grid gap-3 px-4 py-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
+                                >
+                                    <StatusBadge
+                                        label={alert.severity}
+                                        variant={severityVariant(
+                                            alert.severity,
+                                        )}
+                                        className="capitalize"
+                                    />
+
+                                    <div className="min-w-0">
+                                        <Link
+                                            href={PlatformAlertController.show(
+                                                alert.id,
+                                            )}
+                                            className="rounded-sm text-sm font-medium break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                        >
+                                            {alert.title}
+                                        </Link>
+                                        <p className="mt-0.5 text-xs text-muted-foreground">
+                                            {alert.typeLabel}
+                                        </p>
+                                    </div>
+
+                                    <time
+                                        dateTime={alert.lastSeenAt}
+                                        className="text-xs text-muted-foreground sm:text-right"
+                                    >
+                                        {formatDateTime(alert.lastSeenAt)}
+                                    </time>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </section>
 
                 <section aria-labelledby="platform-metrics-heading">
                     <h2 id="platform-metrics-heading" className="sr-only">

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Platform\PlatformAlertController;
 use App\Http\Controllers\Platform\PlatformBillingController;
 use App\Http\Controllers\Platform\PlatformDashboardController;
 use App\Http\Controllers\Platform\PlatformHealthController;
@@ -63,6 +64,16 @@ Route::prefix('admin')
             '/health',
             [PlatformHealthController::class, 'index'],
         )->name('health.index');
+
+        Route::get(
+            '/alerts',
+            [PlatformAlertController::class, 'index'],
+        )->name('alerts.index');
+
+        Route::get(
+            '/alerts/{platformAlert}',
+            [PlatformAlertController::class, 'show'],
+        )->name('alerts.show');
 
         Route::get(
             '/product-catalog',

@@ -1,6 +1,8 @@
 <?php
 
+use App\Actions\Platform\Alerts\RecordBackupCommandAlert;
 use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
@@ -23,6 +25,14 @@ Schedule::command('billing:send-renewal-reminders')
 Schedule::command('backup:database')
     ->dailyAt((string) config('backup.schedule_time'))
     ->withoutOverlapping(120)
+    ->onOneServer()
+    ->runInBackground()
+    ->onFailure(fn () => App::make(RecordBackupCommandAlert::class)->recordFailure())
+    ->onSuccess(fn () => App::make(RecordBackupCommandAlert::class)->recordSuccess());
+
+Schedule::command('platform-alerts:evaluate')
+    ->hourly()
+    ->withoutOverlapping(10)
     ->onOneServer()
     ->runInBackground();
 

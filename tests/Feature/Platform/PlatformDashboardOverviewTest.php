@@ -1,6 +1,9 @@
 <?php
 
+use App\Actions\Platform\Alerts\RecordPlatformAlertObservation;
 use App\Enums\BillingPaymentStatus;
+use App\Enums\PlatformAlertSeverity;
+use App\Enums\PlatformAlertType;
 use App\Enums\ProblemReportStatus;
 use App\Models\BillingInvoice;
 use App\Models\BillingPayment;
@@ -9,6 +12,7 @@ use App\Models\PlatformAdmin;
 use App\Models\ProblemReport;
 use App\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('platform overview aggregates organizations users and exact open problem report statuses', function () {
@@ -239,6 +243,50 @@ test('platform overview remains available to platform admins without organizatio
                 ->where('organizationContext.memberships', [])
                 ->where('metrics.organizations.total', 0)
                 ->where('metrics.users.total', 1),
+        );
+});
+
+test('the dashboard attention summary reads the persisted alert authority ordered by severity', function () {
+    Queue::fake();
+
+    $platformUser = User::factory()->withTwoFactor()->create();
+
+    PlatformAdmin::query()->create([
+        'user_id' => $platformUser->getKey(),
+    ]);
+
+    $record = app(RecordPlatformAlertObservation::class);
+
+    $record->handle(
+        fingerprint: 'dashboard.warning.fingerprint',
+        type: PlatformAlertType::QueueBacklog,
+        source: 'test-source',
+        severity: PlatformAlertSeverity::Warning,
+        title: 'Warning alert',
+        summary: 'Summary',
+        context: [],
+    );
+
+    $critical = $record->handle(
+        fingerprint: 'dashboard.critical.fingerprint',
+        type: PlatformAlertType::DatabaseHealth,
+        source: 'test-source',
+        severity: PlatformAlertSeverity::Critical,
+        title: 'Critical alert',
+        summary: 'Summary',
+        context: [],
+    );
+
+    $this->actingAs($platformUser)
+        ->get(route('admin.dashboard'))
+        ->assertOk()
+        ->assertInertia(
+            fn (Assert $page) => $page
+                ->where('alertSummary.counts.critical', 1)
+                ->where('alertSummary.counts.warning', 1)
+                ->where('alertSummary.counts.info', 0)
+                ->where('alertSummary.topAlerts.0.id', $critical->id)
+                ->where('alertSummary.topAlerts.0.severity', 'critical'),
         );
 });
 

@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Platform;
 
 use App\Enums\BillingPaymentStatus;
 use App\Enums\BillingProvider;
+use App\Enums\PlatformAlertState;
 use App\Enums\ProblemReportStatus;
 use App\Http\Controllers\Controller;
 use App\Models\BillingPayment;
 use App\Models\Organization;
+use App\Models\PlatformAlert;
 use App\Models\ProblemReport;
 use App\Models\User;
 use App\Support\Billing\PlatformBillingPaymentSignals;
@@ -40,7 +42,62 @@ final class PlatformDashboardController extends Controller
             ],
             'openProblemReports' => $this->openProblemReports(),
             'failedBillingPayments' => $this->failedBillingPayments(),
+            'alertSummary' => $this->alertSummary(),
         ]);
+    }
+
+    /**
+     * Summarize open platform alerts by severity, plus the highest-priority
+     * open alerts, using the same persisted alert authority the Platform
+     * Alerts console reads (POC-V9.5). This never recomputes alert logic
+     * here; it only reads `platform_alerts`.
+     *
+     * @return array{
+     *     counts: array{critical: int, warning: int, info: int},
+     *     topAlerts: list<array{
+     *         id: int,
+     *         title: string,
+     *         severity: string,
+     *         typeLabel: string,
+     *         lastSeenAt: string
+     *     }>
+     * }
+     */
+    private function alertSummary(): array
+    {
+        $counts = PlatformAlert::query()
+            ->where('state', PlatformAlertState::Open)
+            ->selectRaw(
+                "SUM(CASE WHEN severity = 'critical' THEN 1 ELSE 0 END) AS critical_count, "
+                .'SUM(CASE WHEN severity = \'warning\' THEN 1 ELSE 0 END) AS warning_count, '
+                .'SUM(CASE WHEN severity = \'info\' THEN 1 ELSE 0 END) AS info_count',
+            )
+            ->first();
+
+        $topAlerts = PlatformAlert::query()
+            ->select(['id', 'title', 'severity', 'type', 'last_seen_at'])
+            ->where('state', PlatformAlertState::Open)
+            ->orderByRaw("CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END")
+            ->orderByDesc('last_seen_at')
+            ->limit(5)
+            ->get()
+            ->map(fn (PlatformAlert $alert): array => [
+                'id' => $alert->id,
+                'title' => $alert->title,
+                'severity' => $alert->severity->value,
+                'typeLabel' => $alert->type->label(),
+                'lastSeenAt' => $alert->last_seen_at->toIso8601String(),
+            ])
+            ->all();
+
+        return [
+            'counts' => [
+                'critical' => (int) ($counts?->getAttribute('critical_count') ?? 0),
+                'warning' => (int) ($counts?->getAttribute('warning_count') ?? 0),
+                'info' => (int) ($counts?->getAttribute('info_count') ?? 0),
+            ],
+            'topAlerts' => array_values($topAlerts),
+        ];
     }
 
     /**
