@@ -37,6 +37,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $next_billing_at
  * @property Carbon|null $ends_at
  * @property Carbon|null $cancelled_at
+ * @property int|null $plan_version_id
  */
 #[Fillable([
     'organization_id',
@@ -55,6 +56,7 @@ use Illuminate\Support\Carbon;
     'next_billing_at',
     'ends_at',
     'cancelled_at',
+    'plan_version_id',
 ])]
 class BillingSubscription extends Model
 {
@@ -83,6 +85,12 @@ class BillingSubscription extends Model
         return $this->hasMany(BillingInvoice::class);
     }
 
+    /** @return BelongsTo<BillingPlanVersion, $this> */
+    public function planVersion(): BelongsTo
+    {
+        return $this->belongsTo(BillingPlanVersion::class, 'plan_version_id');
+    }
+
     /**
      * @return array<string, string>
      */
@@ -97,6 +105,7 @@ class BillingSubscription extends Model
             'next_billing_at' => 'datetime',
             'ends_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'plan_version_id' => 'integer',
         ];
     }
 }

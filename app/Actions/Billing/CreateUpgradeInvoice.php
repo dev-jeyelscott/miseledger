@@ -59,7 +59,25 @@ final class CreateUpgradeInvoice
                 throw new RuntimeException('Manual upgrade pricing is unavailable.');
             }
 
-            $amount = $this->proratedAmount($subscription, $currentPlan, $targetPlan);
+            $targetPlanVersionId = null;
+            $sourcePlanVersionId = $subscription->plan_version_id;
+
+            if ((bool) config('billing.versioned_catalog_enabled')) {
+                $targetPlanVersionId = $this->planCatalog->currentVersionId($targetPlan);
+
+                if ($targetPlanVersionId === null || $sourcePlanVersionId === null) {
+                    throw new RuntimeException('The selected plan is not available for manual QR Ph billing.');
+                }
+            }
+
+            $amount = $this->proratedAmount(
+                $subscription,
+                $currentPlan,
+                $targetPlan,
+                $currency,
+                $sourcePlanVersionId,
+                $targetPlanVersionId,
+            );
 
             $existing = BillingInvoice::query()
                 ->where('billing_subscription_id', $subscription->id)
@@ -83,7 +101,9 @@ final class CreateUpgradeInvoice
                 'provider' => $subscription->provider,
                 'invoice_number' => 'INV-'.Str::upper((string) Str::ulid()),
                 'plan_code' => $subscription->plan_code,
+                'plan_version_id' => $sourcePlanVersionId,
                 'target_plan_code' => $targetPlan->value,
+                'target_plan_version_id' => $targetPlanVersionId,
                 'invoice_type' => BillingInvoiceType::Upgrade,
                 'billing_interval' => $subscription->interval,
                 'currency' => $currency,
@@ -113,15 +133,44 @@ final class CreateUpgradeInvoice
         ]);
     }
 
-    /** Calculate the current remaining-period price difference for an upgrade. */
-    private function proratedAmount(BillingSubscription $subscription, PlanCode $currentPlan, PlanCode $targetPlan): int
-    {
+    /**
+     * Calculate the current remaining-period price difference for an
+     * upgrade using exact integer arithmetic (never floating point). When
+     * both source and target versions are pinned, pricing is read from
+     * their frozen `billing_plan_version_prices` rows exclusively; only the
+     * legacy configuration snapshot is used before versioned-catalog
+     * cutover.
+     */
+    private function proratedAmount(
+        BillingSubscription $subscription,
+        PlanCode $currentPlan,
+        PlanCode $targetPlan,
+        string $currency,
+        ?int $sourcePlanVersionId,
+        ?int $targetPlanVersionId,
+    ): int {
         $interval = $subscription->interval;
-        $currentDefinition = $this->planCatalog->get($currentPlan);
-        $targetDefinition = $this->planCatalog->get($targetPlan);
 
-        $oldAmount = $currentDefinition?->manualAmount($interval);
-        $newAmount = $targetDefinition?->manualAmount($interval);
+        if ($sourcePlanVersionId !== null && $targetPlanVersionId !== null) {
+            $oldAmount = $this->planCatalog->versionPrice(
+                $sourcePlanVersionId,
+                $subscription->provider,
+                $subscription->collection_method,
+                $interval,
+                $currency,
+            )?->amount_minor;
+
+            $newAmount = $this->planCatalog->versionPrice(
+                $targetPlanVersionId,
+                $subscription->provider,
+                $subscription->collection_method,
+                $interval,
+                $currency,
+            )?->amount_minor;
+        } else {
+            $oldAmount = $this->planCatalog->get($currentPlan)?->manualAmount($interval);
+            $newAmount = $this->planCatalog->get($targetPlan)?->manualAmount($interval);
+        }
 
         if ($oldAmount === null || $newAmount === null) {
             throw new RuntimeException('The selected plan is not available for manual QR Ph billing.');
@@ -133,20 +182,43 @@ final class CreateUpgradeInvoice
             0,
             $subscription->current_period_ends_at->getTimestamp() - now()->getTimestamp(),
         );
-        $remainingDays = (int) min($nominalDays, ceil($remainingSeconds / 86400));
+
+        // Integer ceil(remainingSeconds / 86400) without floating point.
+        $remainingDays = (int) min($nominalDays, intdiv($remainingSeconds + 86399, 86400));
 
         if ($remainingDays === 0) {
             throw new RuntimeException('This subscription must be renewed before it can be upgraded.');
         }
 
-        $oldDailyRate = $oldAmount / $nominalDays;
-        $newDailyRate = $newAmount / $nominalDays;
-
-        $amount = (int) round(($newDailyRate - $oldDailyRate) * $remainingDays);
+        $amount = self::proratedDifference($oldAmount, $newAmount, $remainingDays, $nominalDays);
 
         $minimum = config('billing.upgrade_minimum_manual_amount');
         $minimum = is_numeric($minimum) ? (int) $minimum : 0;
 
         return max($amount, $minimum);
+    }
+
+    /**
+     * Compute round((newAmount - oldAmount) * remainingDays / nominalDays)
+     * with half-up rounding, using only integer operations.
+     */
+    private static function proratedDifference(
+        int $oldAmount,
+        int $newAmount,
+        int $remainingDays,
+        int $nominalDays,
+    ): int {
+        $difference = $newAmount - $oldAmount;
+        $sign = $difference <=> 0;
+        $product = abs($difference) * $remainingDays;
+
+        $quotient = intdiv($product, $nominalDays);
+        $remainder = $product % $nominalDays;
+
+        if ($remainder * 2 >= $nominalDays) {
+            $quotient++;
+        }
+
+        return $sign * $quotient;
     }
 }

@@ -50,6 +50,41 @@ final readonly class PlanCatalog
     }
 
     /**
+     * Resolve the database ID of the plan's current published version for
+     * new acquisition. Superseded and draft versions never qualify.
+     */
+    public function currentVersionId(PlanCode $code): ?int
+    {
+        $id = BillingPlanVersion::query()
+            ->where('plan_code', $code->value)
+            ->whereNotNull('published_at')
+            ->whereNull('superseded_at')
+            ->value('id');
+
+        return is_int($id) ? $id : null;
+    }
+
+    /**
+     * Resolve one exact price row pinned to an immutable commercial version.
+     * Never falls back to another version or to legacy configuration.
+     */
+    public function versionPrice(
+        int $planVersionId,
+        BillingProvider $provider,
+        BillingCollectionMethod $collectionMethod,
+        string $interval,
+        string $currency,
+    ): ?BillingPlanVersionPrice {
+        return BillingPlanVersionPrice::query()
+            ->where('billing_plan_version_id', $planVersionId)
+            ->where('provider', $provider)
+            ->where('collection_method', $collectionMethod)
+            ->where('interval', $interval)
+            ->where('currency', mb_strtoupper($currency))
+            ->first();
+    }
+
+    /**
      * Resolve one immutable published or superseded commercial version by database ID.
      */
     public function definitionForVersion(int $planVersionId): ?PlanDefinition

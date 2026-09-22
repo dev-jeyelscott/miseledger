@@ -37,12 +37,25 @@ final class CreateRenewalInvoice
                 throw new RuntimeException('This subscription cannot be renewed manually.');
             }
 
-            $plan = $this->planCatalog->get(PlanCode::from($subscription->plan_code));
-            $amount = $plan?->manualAmount($subscription->interval);
             $currency = config('billing.currency');
             $currency = is_string($currency) ? mb_strtoupper($currency) : null;
 
-            if ($plan === null || $amount === null || $currency === null || preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
+            if ($currency === null || preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
+                throw new RuntimeException('Manual renewal pricing is unavailable.');
+            }
+
+            $amount = $subscription->plan_version_id !== null
+                ? $this->planCatalog->versionPrice(
+                    $subscription->plan_version_id,
+                    $subscription->provider,
+                    $subscription->collection_method,
+                    $subscription->interval,
+                    $currency,
+                )?->amount_minor
+                : $this->planCatalog->get(PlanCode::from($subscription->plan_code))
+                    ?->manualAmount($subscription->interval);
+
+            if ($amount === null) {
                 throw new RuntimeException('Manual renewal pricing is unavailable.');
             }
 
@@ -69,6 +82,7 @@ final class CreateRenewalInvoice
                 'provider' => $subscription->provider,
                 'invoice_number' => 'INV-'.Str::upper((string) Str::ulid()),
                 'plan_code' => $subscription->plan_code,
+                'plan_version_id' => $subscription->plan_version_id,
                 'billing_interval' => $subscription->interval,
                 'currency' => $currency,
                 'amount' => $amount,

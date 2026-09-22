@@ -33,6 +33,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonInterface|null $due_at
  * @property CarbonInterface|null $paid_at
  * @property CarbonInterface|null $cancelled_at
+ * @property int|null $plan_version_id
+ * @property int|null $target_plan_version_id
  */
 #[Fillable([
     'organization_id',
@@ -51,6 +53,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'due_at',
     'paid_at',
     'cancelled_at',
+    'plan_version_id',
+    'target_plan_version_id',
 ])]
 class BillingInvoice extends Model
 {
@@ -75,6 +79,18 @@ class BillingInvoice extends Model
         return $this->hasMany(BillingPayment::class);
     }
 
+    /** @return BelongsTo<BillingPlanVersion, $this> */
+    public function planVersion(): BelongsTo
+    {
+        return $this->belongsTo(BillingPlanVersion::class, 'plan_version_id');
+    }
+
+    /** @return BelongsTo<BillingPlanVersion, $this> */
+    public function targetPlanVersion(): BelongsTo
+    {
+        return $this->belongsTo(BillingPlanVersion::class, 'target_plan_version_id');
+    }
+
     /** @return HasMany<BillingRenewalReminder, $this> */
     public function renewalReminders(): HasMany
     {
@@ -92,6 +108,8 @@ class BillingInvoice extends Model
             'due_at' => 'datetime',
             'paid_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'plan_version_id' => 'integer',
+            'target_plan_version_id' => 'integer',
         ];
     }
 }

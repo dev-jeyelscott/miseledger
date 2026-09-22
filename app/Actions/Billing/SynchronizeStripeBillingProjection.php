@@ -4,9 +4,11 @@ namespace App\Actions\Billing;
 
 use App\Enums\BillingProvider;
 use App\Models\BillingCustomer;
+use App\Models\BillingPlanVersion;
 use App\Models\BillingSubscription;
 use App\Models\Organization;
 use App\Support\Billing\PlanCatalog;
+use App\Support\Billing\PlanDefinition;
 use Illuminate\Support\Carbon;
 use Laravel\Cashier\Subscription;
 
@@ -89,10 +91,59 @@ final class SynchronizeStripeBillingProjection
             $subscriptionAttributes['cancelled_at'] = self::timestamp($subscriptionObject['canceled_at']);
         }
 
+        $existing = BillingSubscription::query()
+            ->where('provider', BillingProvider::Stripe)
+            ->where('external_subscription_id', $subscription->stripe_id)
+            ->first();
+
+        if ($existing === null && (bool) config('billing.versioned_catalog_enabled')) {
+            $subscriptionAttributes['plan_version_id'] = $this->resolvePlanVersionIdForNewSubscription(
+                $plan,
+                $subscriptionObject,
+            );
+        }
+
         BillingSubscription::query()->updateOrCreate(
             ['provider' => BillingProvider::Stripe, 'external_subscription_id' => $subscription->stripe_id],
             $subscriptionAttributes,
         );
+    }
+
+    /**
+     * Resolve the exact commercial version to pin a brand-new provider-neutral
+     * subscription row to. Server-selected metadata carried from checkout is
+     * validated rather than trusted outright: it must reference a published
+     * version belonging to the resolved plan code. Invalid, missing, or
+     * mismatched metadata (e.g. a manually created Stripe subscription, or a
+     * redelivered webhook without the original payload) falls back to the
+     * plan's current published version instead of leaving the pin unset.
+     *
+     * @param  array<string, mixed>  $subscriptionObject
+     */
+    private function resolvePlanVersionIdForNewSubscription(
+        ?PlanDefinition $plan,
+        array $subscriptionObject,
+    ): ?int {
+        if ($plan === null) {
+            return null;
+        }
+
+        $metadata = $subscriptionObject['metadata'] ?? null;
+        $rawPlanVersionId = is_array($metadata) ? ($metadata['plan_version_id'] ?? null) : null;
+
+        if (is_string($rawPlanVersionId) && ctype_digit($rawPlanVersionId)) {
+            $candidate = BillingPlanVersion::query()
+                ->whereKey((int) $rawPlanVersionId)
+                ->where('plan_code', $plan->code->value)
+                ->whereNotNull('published_at')
+                ->value('id');
+
+            if (is_int($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return $this->planCatalog->currentVersionId($plan->code);
     }
 
     private static function timestamp(mixed $value): ?Carbon

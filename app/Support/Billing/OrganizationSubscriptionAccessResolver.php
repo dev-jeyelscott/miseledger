@@ -220,6 +220,7 @@ final class OrganizationSubscriptionAccessResolver
                 ? $subscription->trial_ends_at
                 : null,
             endsAt: $subscription->ends_at,
+            planVersionId: $subscription->plan_version_id,
         );
     }
 

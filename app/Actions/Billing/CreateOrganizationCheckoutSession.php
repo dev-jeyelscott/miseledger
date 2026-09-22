@@ -66,6 +66,18 @@ final class CreateOrganizationCheckoutSession
             ]);
         }
 
+        $planVersionId = null;
+
+        if ((bool) config('billing.versioned_catalog_enabled')) {
+            $planVersionId = $this->planCatalog->currentVersionId($plan);
+
+            if ($planVersionId === null) {
+                throw ValidationException::withMessages([
+                    'plan' => __('The selected plan does not have a published version available for new subscriptions.'),
+                ]);
+            }
+        }
+
         $type = (string) config('billing.subscription_type');
 
         $organizationId = (string) $organization->getKey();
@@ -86,6 +98,7 @@ final class CreateOrganizationCheckoutSession
                     $interval,
                     $provider,
                     $externalPlanId,
+                    $planVersionId,
                     $organizationId,
                     $pendingCacheKey,
                     $pendingFingerprint,
@@ -106,6 +119,7 @@ final class CreateOrganizationCheckoutSession
         string $interval,
         BillingProvider $provider,
         string $externalPlanId,
+        ?int $planVersionId,
         string $organizationId,
         string $pendingCacheKey,
         string $pendingFingerprint,
@@ -137,6 +151,12 @@ final class CreateOrganizationCheckoutSession
             ]);
         }
 
+        $metadata = ['organization_id' => $organizationId];
+
+        if ($planVersionId !== null) {
+            $metadata['plan_version_id'] = (string) $planVersionId;
+        }
+
         try {
             $billingProvider = $this->providerManager->provider($provider);
 
@@ -145,7 +165,7 @@ final class CreateOrganizationCheckoutSession
                 $externalPlanId,
                 route('organizations.billing.checkout.success', $organization),
                 route('organizations.billing.checkout.cancel', $organization),
-                ['organization_id' => $organizationId],
+                $metadata,
                 $actor,
             );
         } catch (\Throwable $exception) {

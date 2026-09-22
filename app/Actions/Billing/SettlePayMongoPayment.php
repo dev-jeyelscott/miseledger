@@ -113,10 +113,19 @@ final class SettlePayMongoPayment
 
             $isUpgrade = $invoice->invoice_type === BillingInvoiceType::Upgrade;
             $targetPlanCode = $invoice->target_plan_code;
+            $targetPlanVersionId = $invoice->target_plan_version_id;
 
             if ($isUpgrade && $targetPlanCode === null) {
                 throw new RuntimeException(
                     'Upgrade invoice is missing its target plan.',
+                );
+            }
+
+            if ($isUpgrade
+                && $subscription->plan_version_id !== null
+                && $targetPlanVersionId === null) {
+                throw new RuntimeException(
+                    'Upgrade invoice is missing its frozen target plan version.',
                 );
             }
 
@@ -139,7 +148,10 @@ final class SettlePayMongoPayment
                 'next_billing_at' => $invoice->period_ends_at,
                 'ends_at' => $invoice->period_ends_at,
                 'cancelled_at' => null,
-                ...($isUpgrade ? ['plan_code' => $targetPlanCode] : []),
+                ...($isUpgrade ? [
+                    'plan_code' => $targetPlanCode,
+                    'plan_version_id' => $targetPlanVersionId,
+                ] : []),
             ]);
 
             if ($isUpgrade) {

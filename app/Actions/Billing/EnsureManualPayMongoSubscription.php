@@ -64,6 +64,9 @@ final class EnsureManualPayMongoSubscription
                 'collection_method' => BillingCollectionMethod::Manual,
                 'provider_status' => 'pending',
                 'livemode' => $customer->livemode,
+                'plan_version_id' => (bool) config('billing.versioned_catalog_enabled')
+                    ? $this->planCatalog->currentVersionId($planCode)
+                    : null,
             ]);
         }, attempts: 3);
     }
