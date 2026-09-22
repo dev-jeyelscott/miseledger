@@ -3,12 +3,14 @@ import {
     Activity,
     Building2,
     CreditCard,
+    HeartPulse,
     LayoutDashboard,
     Package,
     Users,
 } from 'lucide-react';
 
 import PlatformBillingController from '@/actions/App/Http/Controllers/Platform/PlatformBillingController';
+import PlatformHealthController from '@/actions/App/Http/Controllers/Platform/PlatformHealthController';
 import PlatformObservabilityController from '@/actions/App/Http/Controllers/Platform/PlatformObservabilityController';
 import PlatformOrganizationController from '@/actions/App/Http/Controllers/Platform/PlatformOrganizationController';
 import PlatformProductCatalogController from '@/actions/App/Http/Controllers/Platform/PlatformProductCatalogController';
@@ -65,6 +67,11 @@ const platformNavigation: NavGroup[] = [
                 title: 'Observability',
                 href: PlatformObservabilityController.index(),
                 icon: Activity,
+            },
+            {
+                title: 'Health',
+                href: PlatformHealthController.index(),
+                icon: HeartPulse,
             },
         ],
     },

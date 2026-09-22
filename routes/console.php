@@ -26,6 +26,12 @@ Schedule::command('backup:database')
     ->onOneServer()
     ->runInBackground();
 
+Schedule::command('platform-health:snapshot-table-sizes')
+    ->dailyAt('01:00')
+    ->withoutOverlapping(30)
+    ->onOneServer()
+    ->runInBackground();
+
 Schedule::command('problem-report:sync-from-notion')
     ->hourly()
     ->withoutOverlapping(30)

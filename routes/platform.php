@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Platform\PlatformBillingController;
 use App\Http\Controllers\Platform\PlatformDashboardController;
+use App\Http\Controllers\Platform\PlatformHealthController;
 use App\Http\Controllers\Platform\PlatformObservabilityController;
 use App\Http\Controllers\Platform\PlatformOrganizationController;
 use App\Http\Controllers\Platform\PlatformProductCatalogController;
@@ -57,6 +58,11 @@ Route::prefix('admin')
             '/observability',
             [PlatformObservabilityController::class, 'index'],
         )->name('observability.index');
+
+        Route::get(
+            '/health',
+            [PlatformHealthController::class, 'index'],
+        )->name('health.index');
 
         Route::get(
             '/product-catalog',
