@@ -15,13 +15,17 @@ test('public home renders the MiseLedger landing page', function () {
 });
 
 test('landing page keeps customer-facing copy and authentication-aware routes', function () {
-    $source = File::get(resource_path('js/pages/welcome.tsx'));
-    $normalizedSource = Str::squish($source);
+    $pageSource = File::get(resource_path('js/pages/welcome.tsx'));
+    $marketingComponentsSource = collect(
+        File::allFiles(resource_path('js/components/marketing')),
+    )->map(fn ($file) => File::get($file->getPathname()))->implode(' ');
+
+    $normalizedSource = Str::squish($pageSource.' '.$marketingComponentsSource);
 
     expect($normalizedSource)
         ->toContain('Know what you have before you buy more.')
         ->toContain('From delivery to plate')
-        ->toContain('Keep every location on the same page')
+        ->toContain('One inventory picture across every location.')
         ->toContain('dashboard()')
         ->toContain('login()')
         ->toContain('register()')

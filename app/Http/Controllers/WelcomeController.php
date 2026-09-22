@@ -24,11 +24,12 @@ class WelcomeController extends Controller
     }
 
     /**
-     * Expose only the configured plan code and display name. Stripe Price
-     * IDs, features, and limits are deliberately withheld: the marketing
-     * page shows what plans exist, not what they cost or grant.
+     * Expose the configured plan code, display name, granted feature codes,
+     * and quantitative limits. Provider price IDs, provider enablement
+     * state, and every other provider-specific identifier stay behind
+     * billing infrastructure and are never serialized here.
      *
-     * @return list<array{code: string, name: string}>
+     * @return list<array{code: string, name: string, features: list<string>, limits: array<string, int|null>}>
      */
     private function plansData(PlanCatalog $planCatalog): array
     {
@@ -36,6 +37,8 @@ class WelcomeController extends Controller
             static fn ($definition): array => [
                 'code' => $definition->code->value,
                 'name' => $definition->name,
+                'features' => $definition->features,
+                'limits' => $definition->limits,
             ],
             $planCatalog->all(),
         );

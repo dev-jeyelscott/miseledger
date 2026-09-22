@@ -42,8 +42,18 @@ test('an unauthenticated visitor sees the landing page with only approved trial 
             ->component('welcome')
             ->where('trialDays', 14)
             ->where('plans', [
-                ['code' => 'starter', 'name' => 'Starter'],
-                ['code' => 'growth', 'name' => 'Growth'],
+                [
+                    'code' => 'starter',
+                    'name' => 'Starter',
+                    'features' => ['recipes'],
+                    'limits' => ['locations' => 3],
+                ],
+                [
+                    'code' => 'growth',
+                    'name' => 'Growth',
+                    'features' => [],
+                    'limits' => [],
+                ],
             ]),
     );
 

@@ -267,6 +267,32 @@
     }
 }
 
+/*
+ * One-time staggered section reveal driven by IntersectionObserver
+ * (see `useMarketingReveal`). Reduced motion renders content immediately
+ * with no transform, matching the `marketing-enter` reduced-motion rule.
+ */
+.marketing-theme .marketing-reveal {
+    opacity: 0;
+    transform: translateY(22px);
+    transition:
+        opacity 700ms ease-out,
+        transform 700ms ease-out;
+}
+
+.marketing-theme .marketing-reveal.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .marketing-theme .marketing-reveal {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+}
+
 @layer base {
     * {
         @apply border-border;
