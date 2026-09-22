@@ -9,3 +9,4 @@ Before planning or editing, find the row whose globs match the file's path and r
 | compose.yaml | .ai/rules/general.md |
 | app/Actions/Inventory/** | .ai/rules/inventory.md |
 | app/Http/Controllers/Platform/**, routes/platform.php | .ai/rules/platform.md |
+| app/Http/Controllers/Platform/PlatformContentController.php, app/Http/Controllers/PublicContentController.php, app/Models/ContentPage.php, app/Models/ContentRevision.php | .ai/rules/content-cms.md |
