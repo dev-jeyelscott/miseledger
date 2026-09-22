@@ -85,8 +85,8 @@ export default function Login({ status, canResetPassword }: Props) {
                         </div>
 
                         <div className="text-center text-sm text-muted-foreground">
-                            Don't have an account?{' '}
-                            <TextLink href={register()}>Sign up</TextLink>
+                            New to MiseLedger?{' '}
+                            <TextLink href={register()}>Start free</TextLink>
                         </div>
                     </>
                 )}
@@ -105,6 +105,7 @@ export default function Login({ status, canResetPassword }: Props) {
 }
 
 Login.layout = {
-    title: 'Log in to your account',
-    description: 'Enter your email and password below to log in',
+    title: 'Welcome back',
+    description:
+        'Log in to manage inventory, purchasing, receiving, waste, and costs.',
 };
