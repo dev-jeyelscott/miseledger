@@ -293,6 +293,35 @@
     }
 }
 
+/*
+ * Small-device marquee for the product-proof strip: the visible track loops
+ * a doubled item list continuously. Reduced motion stops the loop and lets
+ * the track scroll horizontally instead, so every item stays reachable.
+ */
+.marketing-theme .marketing-marquee-track {
+    animation: marketing-marquee 16s linear infinite;
+}
+
+@keyframes marketing-marquee {
+    from {
+        transform: translateX(0);
+    }
+
+    to {
+        transform: translateX(-50%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .marketing-theme .marketing-marquee {
+        overflow-x: auto;
+    }
+
+    .marketing-theme .marketing-marquee-track {
+        animation: none;
+    }
+}
+
 @layer base {
     * {
         @apply border-border;

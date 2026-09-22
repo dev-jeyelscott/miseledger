@@ -34,7 +34,6 @@ type JourneyStepProps = {
     icon: LucideIcon;
     title: string;
     children: ReactNode;
-    showConnector?: boolean;
 };
 
 type WelcomeProps = {
@@ -111,19 +110,9 @@ function JourneyStep({
     icon: Icon,
     title,
     children,
-    showConnector = true,
 }: JourneyStepProps) {
     return (
         <article className="relative flex h-full flex-col">
-            {showConnector && (
-                <div
-                    className="absolute top-[1.125rem] left-[calc(100%-0.5rem)] hidden w-[calc(100%-0.75rem)] border-t border-dashed border-[#a87a55]/65 xl:block"
-                    aria-hidden="true"
-                >
-                    <span className="absolute -top-1.5 right-0 block size-3 rotate-45 border-t border-r border-[#a87a55]/65" />
-                </div>
-            )}
-
             <div className="flex items-center gap-3">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-marketing-accent text-xs font-bold text-marketing-accent-foreground">
                     {number}
@@ -490,7 +479,6 @@ export default function Welcome({ trialDays, plans }: WelcomeProps) {
                                     number={5}
                                     icon={Scale}
                                     title="Cost & Report"
-                                    showConnector={false}
                                 >
                                     <p
                                         className="border-b border-marketing-border/12 pb-3 text-sm font-semibold text-marketing-ink"
@@ -511,26 +499,6 @@ export default function Welcome({ trialDays, plans }: WelcomeProps) {
                                         Calculated automatically
                                     </p>
                                 </JourneyStep>
-                            </div>
-
-                            <div className="mt-12 border-t border-dashed border-[#a87a55]/45 pt-6">
-                                <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center text-xs font-bold tracking-[0.16em] text-[#6c7a72] uppercase">
-                                    <span>Smarter inventory</span>
-                                    <span
-                                        aria-hidden="true"
-                                        className="text-[#a87a55]"
-                                    >
-                                        /
-                                    </span>
-                                    <span>Smoother operations</span>
-                                    <span
-                                        aria-hidden="true"
-                                        className="text-[#a87a55]"
-                                    >
-                                        /
-                                    </span>
-                                    <span>Better food costs</span>
-                                </p>
                             </div>
                         </div>
                     </section>

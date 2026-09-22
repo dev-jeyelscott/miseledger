@@ -9,6 +9,19 @@ const PROOF_ITEMS: Array<{ label: string; icon: LucideIcon }> = [
     { label: 'Multi-location', icon: MapPin },
 ];
 
+/** Render one proof item; reused by both the marquee track and the wrapped list. */
+function ProofItem({ label, icon: Icon }: { label: string; icon: LucideIcon }) {
+    return (
+        <li className="flex shrink-0 items-center gap-2 text-xs font-semibold text-marketing-muted sm:border-l sm:border-marketing-border/15 sm:pl-10 sm:text-sm sm:first:border-l-0 sm:first:pl-0">
+            <Icon
+                className="size-4 shrink-0 text-marketing-accent"
+                aria-hidden="true"
+            />
+            <span>{label}</span>
+        </li>
+    );
+}
+
 /** Render the truthful product-evidence strip that replaces customer-logo social proof. */
 export function ProductProofStrip() {
     return (
@@ -17,23 +30,27 @@ export function ProductProofStrip() {
             aria-label="What MiseLedger covers"
             className="scroll-mt-24 border-b border-marketing-border/15 bg-marketing-surface-muted"
         >
-            <div className="mx-auto max-w-[1280px] px-5 sm:px-8 lg:px-12">
-                <ul className="grid grid-cols-2 gap-x-4 gap-y-5 py-6 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-10 sm:gap-y-4 sm:py-7">
-                    {PROOF_ITEMS.map(({ label, icon: Icon }, index) => (
-                        <li
-                            key={label}
-                            className={`flex items-center gap-2 text-xs font-semibold text-marketing-muted sm:border-l sm:border-marketing-border/15 sm:pl-10 sm:text-sm first:sm:border-l-0 first:sm:pl-0 ${
-                                index === PROOF_ITEMS.length - 1
-                                    ? 'col-span-2 justify-center'
-                                    : ''
-                            }`}
-                        >
-                            <Icon
-                                className="size-4 shrink-0 text-marketing-accent"
-                                aria-hidden="true"
-                            />
-                            <span>{label}</span>
-                        </li>
+            <div className="mx-auto max-w-[1280px] sm:px-8 lg:px-12">
+                <div
+                    className="marketing-marquee overflow-hidden py-6 sm:hidden"
+                    aria-hidden="true"
+                >
+                    <ul className="marketing-marquee-track flex w-max items-center gap-8">
+                        {[...PROOF_ITEMS, ...PROOF_ITEMS].map(
+                            ({ label, icon }, index) => (
+                                <ProofItem
+                                    key={`${label}-${index}`}
+                                    label={label}
+                                    icon={icon}
+                                />
+                            ),
+                        )}
+                    </ul>
+                </div>
+
+                <ul className="sr-only py-7 sm:not-sr-only sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-10 sm:gap-y-4">
+                    {PROOF_ITEMS.map(({ label, icon }) => (
+                        <ProofItem key={label} label={label} icon={icon} />
                     ))}
                 </ul>
             </div>
