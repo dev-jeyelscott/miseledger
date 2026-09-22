@@ -50,6 +50,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureAiRateLimiting();
+        $this->configurePlatformRateLimiting();
         $this->configureAuthorization();
         $this->configureBilling();
         $this->configureModelObservers();
@@ -79,6 +80,50 @@ class AppServiceProvider extends ServiceProvider
                 ->uncompromised()
             : null,
         );
+
+        $this->validatePlatformSecurityConfiguration();
+    }
+
+    /**
+     * Fail closed at boot, rather than leaking a misconfiguration into
+     * production traffic, when session/cookie/debug settings would weaken
+     * the privileged platform boundary (POC-V10.4). Never logs the actual
+     * offending values, only the setting names.
+     */
+    protected function validatePlatformSecurityConfiguration(): void
+    {
+        if (! app()->isProduction()) {
+            return;
+        }
+
+        $problems = [];
+
+        if ((bool) config('app.debug')) {
+            $problems[] = 'APP_DEBUG must be false in production.';
+        }
+
+        if (! (bool) config('session.secure')) {
+            $problems[] = 'SESSION_SECURE_COOKIE must be true in production.';
+        }
+
+        if (! (bool) config('session.http_only')) {
+            $problems[] = 'SESSION_HTTP_ONLY must be true in production.';
+        }
+
+        if (! in_array(config('session.same_site'), ['lax', 'strict'], true)) {
+            $problems[] = "SESSION_SAME_SITE must be 'lax' or 'strict' in production.";
+        }
+
+        if (! str_starts_with((string) config('app.url'), 'https://')) {
+            $problems[] = 'APP_URL must use https in production.';
+        }
+
+        if ($problems !== []) {
+            throw new RuntimeException(
+                'Platform security configuration is unsafe for production: '
+                .implode(' ', $problems),
+            );
+        }
     }
 
     /**
@@ -101,6 +146,20 @@ class AppServiceProvider extends ServiceProvider
                 ),
             );
         }
+    }
+
+    /**
+     * Bound repeated-mutation abuse against consequential platform-owner
+     * commercial mutations (POC-V10.4), on top of the strong-factor and
+     * recent-auth gates already required for these routes.
+     */
+    protected function configurePlatformRateLimiting(): void
+    {
+        RateLimiter::for('platform-mutation', function (Request $request): Limit {
+            return Limit::perMinute(20)->by(
+                (string) ($request->user()?->getAuthIdentifier() ?? $request->ip()),
+            );
+        });
     }
 
     /**

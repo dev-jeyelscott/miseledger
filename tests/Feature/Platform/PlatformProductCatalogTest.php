@@ -1,10 +1,12 @@
 <?php
 
+use App\Enums\PlatformAuditAction;
 use App\Models\BillingCustomer;
 use App\Models\BillingPlanVersion;
 use App\Models\BillingPlanVersionPrice;
 use App\Models\BillingSubscription;
 use App\Models\PlatformAdmin;
+use App\Models\PlatformAuditEvent;
 use App\Models\User;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Route;
@@ -133,6 +135,7 @@ test('an unrecognized plan code returns 404 for show and store', function () {
         ->assertNotFound();
 
     $this->actingAs($platformUser)
+        ->withSession(['auth.password_confirmed_at' => time()])
         ->post(route('admin.product-catalog.versions.store', 'not_a_real_plan'), [
             'name' => 'Rogue',
             'tier' => 1,
@@ -146,6 +149,7 @@ test('creating a draft version rejects arbitrary feature codes and incomplete li
     $platformUser = actingPlatformAdmin();
 
     $this->actingAs($platformUser)
+        ->withSession(['auth.password_confirmed_at' => time()])
         ->post(route('admin.product-catalog.versions.store', 'starter'), [
             'name' => 'Starter',
             'tier' => 1,
@@ -155,6 +159,7 @@ test('creating a draft version rejects arbitrary feature codes and incomplete li
         ->assertSessionHasErrors(['feature_codes.0']);
 
     $this->actingAs($platformUser)
+        ->withSession(['auth.password_confirmed_at' => time()])
         ->post(route('admin.product-catalog.versions.store', 'starter'), [
             'name' => 'Starter',
             'tier' => 1,
@@ -177,12 +182,14 @@ test('only one draft version may exist per plan at a time', function () {
     ];
 
     $this->actingAs($platformUser)
+        ->withSession(['auth.password_confirmed_at' => time()])
         ->post(route('admin.product-catalog.versions.store', 'starter'), $validPayload)
         ->assertRedirect();
 
     expect(BillingPlanVersion::query()->where('plan_code', 'starter')->count())->toBe(1);
 
     $this->actingAs($platformUser)
+        ->withSession(['auth.password_confirmed_at' => time()])
         ->post(route('admin.product-catalog.versions.store', 'starter'), $validPayload)
         ->assertSessionHasErrors(['name']);
 
@@ -206,6 +213,7 @@ test('published versions cannot be edited or updated through the UI', function (
         ->assertForbidden();
 
     $this->actingAs($platformUser)
+        ->withSession(['auth.password_confirmed_at' => time()])
         ->put(route('admin.product-catalog.versions.update', $published), [
             'name' => 'Renamed',
             'tier' => 1,
@@ -215,6 +223,7 @@ test('published versions cannot be edited or updated through the UI', function (
         ->assertForbidden();
 
     $this->actingAs($platformUser)
+        ->withSession(['auth.password_confirmed_at' => time()])
         ->post(route('admin.product-catalog.versions.publish', $published), [
             'confirm' => '1',
         ])
@@ -238,6 +247,7 @@ test('updating a draft replaces its prices and validated entitlements', function
     ]);
 
     $this->actingAs($platformUser)
+        ->withSession(['auth.password_confirmed_at' => time()])
         ->put(route('admin.product-catalog.versions.update', $draft), [
             'name' => 'Starter Updated',
             'tier' => 1,
@@ -279,10 +289,12 @@ test('publishing requires explicit confirmation and at least one recorded price'
     ]);
 
     $this->actingAs($platformUser)
+        ->withSession(['auth.password_confirmed_at' => time()])
         ->post(route('admin.product-catalog.versions.publish', $draft))
         ->assertSessionHasErrors(['confirm']);
 
     $this->actingAs($platformUser)
+        ->withSession(['auth.password_confirmed_at' => time()])
         ->post(route('admin.product-catalog.versions.publish', $draft), [
             'confirm' => '1',
         ])
@@ -326,6 +338,7 @@ test('publishing a version supersedes the prior current version and pins existin
     ]);
 
     $this->actingAs($platformUser)
+        ->withSession(['auth.password_confirmed_at' => time()])
         ->post(route('admin.product-catalog.versions.publish', $draft), [
             'confirm' => '1',
         ])
@@ -371,4 +384,88 @@ test('version payloads never expose provider secrets or external identifiers', f
             ->not->toContain('price_')
             ->not->toContain('webhook');
     });
+});
+
+test('draft creation without recent password confirmation is redirected to confirm password', function () {
+    $platformUser = actingPlatformAdmin();
+
+    $this->actingAs($platformUser)
+        ->post(route('admin.product-catalog.versions.store', 'starter'), [
+            'name' => 'Starter',
+            'tier' => 1,
+            'feature_codes' => [],
+            'limits' => ['seats' => 3, 'locations' => 1, 'inventory_items' => 500],
+        ])
+        ->assertRedirect(route('password.confirm'));
+
+    expect(BillingPlanVersion::query()->where('plan_code', 'starter')->count())->toBe(0);
+});
+
+test('a stale password confirmation blocks a sensitive mutation', function () {
+    $platformUser = actingPlatformAdmin();
+
+    $this->actingAs($platformUser)
+        ->withSession([
+            'auth.password_confirmed_at' => time() - config('auth.password_timeout') - 1,
+        ])
+        ->post(route('admin.product-catalog.versions.store', 'starter'), [
+            'name' => 'Starter',
+            'tier' => 1,
+            'feature_codes' => [],
+            'limits' => ['seats' => 3, 'locations' => 1, 'inventory_items' => 500],
+        ])
+        ->assertRedirect(route('password.confirm'));
+
+    expect(BillingPlanVersion::query()->where('plan_code', 'starter')->count())->toBe(0);
+});
+
+test('publishing a version writes dedicated platform audit evidence', function () {
+    $platformUser = actingPlatformAdmin();
+
+    $draft = BillingPlanVersion::factory()->create([
+        'plan_code' => 'starter',
+        'version' => 1,
+        'feature_codes' => [],
+        'limits' => ['seats' => 3, 'locations' => 1, 'inventory_items' => 500],
+    ]);
+
+    BillingPlanVersionPrice::factory()->create([
+        'billing_plan_version_id' => $draft->id,
+    ]);
+
+    $this->actingAs($platformUser)
+        ->withSession(['auth.password_confirmed_at' => time()])
+        ->post(route('admin.product-catalog.versions.publish', $draft), [
+            'confirm' => '1',
+        ])
+        ->assertRedirect();
+
+    $event = PlatformAuditEvent::query()->latest('id')->first();
+
+    expect($event)->not->toBeNull()
+        ->and($event->action)->toBe(PlatformAuditAction::CatalogVersionPublished)
+        ->and($event->subject_type)->toBe('billing_plan_version')
+        ->and($event->subject_id)->toBe((string) $draft->id)
+        ->and($event->actor_user_id)->toBe($platformUser->id)
+        ->and($event->occurred_at)->not->toBeNull();
+
+    expect(fn () => $event->update(['action' => PlatformAuditAction::CatalogVersionDrafted]))
+        ->toThrow(LogicException::class);
+
+    expect(fn () => $event->delete())
+        ->toThrow(LogicException::class);
+});
+
+test('sensitive platform mutations are rate limited independently per admin', function () {
+    $platformUser = actingPlatformAdmin();
+
+    $this->actingAs($platformUser)
+        ->withSession(['auth.password_confirmed_at' => time()]);
+
+    for ($i = 0; $i < 20; $i++) {
+        $this->post(route('admin.product-catalog.versions.store', 'not_a_real_plan'), []);
+    }
+
+    $this->post(route('admin.product-catalog.versions.store', 'not_a_real_plan'), [])
+        ->assertStatus(429);
 });

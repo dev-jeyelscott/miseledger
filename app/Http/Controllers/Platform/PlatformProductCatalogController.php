@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Platform;
 
+use App\Actions\Platform\RecordPlatformAuditEvent;
 use App\Enums\BillingCollectionMethod;
 use App\Enums\BillingProvider;
 use App\Enums\PlanCode;
+use App\Enums\PlatformAuditAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Platform\PublishPlatformPlanVersionRequest;
 use App\Http\Requests\Platform\SavePlatformPlanVersionRequest;
@@ -88,6 +90,7 @@ final class PlatformProductCatalogController extends Controller
         string $planCode,
         SavePlatformPlanVersionRequest $request,
         PlanCatalog $catalog,
+        RecordPlatformAuditEvent $recordAuditEvent,
     ): RedirectResponse {
         $this->resolveDefinition($planCode, $catalog);
 
@@ -121,6 +124,22 @@ final class PlatformProductCatalogController extends Controller
             'limits' => (array) $request->validated('limits'),
             'created_by_user_id' => $user instanceof User ? $user->id : null,
         ]);
+
+        if ($user instanceof User) {
+            $recordAuditEvent->handle(
+                action: PlatformAuditAction::CatalogVersionDrafted,
+                subjectType: 'billing_plan_version',
+                subjectId: (string) $version->id,
+                actor: $user,
+                source: 'admin.product-catalog.versions.store',
+                after: [
+                    'plan_code' => $planCode,
+                    'version' => $nextVersion,
+                    'name' => $version->name,
+                    'tier' => $version->tier,
+                ],
+            );
+        }
 
         Inertia::flash('toast', [
             'type' => 'success',
@@ -160,8 +179,16 @@ final class PlatformProductCatalogController extends Controller
     public function update(
         BillingPlanVersion $billingPlanVersion,
         SavePlatformPlanVersionRequest $request,
+        RecordPlatformAuditEvent $recordAuditEvent,
     ): RedirectResponse {
         abort_unless($billingPlanVersion->isDraft(), 403);
+
+        $before = [
+            'name' => $billingPlanVersion->name,
+            'tier' => $billingPlanVersion->tier,
+            'feature_codes' => $billingPlanVersion->feature_codes,
+            'limits' => $billingPlanVersion->limits,
+        ];
 
         DB::transaction(function () use ($billingPlanVersion, $request): void {
             $billingPlanVersion->update([
@@ -189,6 +216,25 @@ final class PlatformProductCatalogController extends Controller
             }
         });
 
+        $user = $request->user();
+
+        if ($user instanceof User) {
+            $recordAuditEvent->handle(
+                action: PlatformAuditAction::CatalogVersionUpdated,
+                subjectType: 'billing_plan_version',
+                subjectId: (string) $billingPlanVersion->id,
+                actor: $user,
+                source: 'admin.product-catalog.versions.update',
+                before: $before,
+                after: [
+                    'name' => $billingPlanVersion->name,
+                    'tier' => $billingPlanVersion->tier,
+                    'feature_codes' => $billingPlanVersion->feature_codes,
+                    'limits' => $billingPlanVersion->limits,
+                ],
+            );
+        }
+
         Inertia::flash('toast', [
             'type' => 'success',
             'message' => 'Draft version updated.',
@@ -206,6 +252,7 @@ final class PlatformProductCatalogController extends Controller
         BillingPlanVersion $billingPlanVersion,
         PublishPlatformPlanVersionRequest $request,
         PlanCatalog $catalog,
+        RecordPlatformAuditEvent $recordAuditEvent,
     ): RedirectResponse {
         abort_unless($billingPlanVersion->isDraft(), 403);
 
@@ -230,8 +277,9 @@ final class PlatformProductCatalogController extends Controller
         }
 
         $user = $request->user();
+        $supersededVersionId = null;
 
-        DB::transaction(function () use ($billingPlanVersion, $user): void {
+        DB::transaction(function () use ($billingPlanVersion, $user, &$supersededVersionId): void {
             $current = BillingPlanVersion::query()
                 ->where('plan_code', $billingPlanVersion->plan_code)
                 ->whereNotNull('published_at')
@@ -243,6 +291,7 @@ final class PlatformProductCatalogController extends Controller
 
             if ($current !== null) {
                 $current->update(['superseded_at' => $now]);
+                $supersededVersionId = $current->id;
             }
 
             $billingPlanVersion->update([
@@ -250,6 +299,24 @@ final class PlatformProductCatalogController extends Controller
                 'published_by_user_id' => $user instanceof User ? $user->id : null,
             ]);
         });
+
+        if ($user instanceof User) {
+            $recordAuditEvent->handle(
+                action: PlatformAuditAction::CatalogVersionPublished,
+                subjectType: 'billing_plan_version',
+                subjectId: (string) $billingPlanVersion->id,
+                actor: $user,
+                source: 'admin.product-catalog.versions.publish',
+                before: [
+                    'superseded_version_id' => $supersededVersionId,
+                ],
+                after: [
+                    'plan_code' => $billingPlanVersion->plan_code,
+                    'version' => $billingPlanVersion->version,
+                    'published_at' => $billingPlanVersion->published_at?->toIso8601String(),
+                ],
+            );
+        }
 
         Inertia::flash('toast', [
             'type' => 'success',

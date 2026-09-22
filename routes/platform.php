@@ -80,11 +80,6 @@ Route::prefix('admin')
             [PlatformProductCatalogController::class, 'index'],
         )->name('product-catalog.index');
 
-        Route::post(
-            '/product-catalog/plans/{planCode}/versions',
-            [PlatformProductCatalogController::class, 'store'],
-        )->name('product-catalog.versions.store');
-
         Route::get(
             '/product-catalog/plans/{planCode}',
             [PlatformProductCatalogController::class, 'show'],
@@ -95,13 +90,24 @@ Route::prefix('admin')
             [PlatformProductCatalogController::class, 'edit'],
         )->name('product-catalog.versions.edit');
 
-        Route::put(
-            '/product-catalog/versions/{billingPlanVersion}',
-            [PlatformProductCatalogController::class, 'update'],
-        )->name('product-catalog.versions.update');
+        // Consequential commercial mutations require recent password
+        // confirmation (POC-V10.2) and a dedicated mutation rate limit
+        // (POC-V10.4) on top of the strong-factor platform gate above.
+        Route::middleware(['password.confirm', 'throttle:platform-mutation'])
+            ->group(function (): void {
+                Route::post(
+                    '/product-catalog/plans/{planCode}/versions',
+                    [PlatformProductCatalogController::class, 'store'],
+                )->name('product-catalog.versions.store');
 
-        Route::post(
-            '/product-catalog/versions/{billingPlanVersion}/publish',
-            [PlatformProductCatalogController::class, 'publish'],
-        )->name('product-catalog.versions.publish');
+                Route::put(
+                    '/product-catalog/versions/{billingPlanVersion}',
+                    [PlatformProductCatalogController::class, 'update'],
+                )->name('product-catalog.versions.update');
+
+                Route::post(
+                    '/product-catalog/versions/{billingPlanVersion}/publish',
+                    [PlatformProductCatalogController::class, 'publish'],
+                )->name('product-catalog.versions.publish');
+            });
     });
