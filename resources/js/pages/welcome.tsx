@@ -1,6 +1,5 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import {
-    AlertTriangle,
     ArrowRight,
     BarChart3,
     Boxes,
@@ -24,13 +23,9 @@ import {
     AuthActions,
     MarketingHeader,
 } from '@/components/marketing/marketing-header';
+import { ProblemSection } from '@/components/marketing/problem-section';
+import { ProductProofStrip } from '@/components/marketing/product-proof-strip';
 import { dashboard, login, register } from '@/routes';
-
-type EditorialBenefitProps = {
-    icon: LucideIcon;
-    title: string;
-    description: string;
-};
 
 type JourneyStepProps = {
     number: number;
@@ -113,28 +108,6 @@ function HeroDashboardPreview() {
                 />
             </figure>
         </div>
-    );
-}
-
-/** Render one editorial problem-to-outcome statement. */
-function EditorialBenefit({
-    icon: Icon,
-    title,
-    description,
-}: EditorialBenefitProps) {
-    return (
-        <article className="border-t border-marketing-border/15 px-0 py-7 sm:px-5 lg:border-t-0 lg:border-l lg:px-8 lg:py-3 first:lg:border-l-0">
-            <Icon
-                className="size-6 stroke-[1.4] text-[#526a5f]"
-                aria-hidden="true"
-            />
-            <h3 className="mt-5 max-w-[14rem] font-serif text-xl leading-tight text-marketing-ink">
-                {title}
-            </h3>
-            <p className="mt-3 max-w-[17rem] text-sm leading-6 text-[#5b6a74]">
-                {description}
-            </p>
-        </article>
     );
 }
 
@@ -389,33 +362,6 @@ export default function Welcome({ trialDays, plans }: WelcomeProps) {
     const { auth } = usePage().props;
     const isAuthenticated = Boolean(auth.user);
 
-    const benefits: EditorialBenefitProps[] = [
-        {
-            icon: Boxes,
-            title: 'Stop guessing what is on hand',
-            description:
-                'Review stock on hand by location so buying decisions start with a clearer picture.',
-        },
-        {
-            icon: AlertTriangle,
-            title: 'Catch low stock before service feels it',
-            description:
-                'Use the low-stock view to see which items need attention before the next busy service.',
-        },
-        {
-            icon: Trash2,
-            title: 'See where ingredients are being wasted',
-            description:
-                'Record waste with reasons so recurring losses are easier to review and discuss.',
-        },
-        {
-            icon: Scale,
-            title: 'Understand what every recipe really costs',
-            description:
-                'Review recipe costs using current ingredient information and make better-informed decisions.',
-        },
-    ];
-
     const teamHighlights: Array<{
         label: string;
         icon: LucideIcon;
@@ -487,19 +433,9 @@ export default function Welcome({ trialDays, plans }: WelcomeProps) {
                         </div>
                     </section>
 
-                    <section
-                        id="why-miseledger"
-                        className="scroll-mt-24 border-b border-marketing-border/15 bg-marketing-surface-muted"
-                    >
-                        <div className="mx-auto grid max-w-[1440px] px-5 sm:grid-cols-2 sm:px-8 lg:grid-cols-4 lg:px-12 lg:py-10">
-                            {benefits.map((benefit) => (
-                                <EditorialBenefit
-                                    key={benefit.title}
-                                    {...benefit}
-                                />
-                            ))}
-                        </div>
-                    </section>
+                    <ProductProofStrip />
+
+                    <ProblemSection />
 
                     <section
                         id="how-it-works"
@@ -1010,10 +946,10 @@ export default function Welcome({ trialDays, plans }: WelcomeProps) {
                             aria-label="Footer navigation"
                         >
                             <a
-                                href="#why-miseledger"
+                                href="#product"
                                 className="hover:text-marketing-accent"
                             >
-                                Why MiseLedger
+                                Product
                             </a>
                             <a
                                 href="#how-it-works"
