@@ -2,6 +2,8 @@
 
 namespace App\Actions\Platform;
 
+use Illuminate\Support\Carbon;
+
 /**
  * Represents backup/restore readiness using only evidence the application
  * can actually prove (POC-V8.6). It never infers a successful backup or
@@ -17,6 +19,7 @@ final class CheckBackupHealth
      * @return array{
      *     status: string,
      *     source: string,
+     *     checkedAt: string,
      *     configured: bool,
      *     verificationSource: string,
      *     lastVerifiedRestore: null,
@@ -32,6 +35,9 @@ final class CheckBackupHealth
         return [
             'status' => $configured ? 'configured' : 'warning',
             'source' => 'config(backup.*) and docs/deployment.md',
+            // This timestamp is when the application checked its own
+            // configuration, never a claimed restore-verification time.
+            'checkedAt' => Carbon::now()->toIso8601String(),
             'configured' => $configured,
             'verificationSource' => 'external',
             // Deliberately null: MiseLedger has no application-owned

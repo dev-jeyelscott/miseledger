@@ -24,7 +24,7 @@ final class CheckSlowQueryDiagnostics
      *     source: string,
      *     checkedAt: string,
      *     windowHours: int,
-     *     queries: list<array{sql: string, location: string|null, maxDurationMs: int, count: int}>,
+     *     queries: list<array{sql: string, location: string|null, maxDurationMs: int, avgDurationMs: int, count: int}>,
      * }
      */
     public function handle(): array
@@ -46,19 +46,21 @@ final class CheckSlowQueryDiagnostics
         try {
             $rows = $this->pulse->aggregate(
                 'slow_query',
-                ['max', 'count'],
+                ['max', 'avg', 'count'],
                 CarbonInterval::hours($windowHours),
                 'max',
                 'desc',
                 $limit,
             );
 
-            /** @var list<array{sql: string, location: string|null, maxDurationMs: int, count: int}> $queries */
+            /** @var list<array{sql: string, location: string|null, maxDurationMs: int, avgDurationMs: int, count: int}> $queries */
             $queries = $rows->map(function (object $row): array {
                 [$sql, $location] = json_decode((string) $row->key, true, flags: JSON_THROW_ON_ERROR);
 
                 /** @var int $max */
                 $max = $row->max; // @phpstan-ignore property.notFound (Pulse's aggregate() row shape is dynamic per requested aggregate)
+                /** @var int $avg */
+                $avg = $row->avg; // @phpstan-ignore property.notFound
                 /** @var int $count */
                 $count = $row->count; // @phpstan-ignore property.notFound
 
@@ -66,6 +68,7 @@ final class CheckSlowQueryDiagnostics
                     'sql' => (string) $sql,
                     'location' => $location !== null ? (string) $location : null,
                     'maxDurationMs' => (int) $max,
+                    'avgDurationMs' => (int) round((float) $avg),
                     'count' => (int) $count,
                 ];
             })->values()->all();

@@ -51,6 +51,7 @@ type SlowQuery = {
     sql: string;
     location: string | null;
     maxDurationMs: number;
+    avgDurationMs: number;
     count: number;
 };
 
@@ -82,6 +83,7 @@ type TableGrowthHealth = {
 type BackupHealth = {
     status: HealthStatus;
     source: string;
+    checkedAt: string;
     configured: boolean;
     verificationSource: string;
     lastVerifiedRestore: null;
@@ -564,8 +566,10 @@ export default function PlatformHealth({
                                                     </div>
                                                     <p className="text-xs text-muted-foreground tabular-nums sm:text-right">
                                                         max{' '}
-                                                        {query.maxDurationMs}
-                                                        ms · {query.count}{' '}
+                                                        {query.maxDurationMs}ms
+                                                        · avg{' '}
+                                                        {query.avgDurationMs}ms
+                                                        · {query.count}{' '}
                                                         occurrence
                                                         {query.count === 1
                                                             ? ''
@@ -684,7 +688,10 @@ export default function PlatformHealth({
                                     Last verified restore: external evidence
                                     (see workflow job summary)
                                 </p>
-                                <CheckedAtLine source={backup.source} />
+                                <CheckedAtLine
+                                    source={backup.source}
+                                    checkedAt={backup.checkedAt}
+                                />
                             </CardContent>
                         </Card>
                     )}

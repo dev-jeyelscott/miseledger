@@ -120,6 +120,7 @@ test('the backup readiness evidence never fabricates a last verified restore val
         ->get(route('admin.health.index'))
         ->assertInertia(
             fn (Assert $page) => $page
+                ->has('backup.checkedAt')
                 ->where('backup.verificationSource', 'external')
                 ->where('backup.lastVerifiedRestore', null)
                 ->where(
