@@ -12,7 +12,7 @@ const PROOF_ITEMS: Array<{ label: string; icon: LucideIcon }> = [
 /** Render one proof item; reused by both the marquee track and the wrapped list. */
 function ProofItem({ label, icon: Icon }: { label: string; icon: LucideIcon }) {
     return (
-        <li className="flex shrink-0 items-center gap-2 text-xs font-semibold text-marketing-muted sm:border-l sm:border-marketing-border/15 sm:pl-10 sm:text-sm sm:first:border-l-0 sm:first:pl-0">
+        <li className="flex shrink-0 items-center gap-2 text-xs font-semibold text-marketing-muted lg:border-l lg:border-marketing-border/15 lg:pl-10 lg:text-sm lg:first:border-l-0 lg:first:pl-0">
             <Icon
                 className="size-4 shrink-0 text-marketing-accent"
                 aria-hidden="true"
@@ -28,11 +28,11 @@ export function ProductProofStrip() {
         <section
             id="product"
             aria-label="What MiseLedger covers"
-            className="scroll-mt-24 border-b border-marketing-border/15 bg-marketing-surface-muted"
+            className="scroll-mt-24 bg-marketing-surface-muted"
         >
-            <div className="mx-auto max-w-[1280px] sm:px-8 lg:px-12">
+            <div className="mx-auto max-w-[1280px] border-b border-marketing-border/15">
                 <div
-                    className="marketing-marquee overflow-hidden py-6 sm:hidden"
+                    className="marketing-marquee overflow-hidden py-6 lg:hidden"
                     aria-hidden="true"
                 >
                     <ul className="marketing-marquee-track flex w-max items-center gap-8">
@@ -48,7 +48,7 @@ export function ProductProofStrip() {
                     </ul>
                 </div>
 
-                <ul className="sr-only py-7 sm:not-sr-only sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-10 sm:gap-y-4">
+                <ul className="sr-only lg:not-sr-only lg:flex lg:flex-wrap lg:items-center lg:justify-center lg:gap-x-10 lg:gap-y-4 lg:px-12 lg:py-6">
                     {PROOF_ITEMS.map(({ label, icon }) => (
                         <ProofItem key={label} label={label} icon={icon} />
                     ))}
