@@ -17,7 +17,7 @@ export function ProductProofStrip() {
             aria-label="What MiseLedger covers"
             className="scroll-mt-24 border-b border-marketing-border/15 bg-marketing-surface-muted"
         >
-            <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+            <div className="mx-auto max-w-[1280px] px-5 sm:px-8 lg:px-12">
                 <ul className="grid grid-cols-2 gap-x-4 gap-y-5 py-6 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-10 sm:gap-y-4 sm:py-7">
                     {PROOF_ITEMS.map(({ label, icon: Icon }, index) => (
                         <li

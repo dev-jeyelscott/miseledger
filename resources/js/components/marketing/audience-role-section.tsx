@@ -75,7 +75,7 @@ export function AudienceRoleSection() {
         >
             <div
                 ref={ref}
-                className={`marketing-reveal mx-auto max-w-[1440px] px-5 py-16 sm:px-8 sm:py-20 lg:px-12 ${isVisible ? 'is-visible' : ''}`}
+                className={`marketing-reveal mx-auto max-w-[1280px] px-5 py-16 sm:px-8 sm:py-20 lg:px-12 lg:py-28 ${isVisible ? 'is-visible' : ''}`}
             >
                 <div className="max-w-2xl">
                     <p className="text-xs font-bold tracking-[0.16em] text-marketing-muted uppercase">
@@ -91,7 +91,7 @@ export function AudienceRoleSection() {
                         ({ icon: Icon, title, description }) => (
                             <article
                                 key={title}
-                                className="border border-marketing-border/12 bg-marketing-surface p-6 shadow-[0_9px_24px_rgba(16,40,58,0.06)]"
+                                className="rounded-xl border border-marketing-border/22 bg-marketing-surface p-6 shadow-[0_9px_24px_rgba(16,40,58,0.06)]"
                             >
                                 <Icon
                                     className="size-6 stroke-[1.4] text-marketing-accent"

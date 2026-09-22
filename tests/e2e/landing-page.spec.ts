@@ -142,6 +142,33 @@ test.describe('Public landing page (guest, desktop)', () => {
             page.getByText(/MiseLedger is inventory and purchasing software/),
         ).toBeVisible();
     });
+
+    test('clicking the hero screenshot opens a zoomed dialog, closable via the close button and outside click', async ({
+        page,
+    }) => {
+        await page.goto('/');
+
+        const zoomTrigger = page.getByRole('button', {
+            name: /Zoom in on MiseLedger dashboard/,
+        });
+        await zoomTrigger.click();
+
+        const dialog = page.getByRole('dialog');
+        await expect(dialog).toBeVisible();
+        await expect(
+            dialog.getByRole('img', { name: /MiseLedger dashboard/ }),
+        ).toBeVisible();
+
+        await page.getByRole('button', { name: 'Close' }).click();
+        await expect(dialog).toBeHidden();
+
+        await zoomTrigger.click();
+        await expect(dialog).toBeVisible();
+
+        // Click the dimmed backdrop outside the zoomed image to close.
+        await page.mouse.click(5, 5);
+        await expect(dialog).toBeHidden();
+    });
 });
 
 test.describe('Public landing page (guest, mobile)', () => {

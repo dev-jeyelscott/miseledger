@@ -37,7 +37,7 @@ const PROBLEMS: Problem[] = [
 /** Render one editorial problem-to-outcome card. */
 function ProblemCard({ icon: Icon, title, description }: Problem) {
     return (
-        <article className="rounded-xl border border-marketing-border/12 bg-marketing-surface p-6 shadow-[0_9px_24px_rgba(16,40,58,0.06)] sm:p-7">
+        <article className="rounded-xl border border-marketing-border/22 bg-marketing-surface p-6 shadow-[0_9px_24px_rgba(16,40,58,0.06)] sm:p-7">
             <Icon
                 className="size-6 stroke-[1.4] text-marketing-accent"
                 aria-hidden="true"
@@ -59,7 +59,7 @@ export function ProblemSection() {
             aria-labelledby="operational-problems-heading"
             className="border-b border-marketing-border/15 bg-marketing-canvas"
         >
-            <div className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 sm:py-20 lg:px-12">
+            <div className="mx-auto max-w-[1280px] px-5 py-16 sm:px-8 sm:py-20 lg:px-12 lg:py-28">
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                         <p className="text-xs font-bold tracking-[0.16em] text-marketing-muted uppercase">
@@ -67,7 +67,7 @@ export function ProblemSection() {
                         </p>
                         <h2
                             id="operational-problems-heading"
-                            className="mt-2 max-w-[14ch] font-serif text-4xl tracking-[-0.035em] text-marketing-ink sm:text-5xl"
+                            className="mt-2 max-w-[20ch] font-serif text-4xl tracking-[-0.035em] text-marketing-ink sm:text-5xl"
                         >
                             Why inventory gets hard to control.
                         </h2>

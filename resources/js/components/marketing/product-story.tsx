@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { ZoomableImage } from '@/components/marketing/zoomable-image';
 import { useMarketingReveal } from '@/lib/marketing-motion';
 
 type ProductStoryProps = {
@@ -43,16 +44,16 @@ export function ProductStory({
         >
             <div
                 ref={ref}
-                className={`marketing-reveal mx-auto grid max-w-[1440px] items-center gap-10 px-5 py-16 sm:px-8 sm:py-20 lg:grid-cols-2 lg:gap-16 lg:px-12 ${isVisible ? 'is-visible' : ''}`}
+                className={`marketing-reveal mx-auto grid max-w-[1280px] items-center gap-10 px-5 py-16 sm:px-8 sm:py-20 ${reverse ? 'lg:grid-cols-[1.28fr_0.72fr]' : 'lg:grid-cols-[0.72fr_1.28fr]'} lg:gap-14 lg:px-12 lg:py-28 ${isVisible ? 'is-visible' : ''}`}
             >
                 <div className={reverse ? 'lg:order-2' : ''}>
                     <p className="text-xs font-bold tracking-[0.16em] text-marketing-muted uppercase">
                         {eyebrow}
                     </p>
-                    <h2 className="mt-3 font-serif text-3xl leading-tight tracking-[-0.03em] text-marketing-ink sm:text-4xl">
+                    <h2 className="mt-3 font-serif text-4xl leading-tight tracking-[-0.035em] text-marketing-ink sm:text-5xl">
                         {title}
                     </h2>
-                    <p className="mt-4 max-w-lg text-base leading-7 text-marketing-muted">
+                    <p className="mt-4 max-w-sm text-base leading-7 text-marketing-muted">
                         {description}
                     </p>
                     <ul className="mt-6 space-y-2.5 text-sm leading-6 text-[#526674]">
@@ -70,15 +71,13 @@ export function ProductStory({
                 </div>
 
                 <div className={reverse ? 'lg:order-1' : ''}>
-                    <figure className="overflow-hidden border border-marketing-border/15 bg-marketing-surface p-1.5 shadow-[0_16px_44px_rgba(16,40,58,0.1)] sm:p-2">
-                        <img
+                    <figure className="overflow-hidden rounded-xl border border-marketing-border/25 bg-marketing-surface p-2 shadow-[0_22px_56px_rgba(16,40,58,0.14)] sm:p-2.5">
+                        <ZoomableImage
                             src={imageSrc}
                             alt={imageAlt}
                             width={1918}
                             height={943}
-                            loading="lazy"
-                            decoding="async"
-                            className="block h-auto w-full border border-marketing-border/10 bg-marketing-surface"
+                            className="block h-auto w-full rounded-lg border border-marketing-border/15 bg-marketing-surface"
                         />
                     </figure>
                 </div>

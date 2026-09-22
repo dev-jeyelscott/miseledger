@@ -1,5 +1,6 @@
-import { Bot, Lock, Sparkles } from 'lucide-react';
+import { Lock, Sparkles } from 'lucide-react';
 
+import { ZoomableImage } from '@/components/marketing/zoomable-image';
 import { useMarketingReveal } from '@/lib/marketing-motion';
 
 const EXAMPLE_QUESTIONS = [
@@ -15,49 +16,6 @@ const GUARDRAILS = [
     'Available on plans that include the AI Assistant feature',
 ];
 
-/** Render a sanitized, illustrative preview of one AI Assistant answer. */
-function AiAssistantPreview() {
-    return (
-        <div className="overflow-hidden border border-marketing-border/15 bg-marketing-surface shadow-[0_16px_44px_rgba(16,40,58,0.1)]">
-            <div className="flex items-center gap-2 border-b border-marketing-border/12 bg-marketing-surface-muted px-4 py-3">
-                <Bot
-                    className="size-4 text-marketing-accent"
-                    aria-hidden="true"
-                />
-                <p className="text-xs font-bold tracking-[0.1em] text-marketing-muted uppercase">
-                    AI Assistant · Illustrative
-                </p>
-            </div>
-
-            <div className="space-y-4 p-5">
-                <div className="ml-auto max-w-[80%] border border-marketing-border/15 bg-marketing-canvas px-3 py-2 text-sm text-marketing-ink">
-                    Which items are running low?
-                </div>
-
-                <div className="max-w-[88%] border border-marketing-accent/20 bg-[#edf4ef] px-3 py-2.5 text-sm leading-6 text-[#2c4a3d]">
-                    <p className="font-semibold">
-                        3 items are below their low-stock threshold:
-                    </p>
-                    <ul className="mt-2 space-y-1 text-[13px]">
-                        <li className="flex justify-between">
-                            <span>Basil</span>
-                            <span>0.3 kg on hand</span>
-                        </li>
-                        <li className="flex justify-between">
-                            <span>Olive Oil</span>
-                            <span>4 L on hand</span>
-                        </li>
-                        <li className="flex justify-between">
-                            <span>Chicken Breast</span>
-                            <span>2.5 kg on hand</span>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    );
-}
-
 /** Render the split AI Assistant marketing section. */
 export function AiAssistantSection() {
     const { ref, isVisible } = useMarketingReveal<HTMLDivElement>();
@@ -66,9 +24,17 @@ export function AiAssistantSection() {
         <section className="border-b border-marketing-border/15 bg-marketing-surface-muted">
             <div
                 ref={ref}
-                className={`marketing-reveal mx-auto grid max-w-[1440px] items-center gap-12 px-5 py-16 sm:px-8 sm:py-20 lg:grid-cols-[1fr_0.9fr] lg:gap-16 lg:px-12 ${isVisible ? 'is-visible' : ''}`}
+                className={`marketing-reveal mx-auto grid max-w-[1280px] items-center gap-12 px-5 py-16 sm:px-8 sm:py-20 lg:grid-cols-[1fr_1fr] lg:gap-16 lg:px-12 lg:py-28 ${isVisible ? 'is-visible' : ''}`}
             >
-                <AiAssistantPreview />
+                <figure className="mx-auto w-full max-w-[460px] overflow-hidden rounded-xl border border-marketing-border/25 bg-marketing-surface p-2 shadow-[0_22px_56px_rgba(16,40,58,0.14)] sm:p-2.5 lg:max-w-[520px]">
+                    <ZoomableImage
+                        src="/images/marketing/ai-assistant.png"
+                        alt="MiseLedger AI Assistant drawer answering a question about which inventory items are running low."
+                        width={576}
+                        height={1000}
+                        className="block h-auto w-full rounded-lg border border-marketing-border/15 bg-marketing-surface"
+                    />
+                </figure>
 
                 <div>
                     <p className="inline-flex items-center gap-2 text-xs font-bold tracking-[0.16em] text-marketing-muted uppercase">

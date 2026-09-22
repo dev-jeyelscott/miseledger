@@ -80,7 +80,7 @@ export function MarketingHeader({
 
     return (
         <header className="sticky top-0 z-50 border-b border-[#183247]/15 bg-marketing-canvas/95 backdrop-blur-sm">
-            <div className="mx-auto flex min-h-18 max-w-[1440px] items-center justify-between gap-5 px-5 sm:px-8 lg:px-12">
+            <div className="mx-auto flex min-h-18 max-w-[1280px] items-center justify-between gap-5 px-5 sm:px-8 lg:px-12">
                 <a
                     href="#top"
                     className="font-serif text-2xl font-semibold tracking-[-0.03em] text-marketing-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-marketing-focus sm:text-[1.7rem]"

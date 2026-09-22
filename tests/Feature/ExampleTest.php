@@ -10,7 +10,7 @@ test('public home renders the MiseLedger landing page', function () {
     $response
         ->assertOk()
         ->assertInertia(
-            fn (Assert $page): Assert => $page->component('welcome'),
+            fn(Assert $page): Assert => $page->component('welcome'),
         );
 });
 
@@ -18,9 +18,9 @@ test('landing page keeps customer-facing copy and authentication-aware routes', 
     $pageSource = File::get(resource_path('js/pages/welcome.tsx'));
     $marketingComponentsSource = collect(
         File::allFiles(resource_path('js/components/marketing')),
-    )->map(fn ($file) => File::get($file->getPathname()))->implode(' ');
+    )->map(fn($file) => File::get($file->getPathname()))->implode(' ');
 
-    $normalizedSource = Str::squish($pageSource.' '.$marketingComponentsSource);
+    $normalizedSource = Str::squish($pageSource . ' ' . $marketingComponentsSource);
 
     expect($normalizedSource)
         ->toContain('Know what you have before you buy more.')
@@ -42,10 +42,10 @@ test('landing page uses the real dashboard screenshot in the hero', function () 
     $source = File::get(resource_path('js/pages/welcome.tsx'));
     $normalizedSource = Str::squish($source);
 
-    expect(File::exists(public_path('images/hero-image.png')))
+    expect(File::exists(public_path('images/marketing/dashboard.png')))
         ->toBeTrue()
         ->and($normalizedSource)
-        ->toContain('src="/images/hero-image.png"')
+        ->toContain('src="/images/marketing/dashboard.png"')
         ->toContain('width={1894}')
         ->toContain('height={941}')
         ->toContain('fetchPriority="high"')

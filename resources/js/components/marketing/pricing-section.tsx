@@ -52,10 +52,10 @@ function PlanCard({
 }) {
     return (
         <article
-            className={`flex flex-col border bg-marketing-surface p-6 sm:p-7 ${
+            className={`flex flex-col rounded-xl border bg-marketing-surface p-6 transition duration-200 ease-out hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_24px_56px_rgba(16,40,58,0.16)] sm:p-7 ${
                 emphasize
                     ? 'border-marketing-accent shadow-[0_18px_44px_rgba(15,90,67,0.16)]'
-                    : 'border-marketing-border/15 shadow-[0_9px_24px_rgba(16,40,58,0.06)]'
+                    : 'border-marketing-border/22 shadow-[0_9px_24px_rgba(16,40,58,0.06)]'
             }`}
         >
             <h3 className="font-serif text-2xl text-marketing-ink">
@@ -85,7 +85,7 @@ function PlanCard({
                 </ul>
             )}
 
-            <div className="mt-6 space-y-1.5 border-t border-marketing-border/15 pt-5 text-xs text-marketing-muted">
+            <div className="mt-auto space-y-1.5 border-t border-marketing-border/15 pt-5 text-xs text-marketing-muted">
                 {LIMIT_ORDER.filter((key) =>
                     Object.hasOwn(plan.limits, key),
                 ).map((key) => (
@@ -126,7 +126,7 @@ export function PricingSection({
         >
             <div
                 ref={ref}
-                className={`marketing-reveal mx-auto max-w-[1440px] px-5 py-16 sm:px-8 sm:py-20 lg:px-12 ${isVisible ? 'is-visible' : ''}`}
+                className={`marketing-reveal mx-auto max-w-[1280px] px-5 py-16 sm:px-8 sm:py-20 lg:px-12 lg:py-28 ${isVisible ? 'is-visible' : ''}`}
             >
                 <div className="max-w-2xl">
                     <p className="text-xs font-bold tracking-[0.16em] text-marketing-muted uppercase">

@@ -10,8 +10,18 @@ export function FinalCtaSection({
     isAuthenticated: boolean;
 }) {
     return (
-        <section className="bg-marketing-dark text-marketing-dark-foreground">
-            <div className="mx-auto max-w-[1440px] px-5 py-16 text-center sm:px-8 sm:py-24 lg:px-12">
+        <section className="relative overflow-hidden bg-marketing-dark text-marketing-dark-foreground">
+            <img
+                src="/images/marketing/dashboard.png"
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                decoding="async"
+                className="absolute inset-0 h-full w-full scale-110 object-cover opacity-[0.14] blur-[1px]"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-marketing-dark via-marketing-dark/95 to-marketing-dark/80" />
+
+            <div className="relative mx-auto max-w-[1280px] px-5 py-16 text-center sm:px-8 sm:py-24 lg:px-12">
                 <h2 className="mx-auto max-w-[22ch] font-serif text-4xl leading-tight tracking-[-0.035em] sm:text-5xl">
                     Know what you have before you buy more.
                 </h2>

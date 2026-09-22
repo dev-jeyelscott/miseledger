@@ -42,14 +42,16 @@ export function FaqSection() {
         >
             <div
                 ref={ref}
-                className={`marketing-reveal mx-auto grid max-w-[1440px] gap-10 px-5 py-16 sm:px-8 sm:py-20 lg:grid-cols-[0.4fr_0.6fr] lg:gap-16 lg:px-12 ${isVisible ? 'is-visible' : ''}`}
+                className={`marketing-reveal mx-auto grid max-w-[1280px] gap-10 px-5 py-16 sm:px-8 sm:py-20 lg:grid-cols-[0.4fr_0.6fr] lg:gap-16 lg:px-12 lg:py-28 ${isVisible ? 'is-visible' : ''}`}
             >
                 <div>
                     <p className="text-xs font-bold tracking-[0.16em] text-marketing-muted uppercase">
                         FAQ
                     </p>
                     <h2 className="mt-3 max-w-[14ch] font-serif text-4xl tracking-[-0.035em] text-marketing-ink sm:text-5xl">
-                        Questions food teams ask us
+                        Got questions?
+                        <br />
+                        We've got answers.
                     </h2>
                     <p className="mt-5 max-w-sm text-sm leading-6 text-marketing-muted">
                         Can't find what you're looking for? Create an account

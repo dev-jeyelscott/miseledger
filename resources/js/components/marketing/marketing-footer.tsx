@@ -18,7 +18,7 @@ export function MarketingFooter({
 }) {
     return (
         <footer className="border-t border-marketing-border/15 bg-marketing-canvas">
-            <div className="mx-auto grid max-w-[1440px] gap-10 px-5 py-14 sm:px-8 sm:py-16 md:grid-cols-3 lg:px-12">
+            <div className="mx-auto grid max-w-[1280px] gap-10 px-5 py-14 sm:px-8 sm:py-16 md:grid-cols-3 lg:px-12">
                 <div>
                     <a
                         href="#top"
