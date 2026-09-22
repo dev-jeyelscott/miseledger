@@ -11,3 +11,12 @@ parameters:
         - routes/
 
     level: 7
+
+    ignoreErrors:
+        -
+            # Verbatim Laravel Pulse `vendor:publish` output. `driver()`'s
+            # return type is a broader string than the three supported
+            # database drivers this match narrows on; that is intentional
+            # upstream package behavior, not application logic to alter.
+            identifier: match.unhandled
+            path: database/migrations/*_create_pulse_tables.php

@@ -7,7 +7,7 @@ MiseLedger is an organization-aware operations platform for inventory-led busine
 - Laravel with PostgreSQL and Redis
 - Inertia.js and React
 - Vite and Tailwind CSS
-- Docker Compose for the local application, worker, scheduler, Vite, PostgreSQL, and Redis services
+- Docker Compose for the local application, Horizon queue worker, scheduler, Vite, PostgreSQL, and Redis services
 
 ## Prerequisites
 
@@ -33,10 +33,10 @@ For later sessions, start the stack with:
 docker compose up -d
 ```
 
-Follow application, worker, scheduler, and Vite logs:
+Follow application, Horizon, scheduler, and Vite logs:
 
 ```bash
-docker compose logs -f app worker scheduler vite
+docker compose logs -f app horizon scheduler vite
 ```
 
 Stop services while retaining local PostgreSQL and Redis data:

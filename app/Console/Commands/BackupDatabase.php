@@ -51,7 +51,7 @@ final class BackupDatabase extends Command
      */
     private const DISALLOWED_HOSTS = [
         'localhost', 'host.docker.internal',
-        'app', 'pgsql', 'redis', 'scheduler', 'worker', 'vite',
+        'app', 'pgsql', 'redis', 'scheduler', 'horizon', 'vite',
     ];
 
     public function handle(): int

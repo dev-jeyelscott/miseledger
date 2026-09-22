@@ -2,7 +2,7 @@
 
 ## Purpose
 
-MiseLedger uses one project-owned PHP 8.5 application image for production web, normal queue-worker, scheduler, and one-off Artisan commands. A separate `ai-worker` Docker target contains the pinned Codex runtime and must never be used for HTTP, normal queue, or scheduler processes.
+MiseLedger uses one project-owned PHP 8.5 application image for production web, Horizon (normal queue processing), scheduler, and one-off Artisan commands. A separate `ai-worker` Docker target contains the pinned Codex runtime and must never be used for HTTP, normal queue, or scheduler processes.
 
 The same Dockerfile defines local and production PHP/runtime requirements. Environment-specific differences are intentional:
 
@@ -11,7 +11,7 @@ The same Dockerfile defines local and production PHP/runtime requirements. Envir
 - local Composer and Node dependencies are writable;
 - local Vite HMR runs as a separate Compose service;
 - local Xdebug is available but disabled by default;
-- production web, normal worker, and scheduler use the final `production` target;
+- production web, Horizon, and scheduler use the final `production` target;
 - the AI worker uses the dedicated `ai-worker` target;
 - production application code and Vite assets are immutable;
 - the normal production image does not contain Composer, Node, npm, Codex, Xdebug, or development dependencies;
@@ -26,14 +26,18 @@ The normal production image is used for three independent long-running process t
 | Process   | Command                                                         | Public HTTP               |
 | --------- | --------------------------------------------------------------- | ------------------------- |
 | Web       | `apache2-foreground`                                            | Yes, through Coolify only |
-| Worker    | `php artisan queue:work redis --sleep=1 --tries=3 --timeout=90` | No                        |
+| Horizon   | `php artisan horizon`                                           | No                        |
 | Scheduler | `php artisan schedule:work`                                     | No                        |
 
 The web process listens on container port `8080`.
 
-The worker timeout must remain lower than the Redis queue `retry_after` configuration. The current application queue `retry_after` is 120 seconds.
+Horizon replaces the plain `queue:work redis --sleep=1 --tries=3 --timeout=90` worker for normal Redis queue processing. Its `supervisor-1` configuration (`config/horizon.php`) preserves the exact same `tries=3`/`timeout=90` semantics and manages only the `redis` connection's `default` queue; it never manages the `ai`/`ai-login` connection or queues (see [Coolify AI Worker Resource](#coolify-ai-worker-resource)). Horizon's timeout must remain lower than the Redis queue `retry_after` configuration. The current application queue `retry_after` is 120 seconds.
 
-Do not combine web, worker, and scheduler under Supervisor. Coolify owns process restart and lifecycle behavior independently.
+Do not combine web, Horizon, and scheduler under Supervisor. Coolify owns process restart and lifecycle behavior independently.
+
+### Rollback to a plain queue worker
+
+If Horizon itself is ever suspected as the source of an incident, the rollback path is to redeploy the same application image with the Horizon resource's command temporarily overridden back to `php artisan queue:work redis --sleep=1 --tries=3 --timeout=90` (the exact command this phase replaced). No schema or code change is required: Horizon and `queue:work` both consume the same `redis` connection's `default` queue, so jobs already enqueued are processed identically either way. Run only one of the two commands against that queue at a time.
 
 Two separate AI worker processes exist so a 15-minute device-code login poll can never block a chat turn: one consumes `ai`, the other consumes `ai-login`.
 
@@ -42,7 +46,7 @@ Two separate AI worker processes exist so a 15-minute device-code login poll can
 | AI worker       | `ai-worker`   | `php artisan queue:work ai --sleep=1 --tries=3 --timeout=190`                    | No          |
 | AI login worker | `ai-worker`   | `php artisan queue:work ai --queue=ai-login --sleep=1 --tries=1 --timeout=930`   | No          |
 
-The `ai` connection uses a 960-second `retry_after`, which remains greater than the 190-second normal-turn timeout and the 930-second device-login timeout. Normal workers retain `php artisan queue:work redis --sleep=1 --tries=3 --timeout=90` and therefore continue consuming the existing default queue unchanged.
+The `ai` connection uses a 960-second `retry_after`, which remains greater than the 190-second normal-turn timeout and the 930-second device-login timeout. Horizon retains the same `tries=3`/`timeout=90` semantics as the `queue:work redis --sleep=1 --tries=3 --timeout=90` command it replaces and therefore continues consuming the existing default queue unchanged.
 
 Both AI worker processes must be deployed and must mount the same dedicated Codex profile volume (see [Coolify AI Worker Resource](#coolify-ai-worker-resource)). Codex only persists an authenticated device-login credential into the profile directory of the process that performed the login; if the two processes had independent profile storage, a login completed on the login worker would be invisible to the chat worker, and the durable `AiProviderConnection` row would read as active while every subsequent turn fails authentication. A deployment that omits the AI login worker resource entirely leaves every dispatched `AwaitCodexDeviceCodeLogin` job permanently queued on `ai-login`, since nothing else in this process model consumes it.
 
@@ -254,7 +258,7 @@ This mechanism never uses Redis and never treats application-container filesyste
 
 The repository is deliberately provider-agnostic: it targets any restic-supported, off-host, encrypted repository (S3-compatible object storage, B2, Azure, GCS, SFTP, or a REST server). The operator selects and configures the actual provider before enabling the schedule, entirely through Coolify runtime secrets:
 
-- `RESTIC_REPOSITORY`: the operator-chosen off-host repository target (for example an S3-compatible bucket URL). The command rejects any value that does not start with an approved off-host restic backend prefix (`s3:`, `b2:`, `azure:`, `gs:`, `sftp:`, or `rest:`); a local or on-host filesystem path is refused. For `s3:`, `sftp:`, and `rest:` repositories, which embed a network host, the command additionally extracts that host and rejects it if it is one of the application's own Compose service names (`app`, `pgsql`, `redis`, `scheduler`, `worker`, `vite`) or `localhost`/`host.docker.internal`, or if it is a literal IP address in any loopback or other reserved range (127.0.0.0/8, `::1`, link-local, and similar `FILTER_FLAG_NO_RES_RANGE` ranges) — including bracketed IPv6 loopback (`[::1]`) and a trailing-dot localhost alias (`localhost.`) — so an approved prefix pointed back at the application host is still rejected;
+- `RESTIC_REPOSITORY`: the operator-chosen off-host repository target (for example an S3-compatible bucket URL). The command rejects any value that does not start with an approved off-host restic backend prefix (`s3:`, `b2:`, `azure:`, `gs:`, `sftp:`, or `rest:`); a local or on-host filesystem path is refused. For `s3:`, `sftp:`, and `rest:` repositories, which embed a network host, the command additionally extracts that host and rejects it if it is one of the application's own Compose service names (`app`, `pgsql`, `redis`, `scheduler`, `horizon`, `vite`) or `localhost`/`host.docker.internal`, or if it is a literal IP address in any loopback or other reserved range (127.0.0.0/8, `::1`, link-local, and similar `FILTER_FLAG_NO_RES_RANGE` ranges) — including bracketed IPv6 loopback (`[::1]`) and a trailing-dot localhost alias (`localhost.`) — so an approved prefix pointed back at the application host is still rejected;
 - `RESTIC_PASSWORD`: the repository encryption password; restic uses it to encrypt every archive at rest independently of the storage provider's own encryption, so encryption at rest is guaranteed by the integration itself, not merely by provider configuration;
 - S3-compatible backends reuse the existing `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_DEFAULT_REGION` runtime secrets; the operator must provision a least-privileged credential scoped only to the dedicated backup bucket, never the application's own credentials;
 - `BACKUP_RETENTION_DAILY` / `BACKUP_RETENTION_WEEKLY` / `BACKUP_RETENTION_MONTHLY`: retention counts passed to `restic forget --keep-daily --keep-weekly --keep-monthly` (defaults `7`/`4`/`12`);
@@ -320,7 +324,7 @@ This runbook recovers MiseLedger from a verified PostgreSQL backup after data lo
 
 ### Procedure
 
-1. **Stop writes.** Put MiseLedger in maintenance mode (`php artisan down --retry=60`) and stop or pause the worker and scheduler resources so no queued job or scheduled command writes during the restore.
+1. **Stop writes.** Put MiseLedger in maintenance mode (`php artisan down --retry=60`) and stop or pause the Horizon and scheduler resources so no queued job or scheduled command writes during the restore.
 2. **Provision a clean PostgreSQL target.** Create a new, isolated PostgreSQL database dedicated to the restore. Never restore in place over the existing database; a clean target ensures a partial or failed restore never leaves the prior database in a torn state.
 3. **Restore the verified backup.** Using the `RESTIC_REPOSITORY` and `RESTIC_PASSWORD` runtime secrets obtained from the Coolify secret store (never recorded in this document), the database operator:
     - lists candidate snapshots with `restic snapshots --tag miseledger-postgresql` and selects the snapshot matching the required point in time and its noted verification timestamp;
@@ -329,12 +333,12 @@ This runbook recovers MiseLedger from a verified PostgreSQL backup after data lo
     - deletes the transient retrieved archive immediately after the restore completes, whether it succeeded or failed.
 4. **Validate the application** against the restored database:
     - update the private PostgreSQL connection configuration in Coolify secrets to point at the restored target;
-    - deploy or restart the web, worker, and scheduler resources on the same application image commit;
+    - deploy or restart the web, Horizon, and scheduler resources on the same application image commit;
     - verify `GET /up` returns HTTP 200;
     - verify `php artisan migrate:status` shows no pending migrations.
 5. **Run the post-restore checks** below and capture their results as evidence.
 6. **Check ledger integrity.** Confirm StockMovement history is present and that StockBalance figures reconcile against StockMovement for a sample of items. Do not reconstruct StockMovement from StockBalance and do not repair StockBalance directly; this preserves the same invariant defined in [Backup Scope and Recovery Boundary](#backup-scope-and-recovery-boundary).
-7. **Resume writes** only after the second approver confirms every post-restore check passes: take the application out of maintenance mode (`php artisan up`) and resume worker and scheduler processing.
+7. **Resume writes** only after the second approver confirms every post-restore check passes: take the application out of maintenance mode (`php artisan up`) and resume Horizon and scheduler processing.
 
 ### Post-restore checks
 
@@ -391,7 +395,7 @@ Do not publish container port `8080` directly on the VPS firewall.
 
 Laravel trusts the Coolify reverse proxy. The security assumption behind `trustProxies(at: '*')` is therefore that the application container remains reachable only through the private Coolify/Docker network.
 
-## Coolify Worker Resource
+## Coolify Horizon Resource
 
 Deploy the exact same repository commit and Dockerfile as the web resource.
 
@@ -400,22 +404,26 @@ Do not assign a domain.
 Use the production image and override its process with:
 
 ```bash
-php artisan queue:work redis --sleep=1 --tries=3 --timeout=90
+php artisan horizon
 ```
 
 If the current Coolify UI requires a Docker entrypoint override, the equivalent custom Docker option is:
 
 ```text
---entrypoint "sh -c 'php artisan queue:work redis --sleep=1 --tries=3 --timeout=90'"
+--entrypoint "sh -c 'php artisan horizon'"
 ```
 
 Do not configure an HTTP health check for this resource. Process liveness and Coolify restart behavior are the appropriate first-level supervision.
 
-Start with one worker. Scale only when measured queue latency requires it.
+Horizon's master process listens for `SIGTERM` and gracefully waits for in-flight jobs to finish (up to Horizon's own termination timeout) before exiting; grant it a stop grace period at least as long as the `supervisor-1` job timeout (90 seconds) so Coolify does not force-kill it mid-job during a deploy.
+
+`config/horizon.php` defines exactly one supervisor (`supervisor-1`) scoped to the `redis` connection's `default` queue, with `maxProcesses` set to `1` in both the `production` and `local` environments so the process footprint starts identical to the single worker replica it replaces. Start with one Horizon resource replica. Scale `maxProcesses` only when measured queue latency requires it; Horizon's own dashboard (gated to platform admins, see [Platform-Admin Dashboard Access](#platform-admin-dashboard-access)) shows current throughput and wait times to justify that decision.
+
+Horizon never manages the `ai`/`ai-login` connection or queues; the hardened AI worker and AI login worker resources below remain independent `queue:work` processes (see [Coolify AI Worker Resource](#coolify-ai-worker-resource)).
 
 ## Coolify Scheduler Resource
 
-Deploy the exact same repository commit and Dockerfile as the web and worker resources.
+Deploy the exact same repository commit and Dockerfile as the web and Horizon resources.
 
 Do not assign a domain.
 
@@ -504,13 +512,13 @@ AI_PROVIDER_RUNS_PER_MINUTE=30
 
 `AI_ENABLED=false` disables every AI HTTP route and prevents queued runs from
 starting a provider turn. `AI_OPENAI_ENABLED=false` leaves the rest of the
-application and its normal workers running while rejecting OpenAI/Codex work.
+application and Horizon running while rejecting OpenAI/Codex work.
 Neither flag changes subscription entitlements, organization membership, stock
 history, or existing provider-account records.
 
 #### Staged rollout
 
-1. Deploy with both flags `false`. Verify web, normal worker, scheduler, AI
+1. Deploy with both flags `false`. Verify web, Horizon, scheduler, AI
    worker, and AI login worker health independently.
 2. Set `AI_ENABLED=true` and keep `AI_OPENAI_ENABLED=false`. Verify the AI
    routes deny provider use, no provider process starts, and normal business
@@ -527,7 +535,7 @@ history, or existing provider-account records.
 Rollback is immediate: set `AI_OPENAI_ENABLED=false` for a provider incident,
 or `AI_ENABLED=false` for a full AI incident, then redeploy/restart the
 private AI worker and AI login worker so any in-flight Codex process is
-terminated. Do not stop or restart the web, normal worker, or scheduler merely
+terminated. Do not stop or restart the web, Horizon, or scheduler merely
 to disable AI.
 
 #### Provider disconnect and profile cleanup
@@ -554,18 +562,18 @@ archive, bind-mount, or copy profile directories.
    never be requested or added to incident notes.
 3. A run that has exhausted retries is marked failed. Do not edit AI run rows
    to retry it; let the member submit a new request after the provider is
-   healthy. The normal web, worker, and scheduler processes remain isolated
+   healthy. The normal web, Horizon, and scheduler processes remain isolated
    from AI-worker failure.
 4. Confirm the AI worker consumes only `ai` and the login worker only
-   `ai-login`; confirm normal workers do not consume either queue. Confirm
-   worker timeout remains below the matching Redis `retry_after`.
+   `ai-login`; confirm Horizon does not consume either queue. Confirm
+   Horizon's supervisor timeout remains below the matching Redis `retry_after`.
 5. If a run coincides with any inventory discrepancy, treat it as a normal
    ledger incident. AI has no mutation tool. Inspect StockMovement history and
    derived StockBalance read-only, and never repair balances directly.
 
 ## Required Shared Production Environment
 
-Web, worker, and scheduler must receive the same application, database, Redis, billing, mail, and encryption configuration.
+Web, Horizon, and scheduler must receive the same application, database, Redis, billing, mail, and encryption configuration.
 
 Minimum runtime baseline:
 
@@ -631,7 +639,7 @@ Recommended controlled release sequence:
 5. run `php artisan migrate --force` once from the new web container;
 6. verify `/up`;
 7. leave maintenance mode;
-8. deploy or restart worker and scheduler on the same commit;
+8. deploy or restart Horizon and scheduler on the same commit;
 9. verify logs, queue processing, and scheduled-command registration.
 
 Maintenance commands:
@@ -669,7 +677,7 @@ Verify that:
 - CSS and JavaScript load from immutable `public/build`;
 - no Vite development server is required;
 - authenticated sessions survive normal web-container restarts while Redis remains available;
-- the queue worker is running;
+- Horizon is running with its `supervisor-1` supervisor up;
 - the scheduler is running;
 - PostgreSQL and Redis are not publicly reachable;
 - application and billing logs appear in Coolify;
@@ -681,8 +689,8 @@ The three process types must remain independent.
 
 Expected behavior:
 
-- web failure does not terminate the worker;
-- worker failure does not take down HTTP;
+- web failure does not terminate Horizon;
+- Horizon failure does not take down HTTP;
 - scheduler failure does not take down HTTP;
 - Redis failure may disrupt sessions, cache, queues, and scheduler locks;
 - PostgreSQL failure prevents authoritative application operations;
@@ -704,18 +712,34 @@ Inventory ledger records must never be repaired through direct `stock_balances` 
 
 ## Observability
 
-Initial production observability uses existing application behavior plus Coolify:
+Production observability uses existing application behavior plus Coolify, plus Laravel Pulse and Laravel Horizon as the first dedicated application/queue observability layer:
 
 - Laravel application logs to stderr;
 - Apache access logs to stdout;
 - Apache errors to stderr;
 - Coolify `/up` health monitoring;
 - Coolify process restart monitoring;
-- Laravel failed-job persistence;
+- Laravel failed-job persistence, visible in the Horizon dashboard;
+- Laravel Pulse: requests, exceptions, slow queries, slow outgoing requests, cache interactions, and queue/job throughput (`config/pulse.php`);
+- Laravel Horizon: normal Redis queue supervisors, throughput, wait times, and failed jobs (`config/horizon.php`);
 - existing billing observability and reconciliation;
 - PostgreSQL backup/restore verification.
 
 Add external APM or metrics only when an operational requirement justifies the additional dependency.
+
+### Platform-Admin Dashboard Access
+
+Both native dashboards are platform-admin-only in every environment, including local:
+
+- `config/pulse.php` and `config/horizon.php` both apply the `auth`, `verified`, and `platform.admin` middleware to every Pulse/Horizon route, the same boundary `routes/platform.php` uses for the rest of the Platform Console. A normal authenticated user or an organization Owner is forbidden even by direct URL; a platform admin with zero organization memberships can access both.
+- `HorizonServiceProvider::gate()` additionally defines Horizon's own `viewHorizon` authorization gate against the same platform-admin-plus-strong-factor authority, as defense in depth alongside the route middleware.
+- The Platform Console's `/admin/observability` page (`PlatformObservabilityController`) is a concise landing page that links to both native dashboards; it does not clone their charts or tables, and exposes no restart, deploy, flush, or purge controls.
+- Neither dashboard records secrets, credentials, payment signing material, or raw sensitive request bodies. Pulse's `SlowRequests`/`UserRequests` recorders ignore the Pulse, Horizon, and billing-webhook paths, and `SlowOutgoingRequests` groups provider API calls by host/resource-type so no Stripe/PayMongo identifier is retained (`config/pulse.php`).
+- Pulse's `Servers` recorder is intentionally not enabled: it requires a separate long-running `pulse:check` daemon that is not part of this phase's approved process model (web, Horizon, scheduler, AI worker, AI login worker). Host-level health remains covered by Coolify process/restart monitoring.
+
+### Pulse Storage and Retention
+
+Pulse stores its recorded entries in PostgreSQL (`pulse_entries`, `pulse_values`, `pulse_aggregates`; see the published `create_pulse_tables` migration). Storage growth is bounded by the package's own ingest-time trimming (`config/pulse.php`'s `ingest.trim` and `storage.trim`, both defaulting to a 7-day `keep` window), which runs automatically as part of normal ingestion and requires no separate scheduled command. No additional pruning process is introduced by this phase.
 
 ## AGEAX Container Convention
 
@@ -727,7 +751,7 @@ The reusable AGEAX convention is intentionally small:
 4. local Compose reproduces material production dependencies;
 5. development conveniences live only in the development target;
 6. production secrets are runtime configuration;
-7. web, worker, and scheduler fail independently;
+7. web, Horizon, and scheduler fail independently;
 8. databases and Redis stay private;
 9. migrations are controlled release operations;
 10. persistent data and backup boundaries are explicit.

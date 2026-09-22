@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Platform\PlatformBillingController;
 use App\Http\Controllers\Platform\PlatformDashboardController;
+use App\Http\Controllers\Platform\PlatformObservabilityController;
 use App\Http\Controllers\Platform\PlatformOrganizationController;
 use App\Http\Controllers\Platform\PlatformProductCatalogController;
 use App\Http\Controllers\Platform\PlatformUserController;
@@ -51,6 +52,11 @@ Route::prefix('admin')
             '/billing/payments',
             [PlatformBillingController::class, 'payments'],
         )->name('billing.payments.index');
+
+        Route::get(
+            '/observability',
+            [PlatformObservabilityController::class, 'index'],
+        )->name('observability.index');
 
         Route::get(
             '/product-catalog',

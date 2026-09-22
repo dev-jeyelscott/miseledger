@@ -1,5 +1,6 @@
 import { Link } from '@inertiajs/react';
 import {
+    Activity,
     Building2,
     CreditCard,
     LayoutDashboard,
@@ -8,6 +9,7 @@ import {
 } from 'lucide-react';
 
 import PlatformBillingController from '@/actions/App/Http/Controllers/Platform/PlatformBillingController';
+import PlatformObservabilityController from '@/actions/App/Http/Controllers/Platform/PlatformObservabilityController';
 import PlatformOrganizationController from '@/actions/App/Http/Controllers/Platform/PlatformOrganizationController';
 import PlatformProductCatalogController from '@/actions/App/Http/Controllers/Platform/PlatformProductCatalogController';
 import PlatformUserController from '@/actions/App/Http/Controllers/Platform/PlatformUserController';
@@ -58,6 +60,11 @@ const platformNavigation: NavGroup[] = [
                 title: 'Product Catalog',
                 href: PlatformProductCatalogController.index(),
                 icon: Package,
+            },
+            {
+                title: 'Observability',
+                href: PlatformObservabilityController.index(),
+                icon: Activity,
             },
         ],
     },
