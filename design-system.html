@@ -130,6 +130,70 @@
                 font-size: 0.75rem;
                 overflow-wrap: anywhere;
             }
+
+            .marketing-preview {
+                margin-top: 3rem;
+            }
+
+            .marketing-preview .theme {
+                background: var(--marketing-canvas);
+                color: var(--marketing-ink);
+            }
+
+            .marketing-preview .theme-header {
+                background: var(--marketing-surface-muted);
+                border-bottom: 1px solid
+                    color-mix(
+                        in oklch,
+                        var(--marketing-border) 15%,
+                        transparent
+                    );
+            }
+
+            .marketing-preview .row + .row {
+                border-top: 1px solid
+                    color-mix(
+                        in oklch,
+                        var(--marketing-border) 15%,
+                        transparent
+                    );
+            }
+
+            .marketing-preview .surface {
+                background: var(--marketing-surface);
+                box-shadow: 0 1px 3px rgb(0 0 0 / 0.14);
+            }
+
+            .marketing-preview .marketing-cta {
+                display: inline-flex;
+                min-height: 2.75rem;
+                align-items: center;
+                padding: 0 1.25rem;
+                border: 1px solid var(--marketing-accent);
+                background: var(--marketing-accent);
+                color: var(--marketing-accent-foreground);
+                font-weight: 600;
+            }
+
+            .marketing-preview .marketing-dark-band {
+                background: var(--marketing-dark);
+                color: var(--marketing-dark-foreground);
+            }
+
+            .marketing-preview .marketing-dark-band .muted {
+                color: var(--marketing-dark-muted);
+            }
+
+            .marketing-preview .marketing-screenshot-frame {
+                border: 1px solid
+                    color-mix(
+                        in oklch,
+                        var(--marketing-border) 18%,
+                        transparent
+                    );
+                background: var(--marketing-surface);
+                box-shadow: 0 12px 30px rgb(16 40 58 / 0.08);
+            }
         </style>
     </head>
     <body>
@@ -144,6 +208,71 @@
             </p>
 
             <div class="themes" id="themes" aria-live="polite"></div>
+
+            <section class="marketing-preview">
+                <h2>Public marketing landing page</h2>
+                <p class="intro">
+                    The public landing page (<code>resources/js/pages/welcome.tsx</code>)
+                    scopes its own semantics under <code>.marketing-theme</code>
+                    so the global application <code>.dark</code> state can
+                    never recolor it. It stays intentionally light-only.
+                </p>
+
+                <div class="marketing-theme theme">
+                    <header class="theme-header">
+                        <strong>Marketing theme</strong>
+                        <span>Canvas, surfaces, accent, CTA, dark band</span>
+                    </header>
+
+                    <div class="row">
+                        <strong>Canvas</strong>
+                        <div class="sample">
+                            <span>Page background</span>
+                            <code>--marketing-canvas</code>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <strong>Surface</strong>
+                        <div class="sample surface">
+                            <span>Cards, screenshot frames</span>
+                            <code>--marketing-surface</code>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <strong>Screenshot frame</strong>
+                        <div
+                            class="sample marketing-screenshot-frame"
+                            style="min-height: 4rem"
+                        >
+                            <span>Minimal app/browser chrome border</span>
+                            <code>--marketing-border</code>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <strong>Accent / CTA</strong>
+                        <div class="sample">
+                            <span class="marketing-cta">Start free</span>
+                            <code>--marketing-accent</code>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <strong>Dark-emphasis band</strong>
+                        <div class="sample marketing-dark-band">
+                            <span
+                                >Final CTA / multi-location story
+                                <span class="muted"
+                                    >(muted copy on dark)</span
+                                ></span
+                            >
+                            <code>--marketing-dark</code>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
 
         <template id="theme-template">

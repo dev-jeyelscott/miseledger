@@ -85,6 +85,25 @@
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
+
+    /*
+     * Public marketing landing-page semantics. Values are only ever defined
+     * inside .marketing-theme, so these utilities render nothing outside it
+     * and can never be pulled into the authenticated application surface.
+     */
+    --color-marketing-canvas: var(--marketing-canvas);
+    --color-marketing-surface: var(--marketing-surface);
+    --color-marketing-surface-muted: var(--marketing-surface-muted);
+    --color-marketing-ink: var(--marketing-ink);
+    --color-marketing-muted: var(--marketing-muted);
+    --color-marketing-accent: var(--marketing-accent);
+    --color-marketing-accent-hover: var(--marketing-accent-hover);
+    --color-marketing-accent-foreground: var(--marketing-accent-foreground);
+    --color-marketing-border: var(--marketing-border);
+    --color-marketing-focus: var(--marketing-focus);
+    --color-marketing-dark: var(--marketing-dark);
+    --color-marketing-dark-muted: var(--marketing-dark-muted);
+    --color-marketing-dark-foreground: var(--marketing-dark-foreground);
 }
 
 :root {
@@ -200,6 +219,52 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(0.269 0 0);
     --sidebar-ring: oklch(0.439 0 0);
+}
+
+/*
+ * Public marketing landing page. Intentionally light-only: values are scoped
+ * to this class instead of :root so the global .dark application state can
+ * never recolor the public page, regardless of viewer preference or markup
+ * nesting.
+ */
+.marketing-theme {
+    color-scheme: light;
+
+    --marketing-canvas: #f7f3ea;
+    --marketing-surface: #fffdf8;
+    --marketing-surface-muted: #fbf8f1;
+    --marketing-ink: #10283a;
+    --marketing-muted: #5b6c77;
+    --marketing-accent: #0f5a43;
+    --marketing-accent-hover: #0b4936;
+    --marketing-accent-foreground: #ffffff;
+    --marketing-border: #173247;
+    --marketing-focus: #b87949;
+    --marketing-dark: #0d2a3f;
+    --marketing-dark-muted: #c3d0d8;
+    --marketing-dark-foreground: #ffffff;
+}
+
+.marketing-theme .marketing-enter {
+    animation: marketing-rise 650ms ease-out both;
+}
+
+@keyframes marketing-rise {
+    from {
+        opacity: 0;
+        transform: translateY(18px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .marketing-theme .marketing-enter {
+        animation: none;
+    }
 }
 
 @layer base {
