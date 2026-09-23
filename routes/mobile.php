@@ -7,6 +7,7 @@ use App\Http\Controllers\Mobile\ReceivingController;
 use App\Http\Controllers\Mobile\ScanController;
 use App\Http\Controllers\Mobile\ScanLookupController;
 use App\Http\Controllers\Mobile\StockCountController;
+use App\Http\Controllers\Mobile\StockTransferController;
 use App\Http\Controllers\Mobile\WasteController;
 use App\Http\Middleware\ResolveMobileLocation;
 use Illuminate\Support\Facades\Route;
@@ -53,5 +54,17 @@ Route::middleware(['auth', 'verified', ResolveMobileLocation::class])
         Route::prefix('waste')->name('waste.')->group(function (): void {
             Route::get('/', [WasteController::class, 'record'])->name('record');
             Route::post('/', [WasteController::class, 'store'])->name('store');
+        });
+
+        Route::prefix('transfers')->name('transfers.')->group(function (): void {
+            Route::get('/', [StockTransferController::class, 'create'])->name('create');
+            Route::post('/', [StockTransferController::class, 'begin'])->name('begin');
+            Route::get('/scan', [StockTransferController::class, 'scan'])->name('scan');
+            Route::post('/lines', [StockTransferController::class, 'addLine'])->name('lines.store');
+            Route::get('/{stockTransfer}/review', [StockTransferController::class, 'review'])->name('review');
+            Route::post('/{stockTransfer}/submit', [StockTransferController::class, 'store'])->name('store');
+            Route::post('/{stockTransfer}/ship', [StockTransferController::class, 'ship'])->name('ship');
+            Route::post('/{stockTransfer}/receive', [StockTransferController::class, 'receive'])->name('receive');
+            Route::get('/{stockTransfer}', [StockTransferController::class, 'show'])->name('show');
         });
     });

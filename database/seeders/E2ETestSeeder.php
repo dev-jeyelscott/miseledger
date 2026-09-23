@@ -89,6 +89,24 @@ class E2ETestSeeder extends Seeder
         $storageLocation->active = true;
         $storageLocation->save();
 
+        // A second location/storage pair gives the mobile transfer flow
+        // (Spec 6) a real cross-location destination to E2E test, without
+        // adding a second storage location under Main Kitchen, which would
+        // break other mobile E2E flows that assume exactly one.
+        $secondaryLocation = Location::factory()->create([
+            'organization_id' => $organization->id,
+            'name' => 'Secondary Kitchen',
+            'code' => 'SECOND',
+        ]);
+
+        $secondaryStorageLocation = new StorageLocation;
+        $secondaryStorageLocation->organization_id = $organization->id;
+        $secondaryStorageLocation->location_id = $secondaryLocation->id;
+        $secondaryStorageLocation->name = 'Secondary Storage';
+        $secondaryStorageLocation->code = 'SECOND';
+        $secondaryStorageLocation->active = true;
+        $secondaryStorageLocation->save();
+
         $unit = UnitOfMeasure::factory()->create([
             'organization_id' => $organization->id,
             'name' => 'Kilogram',
