@@ -155,14 +155,18 @@
     --chart-5: oklch(0.769 0.188 70.08);
     --radius: 0.625rem;
 
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.87 0 0);
+    /*
+     * Light mode uses the marketing-dark navy as a brand anchor; dark mode
+     * (below) instead blends the sidebar into the app's own dark canvas.
+     */
+    --sidebar: #0d2a3f;
+    --sidebar-foreground: #ffffff;
+    --sidebar-primary: #ffffff;
+    --sidebar-primary-foreground: #0d2a3f;
+    --sidebar-accent: #173247;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #173247;
+    --sidebar-ring: #c3d0d8;
 }
 
 .dark {
@@ -211,14 +215,74 @@
     --chart-4: oklch(0.627 0.265 303.9);
     --chart-5: oklch(0.645 0.246 16.439);
 
-    --sidebar: oklch(0.205 0 0);
+    /* Dark mode blends the sidebar into the same dark canvas as the rest of the app. */
+    --sidebar: oklch(0.12 0.004 264);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.985 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-primary-foreground: oklch(0.12 0.004 264);
     --sidebar-accent: oklch(0.269 0 0);
     --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(0.269 0 0);
+    --sidebar-border: oklch(0.29 0.006 264);
     --sidebar-ring: oklch(0.439 0 0);
+}
+
+/*
+ * Minimal scrollbar app-wide: no OS-native arrow buttons, thin translucent
+ * thumb derived from each surface's own foreground token (so it inverts
+ * correctly with the light/dark toggle) with no visible track.
+ */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--foreground) 22%, transparent)
+        transparent;
+}
+
+*::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+    border-radius: 9999px;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--foreground) 38%, transparent);
+}
+
+/*
+ * The sidebar has its own foreground token (distinct navy/light pairing
+ * from the rest of the app), so its scrollbar reads from --sidebar-foreground
+ * instead of the general --foreground used everywhere else.
+ */
+[data-slot='sidebar-content'] {
+    scrollbar-color: color-mix(
+            in srgb,
+            var(--sidebar-foreground) 22%,
+            transparent
+        )
+        transparent;
+}
+
+[data-slot='sidebar-content']::-webkit-scrollbar-thumb {
+    background-color: color-mix(
+        in srgb,
+        var(--sidebar-foreground) 22%,
+        transparent
+    );
+}
+
+[data-slot='sidebar-content']:hover::-webkit-scrollbar-thumb {
+    background-color: color-mix(
+        in srgb,
+        var(--sidebar-foreground) 38%,
+        transparent
+    );
 }
 
 /*
