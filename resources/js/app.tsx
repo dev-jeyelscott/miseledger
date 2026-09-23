@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
+import MobileLayout from '@/layouts/mobile/mobile-layout';
 import PlatformLayout from '@/layouts/platform-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { initializeNavigationHistory } from '@/lib/navigation-history';
@@ -25,6 +26,8 @@ createInertiaApp({
                 return PlatformLayout;
             case name.startsWith('settings/'):
                 return [AppLayout, SettingsLayout];
+            case name.startsWith('mobile/'):
+                return MobileLayout;
             default:
                 return AppLayout;
         }
