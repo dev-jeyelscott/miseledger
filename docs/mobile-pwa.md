@@ -12,6 +12,12 @@
 
 For a support ticket where a user is stuck on the picker or on the wrong location, check `session('mobile_location_by_org')` for their organization ID.
 
+## Stock counts stop at Submit
+
+`/mobile/stock-counts/*` (`App\Http\Controllers\Mobile\StockCountController`) is a mobile front end over the same `StockCount` draft/submit/finalize state machine desktop uses (`SaveStockCount`, `SubmitStockCount`). Mobile only reaches **Submitted**; **Finalize** (the step that reconciles `StockBalance` and posts `StockMovement`s) stays a desktop-only action gated by `OrganizationPermission::CountsFinalize`, which most mobile-first roles don't hold. A mobile-submitted count is identical to a desktop-submitted one and is finalized from desktop exactly the same way.
+
+The Review screen's expected quantity is read live from the `StockBalance` projection at the count's storage location (a read-only query), not from the persisted `stock_count_lines.expected_base_quantity` column, which stays `0.000000` until `FinalizeStockCount` runs.
+
 ## Scan camera permission troubleshooting
 
 `resources/js/pages/mobile/scan/index.tsx` requests camera access on mount. Two environment issues look identical to "the user tapped Deny" and both fall back to the manual-entry sheet (`resources/js/components/mobile/scanner/manual-entry-sheet.tsx`), which is the intended behavior but worth ruling out during QA:

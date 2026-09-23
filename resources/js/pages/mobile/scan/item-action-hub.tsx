@@ -38,8 +38,7 @@ const ACTION_CONFIG: Record<ScannedItemAction, ActionConfig> = {
     count: {
         label: 'Count',
         icon: ClipboardList,
-        href: (item) =>
-            `/mobile/counts?from=scan&item_id=${item.inventoryItemId}`,
+        href: () => `/mobile/stock-counts`,
     },
     waste: {
         label: 'Waste',

@@ -6,6 +6,7 @@ use App\Http\Controllers\Mobile\LocationController;
 use App\Http\Controllers\Mobile\ReceivingController;
 use App\Http\Controllers\Mobile\ScanController;
 use App\Http\Controllers\Mobile\ScanLookupController;
+use App\Http\Controllers\Mobile\StockCountController;
 use App\Http\Middleware\ResolveMobileLocation;
 use Illuminate\Support\Facades\Route;
 
@@ -36,5 +37,15 @@ Route::middleware(['auth', 'verified', ResolveMobileLocation::class])
             Route::get('/{goodsReceipt}/review', [ReceivingController::class, 'review'])->name('review');
             Route::delete('/{goodsReceipt}/lines/{line}', [ReceivingController::class, 'removeLine'])->name('lines.destroy');
             Route::post('/{goodsReceipt}/finalize', [ReceivingController::class, 'finalize'])->name('finalize');
+        });
+
+        Route::prefix('stock-counts')->name('stock-counts.')->group(function (): void {
+            Route::get('/', [StockCountController::class, 'index'])->name('index');
+            Route::get('/create', [StockCountController::class, 'create'])->name('create');
+            Route::post('/', [StockCountController::class, 'store'])->name('store');
+            Route::get('/scan', [StockCountController::class, 'scan'])->name('scan');
+            Route::post('/lines', [StockCountController::class, 'addLine'])->name('lines.store');
+            Route::get('/{stockCount}/review', [StockCountController::class, 'review'])->name('review');
+            Route::post('/{stockCount}/submit', [StockCountController::class, 'submit'])->name('submit');
         });
     });
