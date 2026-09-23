@@ -13,10 +13,14 @@ function markEmailVerified(email: string): void {
     execFileSync(
         'php',
         [
-            'artisan',
-            'tinker',
-            '--execute',
-            `App\\Models\\User::query()->where("email", "${email}")->update(["email_verified_at" => now()]);`,
+            '-r',
+            [
+                'require "vendor/autoload.php";',
+                '$app = require "bootstrap/app.php";',
+                '$app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();',
+                'App\\Models\\User::query()->where("email", $argv[1])->update(["email_verified_at" => now()]);',
+            ].join(' '),
+            email,
         ],
         { env: testEnv, stdio: 'pipe' },
     );
