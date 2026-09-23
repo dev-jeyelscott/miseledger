@@ -22,7 +22,6 @@ type MobileTab = {
     href: string;
     icon: ComponentType<{ className?: string }>;
     label: string;
-    /** Every other tab's page ships in a later spec; they route to Home for now. */
     pathPrefix: string;
     /** Key into `navBadgeCounts` for this tab's count badge, if any. */
     badgeKey?: string;
@@ -55,7 +54,7 @@ const tabs: MobileTab[] = [
         pathPrefix: '/mobile/stock',
     },
     {
-        href: mobile.home.url(),
+        href: mobile.more.index.url(),
         icon: MoreHorizontal,
         label: 'More',
         pathPrefix: '/mobile/more',

@@ -25,7 +25,7 @@ type OrganizationSwitcherProps = {
 /**
  * Convert the persisted organization role into a compact human-readable label.
  */
-function roleLabel(role: OrganizationMembership['role']): string {
+export function roleLabel(role: OrganizationMembership['role']): string {
     return role.replaceAll('_', ' ');
 }
 

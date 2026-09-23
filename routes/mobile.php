@@ -3,6 +3,7 @@
 use App\Http\Controllers\Mobile\HomeController;
 use App\Http\Controllers\Mobile\ItemSearchController;
 use App\Http\Controllers\Mobile\LocationController;
+use App\Http\Controllers\Mobile\MoreController;
 use App\Http\Controllers\Mobile\ReceivingController;
 use App\Http\Controllers\Mobile\ScanController;
 use App\Http\Controllers\Mobile\ScanLookupController;
@@ -21,6 +22,8 @@ Route::middleware(['auth', 'verified', ResolveMobileLocation::class])
         Route::get('/', [HomeController::class, 'index'])->name('home');
 
         Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
+
+        Route::get('/more', [MoreController::class, 'index'])->name('more.index');
 
         Route::prefix('location')->name('location.')->group(function (): void {
             Route::get('/', [LocationController::class, 'index'])->name('index');
