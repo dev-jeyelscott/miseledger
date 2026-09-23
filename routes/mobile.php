@@ -3,6 +3,7 @@
 use App\Http\Controllers\Mobile\HomeController;
 use App\Http\Controllers\Mobile\ItemSearchController;
 use App\Http\Controllers\Mobile\LocationController;
+use App\Http\Controllers\Mobile\ReceivingController;
 use App\Http\Controllers\Mobile\ScanController;
 use App\Http\Controllers\Mobile\ScanLookupController;
 use App\Http\Middleware\ResolveMobileLocation;
@@ -23,5 +24,17 @@ Route::middleware(['auth', 'verified', ResolveMobileLocation::class])
             Route::get('/', [ScanController::class, 'index'])->name('index');
             Route::post('/lookup', [ScanLookupController::class, 'lookup'])->name('lookup');
             Route::get('/search', [ItemSearchController::class, 'search'])->name('search');
+        });
+
+        Route::prefix('receiving')->name('receiving.')->group(function (): void {
+            Route::get('/', [ReceivingController::class, 'index'])->name('index');
+            Route::get('/ad-hoc', [ReceivingController::class, 'createAdHoc'])->name('create');
+            Route::post('/ad-hoc', [ReceivingController::class, 'storeAdHoc'])->name('store');
+            Route::get('/scan', [ReceivingController::class, 'scan'])->name('scan');
+            Route::post('/lines', [ReceivingController::class, 'addLine'])->name('lines.store');
+            Route::get('/items/{inventoryItem}/units', [ReceivingController::class, 'itemUnits'])->name('items.units');
+            Route::get('/{goodsReceipt}/review', [ReceivingController::class, 'review'])->name('review');
+            Route::delete('/{goodsReceipt}/lines/{line}', [ReceivingController::class, 'removeLine'])->name('lines.destroy');
+            Route::post('/{goodsReceipt}/finalize', [ReceivingController::class, 'finalize'])->name('finalize');
         });
     });

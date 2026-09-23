@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property int $supplier_id
  * @property string $number
  * @property PurchaseOrderStatus $status
+ * @property string $origin
  * @property Carbon $order_date
  * @property Carbon|null $expected_delivery_date
  * @property string $subtotal
@@ -35,6 +36,7 @@ use Illuminate\Support\Carbon;
     'supplier_id',
     'number',
     'status',
+    'origin',
     'order_date',
     'expected_delivery_date',
     'subtotal',

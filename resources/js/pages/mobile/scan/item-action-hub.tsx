@@ -33,8 +33,7 @@ const ACTION_CONFIG: Record<ScannedItemAction, ActionConfig> = {
     receive: {
         label: 'Receive',
         icon: PackagePlus,
-        href: (item) =>
-            `/mobile/receive?from=scan&item_id=${item.inventoryItemId}`,
+        href: () => `/mobile/receiving`,
     },
     count: {
         label: 'Count',
