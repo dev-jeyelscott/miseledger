@@ -12,6 +12,7 @@ import {
     History,
     Layers3,
     LayoutGrid,
+    ListChecks,
     MapPin,
     NotebookText,
     PackageCheck,
@@ -42,6 +43,7 @@ import StockOnHandReportController from '@/actions/App/Http/Controllers/Inventor
 import StockTransferController from '@/actions/App/Http/Controllers/Inventory/StockTransferController';
 import UnitOfMeasureController from '@/actions/App/Http/Controllers/Inventory/UnitOfMeasureController';
 import WasteController from '@/actions/App/Http/Controllers/Inventory/WasteController';
+import OnboardingController from '@/actions/App/Http/Controllers/OnboardingController';
 import OrganizationController from '@/actions/App/Http/Controllers/OrganizationController';
 import OrganizationLocationController from '@/actions/App/Http/Controllers/OrganizationLocationController';
 import OrganizationMemberController from '@/actions/App/Http/Controllers/OrganizationMemberController';
@@ -64,17 +66,18 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
-import type { NavItem, OrganizationContext } from '@/types';
+import type { NavItem, OrganizationContext, SetupContext } from '@/types';
 
 type PageProps = {
     organizationContext: OrganizationContext;
+    setup: SetupContext | null;
 };
 
 /**
  * Render permission-aware navigation grouped around normal inventory workflows.
  */
 export function AppSidebar() {
-    const { organizationContext } = usePage<PageProps>().props;
+    const { organizationContext, setup } = usePage<PageProps>().props;
 
     const activeMembership = organizationContext.memberships.find(
         (membership) =>
@@ -91,6 +94,14 @@ export function AppSidebar() {
             icon: LayoutGrid,
         },
     ];
+
+    if (setup !== null && (!setup.ready || setup.optionalPending)) {
+        overviewNavItems.push({
+            title: 'Setup',
+            href: OnboardingController.show(),
+            icon: ListChecks,
+        });
+    }
 
     if (organizationContext.ai?.canUse) {
         overviewNavItems.push({

@@ -7,7 +7,13 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { dashboard } from '@/routes';
 
-export default function CreateOrganization() {
+type CreateOrganizationProps = {
+    operationId: string;
+};
+
+export default function CreateOrganization({
+    operationId,
+}: CreateOrganizationProps) {
     return (
         <>
             <Head title="Create organization" />
@@ -26,10 +32,15 @@ export default function CreateOrganization() {
                     >
                         {({ processing, errors }) => (
                             <>
+                                <input
+                                    type="hidden"
+                                    name="operation_id"
+                                    value={operationId}
+                                />
                                 <Field
                                     id="name"
                                     label="Organization name"
-                                    helper="You can invite team members and add locations after the organization is created."
+                                    helper="Only your business name is needed. Setup continues with your first location, units, and inventory."
                                     error={errors.name}
                                 >
                                     <Input

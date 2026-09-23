@@ -17,6 +17,7 @@ use App\Models\User;
 use Brick\Math\BigDecimal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -32,11 +33,13 @@ class DashboardController extends Controller
         if (! $organization instanceof Organization) {
             return Inertia::render('dashboard', [
                 'dashboard' => null,
+                'organizationCreationOperationId' => (string) Str::uuid(),
             ]);
         }
 
         return Inertia::render('dashboard', [
             'dashboard' => $this->dashboardData($request, $organization),
+            'organizationCreationOperationId' => (string) Str::uuid(),
         ]);
     }
 

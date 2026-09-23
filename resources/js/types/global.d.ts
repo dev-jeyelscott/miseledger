@@ -1,5 +1,5 @@
 import type { Auth } from '@/types/auth';
-import type { OrganizationContext } from '@/types/organization';
+import type { OrganizationContext, SetupContext } from '@/types/organization';
 
 declare module 'react' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -15,6 +15,7 @@ declare module '@inertiajs/core' {
             auth: Auth;
             sidebarOpen: boolean;
             organizationContext: OrganizationContext;
+            setup: SetupContext | null;
             [key: string]: unknown;
         };
     }

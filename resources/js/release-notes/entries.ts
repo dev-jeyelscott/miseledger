@@ -101,4 +101,15 @@ export const entries: ReleaseNoteEntry[] = [
             'Removing a stock count line with an item, quantity, unit, or notes already entered now asks for confirmation before discarding it. Blank extra lines are still removed instantly.',
         relatedGuideSlugs: ['stock-counts'],
     },
+    {
+        id: 'guided-first-time-setup',
+        publishedOn: '2026-09-24',
+        type: 'new',
+        title: 'Guided First-Time Setup',
+        summary:
+            'New organizations now get a Setup page that walks through the first location, units, inventory items, and opening stock, with optional supplier and team steps.',
+        details:
+            'You can add items one by one or import them from a CSV file, and your progress is saved so you can return anytime. Stock activity such as purchasing, counts, transfers, and waste unlocks once the required steps are complete.',
+        relatedGuideSlugs: ['getting-started'],
+    },
 ];

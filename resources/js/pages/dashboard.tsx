@@ -121,6 +121,7 @@ type DashboardData = {
 type PageProps = {
     organizationContext: OrganizationContext;
     dashboard: DashboardData | null;
+    organizationCreationOperationId: string;
 };
 
 type PanelHeaderProps = {
@@ -271,6 +272,7 @@ function QuickAction({
 
 /** Create a new organization without navigating away from the Dashboard context. */
 function CreateOrganizationDialog({ trigger }: DialogTriggerProps) {
+    const { organizationCreationOperationId } = usePage<PageProps>().props;
     const dialog = useGuardedDialog(
         'Discard the organization details you entered?',
     );
@@ -297,6 +299,11 @@ function CreateOrganizationDialog({ trigger }: DialogTriggerProps) {
                     >
                         {({ processing, errors }) => (
                             <>
+                                <input
+                                    type="hidden"
+                                    name="operation_id"
+                                    value={organizationCreationOperationId}
+                                />
                                 <div className="grid gap-2">
                                     <Label htmlFor="dashboard-organization-name">
                                         Organization name

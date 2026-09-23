@@ -19,6 +19,7 @@ export const documentedNavigationLabels: Record<string, GuideModuleSlug> = {
     Recipes: 'recipes',
     Receiving: 'purchasing',
     Settings: 'organization',
+    Setup: 'getting-started',
     'Stock adjustments': 'inventory',
     'Stock counts': 'stock-counts',
     'Stock movement ledger': 'reports',

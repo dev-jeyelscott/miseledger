@@ -113,3 +113,9 @@ export type OrganizationContext = {
     entitlements: OrganizationEntitlementContext | null;
     ai: OrganizationAIAccessContext | null;
 };
+
+/** Server-derived first-time setup state shared with the application shell. */
+export type SetupContext = {
+    ready: boolean;
+    optionalPending: boolean;
+};

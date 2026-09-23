@@ -3,6 +3,7 @@ import { AppContent } from '@/components/app-content';
 import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
+import { SetupNotice } from '@/components/setup-notice';
 import { SubscriptionNotice } from '@/components/subscription-notice';
 import type { AppLayoutProps } from '@/types';
 
@@ -17,6 +18,7 @@ export default function AppSidebarLayout({
             <AppContent variant="sidebar" className="overflow-x-clip">
                 <AppSidebarHeader breadcrumbs={breadcrumbs} />
                 <SubscriptionNotice />
+                <SetupNotice />
                 {children}
                 <div className="fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1rem,env(safe-area-inset-bottom))] z-40">
                     <AiAssistantDrawer />

@@ -19,9 +19,12 @@ export const guideModules: GuideModule[] = [
             'organization',
             'location',
             'opening balance',
+            'opening stock',
+            'onboarding',
+            'csv import',
             'sign in',
         ],
-        navigationLabels: [],
+        navigationLabels: ['Setup'],
         pages: [
             {
                 id: 'welcome-to-miseledger',
@@ -118,27 +121,33 @@ export const guideModules: GuideModule[] = [
                 id: 'recommended-setup-order',
                 title: 'Set up your workspace',
                 summary:
-                    'Set up the information your team needs before recording day-to-day inventory activity.',
+                    'After you sign up, the Setup page walks you through the minimum information MiseLedger needs before your team can record stock. Your progress is saved, so you can leave and come back anytime.',
                 whenToUse:
-                    'Use this order when you are setting up a new organization.',
+                    'Use this when you create a new organization or when the app tells you to finish setup.',
                 tutorials: [
                     {
                         id: 'prepare-your-workspace',
-                        title: 'Prepare your workspace',
+                        title: 'Complete the required setup steps',
                         steps: [
-                            'Open Organization settings and confirm the timezone and currency.',
-                            'Add Locations where your team stores or uses stock.',
-                            'Add Units of measure, then create your inventory items.',
-                            'Record Opening balances before processing purchases, transfers, counts, or waste.',
+                            'Enter your business name. Timezone and currency start with sensible defaults that you can change later in Organization settings.',
+                            'Add your first location. Only a name is needed, and you can add details later.',
+                            'Choose the units you use, such as kilogram, liter, or piece. Only the units you select are added.',
+                            'Add your inventory items one by one, or import them from a CSV file.',
+                            'Resolve opening stock for every item: enter the quantity you have now with its cost, or choose No opening stock if the item starts empty.',
+                        ],
+                    },
+                    {
+                        id: 'import-items-from-csv',
+                        title: 'Import items from a CSV file',
+                        steps: [
+                            'Prepare a file with the columns sku, name, and base_unit_symbol. Use unit symbols you already added, such as kg or piece.',
+                            'To record opening stock at the same time, add opening_quantity and opening_unit_cost columns. Enter both in the item base unit. Leave the quantity blank for items you want to decide on later.',
+                            'Choose the file and the location for opening quantities, then select Check file.',
+                            'Fix any rows the check reports, then select Import items. If any row has a problem, nothing is saved.',
                         ],
                     },
                 ],
                 fields: [
-                    {
-                        name: 'Organization',
-                        description:
-                            'The workspace for one business and its team.',
-                    },
                     {
                         name: 'Location',
                         description:
@@ -149,9 +158,39 @@ export const guideModules: GuideModule[] = [
                         description:
                             'The main unit used for an inventory item, such as piece, bottle, or kilogram.',
                     },
+                    {
+                        name: 'Opening stock',
+                        description:
+                            'The quantity and cost of an item on hand when you start using MiseLedger.',
+                    },
+                    {
+                        name: 'No opening stock',
+                        description:
+                            'Your decision that an item starts with nothing on hand. A blank or zero quantity is not treated as this choice.',
+                    },
+                ],
+                notes: [
+                    {
+                        title: 'Optional steps',
+                        description:
+                            'Adding suppliers and inviting your team are optional. You can skip them and return to Setup from the sidebar later. Team invitations open after the required steps are complete.',
+                    },
                 ],
                 whatHappensNext: [
-                    'You can begin recording purchases, stock counts, transfers, and waste when your setup is ready.',
+                    'When the required steps are complete, you are taken to the Dashboard.',
+                    'Purchasing, receiving, stock counts, transfers, waste, and stock adjustments become available.',
+                ],
+                troubleshooting: [
+                    {
+                        question:
+                            'Why does the app say I need to finish setup?',
+                        answer: 'Stock activity stays locked until your organization has an active location and inventory items with opening stock resolved. Select Continue setup to see what is left. You can still browse other pages in the meantime.',
+                    },
+                    {
+                        question:
+                            'I entered the wrong opening quantity. How do I fix it?',
+                        answer: 'Opening stock is recorded once per item. After setup is complete, use a stock adjustment to correct the quantity.',
+                    },
                 ],
             },
             {
