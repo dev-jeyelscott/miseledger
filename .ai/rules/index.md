@@ -10,3 +10,4 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Actions/Inventory/** | .ai/rules/inventory.md |
 | app/Http/Controllers/Platform/**, routes/platform.php | .ai/rules/platform.md |
 | app/Http/Controllers/Platform/PlatformContentController.php, app/Http/Controllers/PublicContentController.php, app/Models/ContentPage.php, app/Models/ContentRevision.php | .ai/rules/content-cms.md |
+| app/Support/Onboarding/**, app/Actions/Onboarding/**, app/Http/Controllers/OnboardingController.php, app/Http/Middleware/EnsureOrganizationSetupComplete.php, routes/web.php, routes/mobile.php | .ai/rules/onboarding.md |
