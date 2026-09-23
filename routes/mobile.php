@@ -7,6 +7,7 @@ use App\Http\Controllers\Mobile\ReceivingController;
 use App\Http\Controllers\Mobile\ScanController;
 use App\Http\Controllers\Mobile\ScanLookupController;
 use App\Http\Controllers\Mobile\StockCountController;
+use App\Http\Controllers\Mobile\WasteController;
 use App\Http\Middleware\ResolveMobileLocation;
 use Illuminate\Support\Facades\Route;
 
@@ -47,5 +48,10 @@ Route::middleware(['auth', 'verified', ResolveMobileLocation::class])
             Route::post('/lines', [StockCountController::class, 'addLine'])->name('lines.store');
             Route::get('/{stockCount}/review', [StockCountController::class, 'review'])->name('review');
             Route::post('/{stockCount}/submit', [StockCountController::class, 'submit'])->name('submit');
+        });
+
+        Route::prefix('waste')->name('waste.')->group(function (): void {
+            Route::get('/', [WasteController::class, 'record'])->name('record');
+            Route::post('/', [WasteController::class, 'store'])->name('store');
         });
     });

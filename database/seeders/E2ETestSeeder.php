@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Actions\Inventory\RecordStockMovement;
+use App\Actions\Organizations\EnsureDefaultWasteReasons;
 use App\Enums\OrganizationRole;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\StockMovementType;
@@ -44,6 +45,8 @@ class E2ETestSeeder extends Seeder
             'currency' => 'PHP',
             'active' => true,
         ]);
+
+        app(EnsureDefaultWasteReasons::class)->handle($organization);
 
         $user = User::factory()->create([
             'name' => 'E2E Owner',
