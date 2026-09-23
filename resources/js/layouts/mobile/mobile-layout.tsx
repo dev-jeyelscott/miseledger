@@ -24,6 +24,8 @@ type MobileTab = {
     label: string;
     /** Every other tab's page ships in a later spec; they route to Home for now. */
     pathPrefix: string;
+    /** Key into `navBadgeCounts` for this tab's count badge, if any. */
+    badgeKey?: string;
 };
 
 const tabs: MobileTab[] = [
@@ -40,10 +42,11 @@ const tabs: MobileTab[] = [
         pathPrefix: '/mobile/scan',
     },
     {
-        href: mobile.home.url(),
+        href: mobile.tasks.index.url(),
         icon: ListChecks,
         label: 'Tasks',
         pathPrefix: '/mobile/tasks',
+        badgeKey: 'tasks',
     },
     {
         href: mobile.home.url(),
@@ -63,13 +66,20 @@ type MobileLayoutProps = {
     activeLocation?: MobileActiveLocation;
     children: ReactNode;
     organization?: MobileOrganizationSummary | null;
+    navBadgeCounts?: Record<string, number>;
 };
+
+/** Caps a nav badge's displayed count so it never breaks the tab layout. */
+function badgeLabel(count: number): string {
+    return count > 99 ? '99+' : String(count);
+}
 
 /** Bottom-nav mobile PWA shell: top bar with org/location, tabs, safe-area padding. */
 export default function MobileLayout({
     activeLocation = null,
     children,
     organization = null,
+    navBadgeCounts = {},
 }: MobileLayoutProps) {
     const { url } = usePage();
     const currentPath = url.split('?')[0];
@@ -122,22 +132,35 @@ export default function MobileLayout({
                             tab.pathPrefix === '/mobile'
                                 ? currentPath === '/mobile'
                                 : currentPath.startsWith(tab.pathPrefix);
+                        const badgeCount = tab.badgeKey
+                            ? (navBadgeCounts[tab.badgeKey] ?? 0)
+                            : 0;
 
                         return (
                             <li key={tab.label}>
                                 <Link
                                     href={tab.href}
                                     className={cn(
-                                        'flex min-h-[44px] flex-col items-center justify-center gap-1 py-2 text-xs',
+                                        'relative flex min-h-[44px] flex-col items-center justify-center gap-1 py-2 text-xs',
                                         isActive
                                             ? 'text-primary'
                                             : 'text-muted-foreground',
                                     )}
                                 >
-                                    <Icon
-                                        className="size-5"
-                                        aria-hidden="true"
-                                    />
+                                    <span className="relative">
+                                        <Icon
+                                            className="size-5"
+                                            aria-hidden="true"
+                                        />
+                                        {badgeCount > 0 ? (
+                                            <span
+                                                className="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none font-medium text-destructive-foreground"
+                                                aria-label={`${badgeCount} pending`}
+                                            >
+                                                {badgeLabel(badgeCount)}
+                                            </span>
+                                        ) : null}
+                                    </span>
                                     <span>{tab.label}</span>
                                 </Link>
                             </li>

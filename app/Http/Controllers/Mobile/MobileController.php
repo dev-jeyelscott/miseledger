@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Mobile;
 use App\Http\Controllers\Controller;
 use App\Models\Location;
 use App\Models\Organization;
+use App\Models\User;
+use App\Support\Mobile\MobileTaskAggregator;
 use Illuminate\Http\Request;
 
 abstract class MobileController extends Controller
@@ -40,12 +42,27 @@ abstract class MobileController extends Controller
     }
 
     /**
-     * Placeholder bottom-nav badge counts, filled in by Spec 7.
+     * Bottom-nav badge counts, read once per page load from the same
+     * aggregator the Home and Tasks pages use (Spec 7 Behavior step 4).
+     * No separate polling endpoint: no real-time push in an online-first,
+     * no-background-sync scope.
      *
      * @return array<string, int>
      */
     protected function navBadgeCounts(Request $request): array
     {
-        return [];
+        $organization = $this->activeOrganization($request);
+        $location = $this->activeLocation($request);
+        $actor = $request->user();
+
+        if ($organization === null || $location === null || ! $actor instanceof User) {
+            return [];
+        }
+
+        $count = app(MobileTaskAggregator::class)
+            ->forLocation($organization, $location, $actor)
+            ->count();
+
+        return ['tasks' => $count];
     }
 }

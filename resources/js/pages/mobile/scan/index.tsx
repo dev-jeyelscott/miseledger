@@ -26,6 +26,7 @@ import { ItemActionHub } from './item-action-hub';
 type ScanIndexProps = {
     activeLocation: MobileActiveLocation;
     organization: MobileOrganizationSummary | null;
+    initialItem?: ScannedItem | null;
 };
 
 type ScanLookupHttpErrorPayload = { notFound?: true; query?: string };
@@ -34,10 +35,11 @@ type ScanLookupHttpErrorPayload = { notFound?: true; query?: string };
 export default function ScanIndex({
     activeLocation,
     organization,
+    initialItem = null,
 }: ScanIndexProps) {
     const [cameraDenied, setCameraDenied] = useState(false);
     const [manualSheetOpen, setManualSheetOpen] = useState(false);
-    const [hubItem, setHubItem] = useState<ScannedItem | null>(null);
+    const [hubItem, setHubItem] = useState<ScannedItem | null>(initialItem);
     const [selectionItems, setSelectionItems] = useState<ScannedItem[] | null>(
         null,
     );

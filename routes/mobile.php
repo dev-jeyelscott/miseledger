@@ -8,6 +8,7 @@ use App\Http\Controllers\Mobile\ScanController;
 use App\Http\Controllers\Mobile\ScanLookupController;
 use App\Http\Controllers\Mobile\StockCountController;
 use App\Http\Controllers\Mobile\StockTransferController;
+use App\Http\Controllers\Mobile\TaskController;
 use App\Http\Controllers\Mobile\WasteController;
 use App\Http\Middleware\ResolveMobileLocation;
 use Illuminate\Support\Facades\Route;
@@ -17,6 +18,8 @@ Route::middleware(['auth', 'verified', ResolveMobileLocation::class])
     ->name('mobile.')
     ->group(function (): void {
         Route::get('/', [HomeController::class, 'index'])->name('home');
+
+        Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
 
         Route::prefix('location')->name('location.')->group(function (): void {
             Route::get('/', [LocationController::class, 'index'])->name('index');

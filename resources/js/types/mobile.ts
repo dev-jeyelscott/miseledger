@@ -48,11 +48,37 @@ type ScanLookupResponse =
 
 type ItemSearchResponse = { matches: ScannedItem[] };
 
+type MobileTaskType =
+    'receive' | 'count' | 'ship' | 'receive_transfer' | 'restock';
+
+type MobileTaskUrgency = 'overdue' | 'in_progress' | 'ready' | 'attention';
+
+type MobileTask = {
+    type: MobileTaskType;
+    urgency: MobileTaskUrgency;
+    title: string;
+    subtitle: string;
+    /** The exact mobile route to resume this task. */
+    href: string;
+    /** ISO timestamp; drives secondary sort + relative-time display. */
+    createdAt: string;
+};
+
+type MobileTaskGroup = {
+    type: MobileTaskType;
+    label: string;
+    tasks: MobileTask[];
+};
+
 export type {
     ItemSearchResponse,
     MobileActiveLocation,
     MobileLocationOption,
     MobileOrganizationSummary,
+    MobileTask,
+    MobileTaskGroup,
+    MobileTaskType,
+    MobileTaskUrgency,
     ScanLookupResponse,
     ScannedItem,
     ScannedItemAction,

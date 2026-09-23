@@ -6,7 +6,9 @@ use App\Actions\Inventory\RecordStockMovement;
 use App\Actions\Organizations\EnsureDefaultWasteReasons;
 use App\Enums\OrganizationRole;
 use App\Enums\PurchaseOrderStatus;
+use App\Enums\StockCountStatus;
 use App\Enums\StockMovementType;
+use App\Enums\StockTransferStatus;
 use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
@@ -14,6 +16,8 @@ use App\Models\OrganizationMembership;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\Recipe;
+use App\Models\StockCount;
+use App\Models\StockTransfer;
 use App\Models\StorageLocation;
 use App\Models\Supplier;
 use App\Models\SupplierItem;
@@ -229,6 +233,43 @@ class E2ETestSeeder extends Seeder
             'unit_price' => '2.5000',
             'line_total' => '25.00',
             'received_base_quantity' => '0.000000',
+        ]);
+
+        // Spec 7 (Tasks Aggregation): a Draft count and a pair of transfers
+        // give the mobile-tasks E2E suite one seeded record of every task
+        // type (receive, count, ship, receive_transfer, restock) alongside
+        // this organization's existing receivable PO and low-stock item.
+        StockCount::query()->create([
+            'organization_id' => $organization->id,
+            'location_id' => $location->id,
+            'storage_location_id' => $storageLocation->id,
+            'number' => 'SC-E2E-0001',
+            'status' => StockCountStatus::Draft,
+            'created_by' => $user->id,
+        ]);
+
+        StockTransfer::query()->create([
+            'organization_id' => $organization->id,
+            'from_location_id' => $location->id,
+            'from_storage_location_id' => $storageLocation->id,
+            'to_location_id' => $secondaryLocation->id,
+            'to_storage_location_id' => $secondaryStorageLocation->id,
+            'number' => 'ST-E2E-0001',
+            'status' => StockTransferStatus::Draft,
+            'created_by' => $user->id,
+        ]);
+
+        StockTransfer::query()->create([
+            'organization_id' => $organization->id,
+            'from_location_id' => $secondaryLocation->id,
+            'from_storage_location_id' => $secondaryStorageLocation->id,
+            'to_location_id' => $location->id,
+            'to_storage_location_id' => $storageLocation->id,
+            'number' => 'ST-E2E-0002',
+            'status' => StockTransferStatus::Shipped,
+            'shipped_at' => now()->subHours(2),
+            'created_by' => $user->id,
+            'shipped_by' => $user->id,
         ]);
     }
 }
