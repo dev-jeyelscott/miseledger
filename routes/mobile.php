@@ -6,6 +6,7 @@ use App\Http\Controllers\Mobile\LocationController;
 use App\Http\Controllers\Mobile\ReceivingController;
 use App\Http\Controllers\Mobile\ScanController;
 use App\Http\Controllers\Mobile\ScanLookupController;
+use App\Http\Controllers\Mobile\StockController;
 use App\Http\Controllers\Mobile\StockCountController;
 use App\Http\Controllers\Mobile\StockTransferController;
 use App\Http\Controllers\Mobile\TaskController;
@@ -30,6 +31,11 @@ Route::middleware(['auth', 'verified', ResolveMobileLocation::class])
             Route::get('/', [ScanController::class, 'index'])->name('index');
             Route::post('/lookup', [ScanLookupController::class, 'lookup'])->name('lookup');
             Route::get('/search', [ItemSearchController::class, 'search'])->name('search');
+        });
+
+        Route::prefix('stock')->name('stock.')->group(function (): void {
+            Route::get('/', [StockController::class, 'index'])->name('index');
+            Route::get('/items/{inventoryItem}', [StockController::class, 'show'])->name('items.show');
         });
 
         Route::prefix('receiving')->name('receiving.')->group(function (): void {

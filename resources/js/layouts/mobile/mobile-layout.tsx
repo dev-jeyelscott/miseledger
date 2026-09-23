@@ -49,7 +49,7 @@ const tabs: MobileTab[] = [
         badgeKey: 'tasks',
     },
     {
-        href: mobile.home.url(),
+        href: mobile.stock.index.url(),
         icon: Boxes,
         label: 'Stock',
         pathPrefix: '/mobile/stock',
