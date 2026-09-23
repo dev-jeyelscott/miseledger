@@ -50,7 +50,7 @@ export default function AuthSplitLayout({
                     MiseLedger
                 </Link>
 
-                <div className="relative flex flex-col gap-8">
+                <div className="relative flex flex-1 flex-col items-center justify-center gap-8">
                     <p className="max-w-sm text-2xl leading-snug font-medium text-balance">
                         {BRAND_STATEMENT}
                     </p>
@@ -69,18 +69,6 @@ export default function AuthSplitLayout({
                             </li>
                         ))}
                     </ul>
-
-                    <div className="overflow-hidden rounded-lg border border-white/15 bg-marketing-dark p-1.5 shadow-2xl">
-                        <img
-                            src="/images/marketing/dashboard.png"
-                            alt=""
-                            width={1894}
-                            height={941}
-                            loading="lazy"
-                            decoding="async"
-                            className="block h-auto w-full rounded-md border border-white/10 opacity-95"
-                        />
-                    </div>
                 </div>
 
                 <span className="sr-only relative">MiseLedger</span>
