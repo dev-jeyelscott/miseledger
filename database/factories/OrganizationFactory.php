@@ -18,6 +18,9 @@ class OrganizationFactory extends Factory
      * Tests exercising read-only/past-due/unpaid states must override
      * `trial_ends_at` or attach a Cashier subscription explicitly.
      *
+     * Fixtures represent operating tenants, so first-time setup is already
+     * complete; use `awaitingSetup()` for a newly registered organization.
+     *
      * @return array<string, mixed>
      */
     public function definition(): array
@@ -32,6 +35,17 @@ class OrganizationFactory extends Factory
             'currency' => 'PHP',
             'active' => true,
             'trial_ends_at' => Carbon::now()->addDays(30),
+            'onboarding_completed_at' => Carbon::now(),
         ];
+    }
+
+    /**
+     * An organization that has not yet reached minimum operational setup.
+     */
+    public function awaitingSetup(): static
+    {
+        return $this->state(fn (): array => [
+            'onboarding_completed_at' => null,
+        ]);
     }
 }

@@ -399,6 +399,9 @@ test('every organization business mutation route is blocked for a commercially r
 test('existing RBAC still decides whether an otherwise writable member may perform an action', function () {
     $organization = Organization::factory()->create();
 
+    Location::factory()->for($organization)->create();
+    InventoryItem::factory()->for($organization)->create();
+
     $kitchenStaff = User::factory()->create();
 
     OrganizationMembership::factory()

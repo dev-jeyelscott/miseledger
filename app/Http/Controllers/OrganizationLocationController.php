@@ -3,14 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Inventory\EnsureStockTransferDependencyCanBeDeactivated;
+use App\Actions\Organizations\CreateLocation;
 use App\Enums\OrganizationPermission;
 use App\Http\Requests\Organizations\StoreOrganizationLocationRequest;
 use App\Http\Requests\Organizations\UpdateOrganizationLocationRequest;
 use App\Models\Location;
 use App\Models\Organization;
-use App\Models\StorageLocation;
-use App\Support\Billing\OrganizationUsageLimitEnforcer;
-use App\Support\Billing\UsageLimitKey;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -62,44 +60,12 @@ class OrganizationLocationController extends Controller
     public function store(
         StoreOrganizationLocationRequest $request,
         Organization $organization,
+        CreateLocation $createLocation,
     ): RedirectResponse {
-        DB::transaction(function () use (
-            $request,
-            $organization,
-        ): void {
-            $lockedOrganization = Organization::query()
-                ->whereKey($organization->getKey())
-                ->lockForUpdate()
-                ->firstOrFail();
+        /** @var array{name: string, code: string} $attributes */
+        $attributes = $request->validated();
 
-            OrganizationUsageLimitEnforcer::assertCanAdd(
-                lockedOrganization: $lockedOrganization,
-                limitKey: UsageLimitKey::Locations,
-                currentUsage: $lockedOrganization->locations()->count(),
-                errorField: 'name',
-                errorMessage: __('This organization has reached its location limit for the current plan.'),
-            );
-
-            $location = $lockedOrganization
-                ->locations()
-                ->create($request->validated());
-
-            $storageLocation = new StorageLocation([
-                'name' => StorageLocation::DEFAULT_NAME,
-                'code' => StorageLocation::DEFAULT_CODE,
-                'active' => true,
-            ]);
-
-            $storageLocation
-                ->organization()
-                ->associate($organization);
-
-            $storageLocation
-                ->location()
-                ->associate($location);
-
-            $storageLocation->save();
-        });
+        $createLocation->handle($organization, $attributes);
 
         Inertia::flash('toast', [
             'type' => 'success',

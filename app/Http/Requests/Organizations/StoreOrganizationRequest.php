@@ -26,6 +26,7 @@ class StoreOrganizationRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:160'],
+            'operation_id' => ['required', 'uuid'],
         ];
     }
 
@@ -35,10 +36,17 @@ class StoreOrganizationRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $name = $this->input('name');
+        $operationId = $this->input('operation_id');
 
         if (is_string($name)) {
             $this->merge([
                 'name' => trim($name),
+            ]);
+        }
+
+        if (is_string($operationId)) {
+            $this->merge([
+                'operation_id' => strtolower(trim($operationId)),
             ]);
         }
     }

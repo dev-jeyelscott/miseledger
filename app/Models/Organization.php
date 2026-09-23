@@ -21,6 +21,10 @@ use Laravel\Cashier\Billable;
  * @property bool $active
  * @property Carbon|null $trial_ends_at
  * @property OrganizationRolloutClassification|null $rollout_classification
+ * @property string|null $creation_operation_id
+ * @property Carbon|null $onboarding_completed_at
+ * @property Carbon|null $onboarding_suppliers_skipped_at
+ * @property Carbon|null $onboarding_team_skipped_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  *
@@ -33,6 +37,10 @@ use Laravel\Cashier\Billable;
  * `rollout_classification` is an explicit, operator-assigned pre-enforcement
  * classification (see `docs/existing-organization-rollout-plan.md`). It is
  * never inferred from timestamps or backfilled automatically.
+ *
+ * `onboarding_completed_at` records only the first time minimum setup was
+ * satisfied. It is workflow metadata, never the sole readiness source: see
+ * `App\Support\Onboarding\OrganizationSetupReadiness`.
  */
 #[Fillable(['name', 'slug', 'timezone', 'currency', 'active', 'trial_ends_at', 'rollout_classification'])]
 class Organization extends Model
@@ -229,6 +237,9 @@ class Organization extends Model
         return [
             'active' => 'boolean',
             'trial_ends_at' => 'datetime',
+            'onboarding_completed_at' => 'datetime',
+            'onboarding_suppliers_skipped_at' => 'datetime',
+            'onboarding_team_skipped_at' => 'datetime',
             'rollout_classification' => OrganizationRolloutClassification::class,
         ];
     }

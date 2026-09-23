@@ -7,6 +7,7 @@ use App\Models\StockBalance;
 use App\Models\StockMovement;
 use App\Models\User;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Str;
 use Stripe\ApiRequestor;
 use Stripe\HttpClient\ClientInterface;
 
@@ -274,8 +275,9 @@ test('organization creation follows onboarding policy and is never blocked as an
     $this->actingAs($user)
         ->post(route('organizations.store'), [
             'name' => 'New Restaurant',
+            'operation_id' => (string) Str::uuid(),
         ])
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('onboarding.show'));
 
     $this->assertDatabaseHas('organizations', [
         'name' => 'New Restaurant',

@@ -5,9 +5,8 @@ use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
-use App\Support\Inventory\StandardUnits;
 
-test('organization creation seeds the deterministic standard unit set', function () {
+test('organization creation leaves unit selection to first-time setup', function () {
     $user = User::factory()->create();
 
     $organization = app(CreateOrganization::class)->handle(
@@ -17,17 +16,7 @@ test('organization creation seeds the deterministic standard unit set', function
 
     expect(
         $organization->unitsOfMeasure()->count(),
-    )->toBe(count(StandardUnits::definitions()));
-
-    foreach (StandardUnits::definitions() as $definition) {
-        $this->assertDatabaseHas('units_of_measure', [
-            'organization_id' => $organization->id,
-            'name' => $definition['name'],
-            'symbol' => $definition['symbol'],
-            'dimension' => $definition['dimension'],
-            'active' => true,
-        ]);
-    }
+    )->toBe(0);
 });
 
 test('an owner can create a dimensioned custom unit', function () {

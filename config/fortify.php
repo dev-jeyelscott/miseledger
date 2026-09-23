@@ -76,6 +76,15 @@ return [
     'home' => '/dashboard',
 
     /*
+    | Newly registered users continue straight into first-time setup. Email
+    | verification preserves this destination as the intended URL.
+    */
+
+    'redirects' => [
+        'register' => '/onboarding',
+    ],
+
+    /*
     |--------------------------------------------------------------------------
     | Fortify Routes Prefix / Subdomain
     |--------------------------------------------------------------------------

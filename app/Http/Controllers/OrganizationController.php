@@ -10,21 +10,25 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class OrganizationController extends Controller
 {
     /**
-     * Show the organization onboarding form.
+     * Show the organization creation form.
      */
     public function create(): Response
     {
-        return Inertia::render('organizations/create');
+        return Inertia::render('organizations/create', [
+            'operationId' => (string) Str::uuid(),
+        ]);
     }
 
     /**
-     * Create an organization with the authenticated user as owner.
+     * Create an organization with the authenticated user as owner, then
+     * continue into first-time setup.
      */
     public function store(
         StoreOrganizationRequest $request,
@@ -39,6 +43,7 @@ class OrganizationController extends Controller
         $organization = $createOrganization->handle(
             $user,
             (string) $request->validated('name'),
+            (string) $request->validated('operation_id'),
         );
 
         $request->session()->put(
@@ -51,7 +56,7 @@ class OrganizationController extends Controller
             'message' => __('Organization created.'),
         ]);
 
-        return to_route('dashboard');
+        return to_route('onboarding.show');
     }
 
     /**

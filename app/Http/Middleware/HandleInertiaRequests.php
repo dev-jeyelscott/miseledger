@@ -14,6 +14,7 @@ use App\Support\Billing\OrganizationSubscriptionAccessResolver;
 use App\Support\Billing\OrganizationUsageOverview;
 use App\Support\Billing\OrganizationUsageOverviewResolver;
 use App\Support\Billing\PlanCatalog;
+use App\Support\Onboarding\OrganizationSetupReadiness;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -59,6 +60,7 @@ class HandleInertiaRequests extends Middleware
                     && $user->isPlatformAdmin(),
             ],
             'organizationContext' => $this->organizationContext($request),
+            'setup' => fn (): ?array => $this->setupContext($request),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }
@@ -161,6 +163,28 @@ class HandleInertiaRequests extends Middleware
                     'reason' => $aiAccess->unavailableReason(),
                 ]
                 : null,
+        ];
+    }
+
+    /**
+     * Expose server-derived first-time setup state for shell notices and
+     * navigation. The server remains the only enforcement boundary.
+     *
+     * @return array{ready: bool, optionalPending: bool}|null
+     */
+    private function setupContext(Request $request): ?array
+    {
+        $organization = $request->attributes->get('activeOrganization');
+
+        if (! $organization instanceof Organization) {
+            return null;
+        }
+
+        $status = OrganizationSetupReadiness::resolve($organization);
+
+        return [
+            'ready' => $status->ready,
+            'optionalPending' => $status->hasPendingOptionalSteps(),
         ];
     }
 

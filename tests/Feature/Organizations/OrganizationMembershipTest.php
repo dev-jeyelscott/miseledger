@@ -6,6 +6,7 @@ use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('a guest cannot create an organization', function () {
@@ -49,13 +50,14 @@ test('a verified user creates an organization and owner membership', function ()
         ->actingAs($user)
         ->post(route('organizations.store'), [
             'name' => 'Mise Restaurant Group',
+            'operation_id' => (string) Str::uuid(),
         ]);
 
     $organization = Organization::query()->sole();
     $membership = OrganizationMembership::query()->sole();
 
     $response
-        ->assertRedirect(route('dashboard'))
+        ->assertRedirect(route('onboarding.show'))
         ->assertSessionHas(
             'active_organization_id',
             $organization->id,

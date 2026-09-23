@@ -2,11 +2,13 @@
 
 namespace Database\Seeders;
 
+use App\Actions\Onboarding\CreateSelectedStandardUnits;
 use App\Actions\Organizations\AddOrganizationMember;
 use App\Actions\Organizations\CreateOrganization;
 use App\Actions\Organizations\SaveStorageLocation;
 use App\Enums\OrganizationRole;
 use App\Models\User;
+use App\Support\Inventory\StandardUnits;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
@@ -19,6 +21,7 @@ class DemoOrganizationSeeder extends Seeder
         CreateOrganization $createOrganization,
         AddOrganizationMember $addOrganizationMember,
         SaveStorageLocation $saveStorageLocation,
+        CreateSelectedStandardUnits $createSelectedStandardUnits,
     ): void {
         if (app()->environment('production')) {
             return;
@@ -38,6 +41,19 @@ class DemoOrganizationSeeder extends Seeder
             $owner,
             'Sinta Kitchen & Café',
         );
+
+        $createSelectedStandardUnits->handle(
+            $organization,
+            array_column(StandardUnits::definitions(), 'symbol'),
+        );
+
+        // The demo tenant represents an operating business, not a new signup.
+        $organization->forceFill([
+            'onboarding_completed_at' => Carbon::parse(
+                '2026-08-01 08:00:00',
+                'Asia/Manila',
+            ),
+        ])->save();
 
         /** @var list<array{name: string, email: string, role: OrganizationRole}> $staff */
         $staff = [

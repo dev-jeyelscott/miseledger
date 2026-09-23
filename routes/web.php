@@ -32,6 +32,7 @@ use App\Http\Controllers\Inventory\StockTransferController;
 use App\Http\Controllers\Inventory\UnitOfMeasureController;
 use App\Http\Controllers\Inventory\WasteController;
 use App\Http\Controllers\Inventory\WasteReasonController;
+use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\OrganizationLocationController;
 use App\Http\Controllers\OrganizationMemberController;
@@ -137,6 +138,50 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         'problem-reports/{reference}/operator/retry-notion-sync',
         [ProblemReportController::class, 'retryNotionSync'],
     )->name('problem-reports.retry-notion-sync');
+
+    Route::prefix('onboarding')
+        ->name('onboarding.')
+        ->group(function (): void {
+            Route::get(
+                '/',
+                [OnboardingController::class, 'show'],
+            )->name('show');
+
+            Route::post(
+                'locations',
+                [OnboardingController::class, 'storeLocation'],
+            )->name('locations.store');
+
+            Route::post(
+                'units',
+                [OnboardingController::class, 'storeUnits'],
+            )->name('units.store');
+
+            Route::post(
+                'inventory-import/preview',
+                [OnboardingController::class, 'previewInventoryImport'],
+            )->name('inventory-import.preview');
+
+            Route::post(
+                'inventory-import',
+                [OnboardingController::class, 'importInventory'],
+            )->name('inventory-import.store');
+
+            Route::post(
+                'opening-stock/{inventoryItem}',
+                [OnboardingController::class, 'resolveOpeningStock'],
+            )->name('opening-stock.resolve');
+
+            Route::post(
+                'suppliers/skip',
+                [OnboardingController::class, 'skipSuppliers'],
+            )->name('suppliers.skip');
+
+            Route::post(
+                'team/skip',
+                [OnboardingController::class, 'skipTeam'],
+            )->name('team.skip');
+        });
 
     Route::get(
         'organizations/create',
@@ -300,7 +345,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             Route::post(
                 'adjustments',
                 [InventoryAdjustmentController::class, 'store'],
-            )->name('adjustments.store');
+            )->name('adjustments.store')->middleware('setup.complete');
 
             Route::get(
                 'stock-on-hand',
@@ -570,6 +615,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
 
         Route::prefix('purchase-orders')
             ->name('purchase-orders.')
+            ->middleware('setup.complete')
             ->group(function (): void {
                 Route::get(
                     '/',
@@ -624,6 +670,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
 
         Route::prefix('goods-receipts')
             ->name('goods-receipts.')
+            ->middleware('setup.complete')
             ->group(function (): void {
                 Route::get(
                     '/',
@@ -654,6 +701,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
 
     Route::prefix('stock-counts')
         ->name('stock-counts.')
+        ->middleware('setup.complete')
         ->group(function (): void {
             Route::get(
                 '/',
@@ -717,7 +765,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             Route::post(
                 '/',
                 [WasteController::class, 'store'],
-            )->name('store');
+            )->name('store')->middleware('setup.complete');
 
             Route::get(
                 'export',
@@ -741,6 +789,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
 
     Route::prefix('stock-transfers')
         ->name('stock-transfers.')
+        ->middleware('setup.complete')
         ->group(function (): void {
             Route::get(
                 '/',

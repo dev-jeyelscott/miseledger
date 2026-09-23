@@ -41,7 +41,7 @@ Route::middleware(['auth', 'verified', ResolveMobileLocation::class])
             Route::get('/items/{inventoryItem}', [StockController::class, 'show'])->name('items.show');
         });
 
-        Route::prefix('receiving')->name('receiving.')->group(function (): void {
+        Route::prefix('receiving')->name('receiving.')->middleware('setup.complete')->group(function (): void {
             Route::get('/', [ReceivingController::class, 'index'])->name('index');
             Route::get('/ad-hoc', [ReceivingController::class, 'createAdHoc'])->name('create');
             Route::post('/ad-hoc', [ReceivingController::class, 'storeAdHoc'])->name('store');
@@ -53,7 +53,7 @@ Route::middleware(['auth', 'verified', ResolveMobileLocation::class])
             Route::post('/{goodsReceipt}/finalize', [ReceivingController::class, 'finalize'])->name('finalize');
         });
 
-        Route::prefix('stock-counts')->name('stock-counts.')->group(function (): void {
+        Route::prefix('stock-counts')->name('stock-counts.')->middleware('setup.complete')->group(function (): void {
             Route::get('/', [StockCountController::class, 'index'])->name('index');
             Route::get('/create', [StockCountController::class, 'create'])->name('create');
             Route::post('/', [StockCountController::class, 'store'])->name('store');
@@ -63,12 +63,12 @@ Route::middleware(['auth', 'verified', ResolveMobileLocation::class])
             Route::post('/{stockCount}/submit', [StockCountController::class, 'submit'])->name('submit');
         });
 
-        Route::prefix('waste')->name('waste.')->group(function (): void {
+        Route::prefix('waste')->name('waste.')->middleware('setup.complete')->group(function (): void {
             Route::get('/', [WasteController::class, 'record'])->name('record');
             Route::post('/', [WasteController::class, 'store'])->name('store');
         });
 
-        Route::prefix('transfers')->name('transfers.')->group(function (): void {
+        Route::prefix('transfers')->name('transfers.')->middleware('setup.complete')->group(function (): void {
             Route::get('/', [StockTransferController::class, 'create'])->name('create');
             Route::post('/', [StockTransferController::class, 'begin'])->name('begin');
             Route::get('/scan', [StockTransferController::class, 'scan'])->name('scan');

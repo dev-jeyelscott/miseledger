@@ -5,6 +5,7 @@ use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('an owner sees the active organization trial status, end date, plan, and a billing setup CTA', function () {
@@ -14,10 +15,11 @@ test('an owner sees the active organization trial status, end date, plan, and a 
 
     $response = $this->actingAs($user)->post(route('organizations.store'), [
         'name' => 'Onboarding Restaurant',
+        'operation_id' => (string) Str::uuid(),
     ]);
 
     $organization = Organization::query()->sole();
-    $response->assertRedirect(route('dashboard'));
+    $response->assertRedirect(route('onboarding.show'));
 
     $this->get(route('dashboard'))
         ->assertOk()

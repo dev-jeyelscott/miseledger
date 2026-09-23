@@ -26,6 +26,8 @@ use Illuminate\Support\Carbon;
  * @property InventoryItemType $type
  * @property string $yield_percentage
  * @property bool $active
+ * @property Carbon|null $opening_stock_waived_at
+ * @property int|null $opening_stock_waived_by
  * @property int|null $unit_conversions_count
  * @property bool|null $unit_conversions_exists
  * @property bool|null $stock_movements_exists
@@ -158,6 +160,7 @@ class InventoryItem extends Model
             'active' => 'boolean',
             'type' => InventoryItemType::class,
             'yield_percentage' => 'decimal:2',
+            'opening_stock_waived_at' => 'datetime',
         ];
     }
 }
