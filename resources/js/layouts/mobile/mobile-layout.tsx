@@ -34,7 +34,7 @@ const tabs: MobileTab[] = [
         pathPrefix: '/mobile',
     },
     {
-        href: mobile.home.url(),
+        href: mobile.scan.index.url(),
         icon: ScanLine,
         label: 'Scan',
         pathPrefix: '/mobile/scan',

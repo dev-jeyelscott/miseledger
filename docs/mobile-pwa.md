@@ -12,6 +12,17 @@
 
 For a support ticket where a user is stuck on the picker or on the wrong location, check `session('mobile_location_by_org')` for their organization ID.
 
+## Scan camera permission troubleshooting
+
+`resources/js/pages/mobile/scan/index.tsx` requests camera access on mount. Two environment issues look identical to "the user tapped Deny" and both fall back to the manual-entry sheet (`resources/js/components/mobile/scanner/manual-entry-sheet.tsx`), which is the intended behavior but worth ruling out during QA:
+
+- **iOS Safari requires HTTPS and an explicit user gesture** before `getUserMedia` will even prompt. A staging/demo environment served over plain HTTP will fail silently into the manual-entry fallback with no permission dialog ever shown.
+- **Some Android WebViews used by embedded/kiosk deployments block camera access by policy**, regardless of user consent, and will also fail straight into the fallback.
+
+If Scan never shows a live viewfinder on a specific device, check the origin's scheme (must be `https://`) and whether the surrounding app shell (a WebView wrapper) grants camera permission to its content, before assuming the scanner itself is broken.
+
+`BarcodeDetector` (the native detection engine) is not shipped by iOS Safari as of this repo's target browser matrix; the `@zxing/browser` fallback is the **primary** path on iOS, not a rare fallback, so scan accuracy should be validated on a real iPhone, not just Android.
+
 ## Testing install on device
 
 **Android Chrome**: visit `https://<host>/mobile` over HTTPS while logged in. Chrome's install affordance (menu → "Install app", or the `beforeinstallprompt`-driven banner rendered by `resources/js/components/mobile/install-hint.tsx`) becomes available once `manifest.json` and the `/mobile-sw.js` service worker (scope `/mobile/`) are both present. Run a Lighthouse "Installable" audit against `/mobile` to verify.
