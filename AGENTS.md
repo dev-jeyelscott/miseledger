@@ -343,6 +343,21 @@ Never claim a test, build, static analysis run, browser verification, or deploym
 
 ### Preferred commands
 
+`DB_HOST=pgsql` and `REDIS_HOST=redis` (`.env`) are Docker Compose service
+names that only resolve on the Compose network. A non-interactive shell (for
+example a headless agent's one-shot `bash -lc "..."`) does not load `~/.bashrc`
+aliases and cannot resolve them, so running `php artisan test` (or any bare
+`php`/`artisan` command) directly on the host will hang or fail attempting to
+reach an unreachable `pgsql`/`redis` host. Always use the explicit
+`docker compose exec` form below unless you have confirmed the `dc*` aliases
+are actually loaded in your shell:
+
+```bash
+docker compose exec -T app php artisan test --compact tests/Feature/RelevantTest.php
+docker compose exec -T app composer format
+docker compose exec -T app composer ci:check
+```
+
 When Docker aliases are available:
 
 ```bash
