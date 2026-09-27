@@ -328,16 +328,7 @@ class ReceivingController extends MobileController
 
         $storageLocation = $this->defaultStorageLocation($organization, $purchaseOrder->location_id);
 
-        $lines = $this->existingLineInput($goodsReceipt);
-        $lines[] = [
-            'purchase_order_line_id' => $poLine->id,
-            'storage_location_id' => $storageLocation->id,
-            'received_quantity' => (string) $validated['quantity'],
-            'received_unit_of_measure_id' => (int) $validated['unit_id'],
-            'notes' => null,
-        ];
-
-        $receipt = $saveGoodsReceipt->handle(
+        $receipt = $saveGoodsReceipt->addMobileLine(
             $organization,
             $actor,
             $purchaseOrder,
@@ -347,7 +338,13 @@ class ReceivingController extends MobileController
                     : $this->uniqueReceiptNumber($organization),
                 'supplier_reference' => $goodsReceipt?->supplier_reference,
                 'notes' => $goodsReceipt?->notes,
-                'lines' => $lines,
+            ],
+            [
+                'purchase_order_line_id' => $poLine->id,
+                'storage_location_id' => $storageLocation->id,
+                'received_quantity' => (string) $validated['quantity'],
+                'received_unit_of_measure_id' => (int) $validated['unit_id'],
+                'notes' => null,
             ],
             $goodsReceipt,
         );
@@ -593,32 +590,6 @@ class ReceivingController extends MobileController
             ->where('inventory_item_id', $inventoryItemId)
             ->orderBy('id')
             ->first();
-    }
-
-    /**
-     * Rebuild the accumulated `SaveGoodsReceipt` line input from a draft's
-     * currently persisted lines.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    private function existingLineInput(?GoodsReceipt $goodsReceipt): array
-    {
-        if ($goodsReceipt === null) {
-            return [];
-        }
-
-        return $goodsReceipt->lines()
-            ->orderBy('id')
-            ->get()
-            ->map(static fn (GoodsReceiptLine $line): array => [
-                'purchase_order_line_id' => $line->purchase_order_line_id,
-                'storage_location_id' => $line->storage_location_id,
-                'received_quantity' => $line->received_quantity,
-                'received_unit_of_measure_id' => $line->received_unit_of_measure_id,
-                'notes' => $line->notes,
-            ])
-            ->values()
-            ->all();
     }
 
     /**

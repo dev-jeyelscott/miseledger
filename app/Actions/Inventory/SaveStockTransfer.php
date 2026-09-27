@@ -8,6 +8,7 @@ use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
 use App\Models\StockTransfer;
+use App\Models\StockTransferLine;
 use App\Models\StorageLocation;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
@@ -286,6 +287,78 @@ final class SaveStockTransfer
             }
 
             return $transfer->refresh();
+        }, 3);
+    }
+
+    /**
+     * Merge one mobile scanned line into a draft's current lines and save.
+     *
+     * Locks the existing draft and reads its current lines inside that lock
+     * before merging in the incoming scan, closing the TOCTOU window where
+     * two concurrent scans against the same draft each build their line
+     * array from a stale snapshot and one silently overwrites the other's
+     * accepted line. `handle()` re-locks the same already-locked row, which
+     * is a no-op within this same transaction.
+     *
+     * @param  array<string, mixed>  $context
+     * @param  array{inventory_item_id: int, requested_quantity: string, unit_id: int}  $line
+     */
+    public function addMobileLine(
+        Organization $organization,
+        User $actor,
+        array $context,
+        array $line,
+        ?StockTransfer $stockTransfer,
+    ): StockTransfer {
+        return DB::transaction(function () use (
+            $organization,
+            $actor,
+            $context,
+            $line,
+            $stockTransfer,
+        ): StockTransfer {
+            $lines = [];
+
+            if ($stockTransfer !== null) {
+                $locked = StockTransfer::query()
+                    ->where('organization_id', $organization->id)
+                    ->whereKey($stockTransfer->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $lines = $locked->lines()
+                    ->orderBy('id')
+                    ->get()
+                    ->map(static fn (StockTransferLine $existing): array => [
+                        'inventory_item_id' => $existing->inventory_item_id,
+                        'requested_quantity' => (string) $existing->requested_quantity,
+                        'unit_id' => $existing->unit_id,
+                    ])
+                    ->values()
+                    ->all();
+            }
+
+            $matchedIndex = null;
+
+            foreach ($lines as $index => $existingLine) {
+                if ($existingLine['inventory_item_id'] === $line['inventory_item_id']) {
+                    $matchedIndex = $index;
+                    break;
+                }
+            }
+
+            if ($matchedIndex !== null) {
+                $lines[$matchedIndex] = $line;
+            } else {
+                $lines[] = $line;
+            }
+
+            return $this->handle(
+                $organization,
+                $actor,
+                [...$context, 'lines' => $lines],
+                $stockTransfer,
+            );
         }, 3);
     }
 

@@ -250,8 +250,6 @@ class StockCountController extends MobileController
         $unitId = (int) $validated['unit_id'];
         $quantity = (string) $validated['quantity'];
 
-        $lines = $this->existingLineInput($stockCount);
-
         // `stock_count_lines` carries a unique(stock_count_id, inventory_item_id)
         // constraint (one line per item per count, not per item+unit), and
         // `SaveStockCount` enforces the same at the application boundary
@@ -259,30 +257,7 @@ class StockCountController extends MobileController
         // different unit therefore still replaces the item's single line —
         // both its quantity and its counted unit — rather than adding a
         // second line, which the schema cannot hold.
-        $matchedIndex = null;
-        $previousQuantity = null;
-
-        foreach ($lines as $index => $line) {
-            if ($line['inventory_item_id'] === $inventoryItemId) {
-                $matchedIndex = $index;
-                $previousQuantity = $line['counted_quantity'];
-                break;
-            }
-        }
-
-        if ($matchedIndex !== null) {
-            $lines[$matchedIndex]['counted_quantity'] = $quantity;
-            $lines[$matchedIndex]['count_unit_id'] = $unitId;
-        } else {
-            $lines[] = [
-                'inventory_item_id' => $inventoryItemId,
-                'counted_quantity' => $quantity,
-                'count_unit_id' => $unitId,
-                'notes' => null,
-            ];
-        }
-
-        $count = $saveStockCount->handle(
+        $result = $saveStockCount->addMobileLine(
             $organization,
             $actor,
             [
@@ -291,12 +266,20 @@ class StockCountController extends MobileController
                     : $this->uniqueCountNumber($organization),
                 'location_id' => $location->id,
                 'storage_location_id' => $storageLocationId,
-                'lines' => $lines,
+            ],
+            [
+                'inventory_item_id' => $inventoryItemId,
+                'counted_quantity' => $quantity,
+                'count_unit_id' => $unitId,
+                'notes' => null,
             ],
             $stockCount,
         );
 
-        if ($matchedIndex !== null && $previousQuantity !== null) {
+        $count = $result['stockCount'];
+        $previousQuantity = $result['previousQuantity'];
+
+        if ($previousQuantity !== null) {
             $item = InventoryItem::query()->find($inventoryItemId);
 
             Inertia::flash('toast', [
@@ -466,31 +449,6 @@ class StockCountController extends MobileController
                 'draftLines' => $draftLines,
             ],
         ]);
-    }
-
-    /**
-     * Rebuild the accumulated `SaveStockCount` line input from a draft's
-     * currently persisted lines.
-     *
-     * @return array<int, array{inventory_item_id: int, counted_quantity: string, count_unit_id: int, notes: string|null}>
-     */
-    private function existingLineInput(?StockCount $stockCount): array
-    {
-        if ($stockCount === null) {
-            return [];
-        }
-
-        return $stockCount->lines()
-            ->orderBy('id')
-            ->get()
-            ->map(static fn (StockCountLine $line): array => [
-                'inventory_item_id' => $line->inventory_item_id,
-                'counted_quantity' => (string) $line->counted_quantity,
-                'count_unit_id' => $line->count_unit_id,
-                'notes' => $line->notes,
-            ])
-            ->values()
-            ->all();
     }
 
     /**

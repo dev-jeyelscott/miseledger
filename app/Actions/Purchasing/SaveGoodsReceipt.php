@@ -7,6 +7,7 @@ use App\Enums\GoodsReceiptStatus;
 use App\Enums\OrganizationPermission;
 use App\Enums\PurchaseOrderStatus;
 use App\Models\GoodsReceipt;
+use App\Models\GoodsReceiptLine;
 use App\Models\InventoryItem;
 use App\Models\Location;
 use App\Models\Organization;
@@ -352,6 +353,73 @@ final class SaveGoodsReceipt
             }
 
             return $receipt->refresh();
+        }, 3);
+    }
+
+    /**
+     * Append one mobile scanned line to a receipt draft and save.
+     *
+     * Locks the existing draft and reads its current lines inside that lock
+     * before appending the incoming scan, closing the TOCTOU window where
+     * two concurrent scans against the same draft each build their line
+     * array from a stale snapshot and one silently overwrites the other's
+     * accepted line. Unlike stock transfers and stock counts, receipt lines
+     * are always appended (never merged by item): a receipt may legitimately
+     * carry more than one line per purchase-order line. `handle()` re-locks
+     * the same already-locked rows, which is a no-op within this same
+     * transaction.
+     *
+     * @param  array<string, mixed>  $context
+     * @param  array<string, mixed>  $line
+     */
+    public function addMobileLine(
+        Organization $organization,
+        User $actor,
+        PurchaseOrder $purchaseOrder,
+        array $context,
+        array $line,
+        ?GoodsReceipt $goodsReceipt,
+    ): GoodsReceipt {
+        return DB::transaction(function () use (
+            $organization,
+            $actor,
+            $purchaseOrder,
+            $context,
+            $line,
+            $goodsReceipt,
+        ): GoodsReceipt {
+            $lines = [];
+
+            if ($goodsReceipt !== null) {
+                $locked = GoodsReceipt::query()
+                    ->where('organization_id', $organization->id)
+                    ->whereKey($goodsReceipt->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $lines = $locked->lines()
+                    ->orderBy('id')
+                    ->get()
+                    ->map(static fn (GoodsReceiptLine $existing): array => [
+                        'purchase_order_line_id' => $existing->purchase_order_line_id,
+                        'storage_location_id' => $existing->storage_location_id,
+                        'received_quantity' => $existing->received_quantity,
+                        'received_unit_of_measure_id' => $existing->received_unit_of_measure_id,
+                        'notes' => $existing->notes,
+                    ])
+                    ->values()
+                    ->all();
+            }
+
+            $lines[] = $line;
+
+            return $this->handle(
+                $organization,
+                $actor,
+                $purchaseOrder,
+                [...$context, 'lines' => $lines],
+                $goodsReceipt,
+            );
         }, 3);
     }
 

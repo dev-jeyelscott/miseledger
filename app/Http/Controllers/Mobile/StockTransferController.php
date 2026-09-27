@@ -257,28 +257,7 @@ class StockTransferController extends MobileController
         $unitId = (int) $validated['unit_id'];
         $quantity = (string) $validated['quantity'];
 
-        $lines = $this->existingLineInput($transfer);
-        $matchedIndex = null;
-
-        foreach ($lines as $index => $line) {
-            if ($line['inventory_item_id'] === $inventoryItemId) {
-                $matchedIndex = $index;
-                break;
-            }
-        }
-
-        if ($matchedIndex !== null) {
-            $lines[$matchedIndex]['requested_quantity'] = $quantity;
-            $lines[$matchedIndex]['unit_id'] = $unitId;
-        } else {
-            $lines[] = [
-                'inventory_item_id' => $inventoryItemId,
-                'requested_quantity' => $quantity,
-                'unit_id' => $unitId,
-            ];
-        }
-
-        $savedTransfer = $saveStockTransfer->handle(
+        $savedTransfer = $saveStockTransfer->addMobileLine(
             $organization,
             $actor,
             [
@@ -288,7 +267,11 @@ class StockTransferController extends MobileController
                 'to_location_id' => $toLocationId,
                 'to_storage_location_id' => $toStorageLocationId,
                 'notes' => $transfer?->notes,
-                'lines' => $lines,
+            ],
+            [
+                'inventory_item_id' => $inventoryItemId,
+                'requested_quantity' => $quantity,
+                'unit_id' => $unitId,
             ],
             $transfer,
         );
@@ -578,29 +561,5 @@ class StockTransferController extends MobileController
         throw ValidationException::withMessages([
             'number' => __('Unable to generate a unique transfer number. Try again.'),
         ]);
-    }
-
-    /**
-     * Rebuild the accumulated `SaveStockTransfer` line input from a draft's
-     * currently persisted lines.
-     *
-     * @return array<int, array{inventory_item_id: int, requested_quantity: string, unit_id: int}>
-     */
-    private function existingLineInput(?StockTransfer $transfer): array
-    {
-        if ($transfer === null) {
-            return [];
-        }
-
-        return $transfer->lines()
-            ->orderBy('id')
-            ->get()
-            ->map(static fn (StockTransferLine $line): array => [
-                'inventory_item_id' => $line->inventory_item_id,
-                'requested_quantity' => (string) $line->requested_quantity,
-                'unit_id' => $line->unit_id,
-            ])
-            ->values()
-            ->all();
     }
 }
