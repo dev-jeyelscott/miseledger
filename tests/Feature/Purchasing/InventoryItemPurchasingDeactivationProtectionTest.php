@@ -82,6 +82,17 @@ beforeEach(function () {
         'active' => true,
     ]);
 
+    // A second active item keeps deactivation coverage isolated to each
+    // test's own dependency (purchase order, goods receipt, balance):
+    // this item is never the organization's only active one.
+    InventoryItem::factory()->create([
+        'organization_id' => $this->organization->id,
+        'base_unit_of_measure_id' => $this->baseUnit->id,
+        'name' => 'Backup Item',
+        'sku' => 'PURCHASING-DEP-BACKUP-ITEM',
+        'active' => true,
+    ]);
+
     $this->supplier = Supplier::factory()->create([
         'organization_id' => $this->organization->id,
         'name' => 'Purchasing Dependency Supplier',
@@ -139,6 +150,25 @@ beforeEach(function () {
         'line_total' => '100.00',
         'received_base_quantity' => '0.000000',
     ]);
+});
+
+test('an organization cannot deactivate its only active inventory item', function () {
+    InventoryItem::query()
+        ->where('organization_id', $this->organization->id)
+        ->where('id', '!=', $this->inventoryItem->id)
+        ->update(['active' => false]);
+
+    expect(fn () => app(SaveInventoryItem::class)->handle(
+        $this->organization,
+        purchasingDeactivationItemAttributes(
+            $this->inventoryItem,
+            $this->baseUnit,
+            false,
+        ),
+        $this->inventoryItem,
+    ))->toThrow(ValidationException::class);
+
+    expect($this->inventoryItem->refresh()->active)->toBeTrue();
 });
 
 test('an open approved purchase-order line blocks its inventory item from being deactivated', function () {

@@ -22,6 +22,8 @@ final class EnsureStockTransferDependencyCanBeDeactivated
         Organization $organization,
         Location $location,
     ): void {
+        $this->assertNotOnlyActiveLocation($organization, $location);
+
         $this->assertNoShippedTransfer(
             StockTransfer::query()
                 ->where(
@@ -109,6 +111,34 @@ final class EnsureStockTransferDependencyCanBeDeactivated
                 ->where('inventory_item_id', $inventoryItem->getKey()),
             __('This inventory item cannot be deactivated while stock remains on hand.'),
         );
+    }
+
+    /**
+     * Prevent deactivating an organization's last active location, since that
+     * would lock every operational stock workflow org-wide with no location
+     * left to record activity against. Callers must lock the organization row
+     * for the duration of the transaction so this check is race-safe against
+     * a concurrent deactivation of a different location.
+     */
+    private function assertNotOnlyActiveLocation(
+        Organization $organization,
+        Location $location,
+    ): void {
+        $anotherActiveLocationExists = Location::query()
+            ->where('organization_id', $organization->getKey())
+            ->where('active', true)
+            ->whereKeyNot($location->getKey())
+            ->exists();
+
+        if ($anotherActiveLocationExists) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'active' => __(
+                'This is the organization\'s only active location. Add or reactivate another location before deactivating this one, or every purchasing, receiving, stock count, transfer, waste, and adjustment workflow will be locked until one is available.',
+            ),
+        ]);
     }
 
     /**

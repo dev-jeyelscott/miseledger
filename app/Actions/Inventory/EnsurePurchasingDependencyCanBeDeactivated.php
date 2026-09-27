@@ -23,6 +23,8 @@ final class EnsurePurchasingDependencyCanBeDeactivated
         Organization $organization,
         InventoryItem $inventoryItem,
     ): void {
+        $this->assertNotOnlyActiveItem($organization, $inventoryItem);
+
         $hasOpenPurchaseOrderLine = PurchaseOrderLine::query()
             ->where('inventory_item_id', $inventoryItem->getKey())
             ->whereIn(
@@ -70,5 +72,33 @@ final class EnsurePurchasingDependencyCanBeDeactivated
                 ),
             ]);
         }
+    }
+
+    /**
+     * Prevent deactivating an organization's last active inventory item,
+     * since that would lock every operational stock workflow org-wide with
+     * no item left to record activity against. Callers must lock the
+     * organization row for the duration of the transaction so this check is
+     * race-safe against a concurrent deactivation of a different item.
+     */
+    private function assertNotOnlyActiveItem(
+        Organization $organization,
+        InventoryItem $inventoryItem,
+    ): void {
+        $anotherActiveItemExists = InventoryItem::query()
+            ->where('organization_id', $organization->getKey())
+            ->where('active', true)
+            ->whereKeyNot($inventoryItem->getKey())
+            ->exists();
+
+        if ($anotherActiveItemExists) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'active' => __(
+                'This is the organization\'s only active inventory item. Add or reactivate another item before deactivating this one, or every purchasing, receiving, stock count, transfer, waste, and adjustment workflow will be locked until one is available.',
+            ),
+        ]);
     }
 }

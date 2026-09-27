@@ -465,6 +465,17 @@ test('non-zero on-hand stock prevents deactivation of its master data', function
 });
 
 test('an inventory item with zero on-hand stock can be deactivated', function () {
+    InventoryItem::factory()
+        ->for($this->organization)
+        ->create([
+            'base_unit_of_measure_id' => $this->baseUnit->id,
+            'name' => 'Backup Ingredient',
+            'sku' => 'BACKUP-ITEM',
+            'type' => InventoryItemType::Ingredient,
+            'yield_percentage' => '100.00',
+            'active' => true,
+        ]);
+
     app(CancelStockTransfer::class)->handle(
         $this->organization,
         $this->owner,

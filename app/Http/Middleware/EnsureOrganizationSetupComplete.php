@@ -35,7 +35,7 @@ class EnsureOrganizationSetupComplete
             return $next($request);
         }
 
-        $message = __('Finish organization setup before recording stock activity. Add a location and inventory items, then resolve their opening stock.');
+        $message = $this->blockedMessage($organization);
 
         if ($request->expectsJson()) {
             return response()->json(['message' => $message], 409);
@@ -47,5 +47,37 @@ class EnsureOrganizationSetupComplete
         ]);
 
         return redirect()->route('onboarding.show');
+    }
+
+    /**
+     * Build a recovery message naming only the setup condition(s) the
+     * organization actually still has unmet, instead of a static checklist
+     * that may misdirect recovery toward requirements already satisfied.
+     */
+    private function blockedMessage(Organization $organization): string
+    {
+        $status = OrganizationSetupReadiness::resolve($organization);
+
+        $missing = [];
+
+        if ($status->activeLocationCount === 0) {
+            $missing[] = __('an active location');
+        }
+
+        if ($status->activeItemCount === 0) {
+            $missing[] = __('an active inventory item');
+        }
+
+        if ($status->unresolvedOpeningStockCount > 0) {
+            $missing[] = __('opening stock resolved for every active inventory item');
+        }
+
+        if ($missing === []) {
+            return __('Finish organization setup before recording stock activity.');
+        }
+
+        return __('Finish organization setup before recording stock activity. This organization still needs: :missing.', [
+            'missing' => implode(', ', $missing),
+        ]);
     }
 }

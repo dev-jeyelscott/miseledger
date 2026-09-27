@@ -131,9 +131,14 @@ class OrganizationLocationController extends Controller
                 ->firstOrFail();
 
             if (! $attributes['active']) {
+                $lockedOrganization = Organization::query()
+                    ->whereKey($organization->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
                 $ensureStockTransferDependencyCanBeDeactivated
                     ->assertLocationCanBeDeactivated(
-                        $organization,
+                        $lockedOrganization,
                         $lockedLocation,
                     );
             }

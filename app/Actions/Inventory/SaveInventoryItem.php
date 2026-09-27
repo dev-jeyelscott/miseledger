@@ -61,17 +61,22 @@ final class SaveInventoryItem
                 $lockedItem !== null
                 && ! $attributes['active']
             ) {
+                $lockedOrganization = Organization::query()
+                    ->whereKey($organization->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
                 $this
                     ->ensureStockTransferDependencyCanBeDeactivated
                     ->assertInventoryItemCanBeDeactivated(
-                        $organization,
+                        $lockedOrganization,
                         $lockedItem,
                     );
 
                 $this
                     ->ensurePurchasingDependencyCanBeDeactivated
                     ->assertInventoryItemCanBeDeactivated(
-                        $organization,
+                        $lockedOrganization,
                         $lockedItem,
                     );
             }

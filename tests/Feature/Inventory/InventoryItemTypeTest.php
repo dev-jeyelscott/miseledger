@@ -118,6 +118,10 @@ test('an inventory item is deactivated without being deleted', function () {
         ->for($organization)
         ->create(['base_unit_of_measure_id' => $unit->id]);
 
+    InventoryItem::factory()
+        ->for($organization)
+        ->create(['base_unit_of_measure_id' => $unit->id]);
+
     $this->withSession(['active_organization_id' => $organization->id])
         ->actingAs($user)
         ->put(route('inventory.items.update', $item), [

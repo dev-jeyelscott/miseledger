@@ -546,6 +546,29 @@ test('a ready organization passes the setup blocker to normal validation', funct
         ->assertSessionHasErrors();
 });
 
+test('the setup blocker message names only the specific unmet condition', function () {
+    [$organization, $owner] = onboardingTenant();
+    onboardingLocation($organization);
+    onboardingItem($organization, onboardingUnit($organization))
+        ->forceFill(['opening_stock_waived_at' => now()])
+        ->save();
+
+    expect(OrganizationSetupReadiness::isReady($organization))->toBeTrue();
+
+    Location::query()->where('organization_id', $organization->id)->update(['active' => false]);
+
+    $this->actingAs($owner)
+        ->withSession(['active_organization_id' => $organization->id])
+        ->post(route('stock-counts.store'), [])
+        ->assertRedirect(route('onboarding.show'))
+        ->assertSessionHas(
+            'inertia.flash_data.toast.message',
+            fn (string $message): bool => str_contains($message, 'an active location')
+                && ! str_contains($message, 'an active inventory item')
+                && ! str_contains($message, 'opening stock resolved'),
+        );
+});
+
 test('readiness is recalculated from current records after completion', function () {
     [$organization, $owner] = onboardingTenant();
     [$location] = onboardingLocation($organization);

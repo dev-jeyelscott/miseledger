@@ -82,6 +82,20 @@ beforeEach(function () {
             'yield_percentage' => '100.00',
             'active' => true,
         ]);
+
+    // A second active item keeps the concurrency race exercised through the
+    // stock-transfer dependency check rather than short-circuited by the
+    // last-active-item guard.
+    InventoryItem::factory()
+        ->for($this->organization)
+        ->create([
+            'base_unit_of_measure_id' => $this->baseUnit->id,
+            'name' => 'Backup Ingredient',
+            'sku' => 'CONCURRENCY-BACKUP-ITEM',
+            'type' => InventoryItemType::Ingredient,
+            'yield_percentage' => '100.00',
+            'active' => true,
+        ]);
 });
 
 test('draft transfer creation is serialized against a concurrent inventory-item deactivation', function () {

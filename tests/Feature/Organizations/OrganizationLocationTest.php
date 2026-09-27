@@ -228,6 +228,14 @@ test('an owner can update and deactivate a location without deleting it', functi
             'active' => true,
         ]);
 
+    Location::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Backup Restaurant',
+            'code' => 'BACKUP',
+            'active' => true,
+        ]);
+
     $this->actingAs($owner)
         ->put(
             route(
@@ -255,7 +263,98 @@ test('an owner can update and deactivate a location without deleting it', functi
         'active' => false,
     ]);
 
-    $this->assertDatabaseCount('locations', 1);
+    $this->assertDatabaseCount('locations', 2);
+});
+
+test('an owner cannot deactivate the organization\'s only active location', function () {
+    $owner = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($owner)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    $location = Location::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Only Restaurant',
+            'code' => 'ONLY',
+            'active' => true,
+        ]);
+
+    $this->actingAs($owner)
+        ->put(
+            route(
+                'organizations.locations.update',
+                [$organization, $location],
+            ),
+            [
+                'name' => $location->name,
+                'code' => $location->code,
+                'active' => false,
+            ],
+        )
+        ->assertSessionHasErrors('active');
+
+    $this->assertDatabaseHas('locations', [
+        'id' => $location->id,
+        'active' => true,
+    ]);
+});
+
+test('an owner can deactivate a location that is inactive alongside other inactive locations', function () {
+    $owner = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    OrganizationMembership::factory()
+        ->for($organization)
+        ->for($owner)
+        ->create([
+            'role' => OrganizationRole::Owner,
+        ]);
+
+    Location::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Active Restaurant',
+            'code' => 'ACTIVE',
+            'active' => true,
+        ]);
+
+    $location = Location::factory()
+        ->for($organization)
+        ->create([
+            'name' => 'Second Restaurant',
+            'code' => 'SECOND',
+            'active' => true,
+        ]);
+
+    $this->actingAs($owner)
+        ->put(
+            route(
+                'organizations.locations.update',
+                [$organization, $location],
+            ),
+            [
+                'name' => $location->name,
+                'code' => $location->code,
+                'active' => false,
+            ],
+        )
+        ->assertRedirect(
+            route(
+                'organizations.locations.index',
+                $organization,
+            ),
+        );
+
+    $this->assertDatabaseHas('locations', [
+        'id' => $location->id,
+        'active' => false,
+    ]);
 });
 
 test('scoped binding rejects a location owned by another organization', function () {
